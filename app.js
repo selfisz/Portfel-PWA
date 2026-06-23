@@ -183,7 +183,7 @@ const subCategoryIconPaths = {
     'Kosmetyki': 'M12 2C9 2 7 4 7 7c0 2.5 1.5 4 3 5.5V22h4v-9.5c1.5-1.5 3-3 3-5.5 0-3-2-5-5-5z',
     'Zdrowie': 'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-4v-4H6v-4h4V6h4v4h4v4z',
     'Sport': 'M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z',
-    'Ubrania': 'M21.6 18.2L13 11.75V4.27l5.12 2.81c.45.25.99.08 1.24-.37.25-.45.08-.99-.37-1.24L12 2 7.01 5.47c-.45.25-.62.79-.37 1.24.25.45.79.62 1.24.37L13 7.27v4.58l-8.6 6.45c-.36.27-.44.78-.17 1.14.27.36.78.44 1.14.17l7.63-5.72 7.63 5.72c.15.11.32.17.49.17.25 0 .5-.12.65-.34.27-.36.19-.87-.17-1.14z',
+    'Ubrania': 'M16 4h-2.9l-.7-2H9.6L8.9 4H6l-2 5v2h3l-1 9h12l-1-9h3V9l-2-5z',
     'Wycieczki': 'M14 6l-3.75 5 2.85 3.8-1.6 1.2C9.81 13.75 7 10 7 10l-6 8h22l-9-12z',
     'Gierki': 'M15 7.5V2H9v5.5l3 3 3-3zM7.5 9H2v6h5.5l3-3-3-3zM9 16.5V22h6v-5.5l-3-3-3 3zM16.5 9l-3 3 3 3H22V9h-5.5z',
     'Rozrywka': 'M18 3v2h-2V3H8v2H6V3H4v18h2v-2h2v2h8v-2h2v2h2V3h-2zM8 17H6v-2h2v2zm0-4H6v-2h2v2zm0-4H6V7h2v2zm10 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z',
@@ -215,7 +215,7 @@ const subCategoryIconPaths = {
     'Studia': 'M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3L1 9l11 6 9-4.91V17h2V9L12 3z',
     'Edukacja': 'M12 3L1 9l11 6 9-4.91V17h2V9L12 3z',
     'Podstawa': 'M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z',
-    'Prowizja': 'M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6h-6z',
+    'Prowizja': 'M4 3.5l-.7 1.8h2.4L4.8 3.5H4zm-.3 1.8h3.1l1.3 11.2H2.4L3.7 5.3zm2.3 9.7a1 1 0 110-2 1 1 0 010 2zM14.2 3.5l-.7 1.8h2.4l-.7-1.8h-1zm-.3 1.8h3.1l1.3 11.2h-5.7L13.9 5.3zm2.3 9.7a1 1 0 110-2 1 1 0 010 2z',
     'Nagroda': 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27z',
     'Delegacja': 'M14 6l-3.75 5 2.85 3.8-1.6 1.2C9.81 13.75 7 10 7 10l-6 8h22l-9-12z',
     'Socjal': 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',
@@ -333,28 +333,90 @@ function initOnboarding() {
 }
 
 function attachSwipeDelete(row, index) {
+    const SWIPE_MAX = 88;
+    const SWIPE_DELETE = 64;
     let startX = 0;
     let currentX = 0;
     let swiped = false;
-    row.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; swiped = false; }, { passive: true });
-    row.addEventListener('touchmove', (e) => {
-        currentX = e.touches[0].clientX - startX;
-        if (currentX < -20) {
-            row.classList.add('swiping');
-            row.style.transform = `translateX(${Math.max(currentX, -80)}px)`;
+    let isDragging = false;
+    let activePointer = null;
+
+    const setOffset = (x) => {
+        row.style.transform = `translate3d(${x}px, 0, 0)`;
+    };
+
+    const resetRow = (animate = true) => {
+        row.classList.remove('swiping', 'is-dragging');
+        row.style.transition = animate ? 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)' : 'none';
+        setOffset(0);
+        if (animate) {
+            window.setTimeout(() => {
+                row.style.transition = '';
+                row.style.transform = '';
+            }, 280);
+        } else {
+            row.style.transition = '';
+            row.style.transform = '';
         }
-    }, { passive: true });
-    row.addEventListener('touchend', () => {
-        if (currentX < -60) {
+    };
+
+    const finishSwipe = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        activePointer = null;
+        row.style.transition = 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)';
+
+        if (currentX <= -SWIPE_DELETE) {
             swiped = true;
-            deleteTransaction(index);
+            row.classList.add('swiping');
+            setOffset(-SWIPE_MAX);
+            row.style.opacity = '0.55';
+            window.setTimeout(() => deleteTransaction(index), 180);
+            return;
         }
-        row.classList.remove('swiping');
-        row.style.transform = '';
+
+        resetRow(true);
         startX = currentX = 0;
-    });
+    };
+
+    const onPointerDown = (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        activePointer = e.pointerId;
+        isDragging = true;
+        swiped = false;
+        startX = e.clientX;
+        currentX = 0;
+        row.classList.add('is-dragging');
+        row.style.transition = 'none';
+        row.setPointerCapture(e.pointerId);
+    };
+
+    const onPointerMove = (e) => {
+        if (!isDragging || e.pointerId !== activePointer) return;
+        currentX = e.clientX - startX;
+        if (currentX > 0) currentX = 0;
+        if (currentX < -SWIPE_MAX) currentX = -SWIPE_MAX;
+        if (currentX < -10) row.classList.add('swiping');
+        else row.classList.remove('swiping');
+        setOffset(currentX);
+    };
+
+    const onPointerEnd = (e) => {
+        if (e.pointerId !== activePointer) return;
+        if (row.hasPointerCapture(e.pointerId)) row.releasePointerCapture(e.pointerId);
+        finishSwipe();
+    };
+
+    row.addEventListener('pointerdown', onPointerDown);
+    row.addEventListener('pointermove', onPointerMove);
+    row.addEventListener('pointerup', onPointerEnd);
+    row.addEventListener('pointercancel', onPointerEnd);
+
     row.addEventListener('click', () => {
-        if (swiped) { swiped = false; return; }
+        if (swiped) {
+            swiped = false;
+            return;
+        }
         editTransaction(index);
     });
 }

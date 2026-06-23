@@ -619,7 +619,11 @@ h2 {
 .toggle-btn.active.expense { background: var(--danger); color: #fff; box-shadow: 0 4px 14px var(--danger-soft); }
 .toggle-btn.active.income { background: var(--success); color: #fff; box-shadow: 0 4px 14px var(--success-soft); }
 
-.form-group { margin-bottom: 18px; }
+.form-group { margin-bottom: 18px; min-width: 0; }
+
+#view-add .card {
+    overflow: hidden;
+}
 .form-group label {
     display: block;
     font-size: 0.8rem;
@@ -630,6 +634,8 @@ h2 {
 
 input[type="text"], input[type="number"], input[type="date"], select {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     padding: 14px 16px;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
@@ -639,6 +645,25 @@ input[type="text"], input[type="number"], input[type="date"], select {
     outline: none;
     transition: border-color 0.2s, box-shadow 0.2s;
     font-family: inherit;
+    display: block;
+}
+
+input[type="date"] {
+    padding: 12px 14px;
+    font-size: 0.95rem;
+    line-height: 1.2;
+}
+
+input[type="date"]::-webkit-date-and-time-value {
+    min-width: 0;
+    text-align: left;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+    margin: 0;
+    padding: 0;
+    opacity: 0.65;
+    cursor: pointer;
 }
 
 input:focus, select:focus {
@@ -863,7 +888,16 @@ html[data-theme="light"] .grid-item.selected {
     border-bottom: 1px solid var(--border);
     position: relative;
     touch-action: pan-y;
-    transition: transform 0.2s ease, background 0.2s;
+    transition: background 0.2s;
+    will-change: transform;
+}
+
+.tx-row.is-dragging {
+    transition: none;
+}
+
+#recent-transactions-list {
+    overflow: hidden;
 }
 
 .tx-row:last-child { border-bottom: none; }
@@ -1027,10 +1061,10 @@ html[data-theme="light"] .grid-item.selected {
 .chart-wrapper {
     position: relative;
     width: 100%;
-    max-width: 280px;
-    margin: 0 auto 12px;
+    max-width: 258px;
+    margin: 0 auto 10px;
     cursor: pointer;
-    padding: 8px;
+    padding: 6px;
 }
 
 .chart-center-label {
@@ -1044,7 +1078,7 @@ html[data-theme="light"] .grid-item.selected {
 }
 
 .chart-center-amount {
-    font-size: 0.95rem;
+    font-size: 0.88rem;
     font-weight: 700;
     color: var(--text);
     line-height: 1.2;
@@ -1053,7 +1087,7 @@ html[data-theme="light"] .grid-item.selected {
 
 .chart-center-sub {
     margin-top: 2px;
-    font-size: 0.68rem;
+    font-size: 0.62rem;
     font-weight: 600;
     color: var(--text-muted);
     text-transform: uppercase;
@@ -1063,18 +1097,18 @@ html[data-theme="light"] .grid-item.selected {
 .chart-legend {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    margin-top: 4px;
+    gap: 7px;
+    margin-top: 2px;
     text-align: left;
 }
 
 .chart-legend-item {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
-    padding: 10px 12px;
-    border-radius: 12px;
+    padding: 8px 10px;
+    border-radius: 10px;
     background: var(--input-bg);
     border: 1px solid var(--border);
     cursor: default;
@@ -1095,9 +1129,9 @@ html[data-theme="light"] .grid-item.selected {
 }
 
 .chart-legend-swatch {
-    width: 10px;
-    height: 10px;
-    border-radius: 4px;
+    width: 9px;
+    height: 9px;
+    border-radius: 3px;
     flex-shrink: 0;
     margin-top: 2px;
     align-self: flex-start;
@@ -1110,7 +1144,7 @@ html[data-theme="light"] .grid-item.selected {
 
 .chart-legend-name {
     display: block;
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     font-weight: 600;
     color: var(--text);
     line-height: 1.2;
@@ -1121,8 +1155,8 @@ html[data-theme="light"] .grid-item.selected {
 
 .chart-legend-amount {
     display: block;
-    margin-top: 3px;
-    font-size: 0.72rem;
+    margin-top: 2px;
+    font-size: 0.68rem;
     font-weight: 600;
     color: var(--text-muted);
     line-height: 1.2;
@@ -1130,7 +1164,7 @@ html[data-theme="light"] .grid-item.selected {
 
 .chart-legend-pct {
     flex-shrink: 0;
-    font-size: 0.7rem;
+    font-size: 0.66rem;
     font-weight: 600;
     color: var(--text-muted);
     opacity: 0.75;
