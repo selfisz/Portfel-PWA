@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Import Money Pro → Portfel</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 520px; margin: 40px auto; padding: 0 16px; }
+        button { padding: 12px 20px; font-size: 1rem; cursor: pointer; }
+        #log { margin-top: 16px; white-space: pre-wrap; color: #333; }
+        .ok { color: #2f855a; }
+        .err { color: #c53030; }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <h1>Import danych Money Pro</h1>
+    <p>Wgra <strong>import-result.json</strong> do Firestore (<code>finances/my_state</code>) i zastąpi obecne transakcje.</p>
+    <button id="btn-import">Wgraj dane</button>
+    <div id="log"></div>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAfvk2_lfsaf5QZkH_MVk-kWbG8GFvjSeI",
+            authDomain: "portfel-pwa.firebaseapp.com",
+            projectId: "portfel-pwa",
+            storageBucket: "portfel-pwa.firebasestorage.app",
+            messagingSenderId: "370658952228",
+            appId: "1:370658952228:web:b5fedfe155ea1918e584b1",
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const logEl = document.getElementById('log');
+
+        function log(msg, cls) {
+            logEl.innerHTML += `<span class="${cls || ''}">${msg}</span>\n`;
+        }
+
+        document.getElementById('btn-import').onclick = async () => {
+            logEl.innerHTML = '';
+            try {
+                log('Ładowanie import-result.json...');
+                const res = await fetch('import-result.json');
+                if (!res.ok) throw new Error('Brak import-result.json — uruchom najpierw import-moneypro.py');
+                const appState = await res.json();
+                log(`Znaleziono ${appState.transactions.length} transakcji. Wgrywanie...`);
+
+                localStorage.setItem('app_finance_state', JSON.stringify(appState));
+                log('Zapisano lokalnie (localStorage).', 'ok');
+
+                try {
+                    await db.collection('finances').doc('my_state').set(appState);
+                    log('Zapisano w Firestore (chmura).', 'ok');
+                } catch (cloudErr) {
+                    log('Chmura niedostępna — dane są tylko lokalnie w tej przeglądarce.', 'err');
+                    log('Otwórz aplikację z tego samego adresu: http://localhost:8765/index.html', 'ok');
+                }
+
+                log('Gotowe! Odśwież aplikację Portfel.', 'ok');
+            } catch (err) {
+                log('Błąd: ' + (err.message || err), 'err');
+            }
+        };
+    </script>
+</body>
+</html>
