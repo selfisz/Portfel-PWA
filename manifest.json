@@ -1,22 +1,25 @@
 {
-  "name": "Moje Finanse",
+  "name": "Finanse",
   "short_name": "Finanse",
+  "description": "Osobisty portfel finansowy",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f7f9fc",
-  "theme_color": "#ffffff",
+  "background_color": "#f5f3ef",
+  "theme_color": "#0f0f0f",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://placehold.co/192x192/3182ce/ffffff.png?text=F",
+      "src": "icons/icon-192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any"
     },
     {
-      "src": "https://placehold.co/512x512/3182ce/ffffff.png?text=F",
+      "src": "icons/icon-512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ]
 }

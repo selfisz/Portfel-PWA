@@ -11,7 +11,10 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const stateRef = db.collection('finances').doc('my_state');
+const cloudBackupRef = db.collection('finances').doc('cloud_backup');
 const STORAGE_KEY = 'app_finance_state';
+const THEME_KEY = 'theme_preference';
+const LOCAL_BACKUP_KEY = 'finanse_local_backup';
 
 db.enablePersistence().catch(err => console.error("Firebase persistence error:", err));
 
@@ -49,6 +52,99 @@ let appState = {
 let editingTxIndex = null;
 let activeChartCategory = null;
 let dashboardChartInstance = null;
+
+const categoryColors = {
+    'Zakupy': '#2563eb', 'Dom': '#7c3aed', 'Osobista': '#db2777', 'Przyjemności': '#ea580c',
+    'Samochód': '#0891b2', 'Rachunki/opłaty': '#4f46e5', 'Subskrypcje': '#6366f1',
+    'Jedzenie na mieście': '#f59e0b', 'Różne': '#64748b', 'Edukacja': '#0d9488',
+    'Prezenty': '#e11d48', 'Komunikacja': '#0284c7', 'Długi': '#b45309',
+    'Wynagrodzenie': '#059669', 'Inne': '#6b7280'
+};
+
+const chartPalette = ['#2563eb', '#3b82f6', '#60a5fa', '#059669', '#34d399', '#7c3aed', '#a78bfa', '#64748b'];
+
+const ONBOARDING_SLIDES = [
+    { title: 'Witaj w Finanse', text: 'Twój osobisty portfel — prosty, elegancki i zawsze pod ręką.' },
+    { title: 'Synchronizacja live', text: 'Dane trafiają do chmury i są dostępne na telefonie oraz komputerze.' },
+    { title: 'Kategorie po Twojemu', text: 'Uporządkowane kategorie z Money Pro — dostosowane pod Ciebie.' }
+];
+
+function getCategoryColor(category) {
+    return categoryColors[category] || '#2563eb';
+}
+
+function hapticFeedback() {
+    if (navigator.vibrate) navigator.vibrate(12);
+}
+
+function formatDateGroup(dateStr) {
+    const d = new Date(dateStr + 'T12:00:00');
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return 'Dzisiaj';
+    if (d.toDateString() === yesterday.toDateString()) return 'Wczoraj';
+    return d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function initOnboarding() {
+    if (localStorage.getItem('onboarding_done')) return;
+    const overlay = document.getElementById('onboarding');
+    let step = 0;
+    const titleEl = document.getElementById('onboarding-title');
+    const textEl = document.getElementById('onboarding-text');
+    const dots = document.querySelectorAll('#onboarding-dots span');
+    const btnNext = document.getElementById('onboarding-next');
+    const btnSkip = document.getElementById('onboarding-skip');
+
+    function showStep(i) {
+        titleEl.textContent = ONBOARDING_SLIDES[i].title;
+        textEl.textContent = ONBOARDING_SLIDES[i].text;
+        dots.forEach((d, idx) => d.classList.toggle('active', idx === i));
+        btnNext.textContent = i === ONBOARDING_SLIDES.length - 1 ? 'Zaczynamy' : 'Dalej';
+    }
+
+    function close() {
+        overlay.classList.add('hidden');
+        localStorage.setItem('onboarding_done', '1');
+    }
+
+    overlay.classList.remove('hidden');
+    showStep(0);
+    btnSkip.onclick = close;
+    btnNext.onclick = () => {
+        step++;
+        if (step >= ONBOARDING_SLIDES.length) close();
+        else showStep(step);
+    };
+}
+
+function attachSwipeDelete(row, index) {
+    let startX = 0;
+    let currentX = 0;
+    let swiped = false;
+    row.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; swiped = false; }, { passive: true });
+    row.addEventListener('touchmove', (e) => {
+        currentX = e.touches[0].clientX - startX;
+        if (currentX < -20) {
+            row.classList.add('swiping');
+            row.style.transform = `translateX(${Math.max(currentX, -80)}px)`;
+        }
+    }, { passive: true });
+    row.addEventListener('touchend', () => {
+        if (currentX < -60) {
+            swiped = true;
+            deleteTransaction(index);
+        }
+        row.classList.remove('swiping');
+        row.style.transform = '';
+        startX = currentX = 0;
+    });
+    row.addEventListener('click', () => {
+        if (swiped) { swiped = false; return; }
+        editTransaction(index);
+    });
+}
 
 function getBasePath() {
     const parts = location.pathname.split('/').filter(Boolean);
@@ -235,6 +331,7 @@ function saveTransaction() {
     }
     appState.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
     saveState();
+    hapticFeedback();
     switchView('dashboard', 'Kokpit', document.querySelectorAll('.nav-item')[0]);
 }
 
@@ -310,7 +407,7 @@ function renderDashboard() {
     document.getElementById('db-total-expenses').innerText = `${totalExpenses.toFixed(2)} zł`;
     const netEl = document.getElementById('db-net-balance');
     netEl.innerText = `${netBalance >= 0 ? '+' : ''}${netBalance.toFixed(2)} zł`;
-    netEl.style.color = netBalance >= 0 ? 'var(--success)' : 'var(--danger)';
+    netEl.style.color = netBalance >= 0 ? '#6ee7b7' : '#fca5a5';
 
     const fillEl = document.getElementById('budget-progress-fill');
     if (totalIncomes > 0) {
@@ -356,11 +453,17 @@ function renderDashboard() {
             type: 'doughnut',
             data: {
                 labels: Object.keys(catSums),
-                datasets: [{ data: Object.values(catSums), backgroundColor: ['#3182ce', '#38a169', '#e53e3e', '#dd6b20', '#805ad5', '#319795', '#718096', '#d69e2e'] }]
+                datasets: [{ data: Object.values(catSums), backgroundColor: chartPalette, borderWidth: 0, hoverOffset: 6 }]
             },
             options: {
                 responsive: true,
-                plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
+                cutout: '62%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { boxWidth: 10, font: { size: 11, family: 'DM Sans' }, color: getComputedStyle(document.body).getPropertyValue('--text-muted').trim() || '#6b7280' }
+                    }
+                },
                 onClick: (event, elements, chart) => {
                     if (elements[0] && !activeChartCategory) {
                         activeChartCategory = chart.data.labels[elements[0].index];
@@ -372,27 +475,42 @@ function renderDashboard() {
     }
 
     const list = document.getElementById('recent-transactions-list');
-    list.innerHTML = displayTx.length === 0 ? '<p style="color:var(--text-muted); font-size:0.9rem;">Brak wyników.</p>' : '';
+    list.innerHTML = '';
+
+    if (displayTx.length === 0) {
+        list.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg><p>Brak transakcji w tym okresie</p></div>`;
+        return;
+    }
+
+    let lastGroup = '';
     displayTx.forEach(t => {
+        const group = formatDateGroup(t.date);
+        if (group !== lastGroup) {
+            const label = document.createElement('div');
+            label.className = 'tx-group-label';
+            label.textContent = group;
+            list.appendChild(label);
+            lastGroup = group;
+        }
+
         const globalIndex = appState.transactions.indexOf(t);
-        const isRec = t.recurringId ? `<span style="font-size:0.7rem; background:#ebf8ff; color:#3182ce; padding:2px 4px; border-radius:4px; margin-left:6px;">&#10227; Stałe</span>` : '';
+        const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
+        const isRec = t.recurringId ? '<span class="tx-badge">&#10227;</span>' : '';
+        const color = getCategoryColor(t.mainCategory);
         const row = document.createElement('div');
-        row.className = 'item-row';
+        row.className = 'tx-row';
         row.innerHTML = `
+            <div class="tx-dot" style="background:${color}"></div>
             <div class="tx-info">
-                <div style="font-weight:600; font-size:0.95rem;">${t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory} ${isRec}</div>
-                <div style="font-size:0.75rem; color:var(--text-muted);">${t.mainCategory} • ${t.date}</div>
+                <div class="tx-title">${title}${isRec}</div>
+                <div class="tx-meta">${t.mainCategory}</div>
                 ${t.note ? `<div class="tx-note">${t.note}</div>` : ''}
             </div>
-            <div style="text-align: right;">
-                <div style="font-weight:700; font-size:1rem; color: ${t.type === 'expense' ? 'var(--danger)' : 'var(--success)'}">
-                    ${t.type === 'expense' ? '-' : '+'}${t.amount.toFixed(2)} zł
-                </div>
-                <div class="tx-actions" style="margin-top:6px;">
-                    <button class="action-btn" onclick="editTransaction(${globalIndex})">Edytuj</button>
-                    <button class="action-btn delete" onclick="deleteTransaction(${globalIndex})">Usuń</button>
-                </div>
-            </div>`;
+            <div class="tx-amount-col">
+                <div class="tx-amount ${t.type}">${t.type === 'expense' ? '-' : '+'}${t.amount.toFixed(2)} zł</div>
+            </div>
+            <div class="tx-swipe-hint">Usuń</div>`;
+        attachSwipeDelete(row, globalIndex);
         list.appendChild(row);
     });
 }
@@ -456,7 +574,172 @@ function addLoanOverpayment() {
     renderLoans();
 }
 
+function getExportPayload() {
+    return {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        transactionCount: appState.transactions.length,
+        data: JSON.parse(JSON.stringify(appState))
+    };
+}
+
+function applyBackupPayload(payload) {
+    const data = payload.data || payload;
+    if (!data || !Array.isArray(data.transactions)) {
+        throw new Error('Nieprawidłowy plik kopii zapasowej.');
+    }
+    appState = data;
+    saveState();
+    refreshCurrentView();
+}
+
+function showSettingsToast(message) {
+    const toast = document.getElementById('settings-toast');
+    toast.textContent = message;
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 2800);
+}
+
+function setTheme(mode) {
+    localStorage.setItem(THEME_KEY, mode);
+    const html = document.documentElement;
+    if (mode === 'auto') {
+        html.removeAttribute('data-theme');
+    } else {
+        html.setAttribute('data-theme', mode);
+    }
+    document.querySelectorAll('.theme-option').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.theme === mode);
+    });
+    updateThemeColorMeta();
+}
+
+function updateThemeColorMeta() {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) return;
+    const forced = document.documentElement.getAttribute('data-theme');
+    const isDark = forced === 'dark' || (!forced && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    meta.content = isDark ? '#0a0a0a' : '#f5f3ef';
+}
+
+function initTheme() {
+    const saved = localStorage.getItem(THEME_KEY) || 'auto';
+    setTheme(saved);
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if ((localStorage.getItem(THEME_KEY) || 'auto') === 'auto') updateThemeColorMeta();
+    });
+}
+
+async function refreshBackupInfo() {
+    const infoEl = document.getElementById('backup-cloud-info');
+    try {
+        const snap = await cloudBackupRef.get();
+        if (snap.exists && snap.data().exportedAt) {
+            const date = new Date(snap.data().exportedAt).toLocaleString('pl-PL');
+            const count = snap.data().transactionCount || snap.data().data?.transactions?.length || '?';
+            infoEl.textContent = `Ostatnia kopia w chmurze: ${date} (${count} transakcji)`;
+        } else {
+            infoEl.textContent = 'Kopia w chmurze: brak zapisanej kopii';
+        }
+    } catch {
+        infoEl.textContent = 'Kopia w chmurze: niedostępna (sprawdź połączenie)';
+    }
+    const localRaw = localStorage.getItem(LOCAL_BACKUP_KEY);
+    if (localRaw) {
+        try {
+            const local = JSON.parse(localRaw);
+            infoEl.textContent += `\nKopia lokalna: ${new Date(local.exportedAt).toLocaleString('pl-PL')}`;
+        } catch { /* ignore */ }
+    }
+}
+
+function openSettings() {
+    document.getElementById('settings-overlay').classList.remove('hidden');
+    const saved = localStorage.getItem(THEME_KEY) || 'auto';
+    document.querySelectorAll('.theme-option').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.theme === saved);
+    });
+    refreshBackupInfo();
+}
+
+function closeSettings() {
+    document.getElementById('settings-overlay').classList.add('hidden');
+}
+
+async function backupToCloud() {
+    try {
+        const payload = getExportPayload();
+        await cloudBackupRef.set(payload);
+        showSettingsToast('Kopia wysłana do chmury');
+        refreshBackupInfo();
+        hapticFeedback();
+    } catch (err) {
+        alert('Nie udało się wysłać kopii do chmury. Opublikuj zaktualizowane reguły Firestore (cloud_backup).');
+        console.error(err);
+    }
+}
+
+function backupToPhone() {
+    const payload = getExportPayload();
+    localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(payload));
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `finanse-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showSettingsToast('Kopia zapisana na telefonie');
+    hapticFeedback();
+}
+
+async function restoreFromCloud() {
+    try {
+        const snap = await cloudBackupRef.get();
+        if (!snap.exists) return alert('Brak kopii zapasowej w chmurze.');
+        const payload = snap.data();
+        const count = payload.transactionCount || payload.data?.transactions?.length || 0;
+        if (!confirm(`Przywrócić kopię z chmury (${count} transakcji)? Obecne dane zostaną zastąpione.`)) return;
+        applyBackupPayload(payload);
+        showSettingsToast('Przywrócono kopię z chmury');
+        refreshBackupInfo();
+        hapticFeedback();
+    } catch (err) {
+        alert('Nie udało się pobrać kopii z chmury.');
+        console.error(err);
+    }
+}
+
+function restoreFromPhoneFile() {
+    document.getElementById('backup-file-input').click();
+}
+
+function handleBackupFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        try {
+            const payload = JSON.parse(reader.result);
+            const count = payload.transactionCount || payload.data?.transactions?.length || 0;
+            if (!confirm(`Przywrócić kopię z pliku (${count} transakcji)? Obecne dane zostaną zastąpione.`)) return;
+            applyBackupPayload(payload);
+            localStorage.setItem(LOCAL_BACKUP_KEY, reader.result);
+            showSettingsToast('Przywrócono kopię z pliku');
+            refreshBackupInfo();
+            hapticFeedback();
+        } catch (err) {
+            alert('Nieprawidłowy plik kopii zapasowej.');
+            console.error(err);
+        }
+        event.target.value = '';
+    };
+    reader.readAsText(file);
+}
+
 document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
 renderMainCategoriesForm();
+initTheme();
+initOnboarding();
 initData();
 registerServiceWorker();
