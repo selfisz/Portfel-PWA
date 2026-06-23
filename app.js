@@ -59,7 +59,32 @@ const MAX_RECENT_CATEGORIES = 5;
 
 let editingTxIndex = null;
 let activeChartCategory = null;
+let chartViewType = 'expense';
 let dashboardChartInstance = null;
+
+const incomeCategoryColorsLight = {
+    'Wynagrodzenie': '#15803d', 'Inne': '#475569',
+    'Podstawa': '#166534', 'Prowizja': '#0d9488', 'Nagroda': '#a16207',
+    'Delegacja': '#1d4ed8', 'Socjal': '#7c3aed'
+};
+
+const incomeCategoryColorsDark = {
+    'Wynagrodzenie': '#4ade80', 'Inne': '#94a3b8',
+    'Podstawa': '#6ee7b7', 'Prowizja': '#2dd4bf', 'Nagroda': '#fde047',
+    'Delegacja': '#60a5fa', 'Socjal': '#c084fc'
+};
+
+const incomeChartCategoryColorsLight = {
+    'Wynagrodzenie': '#15803D', 'Inne': '#57534E', 'Podstawa': '#166534',
+    'Prowizja': '#0F766E', 'Nagroda': '#A16207', 'Delegacja': '#1D4ED8',
+    'Socjal': '#6B21A8', 'Ogólne': '#57534E'
+};
+
+const incomeChartCategoryColorsDark = {
+    'Wynagrodzenie': '#4ADE80', 'Inne': '#A8A29E', 'Podstawa': '#6EE7B7',
+    'Prowizja': '#2DD4BF', 'Nagroda': '#FDE047', 'Delegacja': '#60A5FA',
+    'Socjal': '#C084FC', 'Ogólne': '#A8A29E'
+};
 
 const categoryColorsLight = {
     'Zakupy': '#c0264a', 'Dom': '#6d28d9', 'Osobista': '#be185d', 'Przyjemności': '#c2410c',
@@ -106,9 +131,21 @@ function getThemeCssVar(name, lightFallback, darkFallback) {
     return isLightTheme() ? lightFallback : darkFallback;
 }
 
-function getCategoryColor(category) {
+function getCategoryColor(category, txType = 'expense') {
+    if (txType === 'income' || categoryTree.income[category]) {
+        const palette = isLightTheme() ? incomeCategoryColorsLight : incomeCategoryColorsDark;
+        return palette[category] || (isLightTheme() ? '#15803d' : '#4ade80');
+    }
     const palette = isLightTheme() ? categoryColorsLight : categoryColorsDark;
     return palette[category] || (isLightTheme() ? '#5b4fe8' : '#93c5fd');
+}
+
+function resolveIconColor(mainCategory, subCategory, txType = 'expense') {
+    if (txType === 'income') {
+        const key = subCategory && subCategory !== '[Bez podkategorii]' ? subCategory : mainCategory;
+        return getCategoryColor(key, 'income');
+    }
+    return getCategoryColor(mainCategory, 'expense');
 }
 
 const categoryIconPaths = {
@@ -202,8 +239,8 @@ function categoryColorAlpha(hex, alpha) {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function renderCategoryIcon(mainCategory, variant = 'grid', subCategory = null) {
-    const color = getCategoryColor(mainCategory);
+function renderCategoryIcon(mainCategory, variant = 'grid', subCategory = null, txType = 'expense') {
+    const color = resolveIconColor(mainCategory, subCategory, txType);
     const path = getCategoryIconPath(mainCategory, subCategory);
     const wrapClass = variant === 'list' ? 'cat-icon-wrap cat-icon-wrap--list' : variant === 'chip' ? 'cat-icon-wrap cat-icon-wrap--chip' : 'cat-icon-wrap';
     return `<span class="${wrapClass}" style="background:${categoryColorAlpha(color, 0.16)};color:${color}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${path}"/></svg></span>`;
@@ -231,13 +268,16 @@ function getChartBorderColor() {
     return isLightTheme() ? 'rgba(255, 255, 255, 0.95)' : 'rgba(10, 10, 12, 0.9)';
 }
 
-function getChartSliceColors(labels) {
-    const chartMap = isLightTheme() ? chartCategoryColorsLight : chartCategoryColorsDark;
+function getChartSliceColors(labels, type = chartViewType) {
+    const chartMap = type === 'income'
+        ? (isLightTheme() ? incomeChartCategoryColorsLight : incomeChartCategoryColorsDark)
+        : (isLightTheme() ? chartCategoryColorsLight : chartCategoryColorsDark);
     if (!activeChartCategory) {
         const fallback = generateDistinctHslColors(labels.length, labels.join('|'));
         return labels.map((label, i) => chartMap[label] || fallback[i]);
     }
-    return generateDistinctHslColors(labels.length, `${activeChartCategory}|${labels.join('|')}`);
+    const fallback = generateDistinctHslColors(labels.length, `${activeChartCategory}|${labels.join('|')}`);
+    return labels.map((label, i) => chartMap[label] || fallback[i]);
 }
 
 const ONBOARDING_SLIDES = [
@@ -451,7 +491,7 @@ function createMainCategoryItem(cat) {
     const item = document.createElement('div');
     item.className = 'grid-item';
     if (formState.selectedMainCategory === cat) item.classList.add('selected');
-    item.innerHTML = `${renderCategoryIcon(cat, 'grid')}<span class="grid-item-label">${cat}</span>`;
+    item.innerHTML = `${renderCategoryIcon(cat, 'grid', null, formState.currentType)}<span class="grid-item-label">${cat}</span>`;
     item.onclick = () => selectMainCategoryForm(cat, item);
     return item;
 }
@@ -460,7 +500,7 @@ function createSubCategoryItem(sub) {
     const item = document.createElement('div');
     item.className = 'grid-item grid-item-sub';
     if (formState.selectedSubCategory === sub) item.classList.add('selected');
-    item.innerHTML = `${renderCategoryIcon(formState.selectedMainCategory, 'grid', sub)}<span class="grid-item-label">${sub}</span>`;
+    item.innerHTML = `${renderCategoryIcon(formState.selectedMainCategory, 'grid', sub, formState.currentType)}<span class="grid-item-label">${sub}</span>`;
     item.onclick = () => {
         document.querySelectorAll('#sub-category-grid .grid-item').forEach((i) => i.classList.remove('selected'));
         item.classList.add('selected');
@@ -491,7 +531,7 @@ function renderRecentCategories() {
         const label = recent.subCategory === '[Bez podkategorii]'
             ? recent.mainCategory
             : `${recent.mainCategory} · ${recent.subCategory}`;
-        chip.innerHTML = `${renderCategoryIcon(recent.mainCategory, 'chip', recent.subCategory === '[Bez podkategorii]' ? null : recent.subCategory)}<span>${label}</span>`;
+        chip.innerHTML = `${renderCategoryIcon(recent.mainCategory, 'chip', recent.subCategory === '[Bez podkategorii]' ? null : recent.subCategory, recent.type)}<span>${label}</span>`;
         if (formState.selectedMainCategory === recent.mainCategory && formState.selectedSubCategory === recent.subCategory) {
             chip.classList.add('selected');
         }
@@ -674,7 +714,7 @@ function saveTransaction() {
     appState.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
     saveState();
     hapticFeedback();
-    switchView('dashboard', 'Kokpit', document.querySelectorAll('.nav-item')[0]);
+    switchView('dashboard', 'Pulpit', document.querySelectorAll('.nav-item')[0]);
 }
 
 function editTransaction(index) {
@@ -703,7 +743,7 @@ function deleteTransaction(index) {
 
 function cancelEdit() {
     editingTxIndex = null;
-    switchView('dashboard', 'Kokpit', document.querySelectorAll('.nav-item')[0]);
+    switchView('dashboard', 'Pulpit', document.querySelectorAll('.nav-item')[0]);
 }
 
 function handleDashboardPeriodChange() {
@@ -732,9 +772,87 @@ function getDashboardDates() {
     return { startDate, endDate };
 }
 
+function formatPlnAmount(amount) {
+    return `${amount.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
+}
+
+function renderChartLegend(catSums, sliceColors, labels) {
+    const legendEl = document.getElementById('chart-legend');
+    const centerEl = document.getElementById('chart-center-amount');
+    const total = Object.values(catSums).reduce((sum, value) => sum + value, 0);
+
+    if (centerEl) centerEl.textContent = formatPlnAmount(total);
+
+    if (!labels.length) {
+        legendEl.innerHTML = '';
+        return;
+    }
+
+    const entries = labels
+        .map((label, index) => ({
+            label,
+            amount: catSums[label],
+            color: sliceColors[index],
+            index
+        }))
+        .sort((a, b) => b.amount - a.amount);
+
+    legendEl.innerHTML = entries.map(({ label, amount, color, index }) => {
+        const pct = total > 0 ? Math.round((amount / total) * 100) : 0;
+        return `<button type="button" class="chart-legend-item${activeChartCategory ? '' : ' chart-legend-item--drill'}" data-index="${index}" data-label="${label.replace(/"/g, '&quot;')}">
+            <span class="chart-legend-swatch" style="background:${color}"></span>
+            <span class="chart-legend-text">
+                <span class="chart-legend-name">${label}</span>
+                <span class="chart-legend-amount">${formatPlnAmount(amount)}</span>
+            </span>
+            <span class="chart-legend-pct">${pct}%</span>
+        </button>`;
+    }).join('');
+
+    legendEl.querySelectorAll('.chart-legend-item').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            if (!activeChartCategory) {
+                activeChartCategory = btn.dataset.label;
+                renderDashboard();
+                return;
+            }
+            if (!dashboardChartInstance) return;
+            const chartIndex = parseInt(btn.dataset.index, 10);
+            dashboardChartInstance.toggleDataVisibility(chartIndex);
+            btn.classList.toggle('chart-legend-item--hidden', !dashboardChartInstance.getDataVisibility(chartIndex));
+        });
+    });
+}
+
 function resetDashboardChart() {
     activeChartCategory = null;
     renderDashboard();
+}
+
+function setChartViewType(type) {
+    if (chartViewType === type) return;
+    chartViewType = type;
+    activeChartCategory = null;
+    renderDashboard();
+}
+
+function formatDashboardPeriodLabel() {
+    const period = document.getElementById('dashboard-period-select').value;
+    const now = new Date();
+    if (period === 'current-month') {
+        const label = now.toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+        return label.charAt(0).toUpperCase() + label.slice(1);
+    }
+    if (period === 'previous-month') {
+        const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const label = prev.toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+        return label.charAt(0).toUpperCase() + label.slice(1);
+    }
+    if (period === 'current-year') {
+        return String(now.getFullYear());
+    }
+    const { startDate, endDate } = getDashboardDates();
+    return `${startDate} – ${endDate}`;
 }
 
 function renderDashboard() {
@@ -746,6 +864,7 @@ function renderDashboard() {
     const totalExpenses = dateFilteredTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
     const netBalance = totalIncomes - totalExpenses;
 
+    document.getElementById('db-period-label').innerText = formatDashboardPeriodLabel();
     document.getElementById('db-total-incomes').innerText = `${totalIncomes.toFixed(2)} zł`;
     document.getElementById('db-total-expenses').innerText = `${totalExpenses.toFixed(2)} zł`;
     const netEl = document.getElementById('db-net-balance');
@@ -772,20 +891,24 @@ function renderDashboard() {
         );
     }
 
-    const expensesForChart = displayTx.filter(t => t.type === 'expense');
+    const chartTx = displayTx.filter(t => t.type === chartViewType);
     const catSums = {};
+    const chartTypeLabel = chartViewType === 'income' ? 'wpływów' : 'wydatków';
     document.getElementById('btn-reset-chart').style.display = activeChartCategory ? 'block' : 'none';
-    document.getElementById('chart-title').innerText = activeChartCategory ? `Struktura: ${activeChartCategory}` : 'Struktura wydatków';
+    document.getElementById('chart-title').innerText = activeChartCategory
+        ? `Struktura: ${activeChartCategory}`
+        : `Struktura ${chartTypeLabel}`;
+    document.getElementById('btn-chart-expense').classList.toggle('active', chartViewType === 'expense');
+    document.getElementById('btn-chart-income').classList.toggle('active', chartViewType === 'income');
 
     if (!activeChartCategory) {
-        expensesForChart.forEach(t => { catSums[t.mainCategory] = (catSums[t.mainCategory] || 0) + t.amount; });
+        chartTx.forEach(t => { catSums[t.mainCategory] = (catSums[t.mainCategory] || 0) + t.amount; });
     } else {
-        const drilledExpenses = expensesForChart.filter(t => t.mainCategory === activeChartCategory);
-        drilledExpenses.forEach(t => {
+        chartTx.filter(t => t.mainCategory === activeChartCategory).forEach(t => {
             const label = t.subCategory === '[Bez podkategorii]' ? 'Ogólne' : t.subCategory;
             catSums[label] = (catSums[label] || 0) + t.amount;
         });
-        displayTx = displayTx.filter(t => t.mainCategory === activeChartCategory);
+        displayTx = displayTx.filter(t => t.type === chartViewType && t.mainCategory === activeChartCategory);
     }
 
     const ctxDash = document.getElementById('dashboardChart').getContext('2d');
@@ -795,7 +918,6 @@ function renderDashboard() {
         const chartLabels = Object.keys(catSums);
         const sliceColors = getChartSliceColors(chartLabels);
         const borderColor = getChartBorderColor();
-        const legendTextColor = getThemeCssVar('--text', '#0f172a', '#f5f5f5');
 
         dashboardChartInstance = new Chart(ctxDash, {
             type: 'doughnut',
@@ -816,32 +938,7 @@ function renderDashboard() {
                 responsive: true,
                 cutout: '58%',
                 plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            usePointStyle: true,
-                            pointStyle: 'rectRounded',
-                            boxWidth: 14,
-                            boxHeight: 10,
-                            padding: 14,
-                            font: { size: 12, weight: '600', family: 'DM Sans' },
-                            color: legendTextColor,
-                            generateLabels(chart) {
-                                const ds = chart.data.datasets[0];
-                                return chart.data.labels.map((label, i) => ({
-                                    text: label,
-                                    fillStyle: ds.backgroundColor[i],
-                                    strokeStyle: borderColor,
-                                    lineWidth: 2,
-                                    fontColor: legendTextColor,
-                                    color: legendTextColor,
-                                    hidden: !chart.getDataVisibility(i),
-                                    index: i,
-                                    pointStyle: 'rectRounded'
-                                }));
-                            }
-                        }
-                    },
+                    legend: { display: false },
                     tooltip: {
                         backgroundColor: isLightTheme() ? 'rgba(15, 23, 42, 0.92)' : 'rgba(0, 0, 0, 0.88)',
                         titleFont: { family: 'DM Sans', weight: '700' },
@@ -858,6 +955,11 @@ function renderDashboard() {
                 }
             }
         });
+        renderChartLegend(catSums, sliceColors, chartLabels);
+    } else {
+        document.getElementById('chart-legend').innerHTML = '';
+        const centerEl = document.getElementById('chart-center-amount');
+        if (centerEl) centerEl.textContent = formatPlnAmount(0);
     }
 
     const list = document.getElementById('recent-transactions-list');
@@ -885,7 +987,7 @@ function renderDashboard() {
         const row = document.createElement('div');
         row.className = 'tx-row';
         row.innerHTML = `
-            ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null)}
+            ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
             <div class="tx-info">
                 <div class="tx-title">${title}${isRec}</div>
                 <div class="tx-meta">${t.mainCategory}</div>

@@ -36,7 +36,7 @@
     <header>
         <div class="header-brand">
             <img class="header-logo" src="icons/icon-192.png" alt="">
-            <h1 id="view-title">Kokpit</h1>
+            <h1 id="view-title">Pulpit</h1>
         </div>
         <div class="header-actions">
             <button type="button" id="btn-settings" class="btn-icon" onclick="openSettings()" aria-label="Ustawienia">
@@ -106,7 +106,7 @@
             </div>
 
             <div class="card hero-card">
-                <div class="hero-label">Bilans okresu</div>
+                <div class="hero-label" id="db-period-label">Bieżący miesiąc</div>
                 <div id="db-net-balance" class="hero-balance">0,00 zł</div>
                 <div class="hero-stats">
                     <div class="hero-stat income">
@@ -126,9 +126,22 @@
             </div>
 
             <div class="card chart-card">
-                <h2 id="chart-title">Struktura wydatków</h2>
+                <div class="chart-card-header">
+                    <h2 id="chart-title">Struktura wydatków</h2>
+                    <div class="chart-type-toggle flex-toggle">
+                        <button id="btn-chart-expense" type="button" class="toggle-btn active expense" onclick="setChartViewType('expense')">Wydatki</button>
+                        <button id="btn-chart-income" type="button" class="toggle-btn income" onclick="setChartViewType('income')">Wpływy</button>
+                    </div>
+                </div>
                 <button id="btn-reset-chart" class="btn-outline" onclick="resetDashboardChart()">&#8592; Wróć do ogółu</button>
-                <div class="chart-wrapper"><canvas id="dashboardChart"></canvas></div>
+                <div class="chart-wrapper">
+                    <canvas id="dashboardChart"></canvas>
+                    <div class="chart-center-label" aria-hidden="true">
+                        <div id="chart-center-amount" class="chart-center-amount">0,00 zł</div>
+                        <div class="chart-center-sub">razem</div>
+                    </div>
+                </div>
+                <div id="chart-legend" class="chart-legend"></div>
             </div>
 
             <div class="card">
@@ -233,7 +246,7 @@
     </div>
 
     <nav class="bottom-nav">
-        <button class="nav-item active" onclick="switchView('dashboard', 'Kokpit', this)"><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Kokpit</button>
+        <button class="nav-item active" onclick="switchView('dashboard', 'Pulpit', this)"><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Pulpit</button>
         <button class="nav-item" onclick="switchView('add', 'Dodaj', this)"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>Dodaj</button>
         <button class="nav-item" onclick="switchView('reports', 'Raporty', this)"><svg viewBox="0 0 24 24"><path d="M11 2v20c-5.07-.5-9-4.75-9-10s3.93-9.5 9-10zm2 0v8h9c-.44-4.14-3.51-7.27-7.5-7.85zm0 10v10c3.99-.58 7.06-3.71 7.5-7.85h-9z"/></svg>Raporty</button>
         <button class="nav-item" onclick="switchView('investments', 'Aktywa', this)"><svg viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>Aktywa</button>
