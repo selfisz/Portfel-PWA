@@ -48,7 +48,8 @@ let categoryEditorType = 'expense';
 let appState = {
     transactions: [],
     loan: { totalAmount: 500000.00, currentCapitalLeft: 412500.00, interestRate: 6.75 },
-    investments: [{ ticker: 'VWCE.DE', name: 'Vanguard FTSE All-World', quantity: 45, purchasePrice: 104.20, currentPriceManual: 118.50, currency: 'EUR' }]
+    investments: [{ ticker: 'VWCE.DE', name: 'Vanguard FTSE All-World', quantity: 45, purchasePrice: 104.20, currentPriceManual: 118.50, currency: 'EUR' }],
+    categoryBudgets: {}
 };
 
 let formState = {
@@ -65,8 +66,16 @@ let activeChartCategory = null;
 let chartViewType = 'expense';
 let dashboardChartInstance = null;
 let reportsChartInstance = null;
+let reportsTrendChartInstance = null;
+let reportsYoyChartInstance = null;
+let reportsDowChartInstance = null;
 let reportsViewType = 'expense';
 let reportsRankLevel = 'main';
+let reportsCalendarYear = null;
+let reportsCalendarMonth = null;
+let reportsLastPeriod = null;
+
+const SAVINGS_GOAL_KEY = 'reports_savings_goal_pct';
 
 const incomeCategoryColorsLight = {
     'Wynagrodzenie': '#15803d', 'Inne': '#475569',
@@ -156,7 +165,7 @@ function resolveIconColor(mainCategory, subCategory, txType = 'expense') {
 
 const categoryIconPaths = {
     'Dom': 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z',
-    'Długi': 'M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z',
+    'Długi': 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11H7v-2h10v2z',
     'Osobista': 'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
     'Przyjemności': 'M20 12c0-1.1.9-2 2-2V6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v4c1.1 0 2 .9 2 2s-.9 2-2 2v4c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-4c-1.1 0-2-.9-2-2z',
     'Zakupy': 'M18 6h-2c0-2.21-1.79-4-4-4S8 3.79 8 6H6c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-2c1.1 0 2 .9 2 2h-4c0-1.1.9-2 2-2z',
@@ -179,7 +188,9 @@ const subCategoryIconPaths = {
     'Formalności': 'M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z',
     'Smart home': 'M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z',
     'Konserwacja': 'M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z',
-    'Kredyt Pekao SA': 'M4 10v7h3v-7H4zm10 0v7h3v-7h-3zM2 19h20v2H2v-2zm2-15h2v4H4V4zm14 0h2v4h-2V4z',
+    'Kredyt Pekao SA': 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z',
+    'Kredyt hipoteczny': 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z',
+    'Kredyt na mieszkanie': 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z',
     'Karta kredytowa': 'M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z',
     'Spłata': 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H8v-2h3V9h2v7z',
     'Raty': 'M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z',
@@ -228,9 +239,14 @@ const subCategoryIconPaths = {
     '[Bez podkategorii]': 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z'
 };
 
+const MORTGAGE_ICON_PATH = 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z';
+
 function getCategoryIconPath(mainCategory, subCategory = null) {
     if (subCategory && subCategoryIconPaths[subCategory]) {
         return subCategoryIconPaths[subCategory];
+    }
+    if (subCategory && /kredyt|hipoteczn|mieszkan/i.test(subCategory)) {
+        return MORTGAGE_ICON_PATH;
     }
     return categoryIconPaths[mainCategory] || categoryIconPaths['Inne'];
 }
@@ -493,7 +509,10 @@ function getPersistedState(raw = appState) {
         investments: Array.isArray(data.investments) ? data.investments : [],
         categoryTree: data.categoryTree && typeof data.categoryTree === 'object'
             ? data.categoryTree
-            : JSON.parse(JSON.stringify(DEFAULT_CATEGORY_TREE))
+            : JSON.parse(JSON.stringify(DEFAULT_CATEGORY_TREE)),
+        categoryBudgets: data.categoryBudgets && typeof data.categoryBudgets === 'object'
+            ? data.categoryBudgets
+            : {}
     };
 }
 
@@ -871,6 +890,14 @@ function getDashboardDates() {
     return { startDate, endDate };
 }
 
+function getPortfolioValuePln() {
+    const FIXED_EUR_PLN = 4.32;
+    return appState.investments.reduce((sum, asset) => {
+        const val = asset.quantity * asset.currentPriceManual;
+        return sum + (asset.currency === 'EUR' ? val * FIXED_EUR_PLN : val);
+    }, 0);
+}
+
 function formatPlnAmount(amount) {
     return `${amount.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
 }
@@ -878,6 +905,14 @@ function formatPlnAmount(amount) {
 function formatTxDate(dateStr) {
     const d = new Date(`${dateStr}T12:00:00`);
     return d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function escapeHtml(text) {
+    return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 }
 
 function transactionMatchesSearch(t, searchQuery) {
@@ -1161,6 +1196,533 @@ function setReportsRankLevel(level) {
     renderReports();
 }
 
+function getReportsChartTheme() {
+    return {
+        legendColor: getThemeCssVar('--text', '#0f172a', '#f5f5f5'),
+        gridColor: isLightTheme() ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.08)',
+        expenseColor: isLightTheme() ? 'rgba(220, 38, 38, 0.8)' : 'rgba(248, 113, 113, 0.8)',
+        expenseFill: isLightTheme() ? 'rgba(220, 38, 38, 0.12)' : 'rgba(248, 113, 113, 0.18)',
+        incomeColor: isLightTheme() ? 'rgba(13, 148, 136, 0.85)' : 'rgba(52, 211, 153, 0.8)',
+        prevYearColor: isLightTheme() ? 'rgba(100, 116, 139, 0.55)' : 'rgba(148, 163, 184, 0.5)',
+        tooltipBg: isLightTheme() ? 'rgba(15, 23, 42, 0.92)' : 'rgba(0, 0, 0, 0.88)'
+    };
+}
+
+function getReportsChartOptions(theme, yAxis = true) {
+    const options = {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 1.45,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: {
+                    color: theme.legendColor,
+                    font: { family: 'DM Sans', weight: '600', size: 11 },
+                    boxWidth: 12,
+                    padding: 14
+                }
+            },
+            tooltip: {
+                backgroundColor: theme.tooltipBg,
+                titleFont: { family: 'DM Sans', weight: '700' },
+                bodyFont: { family: 'DM Sans', weight: '600' },
+                padding: 12,
+                cornerRadius: 10,
+                callbacks: {
+                    label: (context) => `${context.dataset.label}: ${formatPlnAmount(context.parsed.y)}`
+                }
+            }
+        },
+        scales: {
+            x: {
+                ticks: { color: theme.legendColor, font: { family: 'DM Sans', size: 10 } },
+                grid: { display: false }
+            }
+        }
+    };
+    if (yAxis) {
+        options.scales.y = {
+            ticks: {
+                color: theme.legendColor,
+                font: { family: 'DM Sans', size: 10 },
+                callback: (value) => (value >= 1000 ? `${Math.round(value / 1000)}k` : value)
+            },
+            grid: { color: theme.gridColor }
+        };
+    }
+    return options;
+}
+
+function formatCompactPln(amount) {
+    if (amount >= 10000) return `${(amount / 1000).toFixed(0)}k`;
+    if (amount >= 1000) return `${(amount / 1000).toFixed(1)}k`;
+    return `${Math.round(amount)}`;
+}
+
+function getExpenseHeatColor(amount, maxAmount) {
+    if (!amount || amount <= 0) return 'transparent';
+    const ratio = Math.min(amount / (maxAmount || 1), 1);
+    if (isLightTheme()) return `rgba(220, 38, 38, ${0.1 + ratio * 0.5})`;
+    return `rgba(248, 113, 113, ${0.12 + ratio * 0.55})`;
+}
+
+function syncReportsCalendarToPeriod(period) {
+    const now = new Date();
+    if (reportsLastPeriod === period && reportsCalendarYear !== null) return;
+    reportsLastPeriod = period;
+
+    if (period === 'all') {
+        reportsCalendarYear = now.getFullYear();
+        reportsCalendarMonth = now.getMonth();
+        return;
+    }
+    const year = parseInt(period, 10);
+    reportsCalendarYear = year;
+    reportsCalendarMonth = year === now.getFullYear() ? now.getMonth() : 11;
+}
+
+function shiftReportsCalendarMonth(delta) {
+    if (typeof reportsCalendarView !== 'undefined' && reportsCalendarView === 'year') {
+        if (reportsCalendarYear === null) reportsCalendarYear = new Date().getFullYear();
+        reportsCalendarYear += delta;
+        if (typeof renderReportsYearHeatmap === 'function') renderReportsYearHeatmap();
+        return;
+    }
+    const period = document.getElementById('reports-year-select')?.value || 'all';
+    reportsCalendarMonth += delta;
+    if (period !== 'all') {
+        const year = parseInt(period, 10);
+        reportsCalendarYear = year;
+        if (reportsCalendarMonth > 11) reportsCalendarMonth = 0;
+        if (reportsCalendarMonth < 0) reportsCalendarMonth = 11;
+    } else {
+        if (reportsCalendarMonth > 11) {
+            reportsCalendarMonth = 0;
+            reportsCalendarYear++;
+        }
+        if (reportsCalendarMonth < 0) {
+            reportsCalendarMonth = 11;
+            reportsCalendarYear--;
+        }
+    }
+    renderReportsCalendar();
+}
+
+function renderReportsCalendar() {
+    const grid = document.getElementById('reports-calendar-grid');
+    const labelEl = document.getElementById('reports-calendar-label');
+    if (!grid || !labelEl || reportsCalendarYear === null) return;
+
+    const year = reportsCalendarYear;
+    const month = reportsCalendarMonth;
+    const monthLabel = new Date(year, month, 1).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+    labelEl.textContent = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+
+    const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const monthEnd = new Date(year, month + 1, 0).toISOString().split('T')[0];
+    const monthExpenses = appState.transactions.filter(
+        (t) => t.type === 'expense' && t.date >= monthStart && t.date <= monthEnd
+    );
+
+    const byDay = {};
+    monthExpenses.forEach((t) => {
+        if (!byDay[t.date]) byDay[t.date] = { total: 0, cats: {} };
+        byDay[t.date].total += t.amount;
+        const cat = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
+        byDay[t.date].cats[cat] = (byDay[t.date].cats[cat] || 0) + t.amount;
+    });
+
+    const maxDay = Math.max(0, ...Object.values(byDay).map((d) => d.total));
+    const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date().toISOString().split('T')[0];
+
+    const parts = ['<div class="cal-weekday">Pn</div>', '<div class="cal-weekday">Wt</div>', '<div class="cal-weekday">Śr</div>', '<div class="cal-weekday">Cz</div>', '<div class="cal-weekday">Pt</div>', '<div class="cal-weekday">Sb</div>', '<div class="cal-weekday">Nd</div>'];
+
+    for (let i = 0; i < firstDow; i++) parts.push('<div class="cal-cell cal-cell--empty"></div>');
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const data = byDay[dateStr];
+        const todayClass = dateStr === today ? ' cal-cell--today' : '';
+        const clickable = ' cal-cell--clickable';
+        if (data) {
+            const topCats = Object.entries(data.cats)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3)
+                .map(([name]) => escapeHtml(name));
+            const heat = getExpenseHeatColor(data.total, maxDay);
+            const catsHtml = topCats.map((name) => `<span class="cal-day-cat">${name}</span>`).join('');
+            const moreCount = Object.keys(data.cats).length - topCats.length;
+            const moreHtml = moreCount > 0 ? `<span class="cal-day-more">+${moreCount}</span>` : '';
+            parts.push(`<button type="button" class="cal-cell${todayClass}${clickable}" data-date="${dateStr}" style="background:${heat}" onclick="openCalendarDay('${dateStr}')">
+                <span class="cal-day-num">${day}</span>
+                <span class="cal-day-amount">${formatCompactPln(data.total)} zł</span>
+                <span class="cal-day-cats">${catsHtml}${moreHtml}</span>
+            </button>`);
+        } else {
+            parts.push(`<button type="button" class="cal-cell${todayClass}${clickable}" data-date="${dateStr}" onclick="openCalendarDay('${dateStr}')">
+                <span class="cal-day-num">${day}</span>
+            </button>`);
+        }
+    }
+
+    grid.innerHTML = parts.join('');
+}
+
+function openCalendarDay(dateStr) {
+    if (typeof openCalendarDayPanel === 'function') {
+        openCalendarDayPanel(dateStr);
+        return;
+    }
+    const overlay = document.getElementById('calendar-day-overlay');
+    const titleEl = document.getElementById('calendar-day-title');
+    const summaryEl = document.getElementById('calendar-day-summary');
+    const listEl = document.getElementById('calendar-day-list');
+    if (!overlay || !titleEl || !summaryEl || !listEl) return;
+
+    const dayTx = appState.transactions
+        .filter((t) => t.date === dateStr)
+        .sort((a, b) => {
+            if (a.type !== b.type) return a.type === 'expense' ? -1 : 1;
+            return b.amount - a.amount;
+        });
+
+    const weekday = new Date(`${dateStr}T12:00:00`).toLocaleDateString('pl-PL', { weekday: 'long' });
+    titleEl.textContent = formatTxDate(dateStr);
+
+    const expenseTotal = dayTx.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+    const incomeTotal = dayTx.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+
+    summaryEl.innerHTML = `<div class="calendar-day-summary-row">
+        <span class="calendar-day-weekday">${weekday.charAt(0).toUpperCase() + weekday.slice(1)}</span>
+        <div class="calendar-day-totals">
+            ${expenseTotal > 0 ? `<span class="calendar-day-total expense">−${formatPlnAmount(expenseTotal)}</span>` : ''}
+            ${incomeTotal > 0 ? `<span class="calendar-day-total income">+${formatPlnAmount(incomeTotal)}</span>` : ''}
+        </div>
+    </div>`;
+
+    if (!dayTx.length) {
+        listEl.innerHTML = '<div class="empty-state"><p>Brak transakcji tego dnia</p></div>';
+    } else {
+        listEl.innerHTML = dayTx.map((t) => {
+            const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
+            const meta = t.subCategory === '[Bez podkategorii]' ? '' : t.mainCategory;
+            const isRec = t.recurringId ? '<span class="tx-badge">&#10227;</span>' : '';
+            return `<div class="calendar-day-tx">
+                ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
+                <div class="tx-info">
+                    <div class="tx-title">${escapeHtml(title)}${isRec}</div>
+                    ${meta ? `<div class="tx-meta">${escapeHtml(meta)}</div>` : ''}
+                    ${t.note ? `<div class="tx-note">${escapeHtml(t.note)}</div>` : ''}
+                </div>
+                <div class="tx-amount ${t.type}">${t.type === 'expense' ? '−' : '+'}${t.amount.toFixed(2)} zł</div>
+            </div>`;
+        }).join('');
+    }
+
+    overlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeCalendarDay() {
+    const overlay = document.getElementById('calendar-day-overlay');
+    if (!overlay) return;
+    overlay.classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+function calcReportsDailyAverage(period, periodTx) {
+    const expenses = periodTx.filter((t) => t.type === 'expense');
+    const now = new Date();
+
+    if (period === 'all') {
+        const cutoff = new Date(now);
+        cutoff.setDate(cutoff.getDate() - 29);
+        const cutoffStr = cutoff.toISOString().split('T')[0];
+        const recentTotal = expenses
+            .filter((t) => t.date >= cutoffStr)
+            .reduce((sum, t) => sum + t.amount, 0);
+        return { avg: recentTotal / 30, hint: 'ostatnie 30 dni' };
+    }
+
+    if (period === 'range' || period === 'compare') {
+        const dates = expenses.map((t) => t.date).sort();
+        if (!dates.length) return { avg: 0, hint: 'brak wydatków' };
+        const start = dates[0];
+        const end = dates[dates.length - 1];
+        const days = Math.max(1, Math.ceil((new Date(`${end}T12:00:00`) - new Date(`${start}T12:00:00`)) / 86400000) + 1);
+        const total = expenses.reduce((sum, t) => sum + t.amount, 0);
+        return { avg: total / days, hint: `zakres (${days} dni)` };
+    }
+
+    const year = parseInt(period, 10);
+    const isCurrentYear = year === now.getFullYear();
+    const start = new Date(year, 0, 1);
+    const end = isCurrentYear ? now : new Date(year, 11, 31);
+    const days = Math.max(1, Math.ceil((end - start) / 86400000) + 1);
+    const total = expenses.reduce((sum, t) => sum + t.amount, 0);
+    return { avg: total / days, hint: isCurrentYear ? `od 1 sty do dziś (${days} dni)` : `cały rok (${days} dni)` };
+}
+
+function renderReportsDailyAvg(period, periodTx) {
+    const { avg, hint } = calcReportsDailyAverage(period, periodTx);
+    const avgEl = document.getElementById('reports-daily-avg');
+    const hintEl = document.getElementById('reports-daily-avg-hint');
+    if (avgEl) avgEl.textContent = formatPlnAmount(avg);
+    if (hintEl) hintEl.textContent = hint;
+}
+
+function loadSavingsGoal() {
+    const value = parseInt(localStorage.getItem(SAVINGS_GOAL_KEY), 10);
+    return Number.isFinite(value) ? value : 20;
+}
+
+function saveSavingsGoal() {
+    const input = document.getElementById('savings-goal-input');
+    if (!input) return;
+    const value = Math.max(0, Math.min(100, parseInt(input.value, 10) || 0));
+    input.value = value;
+    localStorage.setItem(SAVINGS_GOAL_KEY, String(value));
+    const period = document.getElementById('reports-year-select')?.value;
+    if (!period) return;
+    const periodTx = getTransactionsForReportsPeriod(period);
+    const totalIncome = periodTx.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+    const totalExpense = periodTx.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+    const savingsRate = totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 100) : 0;
+    renderReportsSavingsGoal(savingsRate);
+}
+
+function renderReportsSavingsGoal(savingsRate) {
+    const goal = loadSavingsGoal();
+    const input = document.getElementById('savings-goal-input');
+    if (input && document.activeElement !== input) input.value = goal;
+    const fill = document.getElementById('reports-goal-fill');
+    const label = document.getElementById('reports-goal-label');
+    if (!fill || !label) return;
+    const progress = goal > 0 ? Math.min(100, Math.round((savingsRate / goal) * 100)) : 0;
+    fill.style.width = `${progress}%`;
+    fill.style.background = savingsRate >= goal ? 'var(--success)' : (savingsRate >= 0 ? 'var(--accent)' : 'var(--danger)');
+    label.textContent = `${savingsRate}% z ${goal}%`;
+}
+
+function renderReportsTrendChart(period, periodTx, rangeStart, rangeEnd) {
+    const canvas = document.getElementById('reportsTrendChart');
+    if (!canvas) return;
+    const { monthLabels, expenseData } = buildReportsMonthChartData(period, periodTx, rangeStart, rangeEnd);
+    const theme = getReportsChartTheme();
+    const ctx = canvas.getContext('2d');
+    if (reportsTrendChartInstance) reportsTrendChartInstance.destroy();
+
+    reportsTrendChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: monthLabels,
+            datasets: [{
+                label: 'Wydatki',
+                data: expenseData,
+                borderColor: theme.expenseColor,
+                backgroundColor: theme.expenseFill,
+                fill: true,
+                tension: 0.35,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                borderWidth: 2
+            }]
+        },
+        options: getReportsChartOptions(theme)
+    });
+}
+
+function getMonthExpenseTotal(year, month, sourceTx) {
+    const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const monthEnd = new Date(year, month + 1, 0).toISOString().split('T')[0];
+    return sourceTx
+        .filter((t) => t.type === 'expense' && t.date >= monthStart && t.date <= monthEnd)
+        .reduce((sum, t) => sum + t.amount, 0);
+}
+
+function renderReportsYoYChart(period, periodTx, reportsCtx) {
+    const canvas = document.getElementById('reportsYoyChart');
+    const titleEl = document.getElementById('reports-yoy-title');
+    if (!canvas) return;
+
+    const theme = getReportsChartTheme();
+    const ctx = canvas.getContext('2d');
+    if (reportsYoyChartInstance) reportsYoyChartInstance.destroy();
+
+    const now = new Date();
+    const labels = [];
+    const currentData = [];
+    const prevData = [];
+    const allTx = appState.transactions;
+
+    if (period === 'range' || period === 'compare') {
+        const start = reportsCtx?.rangeStart || reportsCtx?.periodA?.start;
+        const end = reportsCtx?.rangeEnd || reportsCtx?.periodA?.end;
+        const { monthKeys } = buildReportsMonthChartData(period, periodTx, start, end);
+        if (titleEl) titleEl.textContent = 'Porównanie rok do roku (zakres)';
+        monthKeys.forEach(({ year, month }) => {
+            labels.push(new Date(year, month, 1).toLocaleDateString('pl-PL', { month: 'short', year: '2-digit' }));
+            currentData.push(getMonthExpenseTotal(year, month, periodTx));
+            prevData.push(getMonthExpenseTotal(year - 1, month, allTx));
+        });
+    } else if (period === 'all') {
+        if (titleEl) titleEl.textContent = 'Porównanie rok do roku (ostatnie 6 mies.)';
+        for (let offset = 5; offset >= 0; offset--) {
+            const monthDate = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+            const year = monthDate.getFullYear();
+            const month = monthDate.getMonth();
+            labels.push(monthDate.toLocaleDateString('pl-PL', { month: 'short', year: '2-digit' }));
+            currentData.push(getMonthExpenseTotal(year, month, allTx));
+            prevData.push(getMonthExpenseTotal(year - 1, month, allTx));
+        }
+    } else {
+        const year = parseInt(period, 10);
+        const monthCount = year === now.getFullYear() ? now.getMonth() + 1 : 12;
+        if (titleEl) titleEl.textContent = `Porównanie ${year} vs ${year - 1}`;
+        for (let month = 0; month < monthCount; month++) {
+            labels.push(new Date(year, month, 1).toLocaleDateString('pl-PL', { month: 'short' }));
+            currentData.push(getMonthExpenseTotal(year, month, periodTx));
+            prevData.push(getMonthExpenseTotal(year - 1, month, allTx));
+        }
+    }
+
+    reportsYoyChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: period === 'all' ? 'Ten rok' : String(parseInt(period, 10)),
+                    data: currentData,
+                    backgroundColor: theme.expenseColor,
+                    borderRadius: 5,
+                    borderSkipped: false
+                },
+                {
+                    label: period === 'all' ? 'Rok wcześniej' : String(parseInt(period, 10) - 1),
+                    data: prevData,
+                    backgroundColor: theme.prevYearColor,
+                    borderRadius: 5,
+                    borderSkipped: false
+                }
+            ]
+        },
+        options: getReportsChartOptions(theme)
+    });
+}
+
+function renderReportsDowChart(periodTx) {
+    const canvas = document.getElementById('reportsDowChart');
+    if (!canvas) return;
+
+    const dowLabels = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'];
+    const dowTotals = [0, 0, 0, 0, 0, 0, 0];
+    const dowCounts = [0, 0, 0, 0, 0, 0, 0];
+
+    periodTx.filter((t) => t.type === 'expense').forEach((t) => {
+        const dow = (new Date(t.date + 'T12:00:00').getDay() + 6) % 7;
+        dowTotals[dow] += t.amount;
+        dowCounts[dow]++;
+    });
+
+    const dowAvg = dowTotals.map((total, i) => (dowCounts[i] > 0 ? total / dowCounts[i] : 0));
+    const theme = getReportsChartTheme();
+    const ctx = canvas.getContext('2d');
+    if (reportsDowChartInstance) reportsDowChartInstance.destroy();
+
+    const maxAvg = Math.max(...dowAvg, 1);
+    const barColors = dowAvg.map((avg) => {
+        const ratio = avg / maxAvg;
+        if (isLightTheme()) return `rgba(220, 38, 38, ${0.25 + ratio * 0.65})`;
+        return `rgba(248, 113, 113, ${0.3 + ratio * 0.65})`;
+    });
+
+    reportsDowChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: dowLabels,
+            datasets: [{
+                label: 'Śr. wydatek',
+                data: dowAvg,
+                backgroundColor: barColors,
+                borderRadius: 6,
+                borderSkipped: false
+            }]
+        },
+        options: getReportsChartOptions(theme)
+    });
+}
+
+function renderReportsRecurring() {
+    const list = document.getElementById('reports-recurring-list');
+    if (!list) return;
+
+    const recurringMap = {};
+    appState.transactions.forEach((t) => {
+        if (!t.recurringId || t.type !== 'expense') return;
+        if (!recurringMap[t.recurringId]) {
+            recurringMap[t.recurringId] = {
+                amount: t.amount,
+                mainCategory: t.mainCategory,
+                subCategory: t.subCategory
+            };
+        }
+    });
+
+    const entries = Object.values(recurringMap).sort((a, b) => b.amount - a.amount);
+    if (!entries.length) {
+        list.innerHTML = '<div class="empty-state"><p>Brak wydatków cyklicznych</p></div>';
+        return;
+    }
+
+    const monthlyTotal = entries.reduce((sum, entry) => sum + entry.amount, 0);
+    list.innerHTML = entries.map((entry) => {
+        const title = entry.subCategory === '[Bez podkategorii]' ? entry.mainCategory : entry.subCategory;
+        const meta = entry.subCategory === '[Bez podkategorii]' ? '' : entry.mainCategory;
+        return `<div class="reports-recurring-item">
+            ${renderCategoryIcon(entry.mainCategory, 'list', entry.subCategory === '[Bez podkategorii]' ? null : entry.subCategory, 'expense')}
+            <div class="reports-top-text">
+                <span class="reports-top-name">${title}</span>
+                ${meta ? `<span class="reports-top-meta">${meta}</span>` : ''}
+            </div>
+            <span class="reports-recurring-amount">${formatPlnAmount(entry.amount)}/mies.</span>
+        </div>`;
+    }).join('') + `<div class="reports-recurring-total">Suma miesięczna: <strong>${formatPlnAmount(monthlyTotal)}</strong></div>`;
+}
+
+function escapeCsvField(value) {
+    const text = String(value ?? '');
+    if (text.includes(';') || text.includes('"') || text.includes('\n')) {
+        return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+}
+
+function exportReportsCsv() {
+    const period = document.getElementById('reports-year-select').value;
+    const periodTx = [...getTransactionsForReportsPeriod(period)].sort((a, b) => a.date.localeCompare(b.date));
+    const headers = ['Data', 'Typ', 'Kategoria', 'Podkategoria', 'Kwota', 'Notatka', 'Cykliczna'];
+    const rows = periodTx.map((t) => [
+        t.date,
+        t.type === 'expense' ? 'Wydatek' : 'Wpływ',
+        t.mainCategory,
+        t.subCategory === '[Bez podkategorii]' ? '' : t.subCategory,
+        t.amount.toFixed(2).replace('.', ','),
+        t.note || '',
+        t.recurringId ? 'Tak' : 'Nie'
+    ]);
+    const csv = '\uFEFF' + [headers, ...rows].map((row) => row.map(escapeCsvField).join(';')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `portfel-raport-${period === 'all' ? 'cala-historia' : period}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+}
+
 function renderReportsTopCategories(periodTx) {
     const topEl = document.getElementById('reports-top-categories');
     document.getElementById('btn-reports-expense').classList.toggle('active', reportsViewType === 'expense');
@@ -1216,11 +1778,31 @@ function renderReportsTopCategories(periodTx) {
     }).join('');
 }
 
-function buildReportsMonthChartData(period, periodTx) {
+function buildReportsMonthChartData(period, periodTx, rangeStart, rangeEnd) {
     const now = new Date();
     const monthLabels = [];
+    const monthKeys = [];
     const incomeData = [];
     const expenseData = [];
+
+    if ((period === 'range' || period === 'compare') && rangeStart && rangeEnd) {
+        const end = new Date(`${rangeEnd}T12:00:00`);
+        let cursor = new Date(`${rangeStart}T12:00:00`);
+        cursor = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+        while (cursor <= end) {
+            const year = cursor.getFullYear();
+            const month = cursor.getMonth();
+            const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+            const monthEnd = new Date(year, month + 1, 0).toISOString().split('T')[0];
+            const monthTx = periodTx.filter((t) => t.date >= monthStart && t.date <= monthEnd);
+            monthLabels.push(cursor.toLocaleDateString('pl-PL', { month: 'short', year: '2-digit' }));
+            monthKeys.push({ year, month });
+            incomeData.push(monthTx.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0));
+            expenseData.push(monthTx.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0));
+            cursor = new Date(year, month + 1, 1);
+        }
+        return { monthLabels, monthKeys, incomeData, expenseData, title: 'Miesiące w zakresie' };
+    }
 
     if (period === 'all') {
         for (let offset = 11; offset >= 0; offset--) {
@@ -1231,10 +1813,11 @@ function buildReportsMonthChartData(period, periodTx) {
             const monthEnd = new Date(year, month + 1, 0).toISOString().split('T')[0];
             const monthTx = periodTx.filter(t => t.date >= monthStart && t.date <= monthEnd);
             monthLabels.push(monthDate.toLocaleDateString('pl-PL', { month: 'short', year: '2-digit' }));
+            monthKeys.push({ year, month });
             incomeData.push(monthTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0));
             expenseData.push(monthTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0));
         }
-        return { monthLabels, incomeData, expenseData, title: 'Ostatnie 12 miesięcy' };
+        return { monthLabels, monthKeys, incomeData, expenseData, title: 'Ostatnie 12 miesięcy' };
     }
 
     const year = parseInt(period, 10);
@@ -1245,23 +1828,44 @@ function buildReportsMonthChartData(period, periodTx) {
         const monthEnd = monthEndDate.toISOString().split('T')[0];
         const monthTx = periodTx.filter(t => t.date >= monthStart && t.date <= monthEnd);
         monthLabels.push(monthEndDate.toLocaleDateString('pl-PL', { month: 'short' }));
+        monthKeys.push({ year, month });
         incomeData.push(monthTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0));
         expenseData.push(monthTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0));
     }
-    return { monthLabels, incomeData, expenseData, title: 'Miesiące w roku' };
+    return { monthLabels, monthKeys, incomeData, expenseData, title: 'Miesiące w roku' };
 }
 
 function renderReports() {
     populateReportsYearSelect();
-    const period = document.getElementById('reports-year-select').value;
-    const periodTx = getTransactionsForReportsPeriod(period);
+    const ctx = typeof getReportsPeriodContext === 'function'
+        ? getReportsPeriodContext()
+        : (() => {
+            const period = document.getElementById('reports-year-select').value;
+            return {
+                mode: 'year',
+                period,
+                label: period === 'all' ? 'Całość' : period,
+                periodTx: getTransactionsForReportsPeriod(period),
+                rangeStart: null,
+                rangeEnd: null
+            };
+        })();
 
+    const { period, periodTx, label, rangeStart, rangeEnd, periodA } = ctx;
+    let chartPeriod = period;
+    let chartRangeStart = rangeStart;
+    let chartRangeEnd = rangeEnd;
+    if (period === 'compare' && periodA) {
+        chartPeriod = 'range';
+        chartRangeStart = periodA.start;
+        chartRangeEnd = periodA.end;
+    }
     const totalIncome = periodTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
     const totalExpense = periodTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
     const netBalance = totalIncome - totalExpense;
     const savingsRate = totalIncome > 0 ? Math.round((netBalance / totalIncome) * 100) : 0;
 
-    document.getElementById('reports-year-label').innerText = period === 'all' ? 'Całość' : period;
+    document.getElementById('reports-year-label').innerText = label;
     document.getElementById('reports-total-income').innerText = formatPlnAmount(totalIncome);
     document.getElementById('reports-total-expense').innerText = formatPlnAmount(totalExpense);
     const netEl = document.getElementById('reports-net-balance');
@@ -1271,37 +1875,19 @@ function renderReports() {
     savingsEl.innerText = `${savingsRate}%`;
     savingsEl.style.color = savingsRate >= 0 ? 'var(--success)' : 'var(--danger)';
 
-    const { monthLabels, incomeData, expenseData, title } = buildReportsMonthChartData(period, periodTx);
+    const { monthLabels, monthKeys, incomeData, expenseData, title } = buildReportsMonthChartData(chartPeriod, periodTx, chartRangeStart, chartRangeEnd);
     document.getElementById('reports-months-title').innerText = title;
+    if (typeof storeReportsMonthChartMeta === 'function') {
+        storeReportsMonthChartMeta(chartPeriod, monthLabels, ctx, monthKeys);
+    }
 
-    const ctx = document.getElementById('reportsMonthsChart').getContext('2d');
+    const ctx2 = document.getElementById('reportsMonthsChart').getContext('2d');
     if (reportsChartInstance) reportsChartInstance.destroy();
 
     const legendColor = getThemeCssVar('--text', '#0f172a', '#f5f5f5');
     const gridColor = isLightTheme() ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.08)';
 
-    reportsChartInstance = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: monthLabels,
-            datasets: [
-                {
-                    label: 'Wpływy',
-                    data: incomeData,
-                    backgroundColor: isLightTheme() ? 'rgba(13, 148, 136, 0.85)' : 'rgba(52, 211, 153, 0.8)',
-                    borderRadius: 6,
-                    borderSkipped: false
-                },
-                {
-                    label: 'Wydatki',
-                    data: expenseData,
-                    backgroundColor: isLightTheme() ? 'rgba(220, 38, 38, 0.8)' : 'rgba(248, 113, 113, 0.8)',
-                    borderRadius: 6,
-                    borderSkipped: false
-                }
-            ]
-        },
-        options: {
+    const monthChartOptions = {
             responsive: true,
             maintainAspectRatio: true,
             aspectRatio: 1.35,
@@ -1340,10 +1926,47 @@ function renderReports() {
                     grid: { color: gridColor }
                 }
             }
-        }
+        };
+    if (typeof attachReportsMonthChartClick === 'function') attachReportsMonthChartClick(monthChartOptions);
+
+    reportsChartInstance = new Chart(ctx2, {
+        type: 'bar',
+        data: {
+            labels: monthLabels,
+            datasets: [
+                {
+                    label: 'Wpływy',
+                    data: incomeData,
+                    backgroundColor: isLightTheme() ? 'rgba(13, 148, 136, 0.85)' : 'rgba(52, 211, 153, 0.8)',
+                    borderRadius: 6,
+                    borderSkipped: false
+                },
+                {
+                    label: 'Wydatki',
+                    data: expenseData,
+                    backgroundColor: isLightTheme() ? 'rgba(220, 38, 38, 0.8)' : 'rgba(248, 113, 113, 0.8)',
+                    borderRadius: 6,
+                    borderSkipped: false
+                }
+            ]
+        },
+        options: monthChartOptions
     });
 
+    syncReportsCalendarToPeriod(chartPeriod === 'range' ? chartRangeStart?.slice(0, 4) : period);
+    if (typeof renderReportsCalendarView === 'function') {
+        renderReportsCalendarView();
+    } else {
+        renderReportsCalendar();
+    }
+    renderReportsDailyAvg(chartPeriod, periodTx);
+    renderReportsSavingsGoal(savingsRate);
+    renderReportsTrendChart(chartPeriod, periodTx, chartRangeStart, chartRangeEnd);
+    renderReportsYoYChart(chartPeriod, periodTx, ctx);
+    renderReportsDowChart(periodTx);
+    renderReportsRecurring();
     renderReportsTopCategories(periodTx);
+    if (typeof renderPhase3Reports === 'function') renderPhase3Reports(ctx, savingsRate);
 }
 
 function renderInvestments() {

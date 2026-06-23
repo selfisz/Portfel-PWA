@@ -111,6 +111,37 @@
             <button type="button" class="btn-submit category-editor-save" onclick="saveCategoryEditor()">Zapisz zmiany</button>
         </div>
     </div>
+
+    <div id="calendar-day-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeCalendarDay()">
+        <div class="calendar-day-panel">
+            <div class="settings-header">
+                <h2 id="calendar-day-title">Dzień</h2>
+                <button type="button" class="btn-icon" onclick="closeCalendarDay()" aria-label="Zamknij">
+                    <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+            <div id="calendar-day-summary" class="calendar-day-summary"></div>
+            <div class="calendar-day-filter-row">
+                <label class="section-label" for="calendar-day-filter">Filtr</label>
+                <select id="calendar-day-filter" onchange="onCalendarDayFilterChange()"></select>
+            </div>
+            <div id="calendar-day-list" class="calendar-day-list"></div>
+        </div>
+    </div>
+
+    <div id="month-drill-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeMonthDrill()">
+        <div class="calendar-day-panel">
+            <div class="settings-header">
+                <h2 id="month-drill-title">Miesiąc</h2>
+                <button type="button" class="btn-icon" onclick="closeMonthDrill()" aria-label="Zamknij">
+                    <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+            <div id="month-drill-summary"></div>
+            <p class="reports-hint">Kliknij słupek na wykresie miesięcy, aby otworzyć szczegóły.</p>
+            <div id="month-drill-list" class="calendar-day-list"></div>
+        </div>
+    </div>
     <p id="settings-toast" class="settings-toast hidden"></p>
 
     <div class="container">
@@ -219,10 +250,46 @@
         </div>
 
         <div id="view-reports" class="app-view">
-            <div class="card filter-card">
-                <label class="section-label" for="reports-year-select">Okres</label>
-                <select id="reports-year-select" onchange="renderReports()"></select>
+            <div class="card filter-card reports-filter-card">
+                <label class="section-label">Tryb okresu</label>
+                <div class="reports-period-tabs flex-toggle">
+                    <button id="btn-reports-mode-year" type="button" class="toggle-btn active" onclick="setReportsPeriodMode('year')">Rok</button>
+                    <button id="btn-reports-mode-range" type="button" class="toggle-btn" onclick="setReportsPeriodMode('range')">Zakres</button>
+                    <button id="btn-reports-mode-compare" type="button" class="toggle-btn" onclick="setReportsPeriodMode('compare')">Porównaj</button>
+                </div>
+                <div id="reports-period-year-wrap">
+                    <label class="section-label" for="reports-year-select">Rok</label>
+                    <select id="reports-year-select" onchange="renderReports()"></select>
+                </div>
+                <div id="reports-period-range-wrap" class="hidden">
+                    <label class="section-label">Zakres dat</label>
+                    <div class="reports-date-row">
+                        <input type="date" id="reports-range-start" onchange="renderReports()">
+                        <span>–</span>
+                        <input type="date" id="reports-range-end" onchange="renderReports()">
+                    </div>
+                </div>
+                <div id="reports-period-compare-wrap" class="hidden">
+                    <label class="section-label">Okres A</label>
+                    <div class="reports-date-row">
+                        <input type="date" id="reports-compare-a-start" onchange="renderReports()">
+                        <span>–</span>
+                        <input type="date" id="reports-compare-a-end" onchange="renderReports()">
+                    </div>
+                    <label class="section-label" style="margin-top:10px">Okres B</label>
+                    <div class="reports-date-row">
+                        <input type="date" id="reports-compare-b-start" onchange="renderReports()">
+                        <span>–</span>
+                        <input type="date" id="reports-compare-b-end" onchange="renderReports()">
+                    </div>
+                </div>
+                <div class="reports-export-row">
+                    <button type="button" class="btn-settings-action" onclick="exportReportsCsv()">CSV</button>
+                    <button type="button" class="btn-settings-action" onclick="exportReportsPdf()">PDF</button>
+                </div>
             </div>
+
+            <div id="reports-compare-card" class="card hidden"></div>
 
             <div class="card reports-summary-card">
                 <div class="hero-label" id="reports-year-label">2026</div>
@@ -246,11 +313,109 @@
                 </div>
             </div>
 
+            <div class="card">
+                <h2>Budżety kategorii</h2>
+                <p class="reports-hint">Miesięczny limit na kategorię. Pasek pokazuje wykorzystanie w bieżącym miesiącu.</p>
+                <div id="reports-budgets-list" class="reports-budgets-list"></div>
+            </div>
+
+            <div class="card">
+                <h2>Wartość netto</h2>
+                <div id="reports-net-worth"></div>
+            </div>
+
+            <div class="card">
+                <h2>Kredyt w raporcie</h2>
+                <div id="reports-loan-summary"></div>
+            </div>
+
+            <div class="card reports-calendar-card">
+                <div class="reports-calendar-header">
+                    <div id="reports-calendar-nav" class="reports-calendar-nav">
+                        <button type="button" class="cal-nav-btn" onclick="shiftReportsCalendarMonth(-1)" aria-label="Poprzedni miesiąc">&#8249;</button>
+                        <h2 id="reports-calendar-label">Czerwiec 2026</h2>
+                        <button type="button" class="cal-nav-btn" onclick="shiftReportsCalendarMonth(1)" aria-label="Następny miesiąc">&#8250;</button>
+                    </div>
+                    <div class="reports-cal-view-toggle flex-toggle">
+                        <button id="btn-cal-month" type="button" class="toggle-btn active" onclick="setReportsCalendarView('month')">Miesiąc</button>
+                        <button id="btn-cal-year" type="button" class="toggle-btn" onclick="setReportsCalendarView('year')">Rok</button>
+                    </div>
+                </div>
+                <p class="reports-hint">Kliknij dzień — transakcje, filtr i edycja. Kolor = wydatki.</p>
+                <div id="reports-calendar-grid" class="reports-calendar-grid"></div>
+                <div id="reports-year-heatmap" class="reports-year-heatmap hidden"></div>
+            </div>
+
+            <div class="card reports-metrics-row">
+                <div class="reports-metric-box">
+                    <div class="section-label">Średnia dzienna</div>
+                    <div id="reports-daily-avg" class="reports-metric-value">0,00 zł</div>
+                    <div id="reports-daily-avg-hint" class="reports-metric-hint">wydatki / dzień</div>
+                </div>
+                <div class="reports-metric-box">
+                    <div class="section-label">Cel oszczędności</div>
+                    <div class="reports-goal-input-row">
+                        <input type="number" id="savings-goal-input" min="0" max="100" step="1" onchange="saveSavingsGoal()">
+                        <span>%</span>
+                    </div>
+                    <div class="progress-bar-bg reports-goal-bar"><div id="reports-goal-fill" class="progress-bar-fill"></div></div>
+                    <div id="reports-goal-label" class="reports-metric-hint">0% z 20%</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Prognoza miesiąca</h2>
+                <div id="reports-forecast"></div>
+            </div>
+
+            <div class="card">
+                <h2>Przepływ środków</h2>
+                <p class="reports-hint">Wpływy → główne kategorie wydatków → bilans.</p>
+                <div id="reports-flow-chart" class="reports-flow-chart"></div>
+            </div>
+
+            <div class="card reports-months-card">
+                <h2>Trend wydatków</h2>
+                <div class="reports-bar-chart-wrap">
+                    <canvas id="reportsTrendChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card reports-months-card">
+                <h2 id="reports-yoy-title">Porównanie rok do roku</h2>
+                <div class="reports-bar-chart-wrap">
+                    <canvas id="reportsYoyChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card reports-months-card">
+                <h2>Wydatki wg dnia tygodnia</h2>
+                <div class="reports-bar-chart-wrap reports-dow-chart-wrap">
+                    <canvas id="reportsDowChart"></canvas>
+                </div>
+            </div>
+
             <div class="card reports-months-card">
                 <h2 id="reports-months-title">Miesiące w roku</h2>
+                <p class="reports-hint">Kliknij słupek, aby zobaczyć transakcje miesiąca.</p>
                 <div class="reports-bar-chart-wrap">
                     <canvas id="reportsMonthsChart"></canvas>
                 </div>
+            </div>
+
+            <div class="card">
+                <h2>Największe wydatki</h2>
+                <div id="reports-outliers-list" class="reports-top-list"></div>
+            </div>
+
+            <div class="card">
+                <h2>Trendy kategorii (3 mies.)</h2>
+                <div id="reports-trends-list" class="reports-top-list"></div>
+            </div>
+
+            <div class="card">
+                <h2>Year in Review</h2>
+                <div id="reports-year-review"></div>
             </div>
 
             <div class="card">
@@ -266,6 +431,12 @@
                     <button id="btn-reports-sub" type="button" class="toggle-btn" onclick="setReportsRankLevel('sub')">Podkategorie</button>
                 </div>
                 <div id="reports-top-categories" class="reports-top-list"></div>
+            </div>
+
+            <div class="card">
+                <h2>Wydatki cykliczne</h2>
+                <p class="reports-hint">Szacunkowa suma miesięczna transakcji oznaczonych jako cykliczne.</p>
+                <div id="reports-recurring-list" class="reports-recurring-list"></div>
             </div>
         </div>
 
@@ -321,6 +492,9 @@
         <button class="nav-item" onclick="switchView('loans', 'Kredyty', this)"><svg viewBox="0 0 24 24"><path d="M21 18v2H3v-2h18M5 16h2V8H5v8m6 0h2V4h-2v12m6 0h2v-5h-2v5z"/></svg>Długi</button>
     </nav>
 
+    <div id="reports-print-meta" class="hidden" aria-hidden="true"></div>
+
     <script src="app.js"></script>
+    <script src="reports-phase3.js"></script>
 </body>
 </html>
