@@ -43,13 +43,19 @@ const categoryTree = {
 };
 
 let appState = {
-    currentType: 'expense',
-    selectedMainCategory: '',
-    selectedSubCategory: '',
     transactions: [],
     loan: { totalAmount: 500000.00, currentCapitalLeft: 412500.00, interestRate: 6.75 },
     investments: [{ ticker: 'VWCE.DE', name: 'Vanguard FTSE All-World', quantity: 45, purchasePrice: 104.20, currentPriceManual: 118.50, currency: 'EUR' }]
 };
+
+let formState = {
+    currentType: 'expense',
+    selectedMainCategory: '',
+    selectedSubCategory: ''
+};
+
+const RECENT_CATEGORIES_KEY = 'recent_categories';
+const MAX_RECENT_CATEGORIES = 5;
 
 let editingTxIndex = null;
 let activeChartCategory = null;
@@ -273,9 +279,114 @@ async function checkModuleSplitThreshold() {
     }
 }
 
+function getPersistedState(raw = appState) {
+    const data = raw ?? appState ?? {};
+    return {
+        transactions: Array.isArray(data.transactions) ? data.transactions : [],
+        loan: data.loan || { totalAmount: 500000.00, currentCapitalLeft: 412500.00, interestRate: 6.75 },
+        investments: Array.isArray(data.investments) ? data.investments : []
+    };
+}
+
+function normalizeAppState(raw) {
+    const hadUiFields = !!(raw && ('currentType' in raw || 'selectedMainCategory' in raw || 'selectedSubCategory' in raw));
+    appState = getPersistedState(raw);
+    return hadUiFields;
+}
+
+function getRecentCategories(type) {
+    try {
+        const all = JSON.parse(localStorage.getItem(RECENT_CATEGORIES_KEY) || '[]');
+        return all.filter((entry) => entry.type === type).slice(0, MAX_RECENT_CATEGORIES);
+    } catch {
+        return [];
+    }
+}
+
+function addRecentCategory(type, mainCategory, subCategory) {
+    const id = `${type}|${mainCategory}|${subCategory}`;
+    let all = [];
+    try {
+        all = JSON.parse(localStorage.getItem(RECENT_CATEGORIES_KEY) || '[]');
+    } catch { /* ignore */ }
+    all = all.filter((entry) => `${entry.type}|${entry.mainCategory}|${entry.subCategory}` !== id);
+    all.unshift({ type, mainCategory, subCategory });
+    localStorage.setItem(RECENT_CATEGORIES_KEY, JSON.stringify(all.slice(0, MAX_RECENT_CATEGORIES * 3)));
+}
+
+function focusAmountField() {
+    requestAnimationFrame(() => {
+        const input = document.getElementById('tx-amount');
+        if (!input) return;
+        input.focus();
+        if (typeof input.select === 'function') input.select();
+    });
+}
+
+function createMainCategoryItem(cat) {
+    const item = document.createElement('div');
+    item.className = 'grid-item';
+    if (formState.selectedMainCategory === cat) item.classList.add('selected');
+    const color = getCategoryColor(cat);
+    item.innerHTML = `<span class="grid-item-dot" style="background:${color}"></span><span class="grid-item-label">${cat}</span>`;
+    item.onclick = () => selectMainCategoryForm(cat, item);
+    return item;
+}
+
+function createSubCategoryItem(sub) {
+    const item = document.createElement('div');
+    item.className = 'grid-item grid-item-sub';
+    if (formState.selectedSubCategory === sub) item.classList.add('selected');
+    const color = getCategoryColor(formState.selectedMainCategory);
+    item.innerHTML = `<span class="grid-item-dot" style="background:${color}"></span><span class="grid-item-label">${sub}</span>`;
+    item.onclick = () => {
+        document.querySelectorAll('#sub-category-grid .grid-item').forEach((i) => i.classList.remove('selected'));
+        item.classList.add('selected');
+        formState.selectedSubCategory = sub;
+        renderRecentCategories();
+    };
+    return item;
+}
+
+function renderRecentCategories() {
+    const wrapper = document.getElementById('recent-categories-wrapper');
+    const row = document.getElementById('recent-categories-row');
+    if (!wrapper || !row) return;
+
+    const recents = getRecentCategories(formState.currentType);
+    if (recents.length === 0) {
+        wrapper.style.display = 'none';
+        row.innerHTML = '';
+        return;
+    }
+
+    wrapper.style.display = 'block';
+    row.innerHTML = '';
+    recents.forEach((recent) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'recent-chip';
+        const label = recent.subCategory === '[Bez podkategorii]'
+            ? recent.mainCategory
+            : `${recent.mainCategory} · ${recent.subCategory}`;
+        const color = getCategoryColor(recent.mainCategory);
+        chip.innerHTML = `<span class="grid-item-dot" style="background:${color}"></span><span>${label}</span>`;
+        if (formState.selectedMainCategory === recent.mainCategory && formState.selectedSubCategory === recent.subCategory) {
+            chip.classList.add('selected');
+        }
+        chip.onclick = () => {
+            formState.selectedMainCategory = recent.mainCategory;
+            formState.selectedSubCategory = recent.subCategory;
+            renderMainCategoriesForm();
+        };
+        row.appendChild(chip);
+    });
+}
+
 function initData() {
     if (localStorage.getItem(STORAGE_KEY)) {
-        appState = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        const hadUiFields = normalizeAppState(JSON.parse(localStorage.getItem(STORAGE_KEY)));
+        if (hadUiFields) localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
         checkAndProcessRecurringTransactions();
         refreshCurrentView();
     }
@@ -283,8 +394,9 @@ function initData() {
     stateRef.onSnapshot((docSnap) => {
         const statusEl = document.getElementById('sync-status');
         if (docSnap.exists) {
-            appState = docSnap.data();
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+            const hadUiFields = normalizeAppState(docSnap.data());
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
+            if (hadUiFields && appState.transactions.length > 0) saveState();
             statusEl.className = 'online';
             refreshCurrentView();
         } else {
@@ -297,8 +409,9 @@ function initData() {
 }
 
 function saveState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
-    stateRef.set(appState).then(() => {
+    const payload = getPersistedState(appState);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    stateRef.set(payload).then(() => {
         document.getElementById('sync-status').className = 'online';
     }).catch(err => {
         console.log("Zapisano offline. Zsynchronizuje się później.", err);
@@ -351,15 +464,18 @@ function switchView(viewId, title, element) {
         document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
         document.getElementById('tx-recurring').checked = false;
         setTransactionType('expense');
+        focusAmountField();
     }
 }
 
-function setTransactionType(type) {
-    appState.currentType = type;
+function setTransactionType(type, keepSelection = false) {
+    formState.currentType = type;
     document.getElementById('btn-expense').classList.toggle('active', type === 'expense');
     document.getElementById('btn-income').classList.toggle('active', type === 'income');
-    appState.selectedMainCategory = '';
-    appState.selectedSubCategory = '';
+    if (!keepSelection) {
+        formState.selectedMainCategory = '';
+        formState.selectedSubCategory = '';
+    }
     document.getElementById('sub-category-wrapper').style.display = 'none';
     renderMainCategoriesForm();
 }
@@ -367,47 +483,38 @@ function setTransactionType(type) {
 function renderMainCategoriesForm() {
     const grid = document.getElementById('main-category-grid');
     grid.innerHTML = '';
-    Object.keys(categoryTree[appState.currentType]).forEach(cat => {
-        const item = document.createElement('div');
-        item.className = 'grid-item';
-        item.innerText = cat;
-        if (appState.selectedMainCategory === cat) item.classList.add('selected');
-        item.onclick = () => selectMainCategoryForm(cat, item);
-        grid.appendChild(item);
+    Object.keys(categoryTree[formState.currentType]).forEach((cat) => {
+        grid.appendChild(createMainCategoryItem(cat));
     });
-    if (appState.selectedMainCategory) renderSubCategoriesForm(appState.selectedMainCategory);
+    if (formState.selectedMainCategory) renderSubCategoriesForm(formState.selectedMainCategory);
+    renderRecentCategories();
 }
 
 function selectMainCategoryForm(cat, element) {
-    document.querySelectorAll('#main-category-grid .grid-item').forEach(i => i.classList.remove('selected'));
+    document.querySelectorAll('#main-category-grid .grid-item').forEach((i) => i.classList.remove('selected'));
     if (element) element.classList.add('selected');
-    appState.selectedMainCategory = cat;
+    formState.selectedMainCategory = cat;
+    formState.selectedSubCategory = '';
     renderSubCategoriesForm(cat);
+    renderRecentCategories();
 }
 
 function renderSubCategoriesForm(cat) {
-    const subs = categoryTree[appState.currentType][cat];
+    const subs = categoryTree[formState.currentType][cat];
     const subWrapper = document.getElementById('sub-category-wrapper');
     const subGrid = document.getElementById('sub-category-grid');
     if (subs.length === 0) {
         subWrapper.style.display = 'none';
-        appState.selectedSubCategory = '[Bez podkategorii]';
+        formState.selectedSubCategory = '[Bez podkategorii]';
     } else {
         subGrid.innerHTML = '';
-        subs.forEach(sub => {
-            const item = document.createElement('div');
-            item.className = 'grid-item';
-            item.innerText = sub;
-            if (appState.selectedSubCategory === sub) item.classList.add('selected');
-            item.onclick = () => {
-                document.querySelectorAll('#sub-category-grid .grid-item').forEach(i => i.classList.remove('selected'));
-                item.classList.add('selected');
-                appState.selectedSubCategory = sub;
-            };
-            subGrid.appendChild(item);
-        });
+        subs.forEach((sub) => subGrid.appendChild(createSubCategoryItem(sub)));
         subWrapper.style.display = 'block';
+        if (!subs.includes(formState.selectedSubCategory)) {
+            formState.selectedSubCategory = '';
+        }
     }
+    renderRecentCategories();
 }
 
 function saveTransaction() {
@@ -416,15 +523,15 @@ function saveTransaction() {
     const note = document.getElementById('tx-note').value;
     const isRecurring = document.getElementById('tx-recurring').checked;
 
-    if (!amount || !appState.selectedMainCategory || !appState.selectedSubCategory || !date) {
+    if (!amount || !formState.selectedMainCategory || !formState.selectedSubCategory || !date) {
         return alert('Uzupełnij kwotę i kategorie.');
     }
 
     const txData = {
         amount,
-        type: appState.currentType,
-        mainCategory: appState.selectedMainCategory,
-        subCategory: appState.selectedSubCategory,
+        type: formState.currentType,
+        mainCategory: formState.selectedMainCategory,
+        subCategory: formState.selectedSubCategory,
         date,
         note
     };
@@ -439,6 +546,7 @@ function saveTransaction() {
         if (isRecurring) txData.recurringId = 'rec_' + Date.now();
         appState.transactions.unshift(txData);
     }
+    addRecentCategory(txData.type, txData.mainCategory, txData.subCategory);
     appState.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
     saveState();
     hapticFeedback();
@@ -454,10 +562,11 @@ function editTransaction(index) {
     document.getElementById('tx-amount').value = tx.amount;
     document.getElementById('tx-date').value = tx.date;
     document.getElementById('tx-note').value = tx.note || '';
-    appState.selectedMainCategory = tx.mainCategory;
-    appState.selectedSubCategory = tx.subCategory;
-    setTransactionType(tx.type);
+    formState.selectedMainCategory = tx.mainCategory;
+    formState.selectedSubCategory = tx.subCategory;
+    setTransactionType(tx.type, true);
     switchView('add', 'Edytuj', document.querySelectorAll('.nav-item')[1]);
+    focusAmountField();
 }
 
 function deleteTransaction(index) {
@@ -728,11 +837,12 @@ function addLoanOverpayment() {
 }
 
 function getExportPayload() {
+    const data = getPersistedState(appState);
     return {
         version: 1,
         exportedAt: new Date().toISOString(),
-        transactionCount: appState.transactions.length,
-        data: JSON.parse(JSON.stringify(appState))
+        transactionCount: data.transactions.length,
+        data
     };
 }
 
@@ -741,7 +851,7 @@ function applyBackupPayload(payload) {
     if (!data || !Array.isArray(data.transactions)) {
         throw new Error('Nieprawidłowy plik kopii zapasowej.');
     }
-    appState = data;
+    normalizeAppState(data);
     saveState();
     refreshCurrentView();
 }
