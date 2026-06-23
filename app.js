@@ -50,10 +50,21 @@ let editingTxIndex = null;
 let activeChartCategory = null;
 let dashboardChartInstance = null;
 
-function registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js').catch(err => console.error('SW registration failed:', err));
+function getBasePath() {
+    const parts = location.pathname.split('/').filter(Boolean);
+    const repoIndex = parts.indexOf('Portfel-PWA');
+    if (repoIndex >= 0) {
+        return '/' + parts.slice(0, repoIndex + 1).join('/');
     }
+    return '';
+}
+
+function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    const base = getBasePath();
+    const swUrl = `${base}/sw.js`;
+    const scope = base ? `${base}/` : '/';
+    navigator.serviceWorker.register(swUrl, { scope }).catch(err => console.error('SW registration failed:', err));
 }
 
 function initData() {

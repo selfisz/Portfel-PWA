@@ -39,7 +39,12 @@
             logEl.innerHTML = '';
             try {
                 log('Ładowanie import-result.json...');
-                const res = await fetch('import-result.json');
+                const base = location.pathname.includes('/Portfel-PWA')
+                    ? '/Portfel-PWA'
+                    : location.pathname.includes('/scripts/')
+                        ? location.pathname.split('/scripts/')[0]
+                        : '';
+                const res = await fetch(`${base}/scripts/import-result.json`);
                 if (!res.ok) throw new Error('Brak import-result.json — uruchom najpierw import-moneypro.py');
                 const appState = await res.json();
                 log(`Znaleziono ${appState.transactions.length} transakcji. Wgrywanie...`);
@@ -52,7 +57,7 @@
                     log('Zapisano w Firestore (chmura).', 'ok');
                 } catch (cloudErr) {
                     log('Chmura niedostępna — dane są tylko lokalnie w tej przeglądarce.', 'err');
-                    log('Otwórz aplikację z tego samego adresu: http://localhost:8765/index.html', 'ok');
+                    log(`Otwórz aplikację: ${location.origin}${base || ''}/index.html`, 'ok');
                 }
 
                 log('Gotowe! Odśwież aplikację Portfel.', 'ok');
