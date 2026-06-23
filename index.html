@@ -150,7 +150,11 @@
                 </div>
                 <div class="form-group">
                     <label>Kwota (PLN)</label>
-                    <input type="number" id="tx-amount" step="0.01" placeholder="0,00" inputmode="decimal">
+                    <input type="number" id="tx-amount" step="0.01" placeholder="0,00" inputmode="decimal" autocomplete="off">
+                </div>
+                <div class="form-group" id="recent-categories-wrapper" style="display:none;">
+                    <label>Ostatnio używane</label>
+                    <div id="recent-categories-row" class="recent-categories"></div>
                 </div>
                 <div class="form-group">
                     <label>Kategoria główna</label>
@@ -161,12 +165,12 @@
                     <div id="sub-category-grid" class="grid-selector"></div>
                 </div>
                 <div class="form-group">
-                    <label>Notatka</label>
-                    <input type="text" id="tx-note" placeholder="Opcjonalny opis">
-                </div>
-                <div class="form-group">
                     <label>Data</label>
                     <input type="date" id="tx-date">
+                </div>
+                <div class="form-group">
+                    <label>Notatka</label>
+                    <input type="text" id="tx-note" placeholder="Opcjonalny opis">
                 </div>
                 <div class="checkbox-wrapper" id="recurring-wrapper">
                     <input type="checkbox" id="tx-recurring">

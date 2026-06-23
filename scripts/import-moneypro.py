@@ -41,7 +41,7 @@ DEFAULT_APP_STATE = {
 CATEGORY_OVERRIDES = {
     ("", "Jedzenie na dowóz"): ("Jedzenie na mieście", "Dowóz"),
     ("", "Ubrania"): ("Osobista", "Ubrania"),
-    ("", "Komunikacja"): ("Komunikacja", "[Bez podkategorii]"),
+    ("", "Transport"): ("Transport", "[Bez podkategorii]"),
     ("", "Prezenty"): ("Prezenty", "[Bez podkategorii]"),
     ("Długi", "Kredyt na mieszkanie"): ("Długi", "Kredyt Pekao SA"),
     ("Subskrypcję", "Netflix"): ("Subskrypcje", "Seriale"),
