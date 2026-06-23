@@ -150,6 +150,7 @@
                     <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
                     <input type="text" id="db-search" placeholder="Szukaj transakcji..." oninput="renderDashboard()">
                 </div>
+                <p id="db-search-hint" class="search-scope-hint">Przeszukiwanie wszystkich transakcji</p>
                 <div id="recent-transactions-list"></div>
             </div>
         </div>
@@ -195,9 +196,49 @@
         </div>
 
         <div id="view-reports" class="app-view">
-            <div class="card" style="text-align: center;">
-                <h2>Analityka</h2>
-                <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.5;">Zaawansowane raporty wieloletnie pojawią się tutaj w kolejnej wersji.</p>
+            <div class="card filter-card">
+                <label class="section-label" for="reports-year-select">Rok</label>
+                <select id="reports-year-select" onchange="renderReports()"></select>
+            </div>
+
+            <div class="card reports-summary-card">
+                <div class="hero-label" id="reports-year-label">2026</div>
+                <div class="reports-summary-grid">
+                    <div class="reports-stat">
+                        <span class="label">Wpływy</span>
+                        <span id="reports-total-income" class="value income">0,00 zł</span>
+                    </div>
+                    <div class="reports-stat">
+                        <span class="label">Wydatki</span>
+                        <span id="reports-total-expense" class="value expense">0,00 zł</span>
+                    </div>
+                    <div class="reports-stat">
+                        <span class="label">Bilans</span>
+                        <span id="reports-net-balance" class="value">0,00 zł</span>
+                    </div>
+                    <div class="reports-stat">
+                        <span class="label">Oszczędności</span>
+                        <span id="reports-savings-rate" class="value savings">0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card reports-months-card">
+                <h2>Miesiące w roku</h2>
+                <div class="reports-bar-chart-wrap">
+                    <canvas id="reportsMonthsChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="chart-card-header">
+                    <h2>Top kategorie</h2>
+                    <div class="chart-type-toggle flex-toggle">
+                        <button id="btn-reports-expense" type="button" class="toggle-btn active expense" onclick="setReportsViewType('expense')">Wydatki</button>
+                        <button id="btn-reports-income" type="button" class="toggle-btn income" onclick="setReportsViewType('income')">Wpływy</button>
+                    </div>
+                </div>
+                <div id="reports-top-categories" class="reports-top-list"></div>
             </div>
         </div>
 

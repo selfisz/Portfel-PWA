@@ -61,6 +61,8 @@ let editingTxIndex = null;
 let activeChartCategory = null;
 let chartViewType = 'expense';
 let dashboardChartInstance = null;
+let reportsChartInstance = null;
+let reportsViewType = 'expense';
 
 const incomeCategoryColorsLight = {
     'Wynagrodzenie': '#15803d', 'Inne': '#475569',
@@ -153,7 +155,7 @@ const categoryIconPaths = {
     'Długi': 'M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z',
     'Osobista': 'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
     'Przyjemności': 'M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5S14.67 12 15.5 12s1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm3-3c-.83 0-1.5-.67-1.5-1.5S17.67 9 18.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z',
-    'Zakupy': 'M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.16 13l.84-2h8.45l1.2 3H7.16zM6 6h15l-1.5 4h-12L6 6z',
+    'Zakupy': 'M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.2 13l.6-2h9.6l.6 2H7.2zM6 4h14l-1.5 6h-12L6 4z',
     'Samochód': 'M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z',
     'Rachunki/opłaty': 'M7 2v11h3v9l7-12h-4l4-8z',
     'Subskrypcje': 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z',
@@ -189,7 +191,7 @@ const subCategoryIconPaths = {
     'Rozrywka': 'M18 3v2h-2V3H8v2H6V3H4v18h2v-2h2v2h8v-2h2v2h2V3h-2zM8 17H6v-2h2v2zm0-4H6v-2h2v2zm0-4H6V7h2v2zm10 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z',
     'Wyjścia': 'M7 14c-1.66 0-3 1.34-3 3 0 1.31-1.16 2-2 2 .92 1.22 2.49 2 4 2 2.21 0 4-1.79 4-4 0-1.66-1.34-3-3-3zm13.71-9.37-1.34-1.34c-.39-.39-1.02-.39-1.41 0L9 12.25 11.75 15l8.96-8.96c.39-.39.39-1.02 0-1.41z',
     'Alko': 'M6 3v6c0 2.97 2.16 5.43 5 5.91V19H8v2h8v-2h-3v-4.09c2.84-.48 5-2.94 5-5.91V3H6zm2 2h8v4c0 2.21-1.79 4-4 4s-4-1.79-4-4V5z',
-    'Zakupy': 'M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.16 13l.84-2h8.45l1.2 3H7.16zM6 6h15l-1.5 4h-12L6 6z',
+    'Zakupy': 'M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.2 13l.6-2h9.6l.6 2H7.2zM6 4h14l-1.5 6h-12L6 4z',
     'Zakupy na dowóz': 'M18 18.5c.83 0 1.5-.67 1.5-1.5s-.67-1.5-1.5-1.5-1.5.67-1.5 1.5.67 1.5 1.5 1.5zM6 18.5c.83 0 1.5-.67 1.5-1.5S6.83 15.5 6 15.5 4.5 16.17 4.5 17 5.17 18.5 6 18.5zm11-9.5V6l-6-6-2.8 2.8 1.4 1.4L9 4.2V6H4v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h4c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-7l-3-4z',
     'Paliwo': 'M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33 0 1.38 1.12 2.5 2.5 2.5.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14c0-1.1-.9-2-2-2h-1V5c0-1.1-.9-2-2-2H6c-1.1 0-2 .9-2 2v16h10v-7.5h1.5v5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V9c0-.69-.28-1.32-.73-1.77zM12 10H6V5h6v5zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z',
     'Serwisowanie': 'M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z',
@@ -215,7 +217,7 @@ const subCategoryIconPaths = {
     'Studia': 'M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3L1 9l11 6 9-4.91V17h2V9L12 3z',
     'Edukacja': 'M12 3L1 9l11 6 9-4.91V17h2V9L12 3z',
     'Podstawa': 'M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z',
-    'Prowizja': 'M4 3.5l-.7 1.8h2.4L4.8 3.5H4zm-.3 1.8h3.1l1.3 11.2H2.4L3.7 5.3zm2.3 9.7a1 1 0 110-2 1 1 0 010 2zM14.2 3.5l-.7 1.8h2.4l-.7-1.8h-1zm-.3 1.8h3.1l1.3 11.2h-5.7L13.9 5.3zm2.3 9.7a1 1 0 110-2 1 1 0 010 2z',
+    'Prowizja': 'M7.5 4C5.57 4 4 5.57 4 7.5S5.57 11 7.5 11 11 9.43 11 7.5 9.43 4 7.5 4zm0 2C6.67 6 6 6.67 6 7.5S6.67 9 7.5 9 9 8.33 9 7.5 8.33 6 7.5 6zM16.5 13c-1.93 0-3.5 1.57-3.5 3.5s1.57 3.5 3.5 3.5 3.5-1.57 3.5-3.5-1.57-3.5-3.5-3.5zm0 2c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5.67-1.5 1.5-1.5zM5.41 20 4 18.59 18.59 4 20 5.41 5.41 20z',
     'Nagroda': 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27z',
     'Delegacja': 'M14 6l-3.75 5 2.85 3.8-1.6 1.2C9.81 13.75 7 10 7 10l-6 8h22l-9-12z',
     'Socjal': 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',
@@ -647,6 +649,7 @@ function saveState() {
 
 function refreshCurrentView() {
     if (document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();
+    if (document.getElementById('view-reports').classList.contains('active')) renderReports();
     if (document.getElementById('view-investments').classList.contains('active')) renderInvestments();
     if (document.getElementById('view-loans').classList.contains('active')) renderLoans();
 }
@@ -678,6 +681,7 @@ function switchView(viewId, title, element) {
     if (element) element.classList.add('active');
 
     if (viewId === 'dashboard') renderDashboard();
+    if (viewId === 'reports') renderReports();
     if (viewId === 'investments') renderInvestments();
     if (viewId === 'loans') renderLoans();
 
@@ -838,6 +842,19 @@ function formatPlnAmount(amount) {
     return `${amount.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
 }
 
+function formatTxDate(dateStr) {
+    const d = new Date(`${dateStr}T12:00:00`);
+    return d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function transactionMatchesSearch(t, searchQuery) {
+    return t.mainCategory.toLowerCase().includes(searchQuery) ||
+        t.subCategory.toLowerCase().includes(searchQuery) ||
+        (t.note && t.note.toLowerCase().includes(searchQuery)) ||
+        t.amount.toString().includes(searchQuery) ||
+        t.date.includes(searchQuery);
+}
+
 function renderChartLegend(catSums, sliceColors, labels) {
     const legendEl = document.getElementById('chart-legend');
     const centerEl = document.getElementById('chart-center-amount');
@@ -943,17 +960,17 @@ function renderDashboard() {
         fillEl.style.background = 'var(--danger)';
     }
 
-    let displayTx = dateFilteredTx;
+    let listTx = dateFilteredTx;
+    const searchHint = document.getElementById('db-search-hint');
+    if (searchHint) searchHint.classList.toggle('visible', !!searchQuery);
+
     if (searchQuery) {
-        displayTx = displayTx.filter(t =>
-            t.mainCategory.toLowerCase().includes(searchQuery) ||
-            t.subCategory.toLowerCase().includes(searchQuery) ||
-            (t.note && t.note.toLowerCase().includes(searchQuery)) ||
-            t.amount.toString().includes(searchQuery)
-        );
+        listTx = appState.transactions.filter(t => transactionMatchesSearch(t, searchQuery));
+    } else if (activeChartCategory) {
+        listTx = listTx.filter(t => t.type === chartViewType && t.mainCategory === activeChartCategory);
     }
 
-    const chartTx = displayTx.filter(t => t.type === chartViewType);
+    const chartTx = dateFilteredTx.filter(t => t.type === chartViewType);
     const catSums = {};
     const chartTypeLabel = chartViewType === 'income' ? 'wpływów' : 'wydatków';
     document.getElementById('btn-reset-chart').style.display = activeChartCategory ? 'block' : 'none';
@@ -970,7 +987,6 @@ function renderDashboard() {
             const label = t.subCategory === '[Bez podkategorii]' ? 'Ogólne' : t.subCategory;
             catSums[label] = (catSums[label] || 0) + t.amount;
         });
-        displayTx = displayTx.filter(t => t.type === chartViewType && t.mainCategory === activeChartCategory);
     }
 
     const ctxDash = document.getElementById('dashboardChart').getContext('2d');
@@ -1027,13 +1043,13 @@ function renderDashboard() {
     const list = document.getElementById('recent-transactions-list');
     list.innerHTML = '';
 
-    if (displayTx.length === 0) {
-        list.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg><p>Brak transakcji w tym okresie</p></div>`;
+    if (listTx.length === 0) {
+        list.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg><p>${searchQuery ? 'Brak wyników wyszukiwania' : 'Brak transakcji w tym okresie'}</p></div>`;
         return;
     }
 
     let lastGroup = '';
-    displayTx.forEach(t => {
+    listTx.forEach(t => {
         const group = formatDateGroup(t.date);
         if (group !== lastGroup) {
             const label = document.createElement('div');
@@ -1046,13 +1062,14 @@ function renderDashboard() {
         const globalIndex = appState.transactions.indexOf(t);
         const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
         const isRec = t.recurringId ? '<span class="tx-badge">&#10227;</span>' : '';
+        const metaText = searchQuery ? `${formatTxDate(t.date)} · ${t.mainCategory}` : t.mainCategory;
         const row = document.createElement('div');
         row.className = 'tx-row';
         row.innerHTML = `
             ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
             <div class="tx-info">
                 <div class="tx-title">${title}${isRec}</div>
-                <div class="tx-meta">${t.mainCategory}</div>
+                <div class="tx-meta">${metaText}</div>
                 ${t.note ? `<div class="tx-note">${t.note}</div>` : ''}
             </div>
             <div class="tx-amount-col">
@@ -1062,6 +1079,181 @@ function renderDashboard() {
         attachSwipeDelete(row, globalIndex);
         list.appendChild(row);
     });
+}
+
+function getTransactionYears() {
+    const years = new Set([new Date().getFullYear()]);
+    appState.transactions.forEach((t) => {
+        if (t.date) years.add(parseInt(t.date.substring(0, 4), 10));
+    });
+    return [...years].sort((a, b) => b - a);
+}
+
+function getTransactionsForYear(year) {
+    const start = `${year}-01-01`;
+    const end = `${year}-12-31`;
+    return appState.transactions.filter(t => t.date >= start && t.date <= end);
+}
+
+function populateReportsYearSelect() {
+    const select = document.getElementById('reports-year-select');
+    if (!select) return;
+    const preferred = select.value || String(new Date().getFullYear());
+    const years = getTransactionYears();
+    select.innerHTML = years.map((year) => {
+        const value = String(year);
+        return `<option value="${value}"${value === preferred ? ' selected' : ''}>${value}</option>`;
+    }).join('');
+    if (!years.map(String).includes(preferred) && years.length) {
+        select.value = String(years[0]);
+    }
+}
+
+function setReportsViewType(type) {
+    if (reportsViewType === type) return;
+    reportsViewType = type;
+    renderReports();
+}
+
+function renderReportsTopCategories(yearTx) {
+    const topEl = document.getElementById('reports-top-categories');
+    document.getElementById('btn-reports-expense').classList.toggle('active', reportsViewType === 'expense');
+    document.getElementById('btn-reports-income').classList.toggle('active', reportsViewType === 'income');
+
+    const typeTx = yearTx.filter(t => t.type === reportsViewType);
+    const catSums = {};
+    typeTx.forEach(t => { catSums[t.mainCategory] = (catSums[t.mainCategory] || 0) + t.amount; });
+    const total = Object.values(catSums).reduce((sum, value) => sum + value, 0);
+    const entries = Object.keys(catSums)
+        .map(label => ({ label, amount: catSums[label] }))
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 10);
+
+    if (!entries.length) {
+        topEl.innerHTML = '<div class="empty-state"><p>Brak danych za ten rok</p></div>';
+        return;
+    }
+
+    topEl.innerHTML = entries.map((entry, index) => {
+        const pct = total > 0 ? Math.round((entry.amount / total) * 100) : 0;
+        return `<div class="reports-top-item">
+            <span class="reports-top-rank">${index + 1}</span>
+            ${renderCategoryIcon(entry.label, 'list', null, reportsViewType)}
+            <div class="reports-top-text">
+                <span class="reports-top-name">${entry.label}</span>
+                <span class="reports-top-amount">${formatPlnAmount(entry.amount)}</span>
+            </div>
+            <span class="reports-top-pct">${pct}%</span>
+        </div>`;
+    }).join('');
+}
+
+function renderReports() {
+    populateReportsYearSelect();
+    const year = parseInt(document.getElementById('reports-year-select').value, 10);
+    const yearTx = getTransactionsForYear(year);
+
+    const totalIncome = yearTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+    const totalExpense = yearTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+    const netBalance = totalIncome - totalExpense;
+    const savingsRate = totalIncome > 0 ? Math.round((netBalance / totalIncome) * 100) : 0;
+
+    document.getElementById('reports-year-label').innerText = String(year);
+    document.getElementById('reports-total-income').innerText = formatPlnAmount(totalIncome);
+    document.getElementById('reports-total-expense').innerText = formatPlnAmount(totalExpense);
+    const netEl = document.getElementById('reports-net-balance');
+    netEl.innerText = `${netBalance >= 0 ? '+' : ''}${netBalance.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
+    netEl.style.color = netBalance >= 0 ? 'var(--success)' : 'var(--danger)';
+    const savingsEl = document.getElementById('reports-savings-rate');
+    savingsEl.innerText = `${savingsRate}%`;
+    savingsEl.style.color = savingsRate >= 0 ? 'var(--success)' : 'var(--danger)';
+
+    const now = new Date();
+    const monthCount = year === now.getFullYear() ? now.getMonth() + 1 : 12;
+    const monthLabels = [];
+    const incomeData = [];
+    const expenseData = [];
+
+    for (let month = 0; month < monthCount; month++) {
+        const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+        const monthEndDate = new Date(year, month + 1, 0);
+        const monthEnd = monthEndDate.toISOString().split('T')[0];
+        const monthTx = yearTx.filter(t => t.date >= monthStart && t.date <= monthEnd);
+        monthLabels.push(monthEndDate.toLocaleDateString('pl-PL', { month: 'short' }));
+        incomeData.push(monthTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0));
+        expenseData.push(monthTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0));
+    }
+
+    const ctx = document.getElementById('reportsMonthsChart').getContext('2d');
+    if (reportsChartInstance) reportsChartInstance.destroy();
+
+    const legendColor = getThemeCssVar('--text', '#0f172a', '#f5f5f5');
+    const gridColor = isLightTheme() ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.08)';
+
+    reportsChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: monthLabels,
+            datasets: [
+                {
+                    label: 'Wpływy',
+                    data: incomeData,
+                    backgroundColor: isLightTheme() ? 'rgba(13, 148, 136, 0.85)' : 'rgba(52, 211, 153, 0.8)',
+                    borderRadius: 6,
+                    borderSkipped: false
+                },
+                {
+                    label: 'Wydatki',
+                    data: expenseData,
+                    backgroundColor: isLightTheme() ? 'rgba(220, 38, 38, 0.8)' : 'rgba(248, 113, 113, 0.8)',
+                    borderRadius: 6,
+                    borderSkipped: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 1.35,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: legendColor,
+                        font: { family: 'DM Sans', weight: '600', size: 11 },
+                        boxWidth: 12,
+                        padding: 14
+                    }
+                },
+                tooltip: {
+                    backgroundColor: isLightTheme() ? 'rgba(15, 23, 42, 0.92)' : 'rgba(0, 0, 0, 0.88)',
+                    titleFont: { family: 'DM Sans', weight: '700' },
+                    bodyFont: { family: 'DM Sans', weight: '600' },
+                    padding: 12,
+                    cornerRadius: 10,
+                    callbacks: {
+                        label: (context) => `${context.dataset.label}: ${formatPlnAmount(context.parsed.y)}`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: legendColor, font: { family: 'DM Sans', size: 10 } },
+                    grid: { display: false }
+                },
+                y: {
+                    ticks: {
+                        color: legendColor,
+                        font: { family: 'DM Sans', size: 10 },
+                        callback: (value) => (value >= 1000 ? `${Math.round(value / 1000)}k` : value)
+                    },
+                    grid: { color: gridColor }
+                }
+            }
+        }
+    });
+
+    renderReportsTopCategories(yearTx);
 }
 
 function renderInvestments() {
