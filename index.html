@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Finanse</title>
-    <meta name="theme-color" content="#0f0f0f">
+    <meta name="theme-color" content="#e4eaf4">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Finanse">
@@ -46,6 +46,14 @@
         </div>
     </header>
 
+    <div id="module-split-banner" class="module-split-banner hidden" role="alert">
+        <div>
+            <strong>Konserwacja kodu</strong>
+            <span id="module-split-banner-text">app.js przekroczył próg — czas podzielić na moduły w folderze js/.</span>
+        </div>
+        <button type="button" onclick="dismissModuleSplitBanner()">OK</button>
+    </div>
+
     <div id="settings-overlay" class="settings-overlay hidden" onclick="if (event.target === this) closeSettings()">
         <div class="settings-panel">
             <div class="settings-header">
@@ -62,6 +70,11 @@
                     <button type="button" class="theme-option" data-theme="dark" onclick="setTheme('dark')">Ciemny</button>
                     <button type="button" class="theme-option" data-theme="auto" onclick="setTheme('auto')">Auto</button>
                 </div>
+            </div>
+
+            <div id="module-split-notice" class="settings-maintenance hidden">
+                <strong>Konserwacja kodu</strong>
+                <p>Plik <code>app.js</code> ma <span id="module-split-lines">—</span> linii (próg: <span id="module-split-threshold">900</span>). Rozważ podział na moduły w <code>js/</code>.</p>
             </div>
 
             <div class="settings-section">

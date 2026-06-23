@@ -15,6 +15,8 @@ const cloudBackupRef = db.collection('finances').doc('cloud_backup');
 const STORAGE_KEY = 'app_finance_state';
 const THEME_KEY = 'theme_preference';
 const LOCAL_BACKUP_KEY = 'finanse_local_backup';
+const MODULE_SPLIT_LINE_THRESHOLD = 900;
+const MODULE_SPLIT_BANNER_KEY = 'module_split_banner_dismissed_at';
 
 db.enablePersistence().catch(err => console.error("Firebase persistence error:", err));
 
@@ -53,25 +55,92 @@ let editingTxIndex = null;
 let activeChartCategory = null;
 let dashboardChartInstance = null;
 
-const categoryColors = {
-    'Zakupy': '#2563eb', 'Dom': '#7c3aed', 'Osobista': '#db2777', 'Przyjemności': '#ea580c',
-    'Samochód': '#0891b2', 'Rachunki/opłaty': '#4f46e5', 'Subskrypcje': '#6366f1',
-    'Jedzenie na mieście': '#f59e0b', 'Różne': '#64748b', 'Edukacja': '#0d9488',
-    'Prezenty': '#e11d48', 'Komunikacja': '#0284c7', 'Długi': '#b45309',
-    'Wynagrodzenie': '#059669', 'Inne': '#6b7280'
+const categoryColorsLight = {
+    'Zakupy': '#c0264a', 'Dom': '#6d28d9', 'Osobista': '#be185d', 'Przyjemności': '#c2410c',
+    'Samochód': '#0369a1', 'Rachunki/opłaty': '#4338ca', 'Subskrypcje': '#4f46e5',
+    'Jedzenie na mieście': '#a16207', 'Różne': '#334155', 'Edukacja': '#0f766e',
+    'Prezenty': '#b91c1c', 'Komunikacja': '#1d4ed8', 'Długi': '#9a3412',
+    'Wynagrodzenie': '#15803d', 'Inne': '#475569'
 };
 
-const chartPalette = ['#2563eb', '#3b82f6', '#60a5fa', '#059669', '#34d399', '#7c3aed', '#a78bfa', '#64748b'];
+const categoryColorsDark = {
+    'Zakupy': '#93c5fd', 'Dom': '#c4b5fd', 'Osobista': '#f9a8d4', 'Przyjemności': '#fdba74',
+    'Samochód': '#67e8f9', 'Rachunki/opłaty': '#a5b4fc', 'Subskrypcje': '#a5b4fc',
+    'Jedzenie na mieście': '#fcd34d', 'Różne': '#94a3b8', 'Edukacja': '#5eead4',
+    'Prezenty': '#fca5a5', 'Komunikacja': '#7dd3fc', 'Długi': '#fdba74',
+    'Wynagrodzenie': '#6ee7b7', 'Inne': '#9ca3af'
+};
+
+const chartCategoryColorsLight = {
+    'Zakupy': '#C81E1E', 'Dom': '#6B21A8', 'Osobista': '#BE185D', 'Przyjemności': '#C2410C',
+    'Samochód': '#0369A1', 'Rachunki/opłaty': '#1D4ED8', 'Subskrypcje': '#5B21B6',
+    'Jedzenie na mieście': '#A16207', 'Różne': '#475569', 'Edukacja': '#0F766E',
+    'Prezenty': '#9F1239', 'Komunikacja': '#0E7490', 'Długi': '#92400E',
+    'Wynagrodzenie': '#15803D', 'Inne': '#57534E'
+};
+
+const chartCategoryColorsDark = {
+    'Zakupy': '#FF6B6B', 'Dom': '#C084FC', 'Osobista': '#F472B6', 'Przyjemności': '#FB923C',
+    'Samochód': '#38BDF8', 'Rachunki/opłaty': '#60A5FA', 'Subskrypcje': '#A78BFA',
+    'Jedzenie na mieście': '#FDE047', 'Różne': '#CBD5E1', 'Edukacja': '#2DD4BF',
+    'Prezenty': '#FB7185', 'Komunikacja': '#22D3EE', 'Długi': '#FBBF24',
+    'Wynagrodzenie': '#4ADE80', 'Inne': '#A8A29E'
+};
+
+function isLightTheme() {
+    const forced = document.documentElement.getAttribute('data-theme');
+    if (forced === 'light') return true;
+    if (forced === 'dark') return false;
+    return !window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function getThemeCssVar(name, lightFallback, darkFallback) {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    if (value) return value;
+    return isLightTheme() ? lightFallback : darkFallback;
+}
+
+function getCategoryColor(category) {
+    const palette = isLightTheme() ? categoryColorsLight : categoryColorsDark;
+    return palette[category] || (isLightTheme() ? '#5b4fe8' : '#93c5fd');
+}
+
+function hashString(str) {
+    let h = 0;
+    for (let i = 0; i < str.length; i++) h = str.charCodeAt(i) + ((h << 5) - h);
+    return Math.abs(h);
+}
+
+function generateDistinctHslColors(count, seed) {
+    const light = isLightTheme();
+    const colors = [];
+    const goldenAngle = 137.508;
+    const baseHue = hashString(seed) % 360;
+    for (let i = 0; i < count; i++) {
+        const hue = (baseHue + i * goldenAngle) % 360;
+        colors.push(`hsl(${Math.round(hue)}, ${light ? 78 : 72}%, ${light ? 38 : 56}%)`);
+    }
+    return colors;
+}
+
+function getChartBorderColor() {
+    return isLightTheme() ? 'rgba(255, 255, 255, 0.95)' : 'rgba(10, 10, 12, 0.9)';
+}
+
+function getChartSliceColors(labels) {
+    const chartMap = isLightTheme() ? chartCategoryColorsLight : chartCategoryColorsDark;
+    if (!activeChartCategory) {
+        const fallback = generateDistinctHslColors(labels.length, labels.join('|'));
+        return labels.map((label, i) => chartMap[label] || fallback[i]);
+    }
+    return generateDistinctHslColors(labels.length, `${activeChartCategory}|${labels.join('|')}`);
+}
 
 const ONBOARDING_SLIDES = [
     { title: 'Witaj w Finanse', text: 'Twój osobisty portfel — prosty, elegancki i zawsze pod ręką.' },
     { title: 'Synchronizacja live', text: 'Dane trafiają do chmury i są dostępne na telefonie oraz komputerze.' },
     { title: 'Kategorie po Twojemu', text: 'Uporządkowane kategorie z Money Pro — dostosowane pod Ciebie.' }
 ];
-
-function getCategoryColor(category) {
-    return categoryColors[category] || '#2563eb';
-}
 
 function hapticFeedback() {
     if (navigator.vibrate) navigator.vibrate(12);
@@ -161,6 +230,47 @@ function registerServiceWorker() {
     const swUrl = `${base}/sw.js`;
     const scope = base ? `${base}/` : '/';
     navigator.serviceWorker.register(swUrl, { scope }).catch(err => console.error('SW registration failed:', err));
+}
+
+function dismissModuleSplitBanner() {
+    localStorage.setItem(MODULE_SPLIT_BANNER_KEY, String(Date.now()));
+    document.getElementById('module-split-banner').classList.add('hidden');
+}
+
+function showModuleSplitAlert(lineCount) {
+    const thresholdEl = document.getElementById('module-split-threshold');
+    const linesEl = document.getElementById('module-split-lines');
+    const notice = document.getElementById('module-split-notice');
+    const banner = document.getElementById('module-split-banner');
+    const bannerText = document.getElementById('module-split-banner-text');
+
+    if (thresholdEl) thresholdEl.textContent = String(MODULE_SPLIT_LINE_THRESHOLD);
+    if (linesEl) linesEl.textContent = String(lineCount);
+    if (notice) notice.classList.remove('hidden');
+    if (bannerText) {
+        bannerText.textContent = `app.js ma ${lineCount} linii (próg: ${MODULE_SPLIT_LINE_THRESHOLD}). Czas podzielić kod na moduły w folderze js/.`;
+    }
+
+    console.warn(`[Finanse] app.js: ${lineCount} linii — próg ${MODULE_SPLIT_LINE_THRESHOLD}. Rozważ podział na moduły js/.`);
+
+    const dismissedAt = Number(localStorage.getItem(MODULE_SPLIT_BANNER_KEY) || 0);
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    if (banner && (!dismissedAt || Date.now() - dismissedAt > weekMs)) {
+        banner.classList.remove('hidden');
+    }
+}
+
+async function checkModuleSplitThreshold() {
+    try {
+        const res = await fetch(`${getBasePath()}/app.js`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const lineCount = (await res.text()).split('\n').length;
+        if (lineCount >= MODULE_SPLIT_LINE_THRESHOLD) {
+            showModuleSplitAlert(lineCount);
+        }
+    } catch {
+        /* offline lub cache — pomijamy */
+    }
 }
 
 function initData() {
@@ -449,19 +559,62 @@ function renderDashboard() {
     if (dashboardChartInstance) dashboardChartInstance.destroy();
 
     if (Object.keys(catSums).length > 0) {
+        const chartLabels = Object.keys(catSums);
+        const sliceColors = getChartSliceColors(chartLabels);
+        const borderColor = getChartBorderColor();
+        const legendTextColor = getThemeCssVar('--text', '#0f172a', '#f5f5f5');
+
         dashboardChartInstance = new Chart(ctxDash, {
             type: 'doughnut',
             data: {
-                labels: Object.keys(catSums),
-                datasets: [{ data: Object.values(catSums), backgroundColor: chartPalette, borderWidth: 0, hoverOffset: 6 }]
+                labels: chartLabels,
+                datasets: [{
+                    data: Object.values(catSums),
+                    backgroundColor: sliceColors,
+                    borderColor: borderColor,
+                    borderWidth: 3,
+                    borderRadius: 5,
+                    spacing: 2,
+                    hoverOffset: 10,
+                    hoverBorderWidth: 3
+                }]
             },
             options: {
                 responsive: true,
-                cutout: '62%',
+                cutout: '58%',
                 plugins: {
                     legend: {
                         position: 'bottom',
-                        labels: { boxWidth: 10, font: { size: 11, family: 'DM Sans' }, color: getComputedStyle(document.body).getPropertyValue('--text-muted').trim() || '#6b7280' }
+                        labels: {
+                            usePointStyle: true,
+                            pointStyle: 'rectRounded',
+                            boxWidth: 14,
+                            boxHeight: 10,
+                            padding: 14,
+                            font: { size: 12, weight: '600', family: 'DM Sans' },
+                            color: legendTextColor,
+                            generateLabels(chart) {
+                                const ds = chart.data.datasets[0];
+                                return chart.data.labels.map((label, i) => ({
+                                    text: label,
+                                    fillStyle: ds.backgroundColor[i],
+                                    strokeStyle: borderColor,
+                                    lineWidth: 2,
+                                    fontColor: legendTextColor,
+                                    color: legendTextColor,
+                                    hidden: !chart.getDataVisibility(i),
+                                    index: i,
+                                    pointStyle: 'rectRounded'
+                                }));
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: isLightTheme() ? 'rgba(15, 23, 42, 0.92)' : 'rgba(0, 0, 0, 0.88)',
+                        titleFont: { family: 'DM Sans', weight: '700' },
+                        bodyFont: { family: 'DM Sans', weight: '600' },
+                        padding: 12,
+                        cornerRadius: 10
                     }
                 },
                 onClick: (event, elements, chart) => {
@@ -612,6 +765,7 @@ function setTheme(mode) {
         btn.classList.toggle('active', btn.dataset.theme === mode);
     });
     updateThemeColorMeta();
+    refreshCurrentView();
 }
 
 function updateThemeColorMeta() {
@@ -619,7 +773,7 @@ function updateThemeColorMeta() {
     if (!meta) return;
     const forced = document.documentElement.getAttribute('data-theme');
     const isDark = forced === 'dark' || (!forced && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    meta.content = isDark ? '#0a0a0a' : '#f5f3ef';
+    meta.content = isDark ? '#0a0a0a' : '#e4eaf4';
 }
 
 function initTheme() {
@@ -743,3 +897,4 @@ initTheme();
 initOnboarding();
 initData();
 registerServiceWorker();
+checkModuleSplitThreshold();
