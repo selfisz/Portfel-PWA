@@ -78,6 +78,12 @@
             </div>
 
             <div class="settings-section">
+                <div class="section-label">Kategorie</div>
+                <p class="settings-hint">Zmień nazwy kategorii i podkategorii — zmiany obowiązują w całej aplikacji i we wszystkich transakcjach.</p>
+                <button type="button" class="btn-settings-action" onclick="openCategoryEditor()">Edytuj nazwy kategorii</button>
+            </div>
+
+            <div class="settings-section">
                 <div class="section-label">Kopia zapasowa</div>
                 <p class="settings-hint" id="backup-cloud-info">Kopia w chmurze: brak danych</p>
                 <button type="button" class="btn-settings-action" onclick="backupToCloud()">Wyślij kopię do chmury</button>
@@ -86,6 +92,23 @@
                 <button type="button" class="btn-settings-action" onclick="restoreFromPhoneFile()">Pobierz kopię z pliku</button>
                 <input type="file" id="backup-file-input" accept=".json,application/json" hidden onchange="handleBackupFileSelect(event)">
             </div>
+        </div>
+    </div>
+
+    <div id="category-editor-overlay" class="settings-overlay category-editor-overlay hidden" onclick="if (event.target === this) closeCategoryEditor()">
+        <div class="settings-panel category-editor-panel">
+            <div class="settings-header">
+                <h2>Nazwy kategorii</h2>
+                <button type="button" class="btn-icon" onclick="closeCategoryEditor()" aria-label="Zamknij">
+                    <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+            <div class="flex-toggle category-editor-type-toggle">
+                <button id="btn-category-editor-expense" type="button" class="toggle-btn active expense" onclick="setCategoryEditorType('expense')">Wydatki</button>
+                <button id="btn-category-editor-income" type="button" class="toggle-btn income" onclick="setCategoryEditorType('income')">Wpływy</button>
+            </div>
+            <div id="category-editor-list" class="category-editor-list"></div>
+            <button type="button" class="btn-submit category-editor-save" onclick="saveCategoryEditor()">Zapisz zmiany</button>
         </div>
     </div>
     <p id="settings-toast" class="settings-toast hidden"></p>
@@ -197,7 +220,7 @@
 
         <div id="view-reports" class="app-view">
             <div class="card filter-card">
-                <label class="section-label" for="reports-year-select">Rok</label>
+                <label class="section-label" for="reports-year-select">Okres</label>
                 <select id="reports-year-select" onchange="renderReports()"></select>
             </div>
 
@@ -224,7 +247,7 @@
             </div>
 
             <div class="card reports-months-card">
-                <h2>Miesiące w roku</h2>
+                <h2 id="reports-months-title">Miesiące w roku</h2>
                 <div class="reports-bar-chart-wrap">
                     <canvas id="reportsMonthsChart"></canvas>
                 </div>
@@ -232,11 +255,15 @@
 
             <div class="card">
                 <div class="chart-card-header">
-                    <h2>Top kategorie</h2>
+                    <h2 id="reports-top-title">Top kategorie</h2>
                     <div class="chart-type-toggle flex-toggle">
                         <button id="btn-reports-expense" type="button" class="toggle-btn active expense" onclick="setReportsViewType('expense')">Wydatki</button>
                         <button id="btn-reports-income" type="button" class="toggle-btn income" onclick="setReportsViewType('income')">Wpływy</button>
                     </div>
+                </div>
+                <div class="reports-rank-toggle flex-toggle">
+                    <button id="btn-reports-main" type="button" class="toggle-btn active" onclick="setReportsRankLevel('main')">Kategorie</button>
+                    <button id="btn-reports-sub" type="button" class="toggle-btn" onclick="setReportsRankLevel('sub')">Podkategorie</button>
                 </div>
                 <div id="reports-top-categories" class="reports-top-list"></div>
             </div>

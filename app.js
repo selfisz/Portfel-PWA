@@ -20,7 +20,7 @@ const MODULE_SPLIT_BANNER_KEY = 'module_split_banner_dismissed_at';
 
 db.enablePersistence().catch(err => console.error("Firebase persistence error:", err));
 
-const categoryTree = {
+const DEFAULT_CATEGORY_TREE = {
     expense: {
         "Dom": ["Czynsz", "Meble", "Remont", "Formalności", "Smart home", "Konserwacja", "Inne"],
         "Długi": ["Kredyt Pekao SA", "Karta kredytowa", "Spłata", "Raty", "Odroczenia płatności"],
@@ -41,6 +41,9 @@ const categoryTree = {
         "Inne": []
     }
 };
+
+let categoryTree = DEFAULT_CATEGORY_TREE;
+let categoryEditorType = 'expense';
 
 let appState = {
     transactions: [],
@@ -63,6 +66,7 @@ let chartViewType = 'expense';
 let dashboardChartInstance = null;
 let reportsChartInstance = null;
 let reportsViewType = 'expense';
+let reportsRankLevel = 'main';
 
 const incomeCategoryColorsLight = {
     'Wynagrodzenie': '#15803d', 'Inne': '#475569',
@@ -154,8 +158,8 @@ const categoryIconPaths = {
     'Dom': 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z',
     'Długi': 'M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z',
     'Osobista': 'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
-    'Przyjemności': 'M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5S14.67 12 15.5 12s1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm3-3c-.83 0-1.5-.67-1.5-1.5S17.67 9 18.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z',
-    'Zakupy': 'M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.2 13l.6-2h9.6l.6 2H7.2zM6 4h14l-1.5 6h-12L6 4z',
+    'Przyjemności': 'M20 12c0-1.1.9-2 2-2V6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v4c1.1 0 2 .9 2 2s-.9 2-2 2v4c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-4c-1.1 0-2-.9-2-2z',
+    'Zakupy': 'M18 6h-2c0-2.21-1.79-4-4-4S8 3.79 8 6H6c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-2c1.1 0 2 .9 2 2h-4c0-1.1.9-2 2-2z',
     'Samochód': 'M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z',
     'Rachunki/opłaty': 'M7 2v11h3v9l7-12h-4l4-8z',
     'Subskrypcje': 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z',
@@ -181,17 +185,17 @@ const subCategoryIconPaths = {
     'Raty': 'M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z',
     'Odroczenia płatności': 'M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z',
     'Randki': 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z',
-    'Fryzjer': 'M12 2C8.43 2 5.23 3.54 3 6l1.5 1.5C6.12 5.55 8.87 4.3 12 4.3c3.13 0 5.88 1.25 7.5 3.2L21 6c-2.23-2.46-5.43-4-9-4zm0 4c-2.76 0-5 2.24-5 5 0 2.5 1.5 4.5 3.5 5.5V22h3v-4.5c2-1 3.5-3 3.5-5.5 0-2.76-2.24-5-5-5z',
+    'Fryzjer': 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z',
     'Kosmetyki': 'M12 2C9 2 7 4 7 7c0 2.5 1.5 4 3 5.5V22h4v-9.5c1.5-1.5 3-3 3-5.5 0-3-2-5-5-5z',
     'Zdrowie': 'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-4v-4H6v-4h4V6h4v4h4v4z',
-    'Sport': 'M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z',
+    'Sport': 'M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z',
     'Ubrania': 'M16 4h-2.9l-.7-2H9.6L8.9 4H6l-2 5v2h3l-1 9h12l-1-9h3V9l-2-5z',
     'Wycieczki': 'M14 6l-3.75 5 2.85 3.8-1.6 1.2C9.81 13.75 7 10 7 10l-6 8h22l-9-12z',
     'Gierki': 'M15 7.5V2H9v5.5l3 3 3-3zM7.5 9H2v6h5.5l3-3-3-3zM9 16.5V22h6v-5.5l-3-3-3 3zM16.5 9l-3 3 3 3H22V9h-5.5z',
     'Rozrywka': 'M18 3v2h-2V3H8v2H6V3H4v18h2v-2h2v2h8v-2h2v2h2V3h-2zM8 17H6v-2h2v2zm0-4H6v-2h2v2zm0-4H6V7h2v2zm10 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z',
     'Wyjścia': 'M7 14c-1.66 0-3 1.34-3 3 0 1.31-1.16 2-2 2 .92 1.22 2.49 2 4 2 2.21 0 4-1.79 4-4 0-1.66-1.34-3-3-3zm13.71-9.37-1.34-1.34c-.39-.39-1.02-.39-1.41 0L9 12.25 11.75 15l8.96-8.96c.39-.39.39-1.02 0-1.41z',
     'Alko': 'M6 3v6c0 2.97 2.16 5.43 5 5.91V19H8v2h8v-2h-3v-4.09c2.84-.48 5-2.94 5-5.91V3H6zm2 2h8v4c0 2.21-1.79 4-4 4s-4-1.79-4-4V5z',
-    'Zakupy': 'M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.2 13l.6-2h9.6l.6 2H7.2zM6 4h14l-1.5 6h-12L6 4z',
+    'Zakupy': 'M18 6h-2c0-2.21-1.79-4-4-4S8 3.79 8 6H6c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-2c1.1 0 2 .9 2 2h-4c0-1.1.9-2 2-2z',
     'Zakupy na dowóz': 'M18 18.5c.83 0 1.5-.67 1.5-1.5s-.67-1.5-1.5-1.5-1.5.67-1.5 1.5.67 1.5 1.5 1.5zM6 18.5c.83 0 1.5-.67 1.5-1.5S6.83 15.5 6 15.5 4.5 16.17 4.5 17 5.17 18.5 6 18.5zm11-9.5V6l-6-6-2.8 2.8 1.4 1.4L9 4.2V6H4v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h4c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-7l-3-4z',
     'Paliwo': 'M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33 0 1.38 1.12 2.5 2.5 2.5.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14c0-1.1-.9-2-2-2h-1V5c0-1.1-.9-2-2-2H6c-1.1 0-2 .9-2 2v16h10v-7.5h1.5v5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V9c0-.69-.28-1.32-.73-1.77zM12 10H6V5h6v5zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z',
     'Serwisowanie': 'M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z',
@@ -217,7 +221,7 @@ const subCategoryIconPaths = {
     'Studia': 'M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3L1 9l11 6 9-4.91V17h2V9L12 3z',
     'Edukacja': 'M12 3L1 9l11 6 9-4.91V17h2V9L12 3z',
     'Podstawa': 'M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z',
-    'Prowizja': 'M7.5 4C5.57 4 4 5.57 4 7.5S5.57 11 7.5 11 11 9.43 11 7.5 9.43 4 7.5 4zm0 2C6.67 6 6 6.67 6 7.5S6.67 9 7.5 9 9 8.33 9 7.5 8.33 6 7.5 6zM16.5 13c-1.93 0-3.5 1.57-3.5 3.5s1.57 3.5 3.5 3.5 3.5-1.57 3.5-3.5-1.57-3.5-3.5-3.5zm0 2c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5.67-1.5 1.5-1.5zM5.41 20 4 18.59 18.59 4 20 5.41 5.41 20z',
+    'Prowizja': 'M7.5 4C5.57 4 4 5.57 4 7.5S5.57 11 7.5 11 11 9.43 11 7.5 9.43 4 7.5 4zM16.5 13c-1.93 0-3.5 1.57-3.5 3.5s1.57 3.5 3.5 3.5 3.5-1.57 3.5-3.5-1.57-3.5-3.5-3.5zM5.41 20 4 18.59 18.59 4 20 5.41 5.41 20z',
     'Nagroda': 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27z',
     'Delegacja': 'M14 6l-3.75 5 2.85 3.8-1.6 1.2C9.81 13.75 7 10 7 10l-6 8h22l-9-12z',
     'Socjal': 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',
@@ -486,7 +490,10 @@ function getPersistedState(raw = appState) {
     return {
         transactions: Array.isArray(data.transactions) ? data.transactions : [],
         loan: data.loan || { totalAmount: 500000.00, currentCapitalLeft: 412500.00, interestRate: 6.75 },
-        investments: Array.isArray(data.investments) ? data.investments : []
+        investments: Array.isArray(data.investments) ? data.investments : [],
+        categoryTree: data.categoryTree && typeof data.categoryTree === 'object'
+            ? data.categoryTree
+            : JSON.parse(JSON.stringify(DEFAULT_CATEGORY_TREE))
     };
 }
 
@@ -519,7 +526,32 @@ function migrateCategoryData() {
 function normalizeAppState(raw) {
     const hadUiFields = !!(raw && ('currentType' in raw || 'selectedMainCategory' in raw || 'selectedSubCategory' in raw));
     appState = getPersistedState(raw);
+    categoryTree = appState.categoryTree;
     return hadUiFields;
+}
+
+function migrateRecentCategories(mainMap, subRenames, type) {
+    try {
+        const recents = JSON.parse(localStorage.getItem(RECENT_CATEGORIES_KEY) || '[]');
+        let changed = false;
+        const migrated = recents.map((entry) => {
+            if (entry.type !== type) return entry;
+            let { mainCategory, subCategory } = entry;
+            if (mainMap[mainCategory]) {
+                mainCategory = mainMap[mainCategory];
+                changed = true;
+            }
+            const origMain = entry.mainCategory;
+            subRenames.forEach((r) => {
+                if (origMain === r.oldMain && subCategory === r.oldSub) {
+                    subCategory = r.newSub;
+                    changed = true;
+                }
+            });
+            return { ...entry, mainCategory, subCategory };
+        });
+        if (changed) localStorage.setItem(RECENT_CATEGORIES_KEY, JSON.stringify(migrated));
+    } catch { /* ignore */ }
 }
 
 function getRecentCategories(type) {
@@ -713,6 +745,7 @@ function setTransactionType(type, keepSelection = false) {
 function renderMainCategoriesForm() {
     const grid = document.getElementById('main-category-grid');
     grid.innerHTML = '';
+    grid.classList.toggle('grid-selector--income', formState.currentType === 'income');
     Object.keys(categoryTree[formState.currentType]).forEach((cat) => {
         grid.appendChild(createMainCategoryItem(cat));
     });
@@ -1095,16 +1128,23 @@ function getTransactionsForYear(year) {
     return appState.transactions.filter(t => t.date >= start && t.date <= end);
 }
 
+function getTransactionsForReportsPeriod(period) {
+    if (period === 'all') return appState.transactions;
+    return getTransactionsForYear(parseInt(period, 10));
+}
+
 function populateReportsYearSelect() {
     const select = document.getElementById('reports-year-select');
     if (!select) return;
     const preferred = select.value || String(new Date().getFullYear());
     const years = getTransactionYears();
-    select.innerHTML = years.map((year) => {
+    const options = [`<option value="all"${preferred === 'all' ? ' selected' : ''}>Całość</option>`];
+    years.forEach((year) => {
         const value = String(year);
-        return `<option value="${value}"${value === preferred ? ' selected' : ''}>${value}</option>`;
-    }).join('');
-    if (!years.map(String).includes(preferred) && years.length) {
+        options.push(`<option value="${value}"${value === preferred ? ' selected' : ''}>${value}</option>`);
+    });
+    select.innerHTML = options.join('');
+    if (preferred !== 'all' && !years.map(String).includes(preferred) && years.length) {
         select.value = String(years[0]);
     }
 }
@@ -1115,32 +1155,60 @@ function setReportsViewType(type) {
     renderReports();
 }
 
-function renderReportsTopCategories(yearTx) {
+function setReportsRankLevel(level) {
+    if (reportsRankLevel === level) return;
+    reportsRankLevel = level;
+    renderReports();
+}
+
+function renderReportsTopCategories(periodTx) {
     const topEl = document.getElementById('reports-top-categories');
     document.getElementById('btn-reports-expense').classList.toggle('active', reportsViewType === 'expense');
     document.getElementById('btn-reports-income').classList.toggle('active', reportsViewType === 'income');
+    document.getElementById('btn-reports-main').classList.toggle('active', reportsRankLevel === 'main');
+    document.getElementById('btn-reports-sub').classList.toggle('active', reportsRankLevel === 'sub');
+    document.getElementById('reports-top-title').innerText = reportsRankLevel === 'sub' ? 'Top podkategorie' : 'Top kategorie';
 
-    const typeTx = yearTx.filter(t => t.type === reportsViewType);
+    const typeTx = periodTx.filter(t => t.type === reportsViewType);
     const catSums = {};
-    typeTx.forEach(t => { catSums[t.mainCategory] = (catSums[t.mainCategory] || 0) + t.amount; });
-    const total = Object.values(catSums).reduce((sum, value) => sum + value, 0);
-    const entries = Object.keys(catSums)
-        .map(label => ({ label, amount: catSums[label] }))
+
+    if (reportsRankLevel === 'sub') {
+        typeTx.forEach((t) => {
+            const sub = t.subCategory === '[Bez podkategorii]' ? null : t.subCategory;
+            const key = sub ? `${t.mainCategory}|${sub}` : t.mainCategory;
+            if (!catSums[key]) {
+                catSums[key] = { amount: 0, mainCategory: t.mainCategory, subCategory: sub, label: sub || t.mainCategory };
+            }
+            catSums[key].amount += t.amount;
+        });
+    } else {
+        typeTx.forEach((t) => {
+            if (!catSums[t.mainCategory]) {
+                catSums[t.mainCategory] = { amount: 0, mainCategory: t.mainCategory, subCategory: null, label: t.mainCategory };
+            }
+            catSums[t.mainCategory].amount += t.amount;
+        });
+    }
+
+    const total = Object.values(catSums).reduce((sum, entry) => sum + entry.amount, 0);
+    const entries = Object.values(catSums)
         .sort((a, b) => b.amount - a.amount)
         .slice(0, 10);
 
     if (!entries.length) {
-        topEl.innerHTML = '<div class="empty-state"><p>Brak danych za ten rok</p></div>';
+        topEl.innerHTML = '<div class="empty-state"><p>Brak danych za wybrany okres</p></div>';
         return;
     }
 
     topEl.innerHTML = entries.map((entry, index) => {
         const pct = total > 0 ? Math.round((entry.amount / total) * 100) : 0;
+        const meta = reportsRankLevel === 'sub' && entry.subCategory ? entry.mainCategory : '';
         return `<div class="reports-top-item">
             <span class="reports-top-rank">${index + 1}</span>
-            ${renderCategoryIcon(entry.label, 'list', null, reportsViewType)}
+            ${renderCategoryIcon(entry.mainCategory, 'list', entry.subCategory, reportsViewType)}
             <div class="reports-top-text">
                 <span class="reports-top-name">${entry.label}</span>
+                ${meta ? `<span class="reports-top-meta">${meta}</span>` : ''}
                 <span class="reports-top-amount">${formatPlnAmount(entry.amount)}</span>
             </div>
             <span class="reports-top-pct">${pct}%</span>
@@ -1148,17 +1216,52 @@ function renderReportsTopCategories(yearTx) {
     }).join('');
 }
 
+function buildReportsMonthChartData(period, periodTx) {
+    const now = new Date();
+    const monthLabels = [];
+    const incomeData = [];
+    const expenseData = [];
+
+    if (period === 'all') {
+        for (let offset = 11; offset >= 0; offset--) {
+            const monthDate = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+            const year = monthDate.getFullYear();
+            const month = monthDate.getMonth();
+            const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+            const monthEnd = new Date(year, month + 1, 0).toISOString().split('T')[0];
+            const monthTx = periodTx.filter(t => t.date >= monthStart && t.date <= monthEnd);
+            monthLabels.push(monthDate.toLocaleDateString('pl-PL', { month: 'short', year: '2-digit' }));
+            incomeData.push(monthTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0));
+            expenseData.push(monthTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0));
+        }
+        return { monthLabels, incomeData, expenseData, title: 'Ostatnie 12 miesięcy' };
+    }
+
+    const year = parseInt(period, 10);
+    const monthCount = year === now.getFullYear() ? now.getMonth() + 1 : 12;
+    for (let month = 0; month < monthCount; month++) {
+        const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+        const monthEndDate = new Date(year, month + 1, 0);
+        const monthEnd = monthEndDate.toISOString().split('T')[0];
+        const monthTx = periodTx.filter(t => t.date >= monthStart && t.date <= monthEnd);
+        monthLabels.push(monthEndDate.toLocaleDateString('pl-PL', { month: 'short' }));
+        incomeData.push(monthTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0));
+        expenseData.push(monthTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0));
+    }
+    return { monthLabels, incomeData, expenseData, title: 'Miesiące w roku' };
+}
+
 function renderReports() {
     populateReportsYearSelect();
-    const year = parseInt(document.getElementById('reports-year-select').value, 10);
-    const yearTx = getTransactionsForYear(year);
+    const period = document.getElementById('reports-year-select').value;
+    const periodTx = getTransactionsForReportsPeriod(period);
 
-    const totalIncome = yearTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-    const totalExpense = yearTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+    const totalIncome = periodTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+    const totalExpense = periodTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
     const netBalance = totalIncome - totalExpense;
     const savingsRate = totalIncome > 0 ? Math.round((netBalance / totalIncome) * 100) : 0;
 
-    document.getElementById('reports-year-label').innerText = String(year);
+    document.getElementById('reports-year-label').innerText = period === 'all' ? 'Całość' : period;
     document.getElementById('reports-total-income').innerText = formatPlnAmount(totalIncome);
     document.getElementById('reports-total-expense').innerText = formatPlnAmount(totalExpense);
     const netEl = document.getElementById('reports-net-balance');
@@ -1168,21 +1271,8 @@ function renderReports() {
     savingsEl.innerText = `${savingsRate}%`;
     savingsEl.style.color = savingsRate >= 0 ? 'var(--success)' : 'var(--danger)';
 
-    const now = new Date();
-    const monthCount = year === now.getFullYear() ? now.getMonth() + 1 : 12;
-    const monthLabels = [];
-    const incomeData = [];
-    const expenseData = [];
-
-    for (let month = 0; month < monthCount; month++) {
-        const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-        const monthEndDate = new Date(year, month + 1, 0);
-        const monthEnd = monthEndDate.toISOString().split('T')[0];
-        const monthTx = yearTx.filter(t => t.date >= monthStart && t.date <= monthEnd);
-        monthLabels.push(monthEndDate.toLocaleDateString('pl-PL', { month: 'short' }));
-        incomeData.push(monthTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0));
-        expenseData.push(monthTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0));
-    }
+    const { monthLabels, incomeData, expenseData, title } = buildReportsMonthChartData(period, periodTx);
+    document.getElementById('reports-months-title').innerText = title;
 
     const ctx = document.getElementById('reportsMonthsChart').getContext('2d');
     if (reportsChartInstance) reportsChartInstance.destroy();
@@ -1253,7 +1343,7 @@ function renderReports() {
         }
     });
 
-    renderReportsTopCategories(yearTx);
+    renderReportsTopCategories(periodTx);
 }
 
 function renderInvestments() {
@@ -1403,6 +1493,151 @@ function openSettings() {
         btn.classList.toggle('active', btn.dataset.theme === saved);
     });
     refreshBackupInfo();
+}
+
+function openCategoryEditor() {
+    categoryEditorType = 'expense';
+    document.getElementById('category-editor-overlay').classList.remove('hidden');
+    document.getElementById('btn-category-editor-expense').classList.add('active');
+    document.getElementById('btn-category-editor-income').classList.remove('active');
+    renderCategoryEditor();
+}
+
+function closeCategoryEditor() {
+    document.getElementById('category-editor-overlay').classList.add('hidden');
+}
+
+function setCategoryEditorType(type) {
+    if (categoryEditorType === type) return;
+    categoryEditorType = type;
+    document.getElementById('btn-category-editor-expense').classList.toggle('active', type === 'expense');
+    document.getElementById('btn-category-editor-income').classList.toggle('active', type === 'income');
+    renderCategoryEditor();
+}
+
+function renderCategoryEditor() {
+    const list = document.getElementById('category-editor-list');
+    list.innerHTML = '';
+    const txType = categoryEditorType;
+
+    Object.keys(categoryTree[txType]).forEach((main) => {
+        const group = document.createElement('div');
+        group.className = 'category-edit-group';
+
+        const mainRow = document.createElement('div');
+        mainRow.className = 'category-edit-row category-edit-row--main';
+        mainRow.innerHTML = renderCategoryIcon(main, 'chip', null, txType);
+        const mainInput = document.createElement('input');
+        mainInput.type = 'text';
+        mainInput.className = 'category-edit-input category-edit-input--main';
+        mainInput.value = main;
+        mainInput.dataset.original = main;
+        mainInput.maxLength = 40;
+        mainRow.appendChild(mainInput);
+        group.appendChild(mainRow);
+
+        const subsWrap = document.createElement('div');
+        subsWrap.className = 'category-edit-subs';
+        categoryTree[txType][main].forEach((sub) => {
+            const subRow = document.createElement('div');
+            subRow.className = 'category-edit-row category-edit-row--sub';
+            subRow.innerHTML = renderCategoryIcon(main, 'chip', sub, txType);
+            const subInput = document.createElement('input');
+            subInput.type = 'text';
+            subInput.className = 'category-edit-input category-edit-input--sub';
+            subInput.value = sub;
+            subInput.dataset.original = sub;
+            subInput.maxLength = 40;
+            subRow.appendChild(subInput);
+            subsWrap.appendChild(subRow);
+        });
+        if (categoryTree[txType][main].length) group.appendChild(subsWrap);
+        list.appendChild(group);
+    });
+}
+
+function saveCategoryEditor() {
+    const type = categoryEditorType;
+    const mainRenames = [];
+    const subRenames = [];
+    const newTypeTree = {};
+
+    const groups = document.querySelectorAll('#category-editor-list .category-edit-group');
+    for (const group of groups) {
+        const mainInput = group.querySelector('.category-edit-input--main');
+        const oldMain = mainInput.dataset.original;
+        const newMain = mainInput.value.trim();
+        if (!newMain) {
+            alert('Nazwa kategorii głównej nie może być pusta.');
+            mainInput.focus();
+            return;
+        }
+
+        const subs = [];
+        const subInputs = group.querySelectorAll('.category-edit-input--sub');
+        for (const subInput of subInputs) {
+            const oldSub = subInput.dataset.original;
+            const newSub = subInput.value.trim();
+            if (!newSub) {
+                alert('Nazwa podkategorii nie może być pusta.');
+                subInput.focus();
+                return;
+            }
+            subs.push(newSub);
+            if (oldSub !== newSub) subRenames.push({ oldMain, oldSub, newSub });
+        }
+
+        if (oldMain !== newMain) mainRenames.push({ oldMain, newMain });
+        newTypeTree[newMain] = subs;
+    }
+
+    const mainNames = Object.keys(newTypeTree);
+    if (mainNames.length !== new Set(mainNames).size) {
+        alert('Kategorie główne muszą mieć unikalne nazwy.');
+        return;
+    }
+    for (const main of mainNames) {
+        const subs = newTypeTree[main];
+        if (subs.length !== new Set(subs).size) {
+            alert(`Podkategorie w „${main}” muszą mieć unikalne nazwy.`);
+            return;
+        }
+    }
+
+    const mainMap = {};
+    mainRenames.forEach((r) => { mainMap[r.oldMain] = r.newMain; });
+
+    categoryTree[type] = newTypeTree;
+    appState.categoryTree = categoryTree;
+
+    appState.transactions.forEach((tx) => {
+        if (tx.type !== type) return;
+        const origMain = tx.mainCategory;
+        const origSub = tx.subCategory;
+        if (mainMap[origMain]) tx.mainCategory = mainMap[origMain];
+        subRenames.forEach((r) => {
+            if (origMain === r.oldMain && origSub === r.oldSub) tx.subCategory = r.newSub;
+        });
+    });
+
+    if (activeChartCategory && mainMap[activeChartCategory]) {
+        activeChartCategory = mainMap[activeChartCategory];
+    }
+    if (formState.selectedMainCategory && mainMap[formState.selectedMainCategory]) {
+        formState.selectedMainCategory = mainMap[formState.selectedMainCategory];
+    }
+    subRenames.forEach((r) => {
+        if (formState.selectedSubCategory === r.oldSub && formState.selectedMainCategory === (mainMap[r.oldMain] || r.oldMain)) {
+            formState.selectedSubCategory = r.newSub;
+        }
+    });
+
+    migrateRecentCategories(mainMap, subRenames, type);
+    saveState();
+    hapticFeedback();
+    closeCategoryEditor();
+    showSettingsToast('Nazwy kategorii zapisane');
+    refreshCurrentView();
 }
 
 function closeSettings() {
