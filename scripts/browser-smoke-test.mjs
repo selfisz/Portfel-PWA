@@ -6,7 +6,7 @@ const views = [
     { id: 'dashboard', title: 'Pulpit', selector: '#db-total-expenses' },
     { id: 'add', title: 'Dodaj', selector: '#tx-amount' },
     { id: 'reports', title: 'Analiza', selector: '#reports-total-expense' },
-    { id: 'investments', title: 'Aktywa', selector: '#portfolio-value' },
+    { id: 'investments', title: 'Aktywa', selector: '#assets-list' },
     { id: 'loans', title: 'Kredyty', selector: '#loans-list' },
 ];
 

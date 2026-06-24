@@ -132,6 +132,140 @@
         </div>
     </div>
 
+    <div id="asset-picker-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeAssetPicker()">
+        <div class="calendar-day-panel asset-picker-panel" onclick="event.stopPropagation()">
+            <div class="settings-header">
+                <h2>Dodaj aktywo</h2>
+                <button type="button" class="btn-icon" onclick="closeAssetPicker()" aria-label="Zamknij">
+                    <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+            <p class="reports-hint">Inwestycje, lokaty, gotówka i PPK/IKZE — bez nieruchomości i auta.</p>
+            <div class="asset-picker-grid">
+                <button type="button" class="asset-picker-btn" onclick="startNewAsset('investment')">
+                    <span class="asset-picker-icon">📈</span>
+                    <strong>Inwestycja</strong>
+                    <span>ETF, akcje</span>
+                </button>
+                <button type="button" class="asset-picker-btn" onclick="startNewAsset('deposit')">
+                    <span class="asset-picker-icon">🏦</span>
+                    <strong>Lokata</strong>
+                    <span>oprocentowanie, termin</span>
+                </button>
+                <button type="button" class="asset-picker-btn" onclick="startNewAsset('cash')">
+                    <span class="asset-picker-icon">💵</span>
+                    <strong>Gotówka</strong>
+                    <span>konto, portfel</span>
+                </button>
+                <button type="button" class="asset-picker-btn" onclick="startNewAsset('retirement')">
+                    <span class="asset-picker-icon">🛡️</span>
+                    <strong>PPK / IKZE</strong>
+                    <span>emerytura</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="asset-details-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeAssetDetails()">
+        <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
+            <div class="settings-header loan-details-header">
+                <h2 id="asset-details-title">Aktywo</h2>
+                <div class="loan-details-header-actions">
+                    <button id="btn-asset-details-edit" type="button" class="loan-details-header-btn" onclick="setAssetDetailsMode('edit')">Edytuj</button>
+                    <button id="btn-asset-details-view" type="button" class="loan-details-header-btn hidden" onclick="setAssetDetailsMode('view')">Podgląd</button>
+                    <button type="button" class="btn-icon" onclick="closeAssetDetails()" aria-label="Zamknij">
+                        <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div id="asset-details-content" class="loan-details-content"></div>
+            <div id="asset-details-actions" class="asset-details-actions-wrap"></div>
+            <div id="asset-details-edit" class="loan-details-edit hidden">
+                <div class="form-group">
+                    <label class="section-label" for="asset-type-input">Typ</label>
+                    <select id="asset-type-input" onchange="onAssetTypeInputChange()"></select>
+                </div>
+                <div class="form-group">
+                    <label class="section-label" for="asset-name-input">Nazwa</label>
+                    <input type="text" id="asset-name-input" placeholder="np. VWCE, mBank, PPK pracodawcy" maxlength="80">
+                </div>
+                <div class="form-group">
+                    <label class="section-label" for="asset-currency-input">Waluta</label>
+                    <select id="asset-currency-input">
+                        <option value="PLN">PLN</option>
+                        <option value="EUR">EUR</option>
+                    </select>
+                </div>
+
+                <div data-asset-fields="investment">
+                    <div class="loan-form-row">
+                        <div class="form-group">
+                            <label class="section-label" for="asset-ticker-input">Ticker</label>
+                            <input type="text" id="asset-ticker-input" placeholder="VWCE.DE" maxlength="20">
+                        </div>
+                        <div class="form-group">
+                            <label class="section-label" for="asset-quantity-input">Ilość</label>
+                            <input type="number" id="asset-quantity-input" min="0" step="0.0001" placeholder="45">
+                        </div>
+                    </div>
+                    <div class="loan-form-row">
+                        <div class="form-group">
+                            <label class="section-label" for="asset-purchase-input">Średnia cena</label>
+                            <input type="number" id="asset-purchase-input" min="0" step="0.01" placeholder="104.20">
+                        </div>
+                        <div class="form-group">
+                            <label class="section-label" for="asset-price-input">Bieżący kurs</label>
+                            <input type="number" id="asset-price-input" min="0" step="0.01" placeholder="118.50">
+                        </div>
+                    </div>
+                </div>
+
+                <div data-asset-fields="deposit cash retirement" class="hidden">
+                    <div class="form-group">
+                        <label class="section-label" for="asset-amount-input">Saldo / kwota</label>
+                        <input type="number" id="asset-amount-input" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+
+                <div data-asset-fields="deposit" class="hidden">
+                    <div class="loan-form-row">
+                        <div class="form-group">
+                            <label class="section-label" for="asset-rate-input">Oprocentowanie (%)</label>
+                            <input type="number" id="asset-rate-input" min="0" step="0.01" placeholder="5.5">
+                        </div>
+                        <div class="form-group">
+                            <label class="section-label" for="asset-end-input">Koniec lokaty</label>
+                            <input type="date" id="asset-end-input">
+                        </div>
+                    </div>
+                </div>
+
+                <div data-asset-fields="retirement" class="hidden">
+                    <div class="loan-form-row">
+                        <div class="form-group">
+                            <label class="section-label" for="asset-retirement-kind-input">Rodzaj</label>
+                            <select id="asset-retirement-kind-input">
+                                <option value="PPK">PPK</option>
+                                <option value="IKZE">IKZE</option>
+                                <option value="IKE">IKE</option>
+                                <option value="KZP">KZP</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="section-label" for="asset-institution-input">Instytucja</label>
+                            <input type="text" id="asset-institution-input" placeholder="np. Nationale-Nederlanden" maxlength="60">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="loan-details-edit-actions">
+                    <button type="button" class="btn-submit" onclick="saveAssetDetails()">Zapisz</button>
+                    <button type="button" class="btn-outline loan-details-btn" onclick="cancelAssetEdit()">Anuluj</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="loan-details-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeLoanDetails()">
         <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
             <div class="settings-header loan-details-header">
@@ -817,22 +951,29 @@
         </div>
 
         <div id="view-investments" class="app-view">
-            <div class="card hero-card" style="padding: 20px;">
-                <div class="hero-label">Wartość portfela</div>
-                <div id="portfolio-value" class="hero-balance" style="font-size: 1.6rem;">0,00 PLN</div>
+            <div id="assets-total-hero" class="card hero-card assets-hero-card hidden">
+                <div class="hero-label">Wartość majątku</div>
+                <div id="assets-total-value" class="hero-balance">—</div>
+                <p id="assets-total-meta" class="loan-hero-meta hidden"></p>
             </div>
-            <div class="card">
-                <h2>Pozycje</h2>
-                <div id="assets-list"></div>
-                <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:16px;">
-                    <div class="section-label">Aktualizacja kursu</div>
-                    <div style="display:flex; gap:8px;">
-                        <select id="update-asset-select" style="flex:1.2;"></select>
-                        <input type="number" id="update-asset-price" step="0.01" placeholder="Kurs" style="flex:0.8;">
-                    </div>
-                    <button class="btn-submit" style="margin-top:12px; padding:12px;" onclick="updateAssetPriceManual()">Zapisz kurs</button>
-                </div>
+
+            <nav id="assets-type-filter" class="loans-chip-nav assets-chip-nav hidden" aria-label="Filtr aktywów"></nav>
+
+            <div id="assets-list" class="assets-list"></div>
+
+            <div id="assets-archive-section" class="card assets-archive-section hidden">
+                <button type="button" class="loans-archive-toggle assets-archive-toggle" onclick="toggleAssetsArchive()" aria-expanded="false" aria-controls="assets-archive-list">
+                    <span class="loans-archive-toggle-text">
+                        <h2>Archiwum</h2>
+                        <span id="assets-archive-count" class="loans-archive-count">0</span>
+                    </span>
+                    <svg class="loans-archive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </button>
+                <p class="reports-hint loans-archive-hint">Zamknięte pozycje — bez wpływu na sumę majątku.</p>
+                <div id="assets-archive-list" class="assets-archive-list hidden"></div>
             </div>
+
+            <button type="button" class="loans-fab assets-fab" onclick="openNewAssetPicker()" aria-label="Dodaj aktywo">+</button>
         </div>
 
         <div id="view-loans" class="app-view">
@@ -899,6 +1040,7 @@
     <script src="js/transactions.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/reports-core.js"></script>
+    <script src="js/assets.js"></script>
     <script src="js/investments.js"></script>
     <script src="js/loans.js"></script>
     <script src="js/settings.js"></script>

@@ -141,11 +141,27 @@ function convertToPln(amount, currency = 'PLN') {
 }
 
 function getAssetValuePln(asset) {
-    return convertToPln(asset.quantity * asset.currentPriceManual, asset.currency);
+    if (!asset) return 0;
+    const type = asset.type || (asset.ticker || asset.quantity ? 'investment' : 'cash');
+    if (type === 'investment') {
+        const price = asset.currentPrice ?? asset.currentPriceManual ?? 0;
+        return convertToPln((asset.quantity || 0) * price, asset.currency || 'EUR');
+    }
+    return convertToPln(asset.amount || 0, asset.currency || 'PLN');
+}
+
+function getAssetCostPln(asset) {
+    if (!asset) return 0;
+    const type = asset.type || (asset.ticker ? 'investment' : 'cash');
+    if (type !== 'investment') return getAssetValuePln(asset);
+    return convertToPln((asset.quantity || 0) * (asset.purchasePrice || 0), asset.currency || 'EUR');
 }
 
 function getPortfolioValuePln() {
-    return (appState.investments || []).reduce((sum, asset) => sum + getAssetValuePln(asset), 0);
+    const assets = typeof getActiveAssets === 'function'
+        ? getActiveAssets()
+        : (appState.assets || appState.investments || []);
+    return assets.reduce((sum, asset) => sum + getAssetValuePln(asset), 0);
 }
 
 function getLoanCapitalLeft() {

@@ -6,7 +6,7 @@ let appState = {
     loans: [],
     creditCards: [],
     creditCardMovements: [],
-    investments: [],
+    assets: [],
     categoryBudgets: {}
 };
 
@@ -38,12 +38,12 @@ let reportsCalendarMonth = null;
 let reportsLastPeriod = null;
 function getPersistedState(raw = appState) {
     const data = raw ?? appState ?? {};
-    return {
+    const persisted = {
         transactions: Array.isArray(data.transactions) ? data.transactions : [],
         loans: normalizeLoansArray(data.loans, data.loan),
         creditCards: Array.isArray(data.creditCards) ? data.creditCards : [],
         creditCardMovements: Array.isArray(data.creditCardMovements) ? data.creditCardMovements : [],
-        investments: Array.isArray(data.investments) ? data.investments : [],
+        assets: Array.isArray(data.assets) ? data.assets : [],
         categoryTree: data.categoryTree && typeof data.categoryTree === 'object'
             ? data.categoryTree
             : JSON.parse(JSON.stringify(DEFAULT_CATEGORY_TREE)),
@@ -51,6 +51,7 @@ function getPersistedState(raw = appState) {
             ? data.categoryBudgets
             : {}
     };
+    return persisted;
 }
 
 function migrateLoansArray() {
@@ -128,6 +129,9 @@ function applyRemoteAppState(raw, extraLoanSources = [], extraCreditCardSources 
         loans: mergeLoansById(base.loans, ...extraLoanSources),
         creditCards: mergeCreditCardsById(base.creditCards, ...extraCreditCardSources)
     };
+    if (Array.isArray(raw?.investments) && raw.investments.length) {
+        appState.investments = raw.investments;
+    }
     migrateLoansArray();
     categoryTree = appState.categoryTree;
     return hadUiFields;
@@ -144,8 +148,9 @@ function initData() {
         const hadMigration = migrateCategoryData() || migrateLoanCategoryTree();
         const hadLoanMigration = runLoanMigrations();
         const hadCardMigration = runCreditCardMigrations();
+        const hadAssetMigration = typeof runAssetMigrations === 'function' ? runAssetMigrations() : false;
         if (hadUiFields) localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-        if (hadMigration || hadLoanMigration || hadCardMigration) saveState();
+        if (hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration) saveState();
         checkAndProcessRecurringTransactions();
         refreshCurrentView();
     }
@@ -165,8 +170,9 @@ function initData() {
             const hadMigration = migrateCategoryData() || migrateLoanCategoryTree();
             const hadLoanMigration = runLoanMigrations();
             const hadCardMigration = runCreditCardMigrations();
+            const hadAssetMigration = typeof runAssetMigrations === 'function' ? runAssetMigrations() : false;
             localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-            if (hadUiFields || hadMigration || hadLoanMigration || hadCardMigration) saveState();
+            if (hadUiFields || hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration) saveState();
             statusEl.className = 'online';
             refreshCurrentView();
         } else {

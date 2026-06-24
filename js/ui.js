@@ -205,6 +205,7 @@ const MODULE_JS_FILES = [
     'js/transactions.js',
     'js/dashboard.js',
     'js/reports-core.js',
+    'js/assets.js',
     'js/investments.js',
     'js/loans.js',
     'js/settings.js',
