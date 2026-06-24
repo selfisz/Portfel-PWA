@@ -1,0 +1,284 @@
+function handleDashboardPeriodChange() {
+    const period = document.getElementById('dashboard-period-select').value;
+    document.getElementById('dashboard-custom-dates').style.display = period === 'custom' ? 'flex' : 'none';
+    renderDashboard();
+}
+
+function getTransactionDateBounds() {
+    if (!appState.transactions.length) {
+        const today = new Date().toISOString().split('T')[0];
+        return { startDate: today, endDate: today };
+    }
+    let min = appState.transactions[0].date;
+    let max = appState.transactions[0].date;
+    appState.transactions.forEach((t) => {
+        if (t.date < min) min = t.date;
+        if (t.date > max) max = t.date;
+    });
+    return { startDate: min, endDate: max };
+}
+
+function getDashboardDates() {
+    const period = document.getElementById('dashboard-period-select').value;
+    let startDate, endDate;
+    const now = new Date();
+    if (period === 'current-month') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    } else if (period === 'previous-month') {
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+    } else if (period === 'current-year') {
+        startDate = new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
+        endDate = new Date(now.getFullYear(), 11, 31).toISOString().split('T')[0];
+    } else if (period === 'previous-year') {
+        const y = now.getFullYear() - 1;
+        startDate = `${y}-01-01`;
+        endDate = `${y}-12-31`;
+    } else if (period === 'all') {
+        ({ startDate, endDate } = getTransactionDateBounds());
+    } else {
+        startDate = document.getElementById('db-start-date').value || '1970-01-01';
+        endDate = document.getElementById('db-end-date').value || '2099-12-31';
+    }
+    return { startDate, endDate };
+}
+function transactionMatchesSearch(t, searchQuery) {
+    return t.mainCategory.toLowerCase().includes(searchQuery) ||
+        t.subCategory.toLowerCase().includes(searchQuery) ||
+        (t.note && t.note.toLowerCase().includes(searchQuery)) ||
+        t.amount.toString().includes(searchQuery) ||
+        t.date.includes(searchQuery);
+}
+
+function renderChartLegend(catSums, sliceColors, labels) {
+    const legendEl = document.getElementById('chart-legend');
+    const centerEl = document.getElementById('chart-center-amount');
+    const total = Object.values(catSums).reduce((sum, value) => sum + value, 0);
+
+    if (centerEl) centerEl.textContent = formatPlnAmount(total);
+
+    if (!labels.length) {
+        legendEl.innerHTML = '';
+        return;
+    }
+
+    const entries = labels
+        .map((label, index) => ({
+            label,
+            amount: catSums[label],
+            color: sliceColors[index],
+            index
+        }))
+        .sort((a, b) => b.amount - a.amount);
+
+    legendEl.innerHTML = entries.map(({ label, amount, color, index }) => {
+        const pct = total > 0 ? Math.round((amount / total) * 100) : 0;
+        return `<button type="button" class="chart-legend-item${activeChartCategory ? '' : ' chart-legend-item--drill'}" data-index="${index}" data-label="${label.replace(/"/g, '&quot;')}">
+            <span class="chart-legend-swatch" style="background:${color}"></span>
+            <span class="chart-legend-text">
+                <span class="chart-legend-name">${label}</span>
+                <span class="chart-legend-amount">${formatPlnAmount(amount)}</span>
+            </span>
+            <span class="chart-legend-pct">${pct}%</span>
+        </button>`;
+    }).join('');
+
+    legendEl.querySelectorAll('.chart-legend-item').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            if (!activeChartCategory) {
+                activeChartCategory = btn.dataset.label;
+                renderDashboard();
+                return;
+            }
+            if (!dashboardChartInstance) return;
+            const chartIndex = parseInt(btn.dataset.index, 10);
+            dashboardChartInstance.toggleDataVisibility(chartIndex);
+            btn.classList.toggle('chart-legend-item--hidden', !dashboardChartInstance.getDataVisibility(chartIndex));
+        });
+    });
+}
+
+function resetDashboardChart() {
+    activeChartCategory = null;
+    renderDashboard();
+}
+
+function setChartViewType(type) {
+    if (chartViewType === type) return;
+    chartViewType = type;
+    activeChartCategory = null;
+    renderDashboard();
+}
+
+function formatDashboardPeriodLabel() {
+    const period = document.getElementById('dashboard-period-select').value;
+    const now = new Date();
+    if (period === 'current-month') {
+        const label = now.toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+        return label.charAt(0).toUpperCase() + label.slice(1);
+    }
+    if (period === 'previous-month') {
+        const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const label = prev.toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+        return label.charAt(0).toUpperCase() + label.slice(1);
+    }
+    if (period === 'current-year') {
+        return String(now.getFullYear());
+    }
+    if (period === 'previous-year') {
+        return String(now.getFullYear() - 1);
+    }
+    if (period === 'all') {
+        return 'Wszystko';
+    }
+    const { startDate, endDate } = getDashboardDates();
+    return `${startDate} – ${endDate}`;
+}
+
+function renderDashboard() {
+    const { startDate, endDate } = getDashboardDates();
+    const searchQuery = document.getElementById('db-search').value.toLowerCase().trim();
+    const dateFilteredTx = appState.transactions.filter(t => t.date >= startDate && t.date <= endDate);
+
+    const totalIncomes = dateFilteredTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+    const totalExpenses = dateFilteredTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+    const netBalance = totalIncomes - totalExpenses;
+
+    document.getElementById('db-period-label').innerText = formatDashboardPeriodLabel();
+    document.getElementById('db-total-incomes').innerText = `${totalIncomes.toFixed(2)} zł`;
+    document.getElementById('db-total-expenses').innerText = `${totalExpenses.toFixed(2)} zł`;
+    const netEl = document.getElementById('db-net-balance');
+    netEl.innerText = `${netBalance >= 0 ? '+' : ''}${netBalance.toFixed(2)} zł`;
+    netEl.style.color = netBalance >= 0 ? '#6ee7b7' : '#fca5a5';
+
+    const fillEl = document.getElementById('budget-progress-fill');
+    if (totalIncomes > 0) {
+        const pct = Math.min((totalExpenses / totalIncomes) * 100, 100);
+        fillEl.style.width = `${pct}%`;
+        fillEl.style.background = pct >= 100 ? 'var(--danger)' : 'var(--accent)';
+    } else {
+        fillEl.style.width = totalExpenses > 0 ? '100%' : '0%';
+        fillEl.style.background = 'var(--danger)';
+    }
+
+    let listTx = dateFilteredTx;
+    const searchHint = document.getElementById('db-search-hint');
+    if (searchHint) searchHint.classList.toggle('visible', !!searchQuery);
+
+    if (searchQuery) {
+        listTx = appState.transactions.filter(t => transactionMatchesSearch(t, searchQuery));
+    } else if (activeChartCategory) {
+        listTx = listTx.filter(t => t.type === chartViewType && t.mainCategory === activeChartCategory);
+    }
+
+    const chartTx = dateFilteredTx.filter(t => t.type === chartViewType);
+    const catSums = {};
+    const chartTypeLabel = chartViewType === 'income' ? 'wpływów' : 'wydatków';
+    document.getElementById('btn-reset-chart').style.display = activeChartCategory ? 'block' : 'none';
+    document.getElementById('chart-title').innerText = activeChartCategory
+        ? `Struktura: ${activeChartCategory}`
+        : `Struktura ${chartTypeLabel}`;
+    document.getElementById('btn-chart-expense').classList.toggle('active', chartViewType === 'expense');
+    document.getElementById('btn-chart-income').classList.toggle('active', chartViewType === 'income');
+
+    if (!activeChartCategory) {
+        chartTx.forEach(t => { catSums[t.mainCategory] = (catSums[t.mainCategory] || 0) + t.amount; });
+    } else {
+        chartTx.filter(t => t.mainCategory === activeChartCategory).forEach(t => {
+            const label = t.subCategory === '[Bez podkategorii]' ? 'Ogólne' : t.subCategory;
+            catSums[label] = (catSums[label] || 0) + t.amount;
+        });
+    }
+
+    const ctxDash = document.getElementById('dashboardChart').getContext('2d');
+    if (dashboardChartInstance) dashboardChartInstance.destroy();
+
+    if (Object.keys(catSums).length > 0) {
+        const chartLabels = Object.keys(catSums);
+        const sliceColors = getChartSliceColors(chartLabels);
+        const borderColor = getChartBorderColor();
+
+        dashboardChartInstance = new Chart(ctxDash, {
+            type: 'doughnut',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    data: Object.values(catSums),
+                    backgroundColor: sliceColors,
+                    borderColor: borderColor,
+                    borderWidth: 3,
+                    borderRadius: 5,
+                    spacing: 2,
+                    hoverOffset: 10,
+                    hoverBorderWidth: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                cutout: '58%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: isLightTheme() ? 'rgba(15, 23, 42, 0.92)' : 'rgba(0, 0, 0, 0.88)',
+                        titleFont: { family: 'DM Sans', weight: '700' },
+                        bodyFont: { family: 'DM Sans', weight: '600' },
+                        padding: 12,
+                        cornerRadius: 10
+                    }
+                },
+                onClick: (event, elements, chart) => {
+                    if (elements[0] && !activeChartCategory) {
+                        activeChartCategory = chart.data.labels[elements[0].index];
+                        renderDashboard();
+                    }
+                }
+            }
+        });
+        renderChartLegend(catSums, sliceColors, chartLabels);
+    } else {
+        document.getElementById('chart-legend').innerHTML = '';
+        const centerEl = document.getElementById('chart-center-amount');
+        if (centerEl) centerEl.textContent = formatPlnAmount(0);
+    }
+
+    const list = document.getElementById('recent-transactions-list');
+    list.innerHTML = '';
+
+    if (listTx.length === 0) {
+        list.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg><p>${searchQuery ? 'Brak wyników wyszukiwania' : 'Brak transakcji w tym okresie'}</p></div>`;
+        return;
+    }
+
+    let lastGroup = '';
+    listTx.forEach(t => {
+        const group = formatDateGroup(t.date);
+        if (group !== lastGroup) {
+            const label = document.createElement('div');
+            label.className = 'tx-group-label';
+            label.textContent = group;
+            list.appendChild(label);
+            lastGroup = group;
+        }
+
+        const globalIndex = appState.transactions.indexOf(t);
+        const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
+        const isRec = t.recurringId ? '<span class="tx-badge">&#10227;</span>' : '';
+        const metaText = searchQuery ? `${formatTxDate(t.date)} · ${t.mainCategory}` : t.mainCategory;
+        const row = document.createElement('div');
+        row.className = 'tx-row';
+        row.innerHTML = `
+            ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
+            <div class="tx-info">
+                <div class="tx-title">${title}${isRec}</div>
+                <div class="tx-meta">${metaText}</div>
+                ${t.note ? `<div class="tx-note">${t.note}</div>` : ''}
+            </div>
+            <div class="tx-amount-col">
+                <div class="tx-amount ${t.type}">${t.type === 'expense' ? '-' : '+'}${t.amount.toFixed(2)} zł</div>
+            </div>
+            <div class="tx-swipe-hint">Usuń</div>`;
+        attachSwipeDelete(row, globalIndex);
+        list.appendChild(row);
+    });
+}

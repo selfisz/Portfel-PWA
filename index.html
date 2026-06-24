@@ -49,7 +49,7 @@
     <div id="module-split-banner" class="module-split-banner hidden" role="alert">
         <div>
             <strong>Konserwacja kodu</strong>
-            <span id="module-split-banner-text">app.js przekroczył próg — czas podzielić na moduły w folderze js/.</span>
+            <span id="module-split-banner-text">Moduł JS przekroczył próg — rozważ dalszy podział w js/.</span>
         </div>
         <button type="button" onclick="dismissModuleSplitBanner()">OK</button>
     </div>
@@ -74,7 +74,7 @@
 
             <div id="module-split-notice" class="settings-maintenance hidden">
                 <strong>Konserwacja kodu</strong>
-                <p>Plik <code>app.js</code> ma <span id="module-split-lines">—</span> linii (próg: <span id="module-split-threshold">900</span>). Rozważ podział na moduły w <code>js/</code>.</p>
+                <p>Największy moduł w <code>js/</code> ma <span id="module-split-lines">—</span> linii (próg: <span id="module-split-threshold">900</span>).</p>
             </div>
 
             <div class="settings-section">
@@ -546,7 +546,21 @@
 
     <div id="reports-print-meta" class="hidden" aria-hidden="true"></div>
 
-    <script src="app.js"></script>
-    <script src="reports-phase3.js"></script>
+    <script src="js/constants.js"></script>
+    <script src="js/firebase.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/format.js"></script>
+    <script src="js/theme.js"></script>
+    <script src="js/categories.js"></script>
+    <script src="js/portfolio.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/transactions.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/reports-core.js"></script>
+    <script src="js/investments.js"></script>
+    <script src="js/loans.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/bootstrap.js"></script>
+    <script src="js/reports-phase3.js"></script>
 </body>
 </html>

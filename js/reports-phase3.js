@@ -882,8 +882,8 @@ function renderReportsNetWorth() {
     if (!el) return;
 
     const assets = getPortfolioValuePln();
-    const loanLeft = appState.loan?.currentCapitalLeft || 0;
-    const net = assets - loanLeft;
+    const loanLeft = getLoanCapitalLeft();
+    const net = calcNetWorthPln();
 
     el.innerHTML = `
         <div class="networth-grid">
@@ -898,9 +898,7 @@ function renderReportsLoanSummary(ctx) {
     if (!el) return;
 
     const loan = appState.loan || {};
-    const paidPct = loan.totalAmount > 0
-        ? Math.round(((loan.totalAmount - loan.currentCapitalLeft) / loan.totalAmount) * 100)
-        : 0;
+    const paidPct = Math.round(getLoanPaidPercent());
 
     const debtPayments = ctx.periodTx
         .filter((t) => t.type === 'expense' && (t.mainCategory === 'Długi' || t.note?.toLowerCase().includes('nadpłata')))
