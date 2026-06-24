@@ -247,7 +247,7 @@
                             <select id="asset-retirement-kind-input">
                                 <option value="PPK">PPK</option>
                                 <option value="IKZE">IKZE</option>
-                                <option value="IKE">IKE</option>
+                                <option value="EMERYTURA">Emerytura</option>
                                 <option value="KZP">KZP</option>
                             </select>
                         </div>
@@ -528,7 +528,7 @@
                         </div>
                     </div>
                     <div id="add-form-loan" class="hidden">
-                        <p class="reports-hint add-loan-hint">Zmniejsza kapitał kredytu i dodaje wydatek w Długach.</p>
+                        <p class="reports-hint add-loan-hint">Zmniejsza kapitał kredytu, dodaje wydatek w Długach i odejmuje z gotówki.</p>
                         <div class="form-group">
                             <label class="section-label" for="add-loan-payment-select">Kredyt</label>
                             <select id="add-loan-payment-select"></select>
@@ -575,6 +575,11 @@
                 </div>
                 <div class="add-form-sticky-bar" id="add-form-sticky-bar">
                     <div id="add-sticky-standard" class="add-sticky-panel">
+                        <p class="reports-hint tx-income-cash-hint hidden" id="tx-income-cash-hint">Wpływ zwiększy saldo gotówki.</p>
+                        <div class="checkbox-wrapper" id="tx-affects-cash-wrapper">
+                            <input type="checkbox" id="tx-affects-cash" checked onchange="updateAddFormCashHints()">
+                            <label for="tx-affects-cash">Z salda (gotówka)</label>
+                        </div>
                         <div class="checkbox-wrapper" id="recurring-wrapper">
                             <input type="checkbox" id="tx-recurring">
                             <label for="tx-recurring">Cykliczna (co miesiąc)</label>
@@ -955,6 +960,8 @@
                 <div class="hero-label">Wartość majątku</div>
                 <div id="assets-total-value" class="hero-balance">—</div>
                 <p id="assets-total-meta" class="loan-hero-meta hidden"></p>
+                <label class="section-label loans-summary-label hidden" id="assets-summary-label">W sumie</label>
+                <nav id="assets-summary-chips" class="loans-chip-nav loans-summary-chips hidden" aria-label="Aktywa w sumie"></nav>
             </div>
 
             <nav id="assets-type-filter" class="loans-chip-nav assets-chip-nav hidden" aria-label="Filtr aktywów"></nav>
@@ -1041,6 +1048,7 @@
     <script src="js/dashboard.js"></script>
     <script src="js/reports-core.js"></script>
     <script src="js/assets.js"></script>
+    <script src="js/cash.js"></script>
     <script src="js/investments.js"></script>
     <script src="js/loans.js"></script>
     <script src="js/settings.js"></script>

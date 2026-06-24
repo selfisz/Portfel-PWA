@@ -7,13 +7,18 @@ const ASSET_TYPE_LABELS = {
     retirement: 'PPK / IKZE'
 };
 
-const RETIREMENT_KINDS = ['PPK', 'IKZE', 'IKE', 'KZP'];
+const RETIREMENT_KINDS = ['PPK', 'IKZE', 'EMERYTURA', 'KZP'];
 
 const RETIREMENT_KIND_LABELS = {
     PPK: 'PPK',
     IKZE: 'IKZE',
-    IKE: 'IKE',
+    EMERYTURA: 'Emerytura',
     KZP: 'KZP'
+};
+
+const ASSET_HORIZON_LABELS = {
+    short: 'Krótkoterminowe',
+    long: 'Długoterminowe'
 };
 
 const ASSET_TYPE_ICONS = {
@@ -45,7 +50,8 @@ function getDefaultAsset(type = 'investment') {
         interestRate: 0,
         endDate: '',
         retirementKind: 'PPK',
-        institution: ''
+        institution: '',
+        includeInSummary: true
     };
 }
 
@@ -58,6 +64,11 @@ function normalizeAsset(raw) {
     asset.currency = asset.currency === 'EUR' ? 'EUR' : 'PLN';
     asset.archived = !!asset.archived;
     asset.archivedAt = asset.archivedAt || '';
+    if (asset.includeInSummary === undefined || asset.includeInSummary === null) {
+        asset.includeInSummary = true;
+    } else {
+        asset.includeInSummary = !!asset.includeInSummary;
+    }
 
     if (asset.type === 'investment') {
         asset.ticker = (asset.ticker || '').trim().toUpperCase();
@@ -86,6 +97,40 @@ function getAssets() {
 
 function getActiveAssets() {
     return getAssets().filter((asset) => !asset.archived);
+}
+
+function getSummaryAssets() {
+    return getActiveAssets().filter((asset) => asset.includeInSummary !== false);
+}
+
+function getAssetHorizon(asset) {
+    const a = normalizeAsset(asset);
+    if (a.type === 'retirement') return 'long';
+    return 'short';
+}
+
+function getAssetsByHorizon(horizon) {
+    return getActiveAssets().filter((asset) => getAssetHorizon(asset) === horizon);
+}
+
+function migrateMbankEmeryturaAsset() {
+    if (!Array.isArray(appState.assets)) return false;
+    let changed = false;
+    appState.assets = appState.assets.map((raw) => {
+        const isLegacyIke = raw?.id === 'asset-ret-mbank-ike'
+            || (raw?.retirementKind === 'IKE' && /mbank/i.test(raw?.name || ''))
+            || (/mbank.*ike/i.test(raw?.name || '') && !/ikze/i.test(raw?.name || ''));
+        if (!isLegacyIke) return raw;
+        changed = true;
+        return {
+            ...raw,
+            id: 'asset-ret-mbank-emerytura',
+            name: 'mBank — Emerytura',
+            retirementKind: 'EMERYTURA',
+            institution: raw.institution || 'mBank'
+        };
+    });
+    return changed;
 }
 
 function getArchivedAssets() {
@@ -191,10 +236,10 @@ function getUserAssetsSeedSnapshots() {
         },
         { id: 'asset-cash-mbank-cele', type: 'cash', name: 'mBank — Cele', amount: 2172.36 },
         {
-            id: 'asset-ret-mbank-ike',
+            id: 'asset-ret-mbank-emerytura',
             type: 'retirement',
-            name: 'mBank — IKE',
-            retirementKind: 'IKE',
+            name: 'mBank — Emerytura',
+            retirementKind: 'EMERYTURA',
             institution: 'mBank',
             amount: 1687.98
         },
@@ -250,8 +295,9 @@ function ensureUserAssetsSeed() {
 function runAssetMigrations() {
     const migrated = migrateInvestmentsToAssets();
     const consolidated = consolidateUserAssets();
+    const emeryturaFix = migrateMbankEmeryturaAsset();
     const seeded = ensureUserAssetsSeed();
-    return migrated || consolidated || seeded;
+    return migrated || consolidated || emeryturaFix || seeded;
 }
 
 function getAssetDisplayName(asset) {
@@ -283,22 +329,25 @@ function getAssetGainPct(asset) {
     return (getAssetGainPln(a) / cost) * 100;
 }
 
-function getActiveAssetsTotalPln() {
-    return getActiveAssets().reduce((sum, asset) => sum + getAssetValueInPln(asset), 0);
+function getActiveAssetsTotalPln(assets = null) {
+    const list = assets || getSummaryAssets();
+    return list.reduce((sum, asset) => sum + getAssetValueInPln(asset), 0);
 }
 
-function getActiveAssetsGainPln() {
-    return getActiveAssets()
+function getActiveAssetsGainPln(assets = null) {
+    const list = assets || getSummaryAssets();
+    return list
         .filter((asset) => asset.type === 'investment')
         .reduce((sum, asset) => sum + getAssetGainPln(asset), 0);
 }
 
-function getActiveAssetsGainPct() {
-    const cost = getActiveAssets()
+function getActiveAssetsGainPct(assets = null) {
+    const list = assets || getSummaryAssets();
+    const cost = list
         .filter((asset) => asset.type === 'investment')
         .reduce((sum, asset) => sum + getAssetCostInPln(asset), 0);
     if (!cost) return 0;
-    return (getActiveAssetsGainPln() / cost) * 100;
+    return (getActiveAssetsGainPln(list) / cost) * 100;
 }
 
 function createDraftAsset(type = 'investment') {
@@ -337,6 +386,90 @@ function setAssetsTypeFilter(filter) {
     renderAssets();
 }
 
+function toggleAssetSummaryInclude(assetId) {
+    const asset = getAssetById(assetId);
+    if (!asset) return;
+    updateAssetInState({ ...asset, includeInSummary: asset.includeInSummary === false });
+    saveState();
+    renderAssets();
+    if (typeof renderReports === 'function' && document.getElementById('view-reports')?.classList.contains('active')) {
+        renderReports();
+    }
+}
+
+function renderAssetsSummaryChips(activeAssets) {
+    const el = document.getElementById('assets-summary-chips');
+    const label = document.getElementById('assets-summary-label');
+    if (!el) return;
+    if (activeAssets.length < 2) {
+        el.innerHTML = '';
+        el.classList.add('hidden');
+        if (label) label.classList.add('hidden');
+        return;
+    }
+    el.classList.remove('hidden');
+    if (label) label.classList.remove('hidden');
+    el.innerHTML = activeAssets.map((asset) => {
+        const included = asset.includeInSummary !== false;
+        return `<button type="button" class="toggle-btn loans-chip${included ? ' active' : ''}" onclick="toggleAssetSummaryInclude('${escapeHtml(asset.id)}')" aria-pressed="${included ? 'true' : 'false'}">${escapeHtml(getAssetDisplayName(asset))}</button>`;
+    }).join('');
+}
+
+function renderAssetsHorizonFilter() {
+    const nav = document.getElementById('assets-type-filter');
+    if (!nav) return;
+    const shortCount = getAssetsByHorizon('short').length;
+    const longCount = getAssetsByHorizon('long').length;
+    if (!getActiveAssets().length) {
+        nav.innerHTML = '';
+        nav.classList.add('hidden');
+        return;
+    }
+    nav.classList.remove('hidden');
+    const chips = [
+        { id: 'all', label: 'Wszystkie' },
+        { id: 'short', label: 'Krótkoterminowe' },
+        { id: 'long', label: 'Długoterminowe' }
+    ];
+    nav.innerHTML = chips
+        .filter((chip) => chip.id === 'all' || (chip.id === 'short' ? shortCount : longCount) > 0 || assetsTypeFilter === chip.id)
+        .map((chip) => {
+            const count = chip.id === 'all'
+                ? getActiveAssets().length
+                : chip.id === 'short' ? shortCount : longCount;
+            return `<button type="button" class="toggle-btn loans-chip${assetsTypeFilter === chip.id ? ' active' : ''}" onclick="setAssetsTypeFilter('${chip.id}')">${chip.label} (${count})</button>`;
+        })
+        .join('');
+}
+
+function filterAssetsByHorizon(assets) {
+    if (assetsTypeFilter === 'short' || assetsTypeFilter === 'long') {
+        return assets.filter((asset) => getAssetHorizon(asset) === assetsTypeFilter);
+    }
+    return assets;
+}
+
+function renderAssetsHorizonSection(horizon, assets) {
+    const sectionAssets = assets.filter((asset) => getAssetHorizon(asset) === horizon);
+    if (!sectionAssets.length) return '';
+
+    const sectionTotal = getActiveAssetsTotalPln(
+        sectionAssets.filter((asset) => asset.includeInSummary !== false)
+    );
+    const hint = horizon === 'short'
+        ? 'Gotówka, Cele, akcje, lokaty'
+        : 'PPK, IKZE, emerytura, KZP';
+
+    return `<section class="assets-horizon-section">
+        <div class="assets-horizon-head">
+            <h2 class="assets-horizon-title">${ASSET_HORIZON_LABELS[horizon]}</h2>
+            <span class="assets-horizon-total">${formatPlnAmount(sectionTotal)}</span>
+        </div>
+        <p class="reports-hint assets-horizon-hint">${hint}</p>
+        <div class="assets-horizon-list">${sectionAssets.map((asset) => renderAssetCardHtml(asset)).join('')}</div>
+    </section>`;
+}
+
 function toggleAssetsArchive() {
     assetsArchiveExpanded = !assetsArchiveExpanded;
     const list = document.getElementById('assets-archive-list');
@@ -349,35 +482,11 @@ function toggleAssetsArchive() {
 }
 
 function filterAssetsByChip(assets) {
-    if (assetsTypeFilter === 'all') return assets;
-    if (assetsTypeFilter === 'retirement') {
-        return assets.filter((asset) => asset.type === 'retirement');
-    }
-    return assets.filter((asset) => asset.type === assetsTypeFilter);
+    return filterAssetsByHorizon(assets);
 }
 
 function renderAssetsTypeFilter() {
-    const nav = document.getElementById('assets-type-filter');
-    if (!nav) return;
-    const counts = {
-        all: getActiveAssets().length,
-        investment: getActiveAssets().filter((a) => a.type === 'investment').length,
-        deposit: getActiveAssets().filter((a) => a.type === 'deposit').length,
-        cash: getActiveAssets().filter((a) => a.type === 'cash').length,
-        retirement: getActiveAssets().filter((a) => a.type === 'retirement').length
-    };
-    const chips = [
-        { id: 'all', label: 'Wszystkie' },
-        { id: 'investment', label: 'Inwestycje' },
-        { id: 'deposit', label: 'Lokaty' },
-        { id: 'cash', label: 'Gotówka' },
-        { id: 'retirement', label: 'PPK / IKZE' }
-    ];
-    nav.innerHTML = chips
-        .filter((chip) => chip.id === 'all' || counts[chip.id] > 0 || assetsTypeFilter === chip.id)
-        .map((chip) => `<button type="button" class="toggle-btn loans-chip${assetsTypeFilter === chip.id ? ' active' : ''}" onclick="setAssetsTypeFilter('${chip.id}')">${chip.label}${counts[chip.id] ? ` (${counts[chip.id]})` : ''}</button>`)
-        .join('');
-    nav.classList.toggle('hidden', !getActiveAssets().length);
+    renderAssetsHorizonFilter();
 }
 
 function renderInvestmentCardHtml(asset) {
@@ -425,6 +534,8 @@ function renderDepositCardHtml(asset) {
 }
 
 function renderCashCardHtml(asset) {
+    const isCele = /cele/i.test(asset.name || '');
+    const sub = isCele ? 'Cele oszczędnościowe' : 'Gotówka / konto';
     return `<div class="card asset-summary-card asset-clickable" role="button" tabindex="0"
         onclick="openAssetDetails('${escapeHtml(asset.id)}')"
         onkeydown="if (event.key === 'Enter') openAssetDetails('${escapeHtml(asset.id)}')">
@@ -432,7 +543,7 @@ function renderCashCardHtml(asset) {
             <span class="asset-type-badge">${ASSET_TYPE_ICONS.cash}</span>
             <div>
                 <h2 class="asset-card-title">${escapeHtml(getAssetDisplayName(asset))}</h2>
-                <p class="asset-card-sub">Gotówka / konto</p>
+                <p class="asset-card-sub">${escapeHtml(sub)}</p>
             </div>
         </div>
         <div class="asset-card-hero">
@@ -488,12 +599,17 @@ function renderArchivedAssetCardHtml(asset) {
 function renderAssets() {
     if (runAssetMigrations()) saveState();
 
-    const activeAssets = filterAssetsByChip(getActiveAssets());
+    const allActive = getActiveAssets();
+    const summaryAssets = getSummaryAssets();
+    const filteredAssets = filterAssetsByHorizon(allActive);
     const archivedAssets = getArchivedAssets();
     const total = getActiveAssetsTotalPln();
+    const shortTotal = getActiveAssetsTotalPln(getAssetsByHorizon('short').filter((a) => a.includeInSummary !== false));
+    const longTotal = getActiveAssetsTotalPln(getAssetsByHorizon('long').filter((a) => a.includeInSummary !== false));
     const gainPln = getActiveAssetsGainPln();
     const gainPct = getActiveAssetsGainPct();
-    const hasAssets = getActiveAssets().length > 0;
+    const hasAssets = allActive.length > 0;
+    const summaryCount = summaryAssets.length;
 
     const hero = document.getElementById('assets-total-hero');
     const totalEl = document.getElementById('assets-total-value');
@@ -503,6 +619,8 @@ function renderAssets() {
     const archiveList = document.getElementById('assets-archive-list');
     const archiveCount = document.getElementById('assets-archive-count');
 
+    renderAssetsSummaryChips(allActive);
+
     if (hero) hero.classList.toggle('hidden', !hasAssets);
     if (totalEl && hasAssets) totalEl.textContent = formatPlnAmount(total);
     if (metaEl) {
@@ -510,19 +628,16 @@ function renderAssets() {
             metaEl.classList.add('hidden');
         } else {
             const parts = [];
-            const typeCounts = ASSET_TYPES.map((type) => ({
-                type,
-                count: getActiveAssets().filter((a) => a.type === type).length
-            })).filter((entry) => entry.count > 0);
-            if (typeCounts.length) {
-                parts.push(typeCounts.map((e) => `${e.count}× ${ASSET_TYPE_LABELS[e.type].toLowerCase()}`).join(' · '));
+            if (summaryCount < allActive.length) {
+                parts.push(`${summaryCount} z ${allActive.length} w sumie`);
             }
-            const investments = getActiveAssets().filter((a) => a.type === 'investment');
+            parts.push(`krótko ${formatPlnAmount(shortTotal)} · długo ${formatPlnAmount(longTotal)}`);
+            const investments = summaryAssets.filter((a) => a.type === 'investment');
             if (investments.length) {
-                parts.push(`P/L ${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}% (${gainPln >= 0 ? '+' : ''}${formatPlnAmount(gainPln)})`);
+                parts.push(`P/L ${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%`);
             }
             metaEl.textContent = parts.join(' · ');
-            metaEl.classList.toggle('hidden', !parts.length);
+            metaEl.classList.remove('hidden');
         }
     }
 
@@ -534,10 +649,15 @@ function renderAssets() {
                 <p class="loan-empty-hint">Dodaj inwestycje, lokaty, gotówkę lub PPK/IKZE — bez nieruchomości i auta.</p>
                 <button type="button" class="btn-submit" onclick="openNewAssetPicker()">Dodaj aktywo</button>
             </div>`;
-        } else if (!activeAssets.length) {
+        } else if (!filteredAssets.length) {
             listEl.innerHTML = '<div class="card asset-empty-card"><p class="loan-empty-hint">Brak pozycji w tym filtrze.</p></div>';
+        } else if (assetsTypeFilter === 'all') {
+            listEl.innerHTML = [
+                renderAssetsHorizonSection('short', filteredAssets),
+                renderAssetsHorizonSection('long', filteredAssets)
+            ].filter(Boolean).join('');
         } else {
-            listEl.innerHTML = activeAssets.map((asset) => renderAssetCardHtml(asset)).join('');
+            listEl.innerHTML = filteredAssets.map((asset) => renderAssetCardHtml(asset)).join('');
         }
     }
 

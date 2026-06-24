@@ -158,9 +158,11 @@ function getAssetCostPln(asset) {
 }
 
 function getPortfolioValuePln() {
-    const assets = typeof getActiveAssets === 'function'
-        ? getActiveAssets()
-        : (appState.assets || appState.investments || []);
+    const assets = typeof getSummaryAssets === 'function'
+        ? getSummaryAssets()
+        : (typeof getActiveAssets === 'function'
+            ? getActiveAssets()
+            : (appState.assets || appState.investments || []));
     return assets.reduce((sum, asset) => sum + getAssetValuePln(asset), 0);
 }
 

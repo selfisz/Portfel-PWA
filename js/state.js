@@ -7,6 +7,7 @@ let appState = {
     creditCards: [],
     creditCardMovements: [],
     assets: [],
+    cashMovements: [],
     categoryBudgets: {}
 };
 
@@ -44,6 +45,7 @@ function getPersistedState(raw = appState) {
         creditCards: Array.isArray(data.creditCards) ? data.creditCards : [],
         creditCardMovements: Array.isArray(data.creditCardMovements) ? data.creditCardMovements : [],
         assets: Array.isArray(data.assets) ? data.assets : [],
+        cashMovements: Array.isArray(data.cashMovements) ? data.cashMovements : [],
         categoryTree: data.categoryTree && typeof data.categoryTree === 'object'
             ? data.categoryTree
             : JSON.parse(JSON.stringify(DEFAULT_CATEGORY_TREE)),
@@ -149,8 +151,9 @@ function initData() {
         const hadLoanMigration = runLoanMigrations();
         const hadCardMigration = runCreditCardMigrations();
         const hadAssetMigration = typeof runAssetMigrations === 'function' ? runAssetMigrations() : false;
+        const hadCashMigration = typeof runCashMigrations === 'function' ? runCashMigrations() : false;
         if (hadUiFields) localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-        if (hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration) saveState();
+        if (hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration) saveState();
         checkAndProcessRecurringTransactions();
         refreshCurrentView();
     }
@@ -171,8 +174,9 @@ function initData() {
             const hadLoanMigration = runLoanMigrations();
             const hadCardMigration = runCreditCardMigrations();
             const hadAssetMigration = typeof runAssetMigrations === 'function' ? runAssetMigrations() : false;
+            const hadCashMigration = typeof runCashMigrations === 'function' ? runCashMigrations() : false;
             localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-            if (hadUiFields || hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration) saveState();
+            if (hadUiFields || hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration) saveState();
             statusEl.className = 'online';
             refreshCurrentView();
         } else {

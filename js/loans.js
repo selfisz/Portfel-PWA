@@ -252,6 +252,12 @@ function registerLoanPayment(loanId, amount, date, note, options = {}) {
     if (!loan || !isLoanActive(loan)) return null;
     if (!amount || amount <= 0) return null;
 
+    let cashMovement = null;
+    if (typeof syncCashForLoanPayment === 'function') {
+        cashMovement = syncCashForLoanPayment(loanId, amount, date, note || 'Spłata kapitału');
+        if (!cashMovement) return null;
+    }
+
     const updates = {
         ...loan,
         currentCapitalLeft: Math.max(0, loan.currentCapitalLeft - amount)
@@ -263,14 +269,18 @@ function registerLoanPayment(loanId, amount, date, note, options = {}) {
     updateLoanInState(updates);
     const updated = getLoanById(loan.id);
 
-    appState.transactions.unshift({
+    const tx = {
         amount,
         type: 'expense',
         mainCategory: 'Długi',
         subCategory: loan.subCategory || 'Spłata',
         date,
-        note: note || 'Spłata kapitału'
-    });
+        note: note || 'Spłata kapitału',
+        affectsCash: true
+    };
+    if (cashMovement) tx.cashMovementId = cashMovement.id;
+    appState.transactions.unshift(tx);
+
     appState.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
     saveState();
     return updated;

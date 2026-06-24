@@ -182,9 +182,16 @@ function registerCreditCardMovement(cardId, type, amount, date, note) {
         if (!confirm(`Przekroczysz limit karty. Kontynuować?`)) return null;
     }
 
+    let cashMovement = null;
+    if (typeof syncCashForCreditCardMovement === 'function') {
+        cashMovement = syncCashForCreditCardMovement(movement);
+        if (!cashMovement) return null;
+    }
+
     adjustCreditCardBalance(cardId, delta);
     if (!Array.isArray(appState.creditCardMovements)) appState.creditCardMovements = [];
     appState.creditCardMovements.unshift(movement);
+
     saveState();
     return getCreditCardById(cardId);
 }
@@ -540,7 +547,9 @@ function populateCreditCardSelectors() {
 function onCreditCardPurchaseToggle() {
     const checked = document.getElementById('tx-credit-card')?.checked;
     const selectWrap = document.getElementById('credit-card-select-wrapper');
+    const cashWrap = document.getElementById('tx-affects-cash-wrapper');
     if (selectWrap) selectWrap.classList.toggle('hidden', !checked);
+    if (cashWrap) cashWrap.classList.toggle('hidden', !!checked);
     if (checked) populateCreditCardSelectors();
 }
 
@@ -550,8 +559,8 @@ function populateAddCreditCardForm() {
     const hint = document.getElementById('add-credit-card-hint');
     if (hint) {
         hint.textContent = type === 'repayment'
-            ? 'Zmniejsza zadłużenie — bez wpływu na wydatki w analizie.'
-            : 'Przelew z karty na konto — zwiększa zadłużenie, bez wpływu na wydatki.';
+            ? 'Zmniejsza zadłużenie karty i odejmuje z gotówki — bez wpływu na wydatki w analizie.'
+            : 'Przelew z karty na konto — zwiększa zadłużenie i dodaje do gotówki.';
     }
     const dateInput = document.getElementById('add-credit-card-date');
     if (dateInput && !dateInput.value) {

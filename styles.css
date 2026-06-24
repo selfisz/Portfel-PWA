@@ -3568,8 +3568,55 @@ html[data-theme="light"] .grid-item.selected {
     transform: scale(0.96);
 }
 
+.tx-income-cash-hint {
+    margin: 0 0 8px;
+    font-size: 0.78rem;
+}
+
+#tx-affects-cash-wrapper {
+    margin-bottom: 8px;
+}
+
 .assets-hero-card {
     margin-bottom: 12px;
+}
+
+.assets-horizon-section {
+    margin-bottom: 18px;
+}
+
+.assets-horizon-section:last-child {
+    margin-bottom: 0;
+}
+
+.assets-horizon-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.assets-horizon-title {
+    font-size: 1rem;
+    margin: 0;
+}
+
+.assets-horizon-total {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--accent);
+    white-space: nowrap;
+}
+
+.assets-horizon-hint {
+    margin: 0 0 10px;
+}
+
+.assets-horizon-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .assets-chip-nav {

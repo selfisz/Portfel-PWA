@@ -30,6 +30,8 @@ function switchView(viewId, title, element) {
         document.getElementById('tx-recurring').checked = false;
         const ccCheckbox = document.getElementById('tx-credit-card');
         if (ccCheckbox) ccCheckbox.checked = false;
+        const affectsCash = document.getElementById('tx-affects-cash');
+        if (affectsCash) affectsCash.checked = true;
         onCreditCardPurchaseToggle();
         document.getElementById('btn-loan-payment')?.classList.remove('hidden');
         document.getElementById('btn-card-payment')?.classList.remove('hidden');
@@ -80,6 +82,7 @@ function setFormMode(mode) {
             ? 'Edytuj transakcję'
             : 'Nowa transakcja';
         populateCreditCardSelectors();
+        updateAddFormCashHints();
         return;
     }
 
@@ -109,12 +112,26 @@ function setTransactionType(type, keepSelection = false) {
         const ccCheckbox = document.getElementById('tx-credit-card');
         if (ccCheckbox && !ccCheckbox.checked) onCreditCardPurchaseToggle();
     }
+    const affectsCash = document.getElementById('tx-affects-cash');
+    if (affectsCash && editingTxIndex === null && type === 'expense') {
+        affectsCash.checked = true;
+    }
     if (!keepSelection) {
         formState.selectedMainCategory = '';
         formState.selectedSubCategory = '';
     }
     document.getElementById('sub-category-wrapper').style.display = 'none';
     renderMainCategoriesForm();
+}
+
+function updateAddFormCashHints() {
+    const incomeHint = document.getElementById('tx-income-cash-hint');
+    const affectsWrap = document.getElementById('tx-affects-cash-wrapper');
+    const isIncome = formState.currentType === 'income';
+    const paidWithCard = document.getElementById('tx-credit-card')?.checked;
+
+    if (incomeHint) incomeHint.classList.toggle('hidden', !isIncome);
+    if (affectsWrap) affectsWrap.classList.toggle('hidden', isIncome || !!paidWithCard);
 }
 
 function renderMainCategoriesForm() {
@@ -126,6 +143,7 @@ function renderMainCategoriesForm() {
     });
     if (formState.selectedMainCategory) renderSubCategoriesForm(formState.selectedMainCategory);
     renderRecentCategories();
+    updateAddFormCashHints();
 }
 
 function selectMainCategoryForm(cat, element) {
@@ -162,10 +180,17 @@ function saveTransaction() {
     const isRecurring = document.getElementById('tx-recurring').checked;
     const paidWithCard = document.getElementById('tx-credit-card')?.checked;
     const creditCardId = document.getElementById('tx-credit-card-select')?.value;
+    const affectsCashChecked = document.getElementById('tx-affects-cash')?.checked ?? true;
 
     if (!amount || !formState.selectedMainCategory || !formState.selectedSubCategory || !date) {
         return alert('Uzupełnij kwotę i kategorie.');
     }
+
+    const affectsCash = resolveTransactionAffectsCash(
+        formState.currentType,
+        !!(paidWithCard && formState.currentType === 'expense'),
+        affectsCashChecked
+    );
 
     const txData = {
         amount,
@@ -173,7 +198,8 @@ function saveTransaction() {
         mainCategory: formState.selectedMainCategory,
         subCategory: formState.selectedSubCategory,
         date,
-        note
+        note,
+        affectsCash
     };
 
     if (paidWithCard && formState.currentType === 'expense') {
@@ -195,6 +221,15 @@ function saveTransaction() {
     }
 
     syncCreditCardOnTransactionSave(txData, previousTx);
+    if (!syncCashOnTransactionSave(txData, previousTx)) {
+        syncCreditCardOnTransactionSave(previousTx || {}, txData);
+        if (editingTxIndex !== null && previousTx) {
+            appState.transactions[editingTxIndex] = previousTx;
+        } else {
+            appState.transactions.shift();
+        }
+        return alert('Anulowano — nie zmieniono salda gotówki.');
+    }
     addRecentCategory(txData.type, txData.mainCategory, txData.subCategory);
     appState.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
     saveState();
@@ -224,6 +259,15 @@ function editTransaction(index) {
         }
         onCreditCardPurchaseToggle();
     }
+    const affectsCash = document.getElementById('tx-affects-cash');
+    if (affectsCash) {
+        if (tx.type === 'income') {
+            affectsCash.checked = true;
+        } else {
+            affectsCash.checked = !tx.creditCardId && (tx.cashMovementId ? true : tx.affectsCash === true);
+        }
+    }
+    updateAddFormCashHints();
     formState.selectedMainCategory = tx.mainCategory;
     formState.selectedSubCategory = tx.subCategory;
     setFormMode(tx.type);
@@ -235,6 +279,7 @@ function deleteTransaction(index) {
     if (confirm('Na pewno usunąć?')) {
         const tx = appState.transactions[index];
         syncCreditCardOnTransactionDelete(tx);
+        syncCashOnTransactionDelete(tx);
         appState.transactions.splice(index, 1);
         saveState();
         renderDashboard();
