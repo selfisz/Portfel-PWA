@@ -653,10 +653,11 @@
             </div>
 
             <div id="analysis-section-swipe" class="analysis-swipe-zone">
-            <div class="analysis-section-nav flex-toggle analysis-section-nav--5">
+            <div class="analysis-section-nav flex-toggle analysis-section-nav--6">
                 <button id="btn-analysis-overview" type="button" class="toggle-btn active" onclick="setAnalysisSection('overview')">Przegląd</button>
                 <button id="btn-analysis-calendar" type="button" class="toggle-btn" onclick="setAnalysisSection('calendar')">Kalendarz</button>
                 <button id="btn-analysis-charts" type="button" class="toggle-btn" onclick="setAnalysisSection('charts')">Wykresy</button>
+                <button id="btn-analysis-assets" type="button" class="toggle-btn" onclick="setAnalysisSection('assets')">Aktywa</button>
                 <button id="btn-analysis-debts" type="button" class="toggle-btn" onclick="setAnalysisSection('debts')">Długi</button>
                 <button id="btn-analysis-details" type="button" class="toggle-btn" onclick="setAnalysisSection('details')">Szczegóły</button>
             </div>
@@ -812,6 +813,23 @@
                     <div id="reports-debt-split-legend" class="reports-debt-split-legend"></div>
                 </div>
 
+                <div class="card reports-months-card">
+                    <h2>Alokacja majątku</h2>
+                    <p class="reports-hint">Udział typów aktywów w sumie (zgodnie z chipami w zakładce Aktywa).</p>
+                    <div class="reports-bar-chart-wrap reports-debt-split-wrap">
+                        <canvas id="reportsAssetAllocationChart"></canvas>
+                    </div>
+                    <div id="reports-asset-allocation-legend" class="reports-debt-split-legend"></div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2>Trend salda gotówki</h2>
+                    <p class="reports-hint">Szacunek salda operacyjnej gotówki na koniec miesiąca (z ruchów gotówki).</p>
+                    <div class="reports-bar-chart-wrap">
+                        <canvas id="reportsCashTrendChart"></canvas>
+                    </div>
+                </div>
+
                 <div class="analysis-charts-grid">
                     <div class="card reports-months-card">
                         <h2 id="reports-yoy-title">Rok do roku</h2>
@@ -824,6 +842,63 @@
                         <div class="reports-bar-chart-wrap reports-dow-chart-wrap">
                             <canvas id="reportsDowChart"></canvas>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="analysis-section-assets" class="analysis-section hidden">
+                <div class="card hero-card reports-assets-hero-card">
+                    <div class="hero-label">Wartość majątku</div>
+                    <div id="reports-assets-hero-total" class="hero-balance">—</div>
+                    <p id="reports-assets-hero-meta" class="loan-hero-meta"></p>
+                </div>
+
+                <div class="card">
+                    <h2>Horyzont inwestycyjny</h2>
+                    <p class="reports-hint">Krótkoterminowe vs długoterminowe — ten sam podział co w zakładce Aktywa.</p>
+                    <div id="reports-assets-horizon"></div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2>Struktura majątku</h2>
+                    <p class="reports-hint">Udział typów aktywów w sumie.</p>
+                    <div class="reports-bar-chart-wrap reports-debt-split-wrap">
+                        <canvas id="reportsAssetsAllocationChart"></canvas>
+                    </div>
+                    <div id="reports-assets-allocation-legend" class="reports-debt-split-legend"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Inwestycje — P/L</h2>
+                    <div id="reports-assets-investments"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Emerytura i długi horyzonty</h2>
+                    <p class="reports-hint">PPK, IKZE, emerytura, KZP.</p>
+                    <div id="reports-assets-retirement"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Wszystkie pozycje</h2>
+                    <div id="reports-assets-list"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Majątek a zobowiązania</h2>
+                    <div id="reports-assets-debt-link"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Gotówka a transakcje</h2>
+                    <p class="reports-hint">Bilans wpływów i wydatków z salda vs rzeczywista zmiana operacyjnej gotówki w okresie.</p>
+                    <div id="reports-assets-cash-flow"></div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2>Trend salda gotówki</h2>
+                    <div class="reports-bar-chart-wrap">
+                        <canvas id="reportsAssetsCashTrendChart"></canvas>
                     </div>
                 </div>
             </div>

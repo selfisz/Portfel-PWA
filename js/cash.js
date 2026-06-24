@@ -143,6 +143,18 @@ function syncCashOnTransactionDelete(tx) {
     }
 }
 
+function getCashMovementsInRange(start, end, assetId = null) {
+    return (appState.cashMovements || [])
+        .map(normalizeCashMovement)
+        .filter(Boolean)
+        .filter((m) => {
+            if (assetId && m.assetId !== assetId) return false;
+            if (start && m.date < start) return false;
+            if (end && m.date > end) return false;
+            return true;
+        });
+}
+
 function runCashMigrations() {
     if (!Array.isArray(appState.cashMovements)) {
         appState.cashMovements = [];
