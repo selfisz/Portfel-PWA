@@ -1,5 +1,139 @@
 /* Raporty — faza 3 (A–F) */
 
+const ANALYSIS_SECTION_KEY = 'analysis_section';
+const ANALYSIS_PERIOD_KEY = 'analysis_period_mode';
+let analysisSection = 'overview';
+
+const ANALYSIS_SECTIONS = ['overview', 'calendar', 'charts', 'details'];
+const PERIOD_MODES = ['year', 'month', 'range', 'compare'];
+
+function shiftArrayIndex(items, current, delta) {
+    const idx = items.indexOf(current);
+    if (idx < 0) return items[0];
+    return items[(idx + delta + items.length) % items.length];
+}
+
+function attachHorizontalSwipe(el, { onSwipeLeft, onSwipeRight, threshold = 56, dominance = 1.35, ignoreSelector = 'input, select, textarea, a, canvas, .cal-cell' }) {
+    if (!el || el.dataset.swipeBound === '1') return;
+    el.dataset.swipeBound = '1';
+    let startX = 0;
+    let startY = 0;
+    let tracking = false;
+
+    el.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        if (ignoreSelector && e.target.closest(ignoreSelector)) return;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        tracking = true;
+    }, { passive: true });
+
+    el.addEventListener('touchend', (e) => {
+        if (!tracking) return;
+        tracking = false;
+        const touch = e.changedTouches[0];
+        const dx = touch.clientX - startX;
+        const dy = touch.clientY - startY;
+        if (Math.abs(dx) < threshold) return;
+        if (Math.abs(dx) < Math.abs(dy) * dominance) return;
+        el.classList.add('analysis-swipe-flash');
+        setTimeout(() => el.classList.remove('analysis-swipe-flash'), 180);
+        if (dx < 0) onSwipeLeft?.();
+        else onSwipeRight?.();
+    }, { passive: true });
+}
+
+function shiftAnalysisSection(delta) {
+    setAnalysisSection(shiftArrayIndex(ANALYSIS_SECTIONS, analysisSection, delta));
+}
+
+function shiftReportsPeriodMode(delta) {
+    setReportsPeriodMode(shiftArrayIndex(PERIOD_MODES, reportsPeriodMode, delta));
+}
+
+function initAnalysisSwipe() {
+    attachHorizontalSwipe(document.querySelector('#analysis-period-swipe .reports-period-tabs'), {
+        onSwipeLeft: () => shiftReportsPeriodMode(1),
+        onSwipeRight: () => shiftReportsPeriodMode(-1),
+        ignoreSelector: 'input, select, textarea'
+    });
+    attachHorizontalSwipe(document.getElementById('analysis-sections-body'), {
+        onSwipeLeft: () => shiftAnalysisSection(1),
+        onSwipeRight: () => shiftAnalysisSection(-1)
+    });
+}
+
+function getReportsMonthValue() {
+    const el = document.getElementById('reports-period-month');
+    if (el?.value) return el.value;
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getMonthBoundsFromValue(monthValue) {
+    const [year, month] = monthValue.split('-').map(Number);
+    const start = `${year}-${String(month).padStart(2, '0')}-01`;
+    const end = new Date(year, month, 0).toISOString().split('T')[0];
+    return { start, end, year, monthIndex: month - 1 };
+}
+
+function formatMonthLabel(monthValue) {
+    const [y, m] = monthValue.split('-').map(Number);
+    const label = new Date(y, m - 1, 1).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function onReportsMonthChange() {
+    const { year, monthIndex } = getMonthBoundsFromValue(getReportsMonthValue());
+    reportsCalendarYear = year;
+    reportsCalendarMonth = monthIndex;
+    renderReports();
+}
+
+function syncReportsCalendarFromContext(ctx) {
+    if (!ctx) return;
+    if (ctx.mode === 'month' && ctx.rangeStart) {
+        const { year, monthIndex } = getMonthBoundsFromValue(ctx.rangeStart.slice(0, 7));
+        reportsCalendarYear = year;
+        reportsCalendarMonth = monthIndex;
+        reportsLastPeriod = `month:${ctx.rangeStart.slice(0, 7)}`;
+        return;
+    }
+    if (ctx.mode === 'year') {
+        syncReportsCalendarToPeriod(ctx.period);
+        return;
+    }
+    if (ctx.mode === 'range' && ctx.rangeStart) {
+        syncReportsCalendarToPeriod(ctx.rangeStart.slice(0, 4));
+    }
+}
+
+function setAnalysisSection(section) {
+    if (!ANALYSIS_SECTIONS.includes(section)) return;
+    analysisSection = section;
+    try { localStorage.setItem(ANALYSIS_SECTION_KEY, section); } catch { /* ignore */ }
+
+    ANALYSIS_SECTIONS.forEach((id) => {
+        document.getElementById(`analysis-section-${id}`)?.classList.toggle('hidden', id !== section);
+        document.getElementById(`btn-analysis-${id}`)?.classList.toggle('active', id === section);
+    });
+
+    if (section === 'charts') {
+        requestAnimationFrame(() => {
+            [reportsChartInstance, reportsTrendChartInstance, reportsYoyChartInstance, reportsDowChartInstance]
+                .forEach((chart) => chart?.resize());
+        });
+    }
+}
+
+function initAnalysisSection() {
+    try {
+        const saved = localStorage.getItem(ANALYSIS_SECTION_KEY);
+        if (saved && ANALYSIS_SECTIONS.includes(saved)) analysisSection = saved;
+    } catch { /* ignore */ }
+    setAnalysisSection(analysisSection);
+}
+
 let reportsPeriodMode = 'year';
 let reportsCalendarView = 'month';
 let calendarDayDate = null;
@@ -28,17 +162,36 @@ function initReportsPeriodDefaults() {
     setIfEmpty('reports-compare-a-end', prevEnd);
     setIfEmpty('reports-compare-b-start', monthStart);
     setIfEmpty('reports-compare-b-end', monthEnd);
+    const monthInput = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    setIfEmpty('reports-period-month', monthInput);
 }
 
-function setReportsPeriodMode(mode) {
+function initAnalysisPeriodMode() {
+    try {
+        const saved = localStorage.getItem(ANALYSIS_PERIOD_KEY);
+        if (saved && PERIOD_MODES.includes(saved)) reportsPeriodMode = saved;
+    } catch { /* ignore */ }
+    setReportsPeriodMode(reportsPeriodMode, true);
+}
+
+function setReportsPeriodMode(mode, skipRender = false) {
     reportsPeriodMode = mode;
+    try { localStorage.setItem(ANALYSIS_PERIOD_KEY, mode); } catch { /* ignore */ }
     document.getElementById('btn-reports-mode-year')?.classList.toggle('active', mode === 'year');
+    document.getElementById('btn-reports-mode-month')?.classList.toggle('active', mode === 'month');
     document.getElementById('btn-reports-mode-range')?.classList.toggle('active', mode === 'range');
     document.getElementById('btn-reports-mode-compare')?.classList.toggle('active', mode === 'compare');
     document.getElementById('reports-period-year-wrap')?.classList.toggle('hidden', mode !== 'year');
+    document.getElementById('reports-period-month-wrap')?.classList.toggle('hidden', mode !== 'month');
     document.getElementById('reports-period-range-wrap')?.classList.toggle('hidden', mode !== 'range');
     document.getElementById('reports-period-compare-wrap')?.classList.toggle('hidden', mode !== 'compare');
-    renderReports();
+    if (mode === 'compare') setAnalysisSection('overview');
+    if (mode === 'month') {
+        const { year, monthIndex } = getMonthBoundsFromValue(getReportsMonthValue());
+        reportsCalendarYear = year;
+        reportsCalendarMonth = monthIndex;
+    }
+    if (!skipRender) renderReports();
 }
 
 function getReportsPeriodContext() {
@@ -72,6 +225,21 @@ function getReportsPeriodContext() {
             periodTx: periodA,
             periodA: { start: aStart, end: aEnd, tx: periodA },
             periodB: { start: bStart, end: bEnd, tx: periodB }
+        };
+    }
+
+    if (reportsPeriodMode === 'month') {
+        const monthValue = getReportsMonthValue();
+        const { start, end } = getMonthBoundsFromValue(monthValue);
+        const periodTx = getTransactionsInRange(start, end);
+        return {
+            mode: 'month',
+            period: 'month',
+            label: formatMonthLabel(monthValue),
+            periodTx,
+            rangeStart: start,
+            rangeEnd: end,
+            monthValue
         };
     }
 
@@ -130,72 +298,6 @@ function renderReportsCompare(ctx) {
         </div>`;
 }
 
-function getBudgetMonthRange(ctx) {
-    const now = new Date();
-    if (ctx.mode === 'range' && ctx.rangeStart) {
-        return { start: ctx.rangeStart.slice(0, 7) + '-01', end: ctx.rangeEnd };
-    }
-    if (ctx.mode === 'year' && ctx.period !== 'all') {
-        const y = parseInt(ctx.period, 10);
-        const m = y === now.getFullYear() ? now.getMonth() : 11;
-        const start = `${y}-${String(m + 1).padStart(2, '0')}-01`;
-        const end = new Date(y, m + 1, 0).toISOString().split('T')[0];
-        return { start, end };
-    }
-    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-    return { start, end };
-}
-
-function renderReportsBudgets(ctx) {
-    const list = document.getElementById('reports-budgets-list');
-    if (!list) return;
-
-    const { start, end } = getBudgetMonthRange(ctx);
-    const monthTx = appState.transactions.filter(
-        (t) => t.type === 'expense' && t.date >= start && t.date <= end
-    );
-    const spentByCat = {};
-    monthTx.forEach((t) => {
-        spentByCat[t.mainCategory] = (spentByCat[t.mainCategory] || 0) + t.amount;
-    });
-
-    const categories = Object.keys(categoryTree.expense || {});
-    const budgets = appState.categoryBudgets || {};
-
-    list.innerHTML = categories.map((cat) => {
-        const budget = parseFloat(budgets[cat]) || 0;
-        const spent = spentByCat[cat] || 0;
-        const pct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0;
-        const over = budget > 0 && spent > budget;
-        const fillColor = over ? 'var(--danger)' : (pct >= 85 ? 'var(--warning, #f59e0b)' : 'var(--accent)');
-        return `<div class="budget-row${over ? ' budget-row--over' : ''}">
-            <div class="budget-row-head">
-                ${renderCategoryIcon(cat, 'list', null, 'expense')}
-                <span class="budget-cat-name">${escapeHtml(cat)}</span>
-                <input type="number" class="budget-input" min="0" step="50" data-cat="${cat.replace(/"/g, '&quot;')}"
-                    value="${budget || ''}" placeholder="Limit" onchange="saveCategoryBudget(this)">
-            </div>
-            <div class="budget-row-meta">
-                <span>${formatPlnAmount(spent)}${budget > 0 ? ` / ${formatPlnAmount(budget)}` : ''}</span>
-                ${budget > 0 ? `<span class="${over ? 'budget-alert' : ''}">${pct}%</span>` : '<span>—</span>'}
-            </div>
-            ${budget > 0 ? `<div class="progress-bar-bg budget-bar"><div class="progress-bar-fill" style="width:${pct}%;background:${fillColor}"></div></div>` : ''}
-            ${over ? '<div class="budget-over-msg">Przekroczono budżet!</div>' : ''}
-        </div>`;
-    }).join('');
-}
-
-function saveCategoryBudget(input) {
-    const cat = input.dataset.cat;
-    const value = Math.max(0, parseFloat(input.value) || 0);
-    if (!appState.categoryBudgets) appState.categoryBudgets = {};
-    if (value > 0) appState.categoryBudgets[cat] = value;
-    else delete appState.categoryBudgets[cat];
-    saveState();
-    renderReportsBudgets(getReportsPeriodContext());
-}
-
 function renderReportsFlow(ctx) {
     const el = document.getElementById('reports-flow-chart');
     if (!el) return;
@@ -211,27 +313,197 @@ function renderReportsFlow(ctx) {
         catSums[t.mainCategory] = (catSums[t.mainCategory] || 0) + t.amount;
     });
     const topCats = Object.entries(catSums).sort((a, b) => b[1] - a[1]).slice(0, 8);
-
-    const incomePct = 100;
-    const catBars = topCats.map(([name, amt]) => ({
-        name,
-        amt,
-        pct: income > 0 ? Math.round((amt / income) * 100) : 0
-    }));
-    const balancePct = income > 0 ? Math.max(0, Math.round((balance / income) * 100)) : 0;
+    const maxCat = Math.max(...topCats.map(([, amt]) => amt), 1);
 
     el.innerHTML = `
-        <div class="flow-step flow-income" style="width:${incomePct}%">
-            <span>Wpływy</span><strong>${formatPlnAmount(income)}</strong>
+        <div class="flow-total flow-total--income">
+            <span>Wpływy</span>
+            <strong>${formatPlnAmount(income)}</strong>
         </div>
-        <div class="flow-expenses">
-            ${catBars.map((c) => `<div class="flow-cat" style="width:${Math.max(c.pct, 4)}%">
-                <span>${escapeHtml(c.name)}</span><em>−${formatPlnAmount(c.amt)}</em>
+        <div class="flow-lines">
+            ${topCats.map(([name, amt]) => `<div class="flow-line">
+                <div class="flow-line-head">
+                    <span class="flow-line-name">${escapeHtml(name)}</span>
+                    <span class="flow-line-amt">−${formatPlnAmount(amt)}</span>
+                </div>
+                <div class="flow-line-bar" aria-hidden="true"><i style="width:${Math.round((amt / maxCat) * 100)}%"></i></div>
             </div>`).join('')}
         </div>
-        <div class="flow-step flow-balance ${balance >= 0 ? 'positive' : 'negative'}" style="width:${Math.max(balancePct, 8)}%">
-            <span>Bilans</span><strong>${balance >= 0 ? '+' : ''}${formatPlnAmount(balance)}</strong>
+        <div class="flow-total flow-total--balance ${balance >= 0 ? 'positive' : 'negative'}">
+            <span>Bilans</span>
+            <strong>${balance >= 0 ? '+' : ''}${formatPlnAmount(balance)}</strong>
         </div>`;
+}
+
+function isLoanOrDebtPayment(t) {
+    if (t.type !== 'expense') return false;
+    if (t.mainCategory === 'Długi') return true;
+    const hay = `${t.mainCategory} ${t.subCategory} ${t.note || ''}`.toLowerCase();
+    return /kredyt|hipotec|\brata\b|raty|spłat|splat|nadpłat|nadplat|lokat|pekao|hipotek/.test(hay);
+}
+
+function getRecurringGroupKey(t) {
+    const sub = t.subCategory === '[Bez podkategorii]' ? '' : t.subCategory;
+    return `${t.mainCategory}|${sub}`;
+}
+
+const RECURRING_KEYWORDS = /czynsz|\brata\b|raty|subskrypc|netflix|spotify|ubezpieczen|telefon|internet|najem|leasing|kredyt|hipotec|lokat|opłat|oplat|muzyk|youtube|disney|hbo|audiobook|kablówk|kablowk|delegac|abonament/i;
+
+function getExpenseGroupKey(t, rankLevel) {
+    if (rankLevel === 'sub') return getRecurringGroupKey(t);
+    return t.mainCategory;
+}
+
+function getSixMonthsAgoDate() {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 6);
+    return d.toISOString().split('T')[0];
+}
+
+function detectRecurringExpenses(rankLevel = 'main') {
+    const cutoff = getSixMonthsAgoDate();
+    const recentCutoff = new Date();
+    recentCutoff.setDate(recentCutoff.getDate() - 60);
+    const recentCutoffStr = recentCutoff.toISOString().split('T')[0];
+    const now = new Date();
+    const fourMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+
+    const byKey = {};
+    appState.transactions
+        .filter((t) => t.type === 'expense' && t.date >= cutoff)
+        .forEach((t) => {
+            const key = getExpenseGroupKey(t, rankLevel);
+            if (!byKey[key]) byKey[key] = [];
+            byKey[key].push(t);
+        });
+
+    const results = [];
+    Object.entries(byKey).forEach(([key, txs]) => {
+        const monthlyTotals = {};
+        txs.forEach((t) => {
+            const m = t.date.substring(0, 7);
+            monthlyTotals[m] = (monthlyTotals[m] || 0) + t.amount;
+        });
+        const monthsWithSpending = Object.keys(monthlyTotals);
+        if (monthsWithSpending.length < 2) return;
+
+        const activeRecent = monthsWithSpending.filter((m) => {
+            const [y, mo] = m.split('-').map(Number);
+            return new Date(y, mo - 1, 1) >= fourMonthsAgo;
+        });
+        if (activeRecent.length < 2) return;
+
+        const latest = [...txs].sort((a, b) => b.date.localeCompare(a.date))[0];
+        if (latest.date < recentCutoffStr) return;
+
+        const amounts = activeRecent.map((m) => monthlyTotals[m]).sort((a, b) => a - b);
+        const median = amounts[Math.floor(amounts.length / 2)];
+        const tolerance = Math.max(median * 0.3, 50);
+        const stableRatio = amounts.filter((a) => Math.abs(a - median) <= tolerance).length / amounts.length;
+
+        const subRaw = rankLevel === 'sub' ? key.split('|')[1] : '';
+        const mainCategory = rankLevel === 'sub' ? key.split('|')[0] : key;
+        const subCategory = rankLevel === 'sub' ? (subRaw || '[Bez podkategorii]') : '[Bez podkategorii]';
+        const labelText = `${mainCategory} ${subRaw} ${txs.map((t) => t.note || '').join(' ')}`.toLowerCase();
+        const hasKeyword = RECURRING_KEYWORDS.test(labelText);
+        const minMonths = hasKeyword ? 2 : 3;
+        if (activeRecent.length < minMonths || stableRatio < 0.6) return;
+
+        const avgMonthly = Math.round(
+            activeRecent.reduce((s, m) => s + monthlyTotals[m], 0) / activeRecent.length
+        );
+
+        results.push({
+            key,
+            amount: avgMonthly,
+            avgMonthly,
+            mainCategory,
+            subCategory,
+            source: 'detected',
+            months: activeRecent.length,
+            lastDate: latest.date,
+            hasKeyword
+        });
+    });
+    return results;
+}
+
+function getManualRecurringEntries(rankLevel = 'main') {
+    const byId = {};
+    appState.transactions.forEach((t) => {
+        if (!t.recurringId || t.type !== 'expense') return;
+        const prev = byId[t.recurringId];
+        if (!prev || t.date >= prev.lastDate) {
+            byId[t.recurringId] = {
+                amount: t.amount,
+                mainCategory: t.mainCategory,
+                subCategory: t.subCategory,
+                source: 'manual',
+                months: null,
+                lastDate: t.date
+            };
+        }
+    });
+
+    const entries = Object.values(byId);
+    if (rankLevel === 'sub') {
+        return entries.map((e) => ({
+            ...e,
+            key: getRecurringGroupKey(e)
+        }));
+    }
+
+    const merged = {};
+    entries.forEach((e) => {
+        const k = e.mainCategory;
+        if (!merged[k]) {
+            merged[k] = { ...e, key: k, subCategory: '[Bez podkategorii]' };
+        } else {
+            merged[k].amount += e.amount;
+            if (e.lastDate > merged[k].lastDate) merged[k].lastDate = e.lastDate;
+        }
+    });
+    return Object.values(merged);
+}
+
+function getAllRecurringEntries(rankLevel = 'main') {
+    const manual = getManualRecurringEntries(rankLevel);
+    const manualKeys = new Set(manual.map((m) => m.key));
+    const detected = detectRecurringExpenses(rankLevel).filter((d) => !manualKeys.has(d.key));
+    return [...manual, ...detected].sort((a, b) => b.amount - a.amount);
+}
+
+function renderDetectedRecurringList() {
+    const list = document.getElementById('reports-recurring-list');
+    if (!list) return;
+
+    const rankLevel = typeof reportsRankLevel !== 'undefined' ? reportsRankLevel : 'main';
+    if (typeof syncReportsRankToggles === 'function') syncReportsRankToggles();
+
+    const entries = getAllRecurringEntries(rankLevel);
+    if (!entries.length) {
+        list.innerHTML = '<div class="empty-state"><p>Brak aktywnych wydatków cyklicznych w ostatnich miesiącach</p></div>';
+        return;
+    }
+
+    const monthlyTotal = entries.reduce((sum, entry) => sum + entry.amount, 0);
+    list.innerHTML = entries.map((entry) => {
+        const showSub = rankLevel === 'sub' && entry.subCategory !== '[Bez podkategorii]';
+        const title = showSub ? entry.subCategory : entry.mainCategory;
+        const metaLine = showSub ? escapeHtml(entry.mainCategory) : '';
+        const badge = entry.source === 'manual'
+            ? '<span class="recurring-badge recurring-badge--manual">Oznaczone ręcznie</span>'
+            : `<span class="recurring-badge recurring-badge--detected">Wykryte · ${entry.months} mies.</span>`;
+        const lastLine = entry.lastDate ? `ostatnio ${formatTxDate(entry.lastDate)}` : '';
+        return `<div class="reports-recurring-item">
+            ${renderCategoryIcon(entry.mainCategory, 'list', showSub ? entry.subCategory : null, 'expense')}
+            <div class="reports-top-text">
+                <span class="reports-top-name">${escapeHtml(title)}</span>
+                <span class="reports-top-meta">${metaLine}${metaLine && lastLine ? ' · ' : ''}${lastLine} ${badge}</span>
+            </div>
+            <span class="reports-recurring-amount">${formatPlnAmount(entry.amount)}/mies.</span>
+        </div>`;
+    }).join('') + `<div class="reports-recurring-total">Szacunkowa suma: <strong>${formatPlnAmount(monthlyTotal)}</strong>/mies.</div>`;
 }
 
 function renderReportsOutliers(ctx) {
@@ -239,12 +511,12 @@ function renderReportsOutliers(ctx) {
     if (!list) return;
 
     const outliers = ctx.periodTx
-        .filter((t) => t.type === 'expense')
+        .filter((t) => t.type === 'expense' && !isLoanOrDebtPayment(t))
         .sort((a, b) => b.amount - a.amount)
         .slice(0, 8);
 
     if (!outliers.length) {
-        list.innerHTML = '<div class="empty-state"><p>Brak wydatków</p></div>';
+        list.innerHTML = '<div class="empty-state"><p>Brak nietypowych wydatków w tym okresie</p></div>';
         return;
     }
 
@@ -262,7 +534,7 @@ function renderReportsOutliers(ctx) {
     }).join('');
 }
 
-function getCategoryMonthlyTotals(mainCategory, monthsBack = 3) {
+function getCategoryMonthlyTotals(mainCategory, subCategory, rankLevel, monthsBack = 3) {
     const now = new Date();
     const totals = [];
     for (let i = monthsBack - 1; i >= 0; i--) {
@@ -270,23 +542,51 @@ function getCategoryMonthlyTotals(mainCategory, monthsBack = 3) {
         const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
         const end = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
         const sum = appState.transactions
-            .filter((t) => t.type === 'expense' && t.mainCategory === mainCategory && t.date >= start && t.date <= end)
+            .filter((t) => {
+                if (t.type !== 'expense' || t.mainCategory !== mainCategory || t.date < start || t.date > end) return false;
+                if (rankLevel === 'sub' && subCategory) {
+                    const sub = t.subCategory === '[Bez podkategorii]' ? null : t.subCategory;
+                    return sub === subCategory;
+                }
+                return true;
+            })
             .reduce((s, t) => s + t.amount, 0);
         totals.push(sum);
     }
     return totals;
 }
 
+function buildTrendEntries(rankLevel) {
+    const keys = {};
+    appState.transactions
+        .filter((t) => t.type === 'expense')
+        .forEach((t) => {
+            if (rankLevel === 'sub') {
+                const sub = t.subCategory === '[Bez podkategorii]' ? null : t.subCategory;
+                const key = sub ? `${t.mainCategory}|${sub}` : t.mainCategory;
+                if (!keys[key]) {
+                    keys[key] = { mainCategory: t.mainCategory, subCategory: sub, label: sub || t.mainCategory };
+                }
+            } else if (!keys[t.mainCategory]) {
+                keys[t.mainCategory] = { mainCategory: t.mainCategory, subCategory: null, label: t.mainCategory };
+            }
+        });
+    return Object.values(keys);
+}
+
 function renderReportsCategoryTrends() {
     const list = document.getElementById('reports-trends-list');
     if (!list) return;
 
-    const entries = Object.keys(categoryTree.expense || {}).map((cat) => {
-        const totals = getCategoryMonthlyTotals(cat, 3);
+    const rankLevel = typeof reportsRankLevel !== 'undefined' ? reportsRankLevel : 'main';
+    if (typeof syncReportsRankToggles === 'function') syncReportsRankToggles();
+
+    const entries = buildTrendEntries(rankLevel).map((entry) => {
+        const totals = getCategoryMonthlyTotals(entry.mainCategory, entry.subCategory, rankLevel, 3);
         const trend = totals[2] - totals[0];
         const rising = totals[0] < totals[1] && totals[1] < totals[2];
         const falling = totals[0] > totals[1] && totals[1] > totals[2];
-        return { cat, totals, trend, rising, falling };
+        return { ...entry, totals, trend, rising, falling };
     }).filter((e) => e.totals.some((v) => v > 0))
         .sort((a, b) => Math.abs(b.trend) - Math.abs(a.trend))
         .slice(0, 8);
@@ -299,11 +599,12 @@ function renderReportsCategoryTrends() {
     list.innerHTML = entries.map((e) => {
         const arrow = e.rising ? '↑ rośnie' : (e.falling ? '↓ spada' : '→ stabilnie');
         const arrowClass = e.rising ? 'trend-up' : (e.falling ? 'trend-down' : 'trend-flat');
+        const meta = rankLevel === 'sub' && e.subCategory ? escapeHtml(e.mainCategory) + ' · ' : '';
         return `<div class="trend-row">
-            ${renderCategoryIcon(e.cat, 'list', null, 'expense')}
+            ${renderCategoryIcon(e.mainCategory, 'list', e.subCategory, 'expense')}
             <div class="trend-text">
-                <span class="reports-top-name">${escapeHtml(e.cat)}</span>
-                <span class="reports-top-meta">${e.totals.map((v) => formatCompactPln(v)).join(' → ')} zł</span>
+                <span class="reports-top-name">${escapeHtml(e.label)}</span>
+                <span class="reports-top-meta">${meta}${e.totals.map((v) => formatCompactPln(v)).join(' → ')} zł</span>
             </div>
             <span class="trend-badge ${arrowClass}">${arrow}</span>
         </div>`;
@@ -329,10 +630,19 @@ function renderReportsForecast(ctx) {
     const remaining = forecast - monthExpenses;
 
     el.innerHTML = `
-        <div class="forecast-grid">
-            <div><span class="label">Wydano do dziś</span><strong class="expense">${formatPlnAmount(monthExpenses)}</strong></div>
-            <div><span class="label">Prognoza na miesiąc</span><strong>${formatPlnAmount(forecast)}</strong></div>
-            <div><span class="label">Szac. do końca mies.</span><strong>${formatPlnAmount(remaining)}</strong></div>
+        <div class="forecast-stats">
+            <div class="forecast-stat">
+                <span class="forecast-label">Wydano do dziś</span>
+                <strong class="forecast-value expense">${formatPlnAmount(monthExpenses)}</strong>
+            </div>
+            <div class="forecast-stat">
+                <span class="forecast-label">Prognoza na miesiąc</span>
+                <strong class="forecast-value">${formatPlnAmount(forecast)}</strong>
+            </div>
+            <div class="forecast-stat">
+                <span class="forecast-label">Szac. do końca mies.</span>
+                <strong class="forecast-value">${formatPlnAmount(remaining)}</strong>
+            </div>
         </div>
         <p class="reports-hint">Na podstawie średniej dziennej z ${dayOfMonth} dni.</p>`;
 }
@@ -508,6 +818,13 @@ function attachReportsMonthChartClick(options) {
     options.onClick = (_evt, elements) => {
         if (!elements.length) return;
         const idx = elements[0].index;
+        const { period, monthKeys } = reportsMonthChartMeta;
+        if (period === 'month' && monthKeys?.[idx]?.day) {
+            const { year, month, day } = monthKeys[idx];
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            openCalendarDay(dateStr);
+            return;
+        }
         const resolved = resolveMonthFromChartIndex(idx);
         if (resolved) openMonthDrillDown(resolved.year, resolved.month);
     };
@@ -592,6 +909,7 @@ function renderReportsLoanSummary(ctx) {
     const savings = summarizePeriod(ctx.periodTx).balance;
 
     el.innerHTML = `
+        <div class="analysis-subsection-label">Kredyt hipoteczny</div>
         <div class="loan-report-grid">
             <div><span class="label">Spłacono</span><strong>${paidPct}%</strong></div>
             <div><span class="label">Kapitał</span><strong>${formatPlnAmount(loan.currentCapitalLeft || 0)}</strong></div>
@@ -627,7 +945,7 @@ function renderReportsYearReview(ctx) {
     const topCat = Object.entries(catSums).sort((a, b) => b[1] - a[1])[0];
 
     el.innerHTML = `
-        <div class="year-review-hero">${year} — Year in Review</div>
+        <div class="year-review-hero">${year} — podsumowanie roku</div>
         <div class="year-review-grid">
             <div><span>Wydatki</span><strong>${formatPlnAmount(s.expense)}</strong></div>
             <div><span>Wpływy</span><strong>${formatPlnAmount(s.income)}</strong></div>
@@ -671,7 +989,6 @@ function exportReportsPdf() {
 
 function renderPhase3Reports(ctx, savingsRate) {
     renderReportsCompare(ctx);
-    renderReportsBudgets(ctx);
     renderReportsFlow(ctx);
     renderReportsOutliers(ctx);
     renderReportsCategoryTrends();
@@ -691,4 +1008,9 @@ function renderPhase3Reports(ctx, savingsRate) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', initReportsPeriodDefaults);
+document.addEventListener('DOMContentLoaded', () => {
+    initReportsPeriodDefaults();
+    initAnalysisPeriodMode();
+    initAnalysisSection();
+    initAnalysisSwipe();
+});
