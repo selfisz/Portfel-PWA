@@ -1,7 +1,50 @@
+let dashboardTxVisibleCount = LIST_PAGE_SIZE;
+let dashboardTxListSignature = '';
+
+function resetDashboardTxListPagination() {
+    dashboardTxVisibleCount = LIST_PAGE_SIZE;
+    dashboardTxListSignature = '';
+}
+
+function showMoreDashboardTransactions() {
+    dashboardTxVisibleCount += LIST_PAGE_SIZE;
+    renderDashboard();
+}
+
+function getDashboardTxListSignature(listTx, searchQuery) {
+    const period = document.getElementById('dashboard-period-select')?.value || '';
+    const { startDate, endDate } = getDashboardDates();
+    return [
+        period,
+        startDate,
+        endDate,
+        searchQuery,
+        activeChartCategory || '',
+        chartViewType,
+        listTx.length,
+        listTx[0]?.date ?? '',
+        listTx[listTx.length - 1]?.date ?? ''
+    ].join('|');
+}
+
 function handleDashboardPeriodChange() {
     const period = document.getElementById('dashboard-period-select').value;
     document.getElementById('dashboard-custom-dates').style.display = period === 'custom' ? 'flex' : 'none';
+    updateDashboardPeriodResetVisibility();
     renderDashboard();
+}
+
+function resetDashboardPeriod() {
+    document.getElementById('dashboard-period-select').value = 'current-month';
+    document.getElementById('dashboard-custom-dates').style.display = 'none';
+    updateDashboardPeriodResetVisibility();
+    renderDashboard();
+}
+
+function updateDashboardPeriodResetVisibility() {
+    const period = document.getElementById('dashboard-period-select').value;
+    const btn = document.getElementById('dashboard-period-reset');
+    if (btn) btn.classList.toggle('hidden', period === 'current-month');
 }
 
 function getTransactionDateBounds() {
@@ -136,7 +179,48 @@ function formatDashboardPeriodLabel() {
     return `${startDate} – ${endDate}`;
 }
 
+function formatDueLabel(days) {
+    if (days === null) return '';
+    if (days === 0) return 'dzisiaj';
+    if (days === 1) return 'jutro';
+    if (days < 0) return `${Math.abs(days)} dni temu`;
+    return `za ${days} dni`;
+}
+
+function renderUpcomingLoanInstallments() {
+    const section = document.getElementById('dashboard-upcoming-loans');
+    const list = document.getElementById('dashboard-upcoming-loans-list');
+    if (!section || !list) return;
+
+    if (!hasScheduledLoanInstallments()) {
+        section.classList.add('hidden');
+        return;
+    }
+
+    section.classList.remove('hidden');
+    const installments = getUpcomingLoanInstallments();
+    if (!installments.length) {
+        list.innerHTML = '<p class="upcoming-loans-empty">W tym miesiącu wszystko spłacone.</p>';
+        return;
+    }
+
+    list.innerHTML = installments.map((loan) => {
+        const days = daysUntilDate(loan.nextInstallmentDue);
+        const overdue = days !== null && days < 0;
+        const dueLabel = formatDueLabel(days);
+        return `<div class="upcoming-loan-row${overdue ? ' upcoming-loan-row--overdue' : ''}">
+            <div class="upcoming-loan-info">
+                <strong class="upcoming-loan-name">${escapeHtml(getLoanDisplayName(loan))}</strong>
+                <span class="upcoming-loan-meta">${formatPlnAmount(loan.nextInstallmentAmount)} · ${formatTxDate(loan.nextInstallmentDue)}${dueLabel ? ` · ${dueLabel}` : ''}</span>
+            </div>
+            <button type="button" class="upcoming-loan-pay-btn" onclick="payLoanInstallment('${escapeHtml(loan.id)}')">Zapłać</button>
+        </div>`;
+    }).join('');
+}
+
 function renderDashboard() {
+    renderUpcomingLoanInstallments();
+    updateDashboardPeriodResetVisibility();
     const { startDate, endDate } = getDashboardDates();
     const searchQuery = document.getElementById('db-search').value.toLowerCase().trim();
     const dateFilteredTx = appState.transactions.filter(t => t.date >= startDate && t.date <= endDate);
@@ -247,11 +331,20 @@ function renderDashboard() {
 
     if (listTx.length === 0) {
         list.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg><p>${searchQuery ? 'Brak wyników wyszukiwania' : 'Brak transakcji w tym okresie'}</p></div>`;
+        const moreBtn = document.getElementById('dashboard-tx-show-more');
+        if (moreBtn) moreBtn.classList.add('hidden');
         return;
     }
 
+    const signature = getDashboardTxListSignature(listTx, searchQuery);
+    if (signature !== dashboardTxListSignature) {
+        dashboardTxListSignature = signature;
+        dashboardTxVisibleCount = LIST_PAGE_SIZE;
+    }
+
+    const visibleTx = listTx.slice(0, dashboardTxVisibleCount);
     let lastGroup = '';
-    listTx.forEach(t => {
+    visibleTx.forEach(t => {
         const group = formatDateGroup(t.date);
         if (group !== lastGroup) {
             const label = document.createElement('div');
@@ -277,8 +370,12 @@ function renderDashboard() {
             <div class="tx-amount-col">
                 <div class="tx-amount ${t.type}">${t.type === 'expense' ? '-' : '+'}${t.amount.toFixed(2)} zł</div>
             </div>
+            <span class="tx-chevron" aria-hidden="true">›</span>
             <div class="tx-swipe-hint">Usuń</div>`;
         attachSwipeDelete(row, globalIndex);
         list.appendChild(row);
     });
+
+    const moreBtn = getOrCreateShowMoreButton('dashboard-tx-show-more', showMoreDashboardTransactions);
+    updateShowMoreButton(moreBtn, listTx.length, visibleTx.length, list.parentElement, list);
 }

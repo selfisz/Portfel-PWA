@@ -11,7 +11,8 @@ function getDefaultLoan() {
         nextInstallmentAmount: 0,
         nextInstallmentDue: '',
         archived: false,
-        archivedAt: ''
+        archivedAt: '',
+        includeInSummary: true
     };
 }
 
@@ -27,6 +28,11 @@ function normalizeLoan(raw) {
     loan.nextInstallmentDue = loan.nextInstallmentDue || '';
     loan.archived = !!loan.archived;
     loan.archivedAt = loan.archivedAt || '';
+    if (loan.includeInSummary === undefined || loan.includeInSummary === null) {
+        loan.includeInSummary = true;
+    } else {
+        loan.includeInSummary = !!loan.includeInSummary;
+    }
     if (loan.totalAmount > 0 && loan.currentCapitalLeft > loan.totalAmount) {
         loan.currentCapitalLeft = loan.totalAmount;
     }
@@ -140,6 +146,56 @@ function getPortfolioValuePln() {
 
 function getLoanCapitalLeft() {
     return getActiveLoans().reduce((sum, loan) => sum + (loan.currentCapitalLeft || 0), 0);
+}
+
+function getLoanSummaryTotal() {
+    return getActiveLoans()
+        .filter((loan) => loan.includeInSummary !== false)
+        .reduce((sum, loan) => sum + (loan.currentCapitalLeft || 0), 0);
+}
+
+function getLoanSummaryCount() {
+    return getActiveLoans().filter((loan) => loan.includeInSummary !== false).length;
+}
+
+function advanceLoanDueDate(isoDate) {
+    if (!isoDate) return '';
+    const d = new Date(`${isoDate}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return isoDate;
+    d.setMonth(d.getMonth() + 1);
+    return d.toISOString().split('T')[0];
+}
+
+function getMonthDateBounds(date = new Date()) {
+    const start = new Date(date.getFullYear(), date.getMonth(), 1);
+    const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    return {
+        startDate: start.toISOString().split('T')[0],
+        endDate: end.toISOString().split('T')[0]
+    };
+}
+
+function getUpcomingLoanInstallments() {
+    const { startDate, endDate } = getMonthDateBounds();
+    return getActiveLoans()
+        .filter((loan) => {
+            if (!(loan.nextInstallmentAmount > 0 && loan.nextInstallmentDue)) return false;
+            return loan.nextInstallmentDue >= startDate && loan.nextInstallmentDue <= endDate;
+        })
+        .sort((a, b) => a.nextInstallmentDue.localeCompare(b.nextInstallmentDue));
+}
+
+function hasScheduledLoanInstallments() {
+    return getActiveLoans().some((loan) => loan.nextInstallmentAmount > 0 && loan.nextInstallmentDue);
+}
+
+function daysUntilDate(isoDate) {
+    if (!isoDate) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(`${isoDate}T12:00:00`);
+    if (Number.isNaN(target.getTime())) return null;
+    return Math.round((target - today) / 86400000);
 }
 
 function getLoanTotalAmount(loan) {

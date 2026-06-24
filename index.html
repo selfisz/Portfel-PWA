@@ -114,7 +114,7 @@
                 <button id="btn-category-editor-income" type="button" class="toggle-btn income" onclick="setCategoryEditorType('income')">Wpływy</button>
             </div>
             <div id="category-editor-list" class="category-editor-list"></div>
-            <button type="button" class="btn-submit category-editor-save" onclick="saveCategoryEditor()">Zapisz zmiany</button>
+            <button type="button" class="btn-submit btn-submit--form category-editor-save" onclick="saveCategoryEditor()">Zapisz zmiany</button>
         </div>
     </div>
 
@@ -213,7 +213,6 @@
                 </button>
             </div>
             <div id="month-drill-summary"></div>
-            <p class="reports-hint">Kliknij słupek na wykresie miesięcy, aby otworzyć szczegóły.</p>
             <div id="month-drill-list" class="calendar-day-list"></div>
         </div>
     </div>
@@ -222,14 +221,19 @@
     <div class="container">
         <div id="view-dashboard" class="app-view active">
             <div class="card filter-card">
-                <select id="dashboard-period-select" onchange="handleDashboardPeriodChange()">
-                    <option value="current-month">Bieżący miesiąc</option>
-                    <option value="previous-month">Poprzedni miesiąc</option>
-                    <option value="current-year">Bieżący rok</option>
-                    <option value="previous-year">Poprzedni rok</option>
-                    <option value="all">Wszystko</option>
-                    <option value="custom">Niestandardowy okres</option>
-                </select>
+                <div class="period-filter-row">
+                    <select id="dashboard-period-select" onchange="handleDashboardPeriodChange()">
+                        <option value="current-month">Bieżący miesiąc</option>
+                        <option value="previous-month">Poprzedni miesiąc</option>
+                        <option value="current-year">Bieżący rok</option>
+                        <option value="previous-year">Poprzedni rok</option>
+                        <option value="all">Wszystko</option>
+                        <option value="custom">Niestandardowy okres</option>
+                    </select>
+                    <button type="button" id="dashboard-period-reset" class="period-reset-btn hidden" onclick="resetDashboardPeriod()" aria-label="Przywróć bieżący miesiąc" title="Bieżący miesiąc">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v4l5-5-5-5v4z"/></svg>
+                    </button>
+                </div>
                 <div id="dashboard-custom-dates">
                     <input type="date" id="db-start-date" onchange="renderDashboard()">
                     <input type="date" id="db-end-date" onchange="renderDashboard()">
@@ -254,6 +258,11 @@
             <div class="card">
                 <div class="budget-label">Zużycie wpływów</div>
                 <div class="progress-bar-bg"><div id="budget-progress-fill" class="progress-bar-fill"></div></div>
+            </div>
+
+            <div id="dashboard-upcoming-loans" class="card hidden">
+                <h2>Raty w tym miesiącu</h2>
+                <div id="dashboard-upcoming-loans-list" class="upcoming-loans-list"></div>
             </div>
 
             <div class="card chart-card">
@@ -282,47 +291,79 @@
                     <input type="text" id="db-search" placeholder="Szukaj transakcji..." oninput="renderDashboard()">
                 </div>
                 <p id="db-search-hint" class="search-scope-hint">Przeszukiwanie wszystkich transakcji</p>
-                <div id="recent-transactions-list"></div>
+            <p class="tx-list-hint">Dotknij, aby edytować · przesuń w lewo, aby usunąć</p>
+            <div id="recent-transactions-list"></div>
             </div>
         </div>
 
         <div id="view-add" class="app-view">
-            <div class="card">
-                <h2 id="form-header" class="form-header">Nowa transakcja</h2>
-                <div class="flex-toggle">
-                    <button id="btn-expense" class="toggle-btn active expense" onclick="setTransactionType('expense')">Wydatek</button>
-                    <button id="btn-income" class="toggle-btn income" onclick="setTransactionType('income')">Wpływ</button>
+            <div class="add-view-layout">
+                <div class="card add-form-card">
+                    <h2 id="form-header" class="form-header">Nowa transakcja</h2>
+                    <div class="flex-toggle flex-toggle--3">
+                        <button id="btn-expense" type="button" class="toggle-btn active expense" onclick="setFormMode('expense')">Wydatek</button>
+                        <button id="btn-income" type="button" class="toggle-btn income" onclick="setFormMode('income')">Wpływ</button>
+                        <button id="btn-loan-payment" type="button" class="toggle-btn loan" onclick="setFormMode('loan')">Spłata</button>
+                    </div>
+                    <div id="add-form-standard">
+                        <div class="form-group form-group--amount">
+                            <label for="tx-amount">Kwota (PLN)</label>
+                            <input type="number" id="tx-amount" step="0.01" placeholder="0,00" inputmode="decimal" autocomplete="off">
+                        </div>
+                        <div class="form-group" id="recent-categories-wrapper" style="display:none;">
+                            <label>Ostatnio używane</label>
+                            <div id="recent-categories-row" class="recent-categories"></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Kategoria główna</label>
+                            <div id="main-category-grid" class="grid-selector"></div>
+                        </div>
+                        <div class="form-group" id="sub-category-wrapper" style="display:none;">
+                            <label>Podkategoria</label>
+                            <div id="sub-category-grid" class="grid-selector"></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Data</label>
+                            <input type="date" id="tx-date">
+                        </div>
+                        <div class="form-group form-group--last">
+                            <label>Notatka</label>
+                            <input type="text" id="tx-note" placeholder="Opcjonalny opis">
+                        </div>
+                    </div>
+                    <div id="add-form-loan" class="hidden">
+                        <p class="reports-hint add-loan-hint">Zmniejsza kapitał kredytu i dodaje wydatek w Długach.</p>
+                        <div class="form-group">
+                            <label class="section-label" for="add-loan-payment-select">Kredyt</label>
+                            <select id="add-loan-payment-select"></select>
+                        </div>
+                        <div class="form-group">
+                            <label class="section-label" for="add-loan-payment-amount">Kwota (PLN)</label>
+                            <input type="number" id="add-loan-payment-amount" step="0.01" placeholder="0,00" inputmode="decimal" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label class="section-label" for="add-loan-payment-date">Data</label>
+                            <input type="date" id="add-loan-payment-date">
+                        </div>
+                        <div class="form-group form-group--last">
+                            <label class="section-label" for="add-loan-payment-note">Notatka</label>
+                            <input type="text" id="add-loan-payment-note" placeholder="Spłata kapitału" maxlength="80">
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Kwota (PLN)</label>
-                    <input type="number" id="tx-amount" step="0.01" placeholder="0,00" inputmode="decimal" autocomplete="off">
+                <div class="add-form-sticky-bar" id="add-form-sticky-bar">
+                    <div id="add-sticky-standard" class="add-sticky-panel">
+                        <div class="checkbox-wrapper" id="recurring-wrapper">
+                            <input type="checkbox" id="tx-recurring">
+                            <label for="tx-recurring">Cykliczna (co miesiąc)</label>
+                        </div>
+                        <button type="button" class="btn-submit btn-submit--form" onclick="saveTransaction()">Zapisz</button>
+                    </div>
+                    <div id="add-sticky-loan" class="add-sticky-panel hidden">
+                        <button type="button" class="btn-submit btn-submit--form" onclick="saveLoanPaymentFromAdd()">Zapisz spłatę</button>
+                    </div>
+                    <button type="button" class="btn-cancel btn-cancel--form" id="btn-cancel-edit" onclick="cancelEdit()">Anuluj edycję</button>
                 </div>
-                <div class="form-group" id="recent-categories-wrapper" style="display:none;">
-                    <label>Ostatnio używane</label>
-                    <div id="recent-categories-row" class="recent-categories"></div>
-                </div>
-                <div class="form-group">
-                    <label>Kategoria główna</label>
-                    <div id="main-category-grid" class="grid-selector"></div>
-                </div>
-                <div class="form-group" id="sub-category-wrapper" style="display:none;">
-                    <label>Podkategoria</label>
-                    <div id="sub-category-grid" class="grid-selector"></div>
-                </div>
-                <div class="form-group">
-                    <label>Data</label>
-                    <input type="date" id="tx-date">
-                </div>
-                <div class="form-group">
-                    <label>Notatka</label>
-                    <input type="text" id="tx-note" placeholder="Opcjonalny opis">
-                </div>
-                <div class="checkbox-wrapper" id="recurring-wrapper">
-                    <input type="checkbox" id="tx-recurring">
-                    <label for="tx-recurring">Cykliczna (co miesiąc)</label>
-                </div>
-                <button class="btn-submit" onclick="saveTransaction()">Zapisz transakcję</button>
-                <button class="btn-cancel" id="btn-cancel-edit" onclick="cancelEdit()">Anuluj edycję</button>
             </div>
         </div>
 
@@ -454,7 +495,6 @@
                             <button id="btn-cal-year" type="button" class="toggle-btn" onclick="setReportsCalendarView('year')">Rok</button>
                         </div>
                     </div>
-                    <p class="reports-hint">Kliknij dzień, aby zobaczyć listę transakcji.</p>
                     <div id="reports-calendar-grid" class="reports-calendar-grid"></div>
                     <div id="reports-year-heatmap" class="reports-year-heatmap hidden"></div>
                 </div>
@@ -463,7 +503,6 @@
             <div id="analysis-section-charts" class="analysis-section hidden">
                 <div class="card reports-months-card">
                     <h2 id="reports-months-title">Miesiące</h2>
-                    <p class="reports-hint">Kliknij słupek, aby zobaczyć transakcje miesiąca.</p>
                     <div class="reports-bar-chart-wrap">
                         <canvas id="reportsMonthsChart"></canvas>
                     </div>
@@ -571,36 +610,15 @@
                 <div class="hero-label">Łącznie do spłaty</div>
                 <div id="loans-total-capital" class="hero-balance loan-capital-hero">—</div>
                 <p id="loans-total-meta" class="loan-hero-meta hidden"></p>
+                <label class="section-label loans-summary-label hidden" id="loans-summary-label">W sumie</label>
+                <nav id="loans-summary-chips" class="loans-chip-nav loans-summary-chips hidden" aria-label="Kredyty w sumie"></nav>
             </div>
 
             <div id="loans-list" class="loans-list"></div>
 
             <div class="card">
-                <h2>Nadpłata</h2>
-                <p class="reports-hint">Zmniejsza kapitał i dodaje wydatek w transakcjach.</p>
-                <div class="form-group">
-                    <label class="section-label" for="loan-overpayment-select">Kredyt</label>
-                    <select id="loan-overpayment-select"></select>
-                </div>
-                <div class="form-group">
-                    <label class="section-label" for="loan-overpayment-amount">Kwota (PLN)</label>
-                    <input type="number" id="loan-overpayment-amount" step="0.01" placeholder="5000">
-                </div>
-                <div class="loan-form-row">
-                    <div class="form-group">
-                        <label class="section-label" for="loan-overpayment-date">Data</label>
-                        <input type="date" id="loan-overpayment-date">
-                    </div>
-                    <div class="form-group">
-                        <label class="section-label" for="loan-overpayment-note">Notatka</label>
-                        <input type="text" id="loan-overpayment-note" placeholder="Nadpłata kapitału" maxlength="80">
-                    </div>
-                </div>
-                <button type="button" class="btn-submit" onclick="addLoanOverpayment()">Zarejestruj nadpłatę</button>
-            </div>
-
-            <div class="card">
                 <h2>Ostatnie wpłaty</h2>
+                <nav id="loans-payments-filter" class="loans-chip-nav loans-payments-filter" aria-label="Filtr wpłat"></nav>
                 <div id="loan-payments-list" class="loan-payments-list"></div>
             </div>
 

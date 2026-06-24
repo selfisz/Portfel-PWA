@@ -21,11 +21,7 @@ DEFAULT_APP_STATE = {
     "currentType": "expense",
     "selectedMainCategory": "",
     "selectedSubCategory": "",
-    "loan": {
-        "totalAmount": 500000.0,
-        "currentCapitalLeft": 412500.0,
-        "interestRate": 6.75,
-    },
+    "loans": [],
     "investments": [
         {
             "ticker": "VWCE.DE",

@@ -9,6 +9,7 @@ let appState = {
 };
 
 let formState = {
+    formMode: 'expense',
     currentType: 'expense',
     selectedMainCategory: '',
     selectedSubCategory: ''

@@ -1,6 +1,19 @@
 let loanDetailsMode = 'view';
 let activeLoanId = null;
 let draftLoan = null;
+let loanPaymentsFilter = 'all';
+let loanPaymentsVisibleCount = LIST_PAGE_SIZE;
+let loanPaymentsListSignature = '';
+
+function resetLoanPaymentsListPagination() {
+    loanPaymentsVisibleCount = LIST_PAGE_SIZE;
+    loanPaymentsListSignature = '';
+}
+
+function showMoreLoanPayments() {
+    loanPaymentsVisibleCount += LIST_PAGE_SIZE;
+    renderLoanRecentPayments();
+}
 
 function createDraftLoan() {
     return normalizeLoan({
@@ -48,7 +61,8 @@ function renderLoans() {
 
     const activeLoans = getActiveLoans();
     const archivedLoans = getArchivedLoans();
-    const totalLeft = getLoanCapitalLeft();
+    const summaryTotal = getLoanSummaryTotal();
+    const summaryCount = getLoanSummaryCount();
     const totalHero = document.getElementById('loans-total-hero');
     const totalCapitalEl = document.getElementById('loans-total-capital');
     const totalMetaEl = document.getElementById('loans-total-meta');
@@ -57,16 +71,22 @@ function renderLoans() {
     const archiveList = document.getElementById('loans-archive-list');
     const archiveCount = document.getElementById('loans-archive-count');
 
-    if (totalHero) totalHero.classList.toggle('hidden', activeLoans.length < 2);
-    if (totalCapitalEl && activeLoans.length >= 2) totalCapitalEl.textContent = formatPlnAmount(totalLeft);
+    if (totalHero) totalHero.classList.toggle('hidden', !activeLoans.length);
+    if (totalCapitalEl && activeLoans.length) totalCapitalEl.textContent = formatPlnAmount(summaryTotal);
     if (totalMetaEl) {
-        if (activeLoans.length >= 2) {
+        if (!activeLoans.length) {
+            totalMetaEl.classList.add('hidden');
+        } else if (summaryCount < activeLoans.length) {
+            totalMetaEl.textContent = `${summaryCount} z ${activeLoans.length} kredytów w sumie`;
+            totalMetaEl.classList.remove('hidden');
+        } else if (activeLoans.length > 1) {
             totalMetaEl.textContent = `${activeLoans.length} aktywne kredyty`;
             totalMetaEl.classList.remove('hidden');
         } else {
             totalMetaEl.classList.add('hidden');
         }
     }
+    renderLoansSummaryChips(activeLoans);
 
     if (listEl) {
         if (!activeLoans.length) {
@@ -93,8 +113,61 @@ function renderLoans() {
         archiveToggle.classList.toggle('loans-archive-toggle--open', loansArchiveExpanded);
     }
 
-    populateLoanOverpaymentSelect(activeLoans);
+    if (loanPaymentsFilter !== 'all' && !activeLoans.some((loan) => loan.id === loanPaymentsFilter)) {
+        loanPaymentsFilter = 'all';
+    }
+    renderLoanPaymentsFilter(activeLoans);
     renderLoanRecentPayments();
+}
+
+function renderLoansSummaryChips(activeLoans) {
+    const el = document.getElementById('loans-summary-chips');
+    const label = document.getElementById('loans-summary-label');
+    if (!el) return;
+    if (activeLoans.length < 2) {
+        el.innerHTML = '';
+        el.classList.add('hidden');
+        if (label) label.classList.add('hidden');
+        return;
+    }
+    el.classList.remove('hidden');
+    if (label) label.classList.remove('hidden');
+    el.innerHTML = activeLoans.map((loan) => {
+        const included = loan.includeInSummary !== false;
+        return `<button type="button" class="toggle-btn loans-chip${included ? ' active' : ''}" onclick="toggleLoanSummaryInclude('${escapeHtml(loan.id)}')" aria-pressed="${included ? 'true' : 'false'}">${escapeHtml(getLoanDisplayName(loan))}</button>`;
+    }).join('');
+}
+
+function toggleLoanSummaryInclude(loanId) {
+    const loan = getLoanById(loanId);
+    if (!loan) return;
+    updateLoanInState({ ...loan, includeInSummary: loan.includeInSummary === false });
+    saveState();
+    renderLoans();
+}
+
+function setLoanPaymentsFilter(filter) {
+    loanPaymentsFilter = filter;
+    renderLoanPaymentsFilter(getActiveLoans());
+    renderLoanRecentPayments();
+}
+
+function renderLoanPaymentsFilter(activeLoans) {
+    const nav = document.getElementById('loans-payments-filter');
+    if (!nav) return;
+    if (!activeLoans.length) {
+        nav.innerHTML = '';
+        nav.classList.add('hidden');
+        return;
+    }
+    nav.classList.remove('hidden');
+    const chips = [
+        `<button type="button" class="toggle-btn loans-chip${loanPaymentsFilter === 'all' ? ' active' : ''}" onclick="setLoanPaymentsFilter('all')">Wszystkie</button>`,
+        ...activeLoans.map((loan) =>
+            `<button type="button" class="toggle-btn loans-chip${loanPaymentsFilter === loan.id ? ' active' : ''}" onclick="setLoanPaymentsFilter('${escapeHtml(loan.id)}')">${escapeHtml(getLoanDisplayName(loan))}</button>`
+        )
+    ];
+    nav.innerHTML = chips.join('');
 }
 
 function renderLoanCardHtml(loan) {
@@ -120,7 +193,6 @@ function renderLoanCardHtml(loan) {
             <div class="progress-bar-fill" style="width:${Math.min(100, paidPct)}%;background:var(--success)"></div>
         </div>
         <p class="loan-hero-meta">Spłacono ${paidPct.toFixed(1)}% · ${formatPlnAmount(paidAmount)} · ${escapeHtml(rateLine)}</p>
-        <p class="loan-tap-hint">Kliknij po szczegóły i edycję</p>
     </div>`;
 }
 
@@ -138,8 +210,9 @@ function renderArchivedLoanCardHtml(loan) {
     </div>`;
 }
 
-function populateLoanOverpaymentSelect(loans = getActiveLoans()) {
-    const select = document.getElementById('loan-overpayment-select');
+function populateAddLoanPaymentForm(loans = getActiveLoans()) {
+    const select = document.getElementById('add-loan-payment-select');
+    const dateInput = document.getElementById('add-loan-payment-date');
     if (!select) return;
 
     if (!loans.length) {
@@ -155,6 +228,103 @@ function populateLoanOverpaymentSelect(loans = getActiveLoans()) {
     select.innerHTML = loans.map((loan) =>
         `<option value="${escapeHtml(loan.id)}"${loan.id === current ? ' selected' : ''}>${escapeHtml(getLoanDisplayName(loan))}</option>`
     ).join('');
+
+    if (dateInput && !dateInput.value) {
+        dateInput.value = new Date().toISOString().split('T')[0];
+    }
+}
+
+function registerLoanPayment(loanId, amount, date, note, options = {}) {
+    const { advanceDueDate = false } = options;
+    const loan = getLoanById(loanId);
+    if (!loan || !isLoanActive(loan)) return null;
+    if (!amount || amount <= 0) return null;
+
+    const updates = {
+        ...loan,
+        currentCapitalLeft: Math.max(0, loan.currentCapitalLeft - amount)
+    };
+    if (advanceDueDate && loan.nextInstallmentDue) {
+        updates.nextInstallmentDue = advanceLoanDueDate(loan.nextInstallmentDue);
+    }
+
+    updateLoanInState(updates);
+    const updated = getLoanById(loan.id);
+
+    appState.transactions.unshift({
+        amount,
+        type: 'expense',
+        mainCategory: 'Długi',
+        subCategory: loan.subCategory || 'Spłata',
+        date,
+        note: note || 'Spłata kapitału'
+    });
+    appState.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+    saveState();
+    return updated;
+}
+
+function saveLoanPaymentFromAdd() {
+    const loanId = document.getElementById('add-loan-payment-select')?.value;
+    const loan = loanId ? getLoanById(loanId) : null;
+    if (!loan || !isLoanActive(loan)) {
+        alert('Wybierz aktywny kredyt do spłaty.');
+        return;
+    }
+
+    const amount = parseFloat(document.getElementById('add-loan-payment-amount')?.value);
+    const date = document.getElementById('add-loan-payment-date')?.value || new Date().toISOString().split('T')[0];
+    const note = document.getElementById('add-loan-payment-note')?.value.trim() || 'Spłata kapitału';
+
+    if (!amount || amount <= 0) {
+        alert('Podaj kwotę spłaty.');
+        return;
+    }
+    if (amount > loan.currentCapitalLeft) {
+        if (!confirm(`Kwota (${formatPlnAmount(amount)}) jest większa niż kapitał (${formatPlnAmount(loan.currentCapitalLeft)}). Kontynuować?`)) return;
+    }
+
+    const updated = registerLoanPayment(loanId, amount, date, note);
+    if (!updated) return;
+
+    hapticFeedback();
+    if (updated.archived) {
+        showSettingsToast('Kredyt spłacony — przeniesiony do archiwum');
+        loansArchiveExpanded = true;
+    } else {
+        showSettingsToast('Spłata zarejestrowana');
+    }
+
+    document.getElementById('add-loan-payment-amount').value = '';
+    document.getElementById('add-loan-payment-note').value = '';
+    switchView('dashboard', 'Pulpit', document.querySelectorAll('.nav-item')[0]);
+    refreshCurrentView();
+}
+
+function payLoanInstallment(loanId) {
+    const loan = getLoanById(loanId);
+    if (!loan || !isLoanActive(loan) || !loan.nextInstallmentAmount) return;
+
+    const amount = loan.nextInstallmentAmount;
+    const date = new Date().toISOString().split('T')[0];
+    const note = `Rata ${getLoanDisplayName(loan)}`;
+
+    if (amount > loan.currentCapitalLeft) {
+        if (!confirm(`Rata (${formatPlnAmount(amount)}) przekracza kapitał (${formatPlnAmount(loan.currentCapitalLeft)}). Kontynuować?`)) return;
+    }
+
+    const updated = registerLoanPayment(loanId, amount, date, note, { advanceDueDate: true });
+    if (!updated) return;
+
+    hapticFeedback();
+    if (updated.archived) {
+        showSettingsToast('Kredyt spłacony — przeniesiony do archiwum');
+        loansArchiveExpanded = true;
+    } else {
+        showSettingsToast('Rata zapisana');
+    }
+    renderDashboard();
+    refreshCurrentView();
 }
 
 function populateLoanForm(loan) {
@@ -236,60 +406,29 @@ function saveLoanDetails() {
     setLoanDetailsMode('view');
 }
 
-function addLoanOverpayment() {
-    const loanId = document.getElementById('loan-overpayment-select')?.value;
-    const loan = loanId ? getLoanById(loanId) : getActiveLoan();
-    if (!loan || !isLoanActive(loan)) {
-        alert('Wybierz aktywny kredyt do nadpłaty.');
-        return;
-    }
-
-    const amount = parseFloat(document.getElementById('loan-overpayment-amount')?.value);
-    const date = document.getElementById('loan-overpayment-date')?.value || new Date().toISOString().split('T')[0];
-    const note = document.getElementById('loan-overpayment-note')?.value.trim() || 'Nadpłata kapitału';
-
-    if (!amount || amount <= 0) return;
-    if (amount > loan.currentCapitalLeft) {
-        if (!confirm(`Kwota (${formatPlnAmount(amount)}) jest większa niż kapitał (${formatPlnAmount(loan.currentCapitalLeft)}). Kontynuować?`)) return;
-    }
-
-    updateLoanInState({
-        ...loan,
-        currentCapitalLeft: Math.max(0, loan.currentCapitalLeft - amount)
-    });
-    const updated = getLoanById(loan.id);
-    appState.transactions.unshift({
-        amount,
-        type: 'expense',
-        mainCategory: 'Długi',
-        subCategory: loan.subCategory || 'Spłata',
-        date,
-        note
-    });
-    appState.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-    saveState();
-    hapticFeedback();
-    if (updated?.archived) {
-        showSettingsToast('Kredyt spłacony — przeniesiony do archiwum');
-        loansArchiveExpanded = true;
-    }
-    document.getElementById('loan-overpayment-amount').value = '';
-    document.getElementById('loan-overpayment-note').value = '';
-    renderLoans();
-    refreshCurrentView();
-}
-
 function renderLoanRecentPayments() {
     const list = document.getElementById('loan-payments-list');
     if (!list) return;
 
     const loans = getLoans().filter(isLoanConfigured);
-    const payments = appState.transactions
-        .filter((t) => loans.some((loan) => transactionMatchesLoan(t, loan)))
-        .sort((a, b) => b.date.localeCompare(a.date))
-        .slice(0, 12);
+    const filterLoan = loanPaymentsFilter !== 'all' ? getLoanById(loanPaymentsFilter) : null;
+    const allPayments = appState.transactions
+        .filter((t) => {
+            if (!loans.some((loan) => transactionMatchesLoan(t, loan))) return false;
+            if (!filterLoan) return true;
+            return transactionMatchesLoan(t, filterLoan);
+        })
+        .sort((a, b) => b.date.localeCompare(a.date));
 
-    if (!payments.length) {
+    const signature = `${loanPaymentsFilter}|${allPayments.length}|${allPayments[0]?.date ?? ''}`;
+    if (signature !== loanPaymentsListSignature) {
+        loanPaymentsListSignature = signature;
+        loanPaymentsVisibleCount = LIST_PAGE_SIZE;
+    }
+
+    const payments = allPayments.slice(0, loanPaymentsVisibleCount);
+
+    if (!allPayments.length) {
         const debtSubs = [...new Set(
             appState.transactions
                 .filter((t) => t.type === 'expense' && t.mainCategory === 'Długi' && t.subCategory)
@@ -299,6 +438,8 @@ function renderLoanRecentPayments() {
             ? `<p class="loan-payments-hint">W transakcjach (Długi): ${debtSubs.map((s) => escapeHtml(s)).join(', ')}</p>`
             : '';
         list.innerHTML = `<div class="empty-state loan-empty-payments"><p>Brak wpłat powiązanych z kredytami</p>${hint}</div>`;
+        const moreBtn = document.getElementById('loan-payments-show-more');
+        if (moreBtn) moreBtn.classList.add('hidden');
         return;
     }
 
@@ -314,13 +455,9 @@ function renderLoanRecentPayments() {
             <span class="loan-payment-amount">${formatPlnAmount(t.amount)}</span>
         </div>`;
     }).join('');
-}
 
-function initLoanOverpaymentDate() {
-    const dateInput = document.getElementById('loan-overpayment-date');
-    if (dateInput && !dateInput.value) {
-        dateInput.value = new Date().toISOString().split('T')[0];
-    }
+    const moreBtn = getOrCreateShowMoreButton('loan-payments-show-more', showMoreLoanPayments);
+    updateShowMoreButton(moreBtn, allPayments.length, payments.length, list.parentElement, list);
 }
 
 function refreshLoanDetailsPanel() {

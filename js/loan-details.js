@@ -46,45 +46,47 @@ function normalizeLoanDetails(raw) {
 
 const PEKAO_CONTRACT_NUMBER = '00621649687/2/KH/25082025';
 
-function isLegacyTestLoan(loan) {
+function isGhostMortgageLoan(loan) {
     const l = normalizeLoan(loan);
+    if (!isMortgageLoan(l)) return false;
     if (l.details?.contractNumber === PEKAO_CONTRACT_NUMBER) return false;
-    const legacyCapital = Math.abs(l.currentCapitalLeft - 412500) < 0.01;
-    const legacyPackage = Math.abs(l.totalAmount - 500000) < 0.01 && Math.abs(l.interestRate - 6.75) < 0.01;
-    return legacyCapital || legacyPackage;
+    if (l.id === 'loan-pekao' && l.currentCapitalLeft >= 600000) return false;
+    return !l.details?.contractNumber;
+}
+
+function purgeGhostMortgageLoans() {
+    migrateLoansArray();
+    const before = appState.loans.length;
+    appState.loans = appState.loans.filter((l) => !isGhostMortgageLoan(l));
+    return appState.loans.length !== before;
 }
 
 function migrateLoanToPekaoIfNeeded() {
     migrateLoansArray();
     const snapshot = getPekaoLoanSnapshot();
-    const pekaoIdx = appState.loans.findIndex((l) => l.details?.contractNumber === PEKAO_CONTRACT_NUMBER);
+    const pekaoIdx = appState.loans.findIndex((l) =>
+        l.id === 'loan-pekao' || l.details?.contractNumber === PEKAO_CONTRACT_NUMBER
+    );
 
-    if (pekaoIdx >= 0) {
-        const loan = normalizeLoan(appState.loans[pekaoIdx]);
-        if (loan.subCategory !== snapshot.subCategory || loan.name !== snapshot.name) {
-            appState.loans[pekaoIdx] = normalizeLoan({ ...loan, name: snapshot.name, subCategory: snapshot.subCategory });
-            return true;
-        }
-        return false;
+    if (pekaoIdx < 0) return false;
+
+    const loan = normalizeLoan(appState.loans[pekaoIdx]);
+    let changed = false;
+    if (loan.id !== 'loan-pekao') {
+        appState.loans[pekaoIdx] = normalizeLoan({ ...loan, id: 'loan-pekao' });
+        changed = true;
     }
-
-    const legacyIdx = appState.loans.findIndex((l) => isLegacyTestLoan(l));
-    if (legacyIdx >= 0) {
-        appState.loans[legacyIdx] = normalizeLoan({ ...snapshot, id: appState.loans[legacyIdx].id || 'loan-pekao' });
-        return true;
+    const current = normalizeLoan(appState.loans[pekaoIdx]);
+    if (current.subCategory !== snapshot.subCategory || current.name !== snapshot.name) {
+        appState.loans[pekaoIdx] = normalizeLoan({
+            ...current,
+            id: 'loan-pekao',
+            name: snapshot.name,
+            subCategory: snapshot.subCategory
+        });
+        changed = true;
     }
-
-    if (!appState.loans.length || appState.loans.every((l) => !isLoanConfigured(l))) {
-        appState.loans = [normalizeLoan({ ...snapshot, id: 'loan-pekao' })];
-        return true;
-    }
-
-    if (!appState.loans.some((l) => isMortgageLoan(l))) {
-        appState.loans.unshift(normalizeLoan({ ...snapshot, id: 'loan-pekao' }));
-        return true;
-    }
-
-    return false;
+    return changed;
 }
 
 const ALIOR_RTV_LOAN_ID = 'loan-alior-rtv';
@@ -284,17 +286,21 @@ function ensureMissingSeedLoans() {
     let changed = false;
     snapshots.forEach((getSnapshot) => {
         const snapshot = getSnapshot();
-        if (!appState.loans.some((l) => l.id === snapshot.id)) {
-            appState.loans.push(normalizeLoan(snapshot));
-            changed = true;
+        if (snapshot.id === 'loan-pekao') {
+            if (appState.loans.some((l) => l.id === snapshot.id || isMortgageLoan(l))) return;
+        } else if (appState.loans.some((l) => l.id === snapshot.id)) {
+            return;
         }
+        appState.loans.push(normalizeLoan(snapshot));
+        changed = true;
     });
     return changed;
 }
 
 function runLoanMigrations() {
     migrateLoansArray();
-    return migrateLoanToPekaoIfNeeded()
+    return purgeGhostMortgageLoans()
+        || migrateLoanToPekaoIfNeeded()
         || ensureMissingSeedLoans()
         || syncAliorRtvLoanFields()
         || seedAliorRtvPayments()

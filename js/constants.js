@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'app_finance_state';
 const THEME_KEY = 'theme_preference';
 const LOCAL_BACKUP_KEY = 'finanse_local_backup';
+const LIST_PAGE_SIZE = 6;
 const MODULE_SPLIT_LINE_THRESHOLD = 900;
 const MODULE_SPLIT_BANNER_KEY = 'module_split_banner_dismissed_at';
 const DEFAULT_CATEGORY_TREE = {

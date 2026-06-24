@@ -1,6 +1,31 @@
 function hapticFeedback() {
     if (navigator.vibrate) navigator.vibrate(12);
 }
+
+function getOrCreateShowMoreButton(id, onClick) {
+    let btn = document.getElementById(id);
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.id = id;
+        btn.type = 'button';
+        btn.className = 'list-show-more-btn';
+        btn.textContent = 'Pokaż więcej';
+        btn.addEventListener('click', onClick);
+    }
+    return btn;
+}
+
+function updateShowMoreButton(btn, totalCount, visibleCount, parent, insertAfter) {
+    if (!btn || !parent) return;
+    const hasMore = totalCount > visibleCount;
+    btn.classList.toggle('hidden', !hasMore);
+    if (!hasMore) return;
+    if (insertAfter && btn.previousElementSibling !== insertAfter) {
+        insertAfter.insertAdjacentElement('afterend', btn);
+    } else if (!insertAfter && btn.parentElement !== parent) {
+        parent.appendChild(btn);
+    }
+}
 function initOnboarding() {
     if (localStorage.getItem('onboarding_done')) return;
     const overlay = document.getElementById('onboarding');

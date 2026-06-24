@@ -915,7 +915,6 @@ function renderReportsLoanSummary(ctx) {
         return `<div class="analysis-loan-click loan-clickable" role="button" tabindex="0"
             onclick="openLoanDetails('${loanId}')" onkeydown="if (event.key === 'Enter') openLoanDetails('${loanId}')">
             <div class="analysis-subsection-label">${loanName}</div>
-            <p class="loan-report-tap-hint">Kliknij po szczegóły</p>
             <div class="loan-report-grid">
                 <div><span class="label">Spłacono</span><strong>${paidPct}%</strong></div>
                 <div><span class="label">Kapitał</span><strong>${formatPlnAmount(loan.currentCapitalLeft || 0)}</strong></div>

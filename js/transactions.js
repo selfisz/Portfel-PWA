@@ -1,4 +1,14 @@
+let activeViewId = 'dashboard';
+
 function switchView(viewId, title, element) {
+    if (activeViewId === 'dashboard' && viewId !== 'dashboard') {
+        resetDashboardTxListPagination();
+    }
+    if (activeViewId === 'loans' && viewId !== 'loans') {
+        resetLoanPaymentsListPagination();
+    }
+    activeViewId = viewId;
+
     document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById(`view-${viewId}`).classList.add('active');
@@ -8,28 +18,61 @@ function switchView(viewId, title, element) {
     if (viewId === 'dashboard') renderDashboard();
     if (viewId === 'reports') renderReports();
     if (viewId === 'investments') renderInvestments();
-    if (viewId === 'loans') {
-        renderLoans();
-        initLoanOverpaymentDate();
-    }
+    if (viewId === 'loans') renderLoans();
 
     if (viewId === 'add' && editingTxIndex === null) {
-        document.getElementById('form-header').innerText = 'Nowa Transakcja';
+        document.getElementById('form-header').innerText = 'Nowa transakcja';
         document.getElementById('btn-cancel-edit').style.display = 'none';
         document.getElementById('recurring-wrapper').style.display = 'flex';
         document.getElementById('tx-amount').value = '';
         document.getElementById('tx-note').value = '';
         document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
         document.getElementById('tx-recurring').checked = false;
-        setTransactionType('expense');
+        document.getElementById('btn-loan-payment')?.classList.remove('hidden');
+        setFormMode('expense');
         focusAmountField();
     }
 }
 
+function setFormMode(mode) {
+    if (editingTxIndex !== null && mode === 'loan') return;
+
+    const isLoan = mode === 'loan';
+    formState.formMode = mode;
+
+    document.getElementById('btn-expense')?.classList.toggle('active', mode === 'expense');
+    document.getElementById('btn-income')?.classList.toggle('active', mode === 'income');
+    document.getElementById('btn-loan-payment')?.classList.toggle('active', mode === 'loan');
+    document.getElementById('add-form-standard')?.classList.toggle('hidden', isLoan);
+    document.getElementById('add-form-loan')?.classList.toggle('hidden', !isLoan);
+    document.getElementById('add-sticky-standard')?.classList.toggle('hidden', isLoan);
+    document.getElementById('add-sticky-loan')?.classList.toggle('hidden', !isLoan);
+
+    const recurringWrapper = document.getElementById('recurring-wrapper');
+    if (recurringWrapper) {
+        recurringWrapper.style.display = isLoan || editingTxIndex !== null ? 'none' : 'flex';
+    }
+
+    if (mode === 'expense' || mode === 'income') {
+        setTransactionType(mode, true);
+        document.getElementById('form-header').innerText = editingTxIndex !== null
+            ? 'Edytuj transakcję'
+            : 'Nowa transakcja';
+        return;
+    }
+
+    populateAddLoanPaymentForm();
+    document.getElementById('form-header').innerText = 'Spłata kredytu';
+}
+
 function setTransactionType(type, keepSelection = false) {
+    formState.formMode = type;
     formState.currentType = type;
     document.getElementById('btn-expense').classList.toggle('active', type === 'expense');
     document.getElementById('btn-income').classList.toggle('active', type === 'income');
+    document.getElementById('btn-loan-payment')?.classList.remove('active');
+    document.getElementById('add-form-standard')?.classList.remove('hidden');
+    document.getElementById('add-form-loan')?.classList.add('hidden');
     if (!keepSelection) {
         formState.selectedMainCategory = '';
         formState.selectedSubCategory = '';
@@ -115,15 +158,16 @@ function saveTransaction() {
 function editTransaction(index) {
     const tx = appState.transactions[index];
     editingTxIndex = index;
-    document.getElementById('form-header').innerText = 'Edytuj Transakcję';
+    document.getElementById('form-header').innerText = 'Edytuj transakcję';
     document.getElementById('btn-cancel-edit').style.display = 'block';
     document.getElementById('recurring-wrapper').style.display = 'none';
+    document.getElementById('btn-loan-payment')?.classList.add('hidden');
     document.getElementById('tx-amount').value = tx.amount;
     document.getElementById('tx-date').value = tx.date;
     document.getElementById('tx-note').value = tx.note || '';
     formState.selectedMainCategory = tx.mainCategory;
     formState.selectedSubCategory = tx.subCategory;
-    setTransactionType(tx.type, true);
+    setFormMode(tx.type);
     switchView('add', 'Edytuj', document.querySelectorAll('.nav-item')[1]);
     focusAmountField();
 }
