@@ -6,7 +6,7 @@ const MODULE_SPLIT_BANNER_KEY = 'module_split_banner_dismissed_at';
 const DEFAULT_CATEGORY_TREE = {
     expense: {
         "Dom": ["Czynsz", "Meble", "Remont", "Formalności", "Smart home", "Konserwacja", "Inne"],
-        "Długi": ["Kredyt Pekao SA", "Karta kredytowa", "Spłata", "Raty", "Odroczenia płatności"],
+        "Długi": ["Kredyt hipoteczny", "Kredyt Pekao SA", "Meble", "Remont", "Karta kredytowa", "Spłata", "Raty", "Odroczenia płatności"],
         "Osobista": ["Randki", "Fryzjer", "Kosmetyki", "Zdrowie", "Sport", "Ubrania"],
         "Przyjemności": ["Wycieczki", "Gierki", "Zakupy", "Rozrywka", "Wyjścia"],
         "Zakupy": ["Zakupy", "Alko", "Zakupy na dowóz"],

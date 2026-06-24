@@ -1,5 +1,108 @@
 const EUR_PLN_RATE = 4.32;
 
+function getDefaultLoan() {
+    return {
+        id: '',
+        name: '',
+        subCategory: '',
+        totalAmount: 0,
+        currentCapitalLeft: 0,
+        interestRate: 0,
+        nextInstallmentAmount: 0,
+        nextInstallmentDue: '',
+        archived: false,
+        archivedAt: ''
+    };
+}
+
+function normalizeLoan(raw) {
+    const loan = { ...getDefaultLoan(), ...(raw && typeof raw === 'object' ? raw : {}) };
+    if (!loan.id) loan.id = `loan-${Date.now().toString(36)}`;
+    if (!loan.name && loan.subCategory) loan.name = loan.subCategory;
+    if (!loan.name && loan.lender) loan.name = `Kredyt ${loan.lender}`;
+    loan.totalAmount = Math.max(0, parseFloat(loan.totalAmount) || 0);
+    loan.currentCapitalLeft = Math.max(0, parseFloat(loan.currentCapitalLeft) || 0);
+    loan.interestRate = Math.max(0, parseFloat(loan.interestRate) || 0);
+    loan.nextInstallmentAmount = Math.max(0, parseFloat(loan.nextInstallmentAmount) || 0);
+    loan.nextInstallmentDue = loan.nextInstallmentDue || '';
+    loan.archived = !!loan.archived;
+    loan.archivedAt = loan.archivedAt || '';
+    if (loan.totalAmount > 0 && loan.currentCapitalLeft > loan.totalAmount) {
+        loan.currentCapitalLeft = loan.totalAmount;
+    }
+    const paidOff = loan.totalAmount > 0 && loan.currentCapitalLeft <= 0;
+    if (paidOff) {
+        loan.archived = true;
+        if (!loan.archivedAt) loan.archivedAt = new Date().toISOString().split('T')[0];
+        loan.nextInstallmentAmount = 0;
+        loan.nextInstallmentDue = '';
+    } else if (loan.currentCapitalLeft > 0) {
+        loan.archived = false;
+        loan.archivedAt = '';
+    }
+    loan.details = normalizeLoanDetails(loan.details);
+    delete loan.lender;
+    return loan;
+}
+
+function normalizeLoansArray(loans, legacyLoan) {
+    if (Array.isArray(loans) && loans.length) {
+        return loans.map(normalizeLoan);
+    }
+    if (legacyLoan && typeof legacyLoan === 'object') {
+        const one = normalizeLoan(legacyLoan);
+        if (!one.id) one.id = 'loan-primary';
+        return [one];
+    }
+    return [];
+}
+
+function getLoans() {
+    return (appState.loans || []).map(normalizeLoan);
+}
+
+function getLoanById(id) {
+    if (!id) return null;
+    return getLoans().find((loan) => loan.id === id) || null;
+}
+
+function updateLoanInState(loan) {
+    const normalized = normalizeLoan(loan);
+    if (!Array.isArray(appState.loans)) appState.loans = [];
+    const idx = appState.loans.findIndex((l) => l.id === normalized.id);
+    if (idx >= 0) appState.loans[idx] = normalized;
+    else appState.loans.push(normalized);
+    return normalized;
+}
+
+function isLoanConfigured(loan) {
+    if (!loan) return false;
+    return (loan.totalAmount || 0) > 0 || (loan.currentCapitalLeft || 0) > 0;
+}
+
+function isLoanArchived(loan) {
+    return isLoanConfigured(loan) && !!loan.archived;
+}
+
+function isLoanActive(loan) {
+    return isLoanConfigured(loan) && !loan.archived;
+}
+
+function getActiveLoans() {
+    return getLoans().filter(isLoanActive);
+}
+
+function getArchivedLoans() {
+    return getLoans().filter(isLoanArchived);
+}
+
+function getLoanDisplayName(loan) {
+    if (!loan) return 'Kredyt';
+    if (loan.name?.trim()) return loan.name.trim();
+    if (loan.subCategory?.trim()) return loan.subCategory.trim();
+    return 'Kredyt';
+}
+
 function convertToPln(amount, currency = 'PLN') {
     return currency === 'EUR' ? amount * EUR_PLN_RATE : amount;
 }
@@ -13,19 +116,66 @@ function getPortfolioValuePln() {
 }
 
 function getLoanCapitalLeft() {
-    return appState.loan?.currentCapitalLeft || 0;
+    return getActiveLoans().reduce((sum, loan) => sum + (loan.currentCapitalLeft || 0), 0);
 }
 
-function getLoanTotalAmount() {
-    return appState.loan?.totalAmount || 0;
+function getLoanTotalAmount(loan) {
+    return loan?.totalAmount || 0;
 }
 
-function getLoanPaidPercent() {
-    const total = getLoanTotalAmount();
+function getLoanPaidAmount(loan) {
+    return Math.max(0, getLoanTotalAmount(loan) - (loan?.currentCapitalLeft || 0));
+}
+
+function getLoanPaidPercent(loan) {
+    const total = getLoanTotalAmount(loan);
     if (!total) return 0;
-    return ((total - getLoanCapitalLeft()) / total) * 100;
+    return ((total - (loan.currentCapitalLeft || 0)) / total) * 100;
 }
 
 function calcNetWorthPln() {
     return getPortfolioValuePln() - getLoanCapitalLeft();
+}
+
+function getLoanDebtSubcategories() {
+    return categoryTree?.expense?.Długi || [];
+}
+
+const MORTGAGE_DEBT_SUBCATEGORIES = [
+    'Kredyt hipoteczny',
+    'Kredyt Pekao SA',
+    'Kredyt na mieszkanie'
+];
+
+function isMortgageLoan(loan) {
+    const primary = loan?.subCategory?.trim() || '';
+    const name = loan?.name?.trim() || '';
+    return MORTGAGE_DEBT_SUBCATEGORIES.includes(primary)
+        || /hipoteczn/i.test(primary)
+        || /hipoteczn/i.test(name);
+}
+
+function getLoanPaymentSubcategories(loan) {
+    const primary = loan?.subCategory?.trim();
+    if (!primary) return null;
+
+    if (isMortgageLoan(loan)) {
+        const subs = new Set(MORTGAGE_DEBT_SUBCATEGORIES);
+        appState.transactions.forEach((t) => {
+            if (t.type !== 'expense' || t.mainCategory !== 'Długi' || !t.subCategory) return;
+            if (MORTGAGE_DEBT_SUBCATEGORIES.includes(t.subCategory)
+                || /hipotec|mieszkan|pekao/i.test(t.subCategory)) {
+                subs.add(t.subCategory);
+            }
+        });
+        return [...subs];
+    }
+    return [primary];
+}
+
+function transactionMatchesLoan(t, loan) {
+    if (t.type !== 'expense' || t.mainCategory !== 'Długi') return false;
+    const subs = getLoanPaymentSubcategories(loan);
+    if (!subs) return true;
+    return subs.includes(t.subCategory);
 }

@@ -8,7 +8,10 @@ function switchView(viewId, title, element) {
     if (viewId === 'dashboard') renderDashboard();
     if (viewId === 'reports') renderReports();
     if (viewId === 'investments') renderInvestments();
-    if (viewId === 'loans') renderLoans();
+    if (viewId === 'loans') {
+        renderLoans();
+        initLoanOverpaymentDate();
+    }
 
     if (viewId === 'add' && editingTxIndex === null) {
         document.getElementById('form-header').innerText = 'Nowa Transakcja';

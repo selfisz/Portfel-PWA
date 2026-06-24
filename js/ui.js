@@ -173,6 +173,7 @@ const MODULE_JS_FILES = [
     'js/format.js',
     'js/theme.js',
     'js/categories.js',
+    'js/loan-details.js',
     'js/portfolio.js',
     'js/ui.js',
     'js/transactions.js',

@@ -43,7 +43,7 @@ CATEGORY_OVERRIDES = {
     ("", "Ubrania"): ("Osobista", "Ubrania"),
     ("", "Transport"): ("Transport", "[Bez podkategorii]"),
     ("", "Prezenty"): ("Prezenty", "[Bez podkategorii]"),
-    ("Długi", "Kredyt na mieszkanie"): ("Długi", "Kredyt Pekao SA"),
+    ("Długi", "Kredyt na mieszkanie"): ("Długi", "Kredyt hipoteczny"),
     ("Subskrypcję", "Netflix"): ("Subskrypcje", "Seriale"),
     ("", "Oszczędzam"): ("Różne", "Różne"),
     ("", "Ubezpieczenie"): ("Rachunki/opłaty", "Ubezpieczenia"),

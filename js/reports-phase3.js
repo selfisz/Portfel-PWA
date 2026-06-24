@@ -888,7 +888,7 @@ function renderReportsNetWorth() {
     el.innerHTML = `
         <div class="networth-grid">
             <div><span class="label">Aktywa</span><strong class="income">${formatPlnAmount(assets)}</strong></div>
-            <div><span class="label">Kredyt</span><strong class="expense">−${formatPlnAmount(loanLeft)}</strong></div>
+            <div><span class="label">Kredyty</span><strong class="expense">−${formatPlnAmount(loanLeft)}</strong></div>
             <div class="networth-total"><span class="label">Wartość netto</span><strong style="color:${net >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatPlnAmount(net)}</strong></div>
         </div>`;
 }
@@ -897,24 +897,34 @@ function renderReportsLoanSummary(ctx) {
     const el = document.getElementById('reports-loan-summary');
     if (!el) return;
 
-    const loan = appState.loan || {};
-    const paidPct = Math.round(getLoanPaidPercent());
+    const loans = getActiveLoans();
+    if (!loans.length) {
+        el.innerHTML = '<p class="reports-hint">Brak aktywnych kredytów.</p>';
+        return;
+    }
 
-    const debtPayments = ctx.periodTx
-        .filter((t) => t.type === 'expense' && (t.mainCategory === 'Długi' || t.note?.toLowerCase().includes('nadpłata')))
-        .reduce((s, t) => s + t.amount, 0);
+    el.innerHTML = loans.map((loan) => {
+        const paidPct = Math.round(getLoanPaidPercent(loan));
+        const loanName = escapeHtml(getLoanDisplayName(loan));
+        const loanId = escapeHtml(loan.id);
 
-    const savings = summarizePeriod(ctx.periodTx).balance;
+        const debtPayments = ctx.periodTx
+            .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
+            .reduce((s, t) => s + t.amount, 0);
 
-    el.innerHTML = `
-        <div class="analysis-subsection-label">Kredyt hipoteczny</div>
-        <div class="loan-report-grid">
-            <div><span class="label">Spłacono</span><strong>${paidPct}%</strong></div>
-            <div><span class="label">Kapitał</span><strong>${formatPlnAmount(loan.currentCapitalLeft || 0)}</strong></div>
-            <div><span class="label">Raty/nadpłaty w okresie</span><strong class="expense">${formatPlnAmount(debtPayments)}</strong></div>
-            <div><span class="label">Bilans okresu</span><strong class="${savings >= 0 ? 'income' : 'expense'}">${formatPlnAmount(savings)}</strong></div>
-        </div>
-        <div class="progress-bar-bg" style="margin-top:12px"><div class="progress-bar-fill" style="width:${paidPct}%;background:var(--success)"></div></div>`;
+        return `<div class="analysis-loan-click loan-clickable" role="button" tabindex="0"
+            onclick="openLoanDetails('${loanId}')" onkeydown="if (event.key === 'Enter') openLoanDetails('${loanId}')">
+            <div class="analysis-subsection-label">${loanName}</div>
+            <p class="loan-report-tap-hint">Kliknij po szczegóły</p>
+            <div class="loan-report-grid">
+                <div><span class="label">Spłacono</span><strong>${paidPct}%</strong></div>
+                <div><span class="label">Kapitał</span><strong>${formatPlnAmount(loan.currentCapitalLeft || 0)}</strong></div>
+                <div><span class="label">Raty/nadpłaty w okresie</span><strong class="expense">${formatPlnAmount(debtPayments)}</strong></div>
+                <div><span class="label">Następna rata</span><strong>${loan.nextInstallmentAmount ? formatPlnAmount(loan.nextInstallmentAmount) : '—'}</strong></div>
+            </div>
+            <div class="progress-bar-bg" style="margin-top:12px"><div class="progress-bar-fill" style="width:${paidPct}%;background:var(--success)"></div></div>
+        </div>`;
+    }).join('');
 }
 
 function renderReportsYearReview(ctx) {

@@ -3,8 +3,8 @@ let categoryEditorType = 'expense';
 
 let appState = {
     transactions: [],
-    loan: { totalAmount: 500000.00, currentCapitalLeft: 412500.00, interestRate: 6.75 },
-    investments: [{ ticker: 'VWCE.DE', name: 'Vanguard FTSE All-World', quantity: 45, purchasePrice: 104.20, currentPriceManual: 118.50, currency: 'EUR' }],
+    loans: [],
+    investments: [],
     categoryBudgets: {}
 };
 
@@ -31,7 +31,7 @@ function getPersistedState(raw = appState) {
     const data = raw ?? appState ?? {};
     return {
         transactions: Array.isArray(data.transactions) ? data.transactions : [],
-        loan: data.loan || { totalAmount: 500000.00, currentCapitalLeft: 412500.00, interestRate: 6.75 },
+        loans: normalizeLoansArray(data.loans, data.loan),
         investments: Array.isArray(data.investments) ? data.investments : [],
         categoryTree: data.categoryTree && typeof data.categoryTree === 'object'
             ? data.categoryTree
@@ -40,6 +40,42 @@ function getPersistedState(raw = appState) {
             ? data.categoryBudgets
             : {}
     };
+}
+
+function migrateLoansArray() {
+    if (Array.isArray(appState.loans) && appState.loans.length) {
+        appState.loans = appState.loans.map(normalizeLoan);
+        delete appState.loan;
+        return false;
+    }
+    if (appState.loan && typeof appState.loan === 'object') {
+        appState.loans = normalizeLoansArray(null, appState.loan);
+        delete appState.loan;
+        return true;
+    }
+    appState.loans = [];
+    delete appState.loan;
+    return true;
+}
+
+function migrateLoanCategoryTree() {
+    const subs = categoryTree?.expense?.Długi;
+    if (!Array.isArray(subs)) return false;
+    let changed = false;
+    if (!subs.includes('Kredyt hipoteczny')) {
+        categoryTree.expense.Długi = ['Kredyt hipoteczny', ...categoryTree.expense.Długi];
+        changed = true;
+    }
+    if (!categoryTree.expense.Długi.includes('Meble')) {
+        categoryTree.expense.Długi = [...categoryTree.expense.Długi, 'Meble'];
+        changed = true;
+    }
+    if (!categoryTree.expense.Długi.includes('Remont')) {
+        categoryTree.expense.Długi = [...categoryTree.expense.Długi, 'Remont'];
+        changed = true;
+    }
+    if (changed) appState.categoryTree = categoryTree;
+    return changed;
 }
 
 function migrateCategoryData() {
@@ -71,15 +107,17 @@ function migrateCategoryData() {
 function normalizeAppState(raw) {
     const hadUiFields = !!(raw && ('currentType' in raw || 'selectedMainCategory' in raw || 'selectedSubCategory' in raw));
     appState = getPersistedState(raw);
+    migrateLoansArray();
     categoryTree = appState.categoryTree;
     return hadUiFields;
 }
 function initData() {
     if (localStorage.getItem(STORAGE_KEY)) {
         const hadUiFields = normalizeAppState(JSON.parse(localStorage.getItem(STORAGE_KEY)));
-        const hadMigration = migrateCategoryData();
+        const hadMigration = migrateCategoryData() || migrateLoanCategoryTree();
+        const hadLoanMigration = runLoanMigrations();
         if (hadUiFields) localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-        if (hadMigration) saveState();
+        if (hadMigration || hadLoanMigration) saveState();
         checkAndProcessRecurringTransactions();
         refreshCurrentView();
     }
@@ -88,9 +126,10 @@ function initData() {
         const statusEl = document.getElementById('sync-status');
         if (docSnap.exists) {
             const hadUiFields = normalizeAppState(docSnap.data());
-            const hadMigration = migrateCategoryData();
+            const hadMigration = migrateCategoryData() || migrateLoanCategoryTree();
+            const hadLoanMigration = runLoanMigrations();
             localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-            if (hadUiFields || hadMigration) saveState();
+            if (hadUiFields || hadMigration || hadLoanMigration) saveState();
             statusEl.className = 'online';
             refreshCurrentView();
         } else {

@@ -132,6 +132,61 @@
         </div>
     </div>
 
+    <div id="loan-details-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeLoanDetails()">
+        <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
+            <div class="settings-header loan-details-header">
+                <h2 id="loan-details-title">Szczegóły kredytu</h2>
+                <div class="loan-details-header-actions">
+                    <button id="btn-loan-details-edit" type="button" class="loan-details-header-btn" onclick="setLoanDetailsMode('edit')">Edytuj</button>
+                    <button id="btn-loan-details-view" type="button" class="loan-details-header-btn hidden" onclick="setLoanDetailsMode('view')">Podgląd</button>
+                    <button type="button" class="btn-icon" onclick="closeLoanDetails()" aria-label="Zamknij">
+                        <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div id="loan-details-content" class="loan-details-content"></div>
+            <div id="loan-details-edit" class="loan-details-edit hidden">
+                <p class="reports-hint">Podkategoria łączy kredyt z transakcjami w kategorii Długi. Brakuje na liście? Dodaj w Ustawienia → Kategorie.</p>
+                <div class="form-group">
+                    <label class="section-label" for="loan-name-input">Nazwa</label>
+                    <input type="text" id="loan-name-input" placeholder="np. Kredyt hipoteczny" maxlength="60">
+                </div>
+                <div class="form-group">
+                    <label class="section-label" for="loan-subcategory-select">Podkategoria</label>
+                    <select id="loan-subcategory-select"></select>
+                </div>
+                <div class="loan-form-row">
+                    <div class="form-group">
+                        <label class="section-label" for="loan-total-input">Kwota początkowa (PLN)</label>
+                        <input type="number" id="loan-total-input" min="0" step="0.01" placeholder="669913.99">
+                    </div>
+                    <div class="form-group">
+                        <label class="section-label" for="loan-capital-input">Pozostały kapitał (PLN)</label>
+                        <input type="number" id="loan-capital-input" min="0" step="0.01" placeholder="661159.25">
+                    </div>
+                </div>
+                <div class="loan-form-row">
+                    <div class="form-group">
+                        <label class="section-label" for="loan-rate-input">Oprocentowanie (%)</label>
+                        <input type="number" id="loan-rate-input" min="0" step="0.01" placeholder="6.19">
+                    </div>
+                    <div class="form-group">
+                        <label class="section-label" for="loan-installment-input">Bieżąca rata (PLN)</label>
+                        <input type="number" id="loan-installment-input" min="0" step="0.01" placeholder="4128.37">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="section-label" for="loan-installment-due-input">Termin najbliższej raty</label>
+                    <input type="date" id="loan-installment-due-input">
+                </div>
+                <div class="loan-details-edit-actions">
+                    <button type="button" class="btn-submit" onclick="saveLoanDetails()">Zapisz</button>
+                    <button type="button" class="btn-outline loan-details-btn" onclick="cancelLoanEdit()">Anuluj</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="calendar-day-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeCalendarDay()">
         <div class="calendar-day-panel">
             <div class="settings-header">
@@ -512,27 +567,56 @@
         </div>
 
         <div id="view-loans" class="app-view">
-            <div class="card">
-                <h2>Kredyt hipoteczny</h2>
-                <div class="item-row">
-                    <span style="color:var(--text-muted);">Kapitał pozostały</span>
-                    <span id="loan-left" style="font-weight: 700;">0,00 zł</span>
-                </div>
-                <div class="item-row">
-                    <span style="color:var(--text-muted);">Oprocentowanie</span>
-                    <span id="loan-rate" style="font-weight: 600;">0%</span>
-                </div>
-                <div class="progress-bar-bg" style="margin-top:14px;">
-                    <div id="loan-progress-fill" class="progress-bar-fill" style="background: var(--success)"></div>
-                </div>
+            <div id="loans-total-hero" class="card hero-card loan-hero-card hidden">
+                <div class="hero-label">Łącznie do spłaty</div>
+                <div id="loans-total-capital" class="hero-balance loan-capital-hero">—</div>
+                <p id="loans-total-meta" class="loan-hero-meta hidden"></p>
             </div>
+
+            <div id="loans-list" class="loans-list"></div>
+
             <div class="card">
                 <h2>Nadpłata</h2>
-                <div class="form-group" style="margin-bottom:12px;">
-                    <input type="number" id="loan-overpayment-amount" step="0.01" placeholder="Kwota (PLN)">
+                <p class="reports-hint">Zmniejsza kapitał i dodaje wydatek w transakcjach.</p>
+                <div class="form-group">
+                    <label class="section-label" for="loan-overpayment-select">Kredyt</label>
+                    <select id="loan-overpayment-select"></select>
                 </div>
-                <button class="btn-submit" onclick="addLoanOverpayment()">Zarejestruj nadpłatę</button>
+                <div class="form-group">
+                    <label class="section-label" for="loan-overpayment-amount">Kwota (PLN)</label>
+                    <input type="number" id="loan-overpayment-amount" step="0.01" placeholder="5000">
+                </div>
+                <div class="loan-form-row">
+                    <div class="form-group">
+                        <label class="section-label" for="loan-overpayment-date">Data</label>
+                        <input type="date" id="loan-overpayment-date">
+                    </div>
+                    <div class="form-group">
+                        <label class="section-label" for="loan-overpayment-note">Notatka</label>
+                        <input type="text" id="loan-overpayment-note" placeholder="Nadpłata kapitału" maxlength="80">
+                    </div>
+                </div>
+                <button type="button" class="btn-submit" onclick="addLoanOverpayment()">Zarejestruj nadpłatę</button>
             </div>
+
+            <div class="card">
+                <h2>Ostatnie wpłaty</h2>
+                <div id="loan-payments-list" class="loan-payments-list"></div>
+            </div>
+
+            <div id="loans-archive-section" class="card loans-archive-section">
+                <button type="button" class="loans-archive-toggle" onclick="toggleLoansArchive()" aria-expanded="false" aria-controls="loans-archive-list">
+                    <span class="loans-archive-toggle-text">
+                        <h2>Archiwum</h2>
+                        <span id="loans-archive-count" class="loans-archive-count">0</span>
+                    </span>
+                    <svg class="loans-archive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </button>
+                <p class="reports-hint loans-archive-hint">Spłacone kredyty — bez wpływu na sumę zadłużenia.</p>
+                <div id="loans-archive-list" class="loans-archive-list hidden"></div>
+            </div>
+
+            <button type="button" class="loans-fab" onclick="openNewLoan()" aria-label="Dodaj kredyt">+</button>
         </div>
     </div>
 
@@ -552,6 +636,7 @@
     <script src="js/format.js"></script>
     <script src="js/theme.js"></script>
     <script src="js/categories.js"></script>
+    <script src="js/loan-details.js"></script>
     <script src="js/portfolio.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/transactions.js"></script>
