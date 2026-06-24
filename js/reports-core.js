@@ -110,12 +110,6 @@ function getReportsChartOptions(theme, yAxis = true) {
     return options;
 }
 
-function formatCompactPln(amount) {
-    if (amount >= 10000) return `${(amount / 1000).toFixed(0)}k`;
-    if (amount >= 1000) return `${(amount / 1000).toFixed(1)}k`;
-    return `${Math.round(amount)}`;
-}
-
 function getExpenseHeatColor(amount, maxAmount) {
     if (!amount || amount <= 0) return 'transparent';
     const ratio = Math.min(amount / (maxAmount || 1), 1);
@@ -581,14 +575,6 @@ function renderReportsRecurring() {
     if (typeof renderDetectedRecurringList === 'function') {
         renderDetectedRecurringList();
     }
-}
-
-function escapeCsvField(value) {
-    const text = String(value ?? '');
-    if (text.includes(';') || text.includes('"') || text.includes('\n')) {
-        return `"${text.replace(/"/g, '""')}"`;
-    }
-    return text;
 }
 
 function exportReportsCsv() {

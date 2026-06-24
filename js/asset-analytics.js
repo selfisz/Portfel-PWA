@@ -1,5 +1,7 @@
 const CELE_ASSET_ID = 'asset-cash-mbank-cele';
 const IKZE_ANNUAL_LIMIT_PLN = 8000;
+const MAX_ASSET_SNAPSHOTS = 36;
+const MAX_ASSET_VALUE_HISTORY = 500;
 
 function normalizeAssetSnapshot(raw) {
     if (!raw || typeof raw !== 'object') return null;
@@ -178,7 +180,7 @@ function getActiveDeposits() {
 }
 
 function getSelectableTransferAssets() {
-    return getActiveAssets().filter((a) => !a.archived);
+    return getActiveAssets();
 }
 
 function populateTransactionAssetSelect() {
@@ -301,7 +303,6 @@ function buildNetWorthTrendData() {
 function buildAllocationTrendData() {
     const snapshots = getAssetSnapshots();
     if (!snapshots.length) return { monthLabels: [], datasets: [] };
-    const types = ['investment', 'cash', 'deposit', 'retirement'];
     return {
         monthLabels: snapshots.map((s) => {
             const [y, m] = s.monthKey.split('-').map(Number);
@@ -355,9 +356,10 @@ function estimateNetWorthPayoffMonths() {
 function getLiquidityAfterOverpayment(extraMonthly) {
     const liquid = getOperationalCashPln();
     const extra = parseFloat(extraMonthly) || 0;
-    const { start, end } = getPeriodBoundsFromCtx(getReportsPeriodContext());
+    const ctx = getReportsPeriodContext();
+    const { start, end } = getPeriodBoundsFromCtx(ctx);
     const days = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1);
-    const expense = getReportsPeriodContext().periodTx
+    const expense = ctx.periodTx
         .filter((t) => t.type === 'expense' && shouldTransactionAffectCash(t))
         .reduce((s, t) => s + t.amount, 0);
     const monthlyExpense = (expense / days) * 30.44;
@@ -376,9 +378,18 @@ function runAssetAnalyticsMigrations() {
         appState.assetValueHistory = [];
         changed = true;
     }
-    const beforeSnap = JSON.stringify(appState.assetSnapshots);
+    const beforeLen = appState.assetSnapshots.length;
     appState.assetSnapshots = getAssetSnapshots();
-    if (JSON.stringify(appState.assetSnapshots) !== beforeSnap) changed = true;
+    if (appState.assetSnapshots.length !== beforeLen) changed = true;
+
+    if (appState.assetSnapshots.length > MAX_ASSET_SNAPSHOTS) {
+        appState.assetSnapshots = appState.assetSnapshots.slice(-MAX_ASSET_SNAPSHOTS);
+        changed = true;
+    }
+    if (appState.assetValueHistory.length > MAX_ASSET_VALUE_HISTORY) {
+        appState.assetValueHistory = appState.assetValueHistory.slice(-MAX_ASSET_VALUE_HISTORY);
+        changed = true;
+    }
 
     const cele = getAssetById?.(CELE_ASSET_ID);
     if (cele && !cele.goalTarget) {

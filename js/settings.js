@@ -25,37 +25,6 @@ function showSettingsToast(message) {
     setTimeout(() => toast.classList.add('hidden'), 2800);
 }
 
-function setTheme(mode) {
-    localStorage.setItem(THEME_KEY, mode);
-    const html = document.documentElement;
-    if (mode === 'auto') {
-        html.removeAttribute('data-theme');
-    } else {
-        html.setAttribute('data-theme', mode);
-    }
-    document.querySelectorAll('.theme-option').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.theme === mode);
-    });
-    updateThemeColorMeta();
-    refreshCurrentView();
-}
-
-function updateThemeColorMeta() {
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (!meta) return;
-    const forced = document.documentElement.getAttribute('data-theme');
-    const isDark = forced === 'dark' || (!forced && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    meta.content = isDark ? '#0a0a0a' : '#e4eaf4';
-}
-
-function initTheme() {
-    const saved = localStorage.getItem(THEME_KEY) || 'auto';
-    setTheme(saved);
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        if ((localStorage.getItem(THEME_KEY) || 'auto') === 'auto') updateThemeColorMeta();
-    });
-}
-
 async function refreshBackupInfo() {
     const infoEl = document.getElementById('backup-cloud-info');
     try {

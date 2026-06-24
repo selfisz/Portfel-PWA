@@ -212,6 +212,9 @@ const MODULE_JS_FILES = [
     'js/loans.js',
     'js/settings.js',
     'js/bootstrap.js',
+    'js/reports-calendar.js',
+    'js/reports-debt.js',
+    'js/reports-assets.js',
     'js/reports-phase3.js'
 ];
 
