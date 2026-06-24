@@ -28,6 +28,8 @@ function switchView(viewId, title, element) {
         document.getElementById('tx-note').value = '';
         document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
         document.getElementById('tx-recurring').checked = false;
+        const linkedAsset = document.getElementById('tx-linked-asset');
+        if (linkedAsset) linkedAsset.checked = false;
         const ccCheckbox = document.getElementById('tx-credit-card');
         if (ccCheckbox) ccCheckbox.checked = false;
         const affectsCash = document.getElementById('tx-affects-cash');
@@ -82,6 +84,7 @@ function setFormMode(mode) {
             ? 'Edytuj transakcję'
             : 'Nowa transakcja';
         populateCreditCardSelectors();
+        populateTransactionAssetSelect();
         updateAddFormCashHints();
         return;
     }
@@ -132,6 +135,7 @@ function updateAddFormCashHints() {
 
     if (incomeHint) incomeHint.classList.toggle('hidden', !isIncome);
     if (affectsWrap) affectsWrap.classList.toggle('hidden', isIncome || !!paidWithCard);
+    updateTransactionAssetHints();
 }
 
 function renderMainCategoriesForm() {
@@ -143,6 +147,7 @@ function renderMainCategoriesForm() {
     });
     if (formState.selectedMainCategory) renderSubCategoriesForm(formState.selectedMainCategory);
     renderRecentCategories();
+    populateTransactionAssetSelect();
     updateAddFormCashHints();
 }
 
@@ -192,6 +197,11 @@ function saveTransaction() {
         affectsCashChecked
     );
 
+    const linkedAssetChecked = document.getElementById('tx-linked-asset')?.checked;
+    const linkedAssetId = linkedAssetChecked
+        ? (document.getElementById('tx-linked-asset-select')?.value || '')
+        : '';
+
     const txData = {
         amount,
         type: formState.currentType,
@@ -199,8 +209,13 @@ function saveTransaction() {
         subCategory: formState.selectedSubCategory,
         date,
         note,
-        affectsCash
+        affectsCash: linkedAssetId && formState.currentType === 'income' ? false : affectsCash
     };
+
+    if (linkedAssetId) txData.linkedAssetId = linkedAssetId;
+    if (linkedAssetChecked && !linkedAssetId) {
+        return alert('Wybierz aktywo lub odznacz powiązanie.');
+    }
 
     if (paidWithCard && formState.currentType === 'expense') {
         if (!creditCardId) return alert('Wybierz kartę kredytową.');
@@ -229,6 +244,16 @@ function saveTransaction() {
             appState.transactions.shift();
         }
         return alert('Anulowano — nie zmieniono salda gotówki.');
+    }
+    if (!syncAssetOnTransactionSave(txData, previousTx)) {
+        syncCashOnTransactionSave(previousTx || {}, txData);
+        syncCreditCardOnTransactionSave(previousTx || {}, txData);
+        if (editingTxIndex !== null && previousTx) {
+            appState.transactions[editingTxIndex] = previousTx;
+        } else {
+            appState.transactions.shift();
+        }
+        return alert('Anulowano — nie zmieniono aktywa.');
     }
     addRecentCategory(txData.type, txData.mainCategory, txData.subCategory);
     appState.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -267,6 +292,11 @@ function editTransaction(index) {
             affectsCash.checked = !tx.creditCardId && (tx.cashMovementId ? true : tx.affectsCash === true);
         }
     }
+    const linkedAsset = document.getElementById('tx-linked-asset');
+    const linkedSelect = document.getElementById('tx-linked-asset-select');
+    populateTransactionAssetSelect();
+    if (linkedAsset) linkedAsset.checked = !!tx.linkedAssetId;
+    if (linkedSelect && tx.linkedAssetId) linkedSelect.value = tx.linkedAssetId;
     updateAddFormCashHints();
     formState.selectedMainCategory = tx.mainCategory;
     formState.selectedSubCategory = tx.subCategory;
@@ -280,6 +310,7 @@ function deleteTransaction(index) {
         const tx = appState.transactions[index];
         syncCreditCardOnTransactionDelete(tx);
         syncCashOnTransactionDelete(tx);
+        syncAssetOnTransactionDelete(tx);
         appState.transactions.splice(index, 1);
         saveState();
         renderDashboard();

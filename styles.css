@@ -3138,6 +3138,42 @@ html[data-theme="light"] .grid-item.selected {
     margin-bottom: 4px;
 }
 
+.assets-snapshot-btn {
+    margin-bottom: 12px;
+}
+
+.assets-snapshot-row {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.assets-snapshot-row:last-child {
+    border-bottom: none;
+}
+
+.debt-scenario-liquidity {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.dashboard-wealth-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.dashboard-wealth-grid .label {
+    display: block;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+#tx-linked-asset-select-wrapper {
+    margin-bottom: 8px;
+}
+
 .reports-calendar-header {
     flex-wrap: wrap;
 }

@@ -120,7 +120,7 @@ function setAnalysisSection(section) {
 
     if (section === 'charts' || section === 'assets' || section === 'debts' || section === 'calendar') {
         requestAnimationFrame(() => {
-            [reportsChartInstance, reportsTrendChartInstance, reportsYoyChartInstance, reportsDowChartInstance, reportsDebtChartInstance, reportsDebtTrendChartInstance, reportsDebtSplitChartInstance, reportsDebtsTabChartInstance, reportsDebtsTabSplitInstance, reportsDebtPeakChartInstance, reportsAssetAllocationChartInstance, reportsAssetsTabAllocationInstance, reportsCashTrendChartInstance, reportsAssetsTabCashTrendInstance]
+            [reportsChartInstance, reportsTrendChartInstance, reportsYoyChartInstance, reportsDowChartInstance, reportsDebtChartInstance, reportsDebtTrendChartInstance, reportsDebtSplitChartInstance, reportsDebtsTabChartInstance, reportsDebtsTabSplitInstance, reportsDebtPeakChartInstance, reportsAssetAllocationChartInstance, reportsAssetsTabAllocationInstance, reportsCashTrendChartInstance, reportsAssetsTabCashTrendInstance, reportsNetWorthTrendChartInstance, reportsAllocationTrendChartInstance, reportsDiversificationChartInstance]
                 .forEach((chart) => chart?.resize());
         });
     }
@@ -912,6 +912,7 @@ function renderDebtCalendarSection() {
     renderDebtCalendarGrid();
     renderDebtPeakChart();
     renderDebtFreedomTimeline();
+    renderDepositsCalendarList();
 }
 
 function renderDebtCalendarGrid() {
@@ -1825,6 +1826,7 @@ function getAnalysisSummaryAssets() {
 }
 
 function getLiquidCashPln() {
+    if (typeof getOperationalCashPln === 'function') return getOperationalCashPln();
     return getAnalysisSummaryAssets()
         .filter((a) => a.type === 'cash')
         .reduce((sum, a) => sum + getAssetValuePln(a), 0);
@@ -2029,6 +2031,8 @@ function renderReportsNetWorth() {
     const periodDays = getPeriodDayCount(ctx);
     const avgMonthlyExpense = (expense / periodDays) * 30.44;
     const runwayMonths = avgMonthlyExpense > 0 ? liquidCash / avgMonthlyExpense : null;
+    const monthChange = typeof getSnapshotMonthChange === 'function' ? getSnapshotMonthChange() : null;
+    const changeEl = document.getElementById('reports-net-worth-change');
 
     el.innerHTML = `
         <div class="networth-grid">
@@ -2043,7 +2047,17 @@ function renderReportsNetWorth() {
             <div><span class="label">Rezerwa (mies.)</span><strong>${runwayMonths !== null ? runwayMonths.toFixed(1) : '—'}</strong></div>
             <div class="networth-total"><span class="label">Wartość netto</span><strong style="color:${net >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatPlnAmount(net)}</strong></div>
         </div>
-        <p class="reports-hint reports-networth-hint">Rezerwa = gotówka ÷ średnie miesięczne wydatki w wybranym okresie.</p>`;
+        <p class="reports-hint reports-networth-hint">Rezerwa = gotówka operacyjna ÷ średnie miesięczne wydatki w wybranym okresie.</p>`;
+
+    if (changeEl) {
+        if (monthChange) {
+            const sign = monthChange.netWorth >= 0 ? '+' : '';
+            changeEl.textContent = `Zmiana net worth vs poprzedni miesiąc: ${sign}${formatPlnAmount(monthChange.netWorth)}`;
+            changeEl.classList.remove('hidden');
+        } else {
+            changeEl.classList.add('hidden');
+        }
+    }
 }
 
 function renderReportsAssetsHero() {
@@ -2249,6 +2263,9 @@ function renderReportsAssetsCashFlow(ctx) {
     const txBalance = income - expenseFromCash;
     const cashDelta = getCashMovementsInRange(start, end, PRIMARY_CASH_ASSET_ID)
         .reduce((s, m) => s + m.delta, 0);
+    const celeDelta = typeof CELE_ASSET_ID !== 'undefined'
+        ? getCashMovementsInRange(start, end, CELE_ASSET_ID).reduce((s, m) => s + m.delta, 0)
+        : 0;
     const diff = cashDelta - txBalance;
     const diffHint = Math.abs(diff) < 1
         ? 'Saldo gotówki zgadza się z transakcjami w okresie.'
@@ -2260,8 +2277,209 @@ function renderReportsAssetsCashFlow(ctx) {
             <div><span class="label">Wydatki z salda</span><strong class="expense">${formatPlnAmount(expenseFromCash)}</strong></div>
             <div><span class="label">Bilans transakcji</span><strong>${formatPlnAmount(txBalance)}</strong></div>
             <div><span class="label">Zmiana gotówki</span><strong class="${cashDelta >= 0 ? 'income' : 'expense'}">${cashDelta >= 0 ? '+' : ''}${formatPlnAmount(cashDelta)}</strong></div>
+            ${celeDelta ? `<div><span class="label">Zmiana Cele</span><strong class="${celeDelta >= 0 ? 'income' : 'expense'}">${celeDelta >= 0 ? '+' : ''}${formatPlnAmount(celeDelta)}</strong></div>` : ''}
         </div>
         <p class="reports-hint">${diffHint}</p>`;
+}
+
+function renderReportsAssetsSnapshotsList() {
+    const el = document.getElementById('reports-assets-snapshots-list');
+    if (!el) return;
+    const snapshots = typeof getAssetSnapshots === 'function' ? getAssetSnapshots() : [];
+    if (!snapshots.length) {
+        el.innerHTML = '<p class="reports-hint">Brak snapshotów — zapiszą się automatycznie lub użyj przycisku powyżej.</p>';
+        return;
+    }
+    el.innerHTML = [...snapshots].reverse().slice(0, 12).map((snap) => {
+        const [y, m] = snap.monthKey.split('-').map(Number);
+        const label = new Date(y, m - 1, 1).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+        return `<div class="assets-snapshot-row">
+            <strong>${escapeHtml(label.charAt(0).toUpperCase() + label.slice(1))}</strong>
+            <span class="reports-hint">${snap.source === 'manual' ? 'ręcznie' : 'auto'}</span>
+            <div class="loan-report-grid">
+                <div><span class="label">Majątek</span><strong>${formatPlnAmount(snap.totalAssets)}</strong></div>
+                <div><span class="label">Net worth</span><strong>${formatPlnAmount(snap.netWorth)}</strong></div>
+                <div><span class="label">Krótko</span><strong>${formatPlnAmount(snap.shortAssets)}</strong></div>
+                <div><span class="label">Długo</span><strong>${formatPlnAmount(snap.longAssets)}</strong></div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderReportsNetWorthTrendChart() {
+    const canvas = document.getElementById('reportsNetWorthTrendChart');
+    if (!canvas || typeof buildNetWorthTrendData !== 'function') return;
+    const { monthLabels, assetsData, debtData, netData } = buildNetWorthTrendData();
+    if (reportsNetWorthTrendChartInstance) reportsNetWorthTrendChartInstance.destroy();
+    if (!monthLabels.length) return;
+    const theme = getReportsChartTheme();
+    reportsNetWorthTrendChartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: monthLabels,
+            datasets: [
+                { label: 'Net worth', data: netData, borderColor: 'var(--success)', tension: 0.3, pointRadius: 3 },
+                { label: 'Aktywa', data: assetsData, borderColor: 'var(--accent)', tension: 0.3, pointRadius: 2, borderDash: [4, 4] },
+                { label: 'Długi', data: debtData, borderColor: 'var(--danger)', tension: 0.3, pointRadius: 2, borderDash: [4, 4] }
+            ]
+        },
+        options: getReportsChartOptions(theme)
+    });
+}
+
+function renderReportsAllocationTrendChart() {
+    const canvas = document.getElementById('reportsAllocationTrendChart');
+    if (!canvas || typeof buildAllocationTrendData !== 'function') return;
+    const data = buildAllocationTrendData();
+    if (reportsAllocationTrendChartInstance) reportsAllocationTrendChartInstance.destroy();
+    if (!data.monthLabels.length) return;
+    const theme = getReportsChartTheme();
+    reportsAllocationTrendChartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: data.monthLabels,
+            datasets: [
+                { label: 'Inwestycje', data: data.investmentData, tension: 0.3, pointRadius: 2 },
+                { label: 'Gotówka', data: data.cashData, tension: 0.3, pointRadius: 2 },
+                { label: 'Lokaty', data: data.depositData, tension: 0.3, pointRadius: 2 },
+                { label: 'Emerytura', data: data.retirementData, tension: 0.3, pointRadius: 2 }
+            ]
+        },
+        options: getReportsChartOptions(theme)
+    });
+}
+
+function renderReportsWealthFlows(ctx) {
+    const el = document.getElementById('reports-wealth-flows');
+    if (!el || typeof buildWealthFlowSummary !== 'function') return;
+    const flow = buildWealthFlowSummary(ctx);
+    el.innerHTML = `
+        <div class="loan-report-grid">
+            <div><span class="label">Na aktywa (powiązane tx)</span><strong class="income">${formatPlnAmount(flow.toAssets)}</strong></div>
+            <div><span class="label">Spłaty długów</span><strong class="expense">${formatPlnAmount(flow.debtPayments)}</strong></div>
+            <div><span class="label">Zmiana gotówki</span><strong class="${flow.cashNet >= 0 ? 'income' : 'expense'}">${flow.cashNet >= 0 ? '+' : ''}${formatPlnAmount(flow.cashNet)}</strong></div>
+        </div>`;
+}
+
+function renderReportsAssetsGoals() {
+    const el = document.getElementById('reports-assets-goals');
+    if (!el) return;
+    const operational = typeof getOperationalCashPln === 'function' ? getOperationalCashPln() : 0;
+    const cele = typeof getCeleCashPln === 'function' ? getCeleCashPln() : 0;
+    const goals = typeof getGoalAssets === 'function' ? getGoalAssets() : [];
+    const goalRows = goals.map((asset) => {
+        const value = getAssetValuePln(asset);
+        const target = asset.goalTarget || 0;
+        const pct = target > 0 ? Math.min(100, Math.round((value / target) * 100)) : null;
+        const name = typeof getAssetDisplayName === 'function' ? getAssetDisplayName(asset) : asset.name;
+        return `<div class="assets-analysis-horizon-row">
+            <div class="assets-analysis-horizon-head"><strong>${escapeHtml(name)}</strong><span>${formatPlnAmount(value)}${target ? ` / ${formatPlnAmount(target)}` : ''}</span></div>
+            ${pct !== null ? `<div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%;background:var(--success)"></div></div>` : ''}
+        </div>`;
+    }).join('');
+    el.innerHTML = `
+        <div class="loan-report-grid">
+            <div><span class="label">Gotówka operacyjna</span><strong>${formatPlnAmount(operational)}</strong></div>
+            <div><span class="label">Cele (oszczędnościowe)</span><strong>${formatPlnAmount(cele)}</strong></div>
+        </div>
+        ${goalRows || '<p class="reports-hint">Ustaw cel w edycji aktywa gotówkowego (np. Cele).</p>'}`;
+}
+
+function renderReportsDiversificationChart() {
+    const canvas = document.getElementById('reportsDiversificationChart');
+    const legendEl = document.getElementById('reports-diversification-legend');
+    if (!canvas || typeof buildDiversificationSlices !== 'function') return;
+    const slices = buildDiversificationSlices();
+    if (reportsDiversificationChartInstance) reportsDiversificationChartInstance.destroy();
+    if (!slices.length) {
+        if (legendEl) legendEl.innerHTML = '<p class="reports-hint">Brak danych.</p>';
+        return;
+    }
+    const labels = slices.map((s) => s.label);
+    const values = slices.map((s) => s.amount);
+    const colors = getChartSliceColors(labels, 'income');
+    reportsDiversificationChartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 2 }] },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+    if (legendEl) {
+        const total = values.reduce((s, v) => s + v, 0);
+        legendEl.innerHTML = slices.slice(0, 10).map((slice, i) => {
+            const pct = total > 0 ? Math.round((slice.amount / total) * 100) : 0;
+            return `<div class="reports-debt-split-item"><span class="reports-debt-split-dot" style="background:${colors[i]}"></span><span>${escapeHtml(slice.label)}</span><strong>${formatPlnAmount(slice.amount)}</strong><em>${pct}%</em></div>`;
+        }).join('');
+    }
+}
+
+function renderReportsIkzeLimit() {
+    const el = document.getElementById('reports-ikze-limit');
+    if (!el) return;
+    const year = new Date().getFullYear();
+    const used = typeof getIkzeContributionsInYear === 'function' ? getIkzeContributionsInYear(year) : 0;
+    const limit = typeof IKZE_ANNUAL_LIMIT_PLN !== 'undefined' ? IKZE_ANNUAL_LIMIT_PLN : 8000;
+    const pct = Math.min(100, Math.round((used / limit) * 100));
+    const left = Math.max(0, limit - used);
+    el.innerHTML = `
+        <div class="loan-report-grid">
+            <div><span class="label">Wpłaty ${year}</span><strong>${formatPlnAmount(used)}</strong></div>
+            <div><span class="label">Limit</span><strong>${formatPlnAmount(limit)}</strong></div>
+            <div><span class="label">Pozostało</span><strong class="income">${formatPlnAmount(left)}</strong></div>
+        </div>
+        <div class="progress-bar-bg" style="margin-top:12px"><div class="progress-bar-fill" style="width:${pct}%;background:var(--accent)"></div></div>
+        <p class="reports-hint">Liczone z transakcji powiązanych z IKZE. Limit orientacyjny — ${formatPlnAmount(limit)} / rok.</p>`;
+}
+
+function renderReportsMortgageVsRetirement() {
+    const el = document.getElementById('reports-mortgage-retirement');
+    if (!el) return;
+    const mortgageCapital = getActiveLoans()
+        .filter((l) => typeof isMortgageLoan === 'function' && isMortgageLoan(l))
+        .reduce((s, l) => s + (l.currentCapitalLeft || 0), 0);
+    const retirementTotal = getAnalysisSummaryAssets()
+        .filter((a) => a.type === 'retirement')
+        .reduce((s, a) => s + getAssetValuePln(a), 0);
+    const payoff = typeof estimateNetWorthPayoffMonths === 'function' ? estimateNetWorthPayoffMonths() : null;
+    let message = 'Budujesz majątek długoterminowy szybciej niż spłacasz hipotekę.';
+    if (retirementTotal < mortgageCapital) {
+        message = 'Kapitał hipoteki przewyższa majątek emerytalny — warto zwiększyć wpłaty długoterminowe.';
+    } else if (mortgageCapital === 0) {
+        message = 'Brak aktywnej hipoteki w kredytach.';
+    }
+    el.innerHTML = `
+        <div class="loan-report-grid">
+            <div><span class="label">Kapitał hipoteki</span><strong class="expense">${formatPlnAmount(mortgageCapital)}</strong></div>
+            <div><span class="label">Majątek emerytalny</span><strong class="income">${formatPlnAmount(retirementTotal)}</strong></div>
+            <div><span class="label">Net worth zero</span><strong>${payoff?.label || '—'}</strong></div>
+        </div>
+        <p class="reports-hint">${message}</p>`;
+}
+
+function renderDepositsCalendarList() {
+    const card = document.getElementById('reports-deposits-calendar-card');
+    const el = document.getElementById('reports-deposits-calendar-list');
+    if (!el) return;
+    const deposits = typeof getActiveDeposits === 'function' ? getActiveDeposits() : [];
+    if (!deposits.length) {
+        card?.classList.add('hidden');
+        return;
+    }
+    card?.classList.remove('hidden');
+    const today = new Date().toISOString().split('T')[0];
+    const sorted = [...deposits].sort((a, b) => a.endDate.localeCompare(b.endDate));
+    el.innerHTML = sorted.map((asset) => {
+        const days = typeof daysUntilDate === 'function' ? daysUntilDate(asset.endDate) : null;
+        const name = typeof getAssetDisplayName === 'function' ? getAssetDisplayName(asset) : asset.name;
+        const overdue = days !== null && days < 0;
+        return `<div class="assets-analysis-row asset-clickable" role="button" tabindex="0"
+            onclick="openAssetDetails('${escapeHtml(asset.id)}')">
+            <div class="assets-analysis-info">
+                <strong>${escapeHtml(name)}</strong>
+                <span class="reports-hint${overdue ? ' expense' : ''}">${formatTxDate(asset.endDate)}${days !== null ? ` · ${days < 0 ? `${Math.abs(days)} dni temu` : `za ${days} dni`}` : ''}</span>
+            </div>
+            <strong>${formatPlnAmount(getAssetValuePln(asset))}</strong>
+        </div>`;
+    }).join('');
 }
 
 function renderReportsAssetsSection(ctx) {
@@ -2274,6 +2492,14 @@ function renderReportsAssetsSection(ctx) {
     renderReportsAssetsCashFlow(ctx);
     renderReportsAssetAllocationChart(ctx, 'reportsAssetsAllocationChart', 'reports-assets-allocation-legend');
     renderReportsCashTrendChart(ctx, 'reportsAssetsCashTrendChart');
+    renderReportsAssetsSnapshotsList();
+    renderReportsNetWorthTrendChart();
+    renderReportsAllocationTrendChart();
+    renderReportsWealthFlows(ctx);
+    renderReportsAssetsGoals();
+    renderReportsDiversificationChart();
+    renderReportsIkzeLimit();
+    renderReportsMortgageVsRetirement();
 }
 
 function renderReportsDebtDsr(ctx) {
@@ -2659,6 +2885,9 @@ function renderReportsDebtScenarios(ctx) {
     const savedLabel = sim.savedMonths
         ? (savedYears > 0 ? `${savedYears} lat ${savedRemMonths} mies.` : `${sim.savedMonths} mies.`)
         : 'brak skrócenia';
+    const liquidity = typeof getLiquidityAfterOverpayment === 'function'
+        ? getLiquidityAfterOverpayment(debtsScenarioExtra)
+        : null;
 
     el.innerHTML = `
         <div class="debt-scenario-result">
@@ -2668,6 +2897,11 @@ function renderReportsDebtScenarios(ctx) {
                 <div><span class="label">Czas spłaty teraz</span><strong>~${sim.baseMonths} mies.</strong></div>
                 <div><span class="label">Po nadpłacie</span><strong>~${sim.newMonths} mies.</strong></div>
             </div>
+            ${liquidity ? `<div class="loan-report-grid debt-scenario-liquidity">
+                <div><span class="label">Gotówka operacyjna</span><strong>${formatPlnAmount(liquidity.liquid)}</strong></div>
+                <div><span class="label">Po nadpłacie / mies.</span><strong class="${liquidity.after < 0 ? 'expense' : ''}">${formatPlnAmount(liquidity.after)}</strong></div>
+                <div><span class="label">Rezerwa po nadpłacie</span><strong>${liquidity.runway !== null ? `${liquidity.runway.toFixed(1)} mies.` : '—'}</strong></div>
+            </div>` : ''}
             <div class="debt-scenario-highlight">
                 <span>Skrócenie</span>
                 <strong class="income">${savedLabel}</strong>

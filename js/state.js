@@ -8,6 +8,8 @@ let appState = {
     creditCardMovements: [],
     assets: [],
     cashMovements: [],
+    assetSnapshots: [],
+    assetValueHistory: [],
     categoryBudgets: {}
 };
 
@@ -36,6 +38,9 @@ let reportsAssetAllocationChartInstance = null;
 let reportsAssetsTabAllocationInstance = null;
 let reportsCashTrendChartInstance = null;
 let reportsAssetsTabCashTrendInstance = null;
+let reportsNetWorthTrendChartInstance = null;
+let reportsAllocationTrendChartInstance = null;
+let reportsDiversificationChartInstance = null;
 let reportsViewType = 'expense';
 let reportsRankLevel = 'main';
 let reportsCalendarYear = null;
@@ -50,6 +55,8 @@ function getPersistedState(raw = appState) {
         creditCardMovements: Array.isArray(data.creditCardMovements) ? data.creditCardMovements : [],
         assets: Array.isArray(data.assets) ? data.assets : [],
         cashMovements: Array.isArray(data.cashMovements) ? data.cashMovements : [],
+        assetSnapshots: Array.isArray(data.assetSnapshots) ? data.assetSnapshots : [],
+        assetValueHistory: Array.isArray(data.assetValueHistory) ? data.assetValueHistory : [],
         categoryTree: data.categoryTree && typeof data.categoryTree === 'object'
             ? data.categoryTree
             : JSON.parse(JSON.stringify(DEFAULT_CATEGORY_TREE)),
@@ -156,8 +163,9 @@ function initData() {
         const hadCardMigration = runCreditCardMigrations();
         const hadAssetMigration = typeof runAssetMigrations === 'function' ? runAssetMigrations() : false;
         const hadCashMigration = typeof runCashMigrations === 'function' ? runCashMigrations() : false;
+        const hadAnalyticsMigration = typeof runAssetAnalyticsMigrations === 'function' ? runAssetAnalyticsMigrations() : false;
         if (hadUiFields) localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-        if (hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration) saveState();
+        if (hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration || hadAnalyticsMigration) saveState();
         checkAndProcessRecurringTransactions();
         refreshCurrentView();
     }
@@ -179,8 +187,9 @@ function initData() {
             const hadCardMigration = runCreditCardMigrations();
             const hadAssetMigration = typeof runAssetMigrations === 'function' ? runAssetMigrations() : false;
             const hadCashMigration = typeof runCashMigrations === 'function' ? runCashMigrations() : false;
+            const hadAnalyticsMigration = typeof runAssetAnalyticsMigrations === 'function' ? runAssetAnalyticsMigrations() : false;
             localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-            if (hadUiFields || hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration) saveState();
+            if (hadUiFields || hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration || hadAnalyticsMigration) saveState();
             statusEl.className = 'online';
             refreshCurrentView();
         } else {

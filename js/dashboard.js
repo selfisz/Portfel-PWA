@@ -218,9 +218,37 @@ function renderUpcomingLoanInstallments() {
     }).join('');
 }
 
+function renderDashboardWealth() {
+    const section = document.getElementById('dashboard-wealth');
+    const el = document.getElementById('dashboard-wealth-content');
+    if (!section || !el || typeof getPortfolioValuePln !== 'function') return;
+
+    const assets = getPortfolioValuePln();
+    if (!assets && !getLoanSummaryTotal()) {
+        section.classList.add('hidden');
+        return;
+    }
+    section.classList.remove('hidden');
+
+    const debt = typeof getLoanSummaryTotal === 'function' ? getLoanSummaryTotal() : 0;
+    const net = assets - debt;
+    const monthChange = typeof getSnapshotMonthChange === 'function' ? getSnapshotMonthChange() : null;
+    const operational = typeof getOperationalCashPln === 'function' ? getOperationalCashPln() : 0;
+
+    el.innerHTML = `
+        <div class="dashboard-wealth-grid">
+            <div><span class="label">Majątek</span><strong class="income">${formatPlnAmount(assets)}</strong></div>
+            <div><span class="label">Net worth</span><strong style="color:${net >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatPlnAmount(net)}</strong></div>
+            <div><span class="label">Gotówka oper.</span><strong>${formatPlnAmount(operational)}</strong></div>
+            <div><span class="label">Zobowiązania</span><strong class="expense">${formatPlnAmount(debt)}</strong></div>
+        </div>
+        ${monthChange ? `<p class="reports-hint">${monthChange.netWorth >= 0 ? '+' : ''}${formatPlnAmount(monthChange.netWorth)} net worth vs poprz. miesiąc</p>` : ''}`;
+}
+
 function renderDashboard() {
     renderUpcomingLoanInstallments();
     renderDashboardCreditCards();
+    renderDashboardWealth();
     updateDashboardPeriodResetVisibility();
     const { startDate, endDate } = getDashboardDates();
     const searchQuery = document.getElementById('db-search').value.toLowerCase().trim();

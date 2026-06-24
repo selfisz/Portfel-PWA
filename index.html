@@ -227,6 +227,13 @@
                     </div>
                 </div>
 
+                <div data-asset-fields="cash" class="hidden">
+                    <div class="form-group">
+                        <label class="section-label" for="asset-goal-input">Cel oszczędnościowy (PLN)</label>
+                        <input type="number" id="asset-goal-input" min="0" step="0.01" placeholder="Opcjonalnie">
+                    </div>
+                </div>
+
                 <div data-asset-fields="deposit" class="hidden">
                     <div class="loan-form-row">
                         <div class="form-group">
@@ -460,6 +467,11 @@
                 <div id="dashboard-credit-cards-list" class="credit-cards-dashboard-list"></div>
             </div>
 
+            <div id="dashboard-wealth" class="card hidden">
+                <h2>Majątek</h2>
+                <div id="dashboard-wealth-content" class="dashboard-wealth-content"></div>
+            </div>
+
             <div class="card chart-card">
                 <div class="chart-card-header">
                     <h2 id="chart-title">Struktura wydatków</h2>
@@ -579,6 +591,15 @@
                         <div class="checkbox-wrapper" id="tx-affects-cash-wrapper">
                             <input type="checkbox" id="tx-affects-cash" checked onchange="updateAddFormCashHints()">
                             <label for="tx-affects-cash">Z salda (gotówka)</label>
+                        </div>
+                        <div class="checkbox-wrapper hidden" id="tx-linked-asset-wrapper">
+                            <input type="checkbox" id="tx-linked-asset" onchange="updateTransactionAssetHints()">
+                            <label for="tx-linked-asset">Powiąż z aktywem</label>
+                        </div>
+                        <div class="form-group hidden" id="tx-linked-asset-select-wrapper">
+                            <label class="section-label" for="tx-linked-asset-select">Aktywo</label>
+                            <select id="tx-linked-asset-select"></select>
+                            <p class="reports-hint">Wydatek → przelew na aktywo. Wpływ → wpłata bezpośrednio na aktywo.</p>
                         </div>
                         <div class="checkbox-wrapper" id="recurring-wrapper">
                             <input type="checkbox" id="tx-recurring">
@@ -719,6 +740,7 @@
 
                 <div class="card">
                     <h2>Majątek i zobowiązania</h2>
+                    <p id="reports-net-worth-change" class="reports-hint hidden"></p>
                     <div id="reports-net-worth"></div>
                     <div id="reports-debt-dsr" class="reports-debt-dsr"></div>
                     <div id="reports-loan-summary" class="analysis-loan-block"></div>
@@ -770,6 +792,12 @@
                     <h2>Kiedy uwolnisz się od zobowiązań</h2>
                     <p class="reports-hint">Prognoza końca spłaty każdego kredytu i karty — im krótszy pasek, tym bliżej wolności.</p>
                     <div id="reports-debt-freedom-timeline"></div>
+                </div>
+
+                <div id="reports-deposits-calendar-card" class="card hidden">
+                    <h2>Koniec lokat</h2>
+                    <p class="reports-hint">Zbliżające się terminy zakończenia lokat.</p>
+                    <div id="reports-deposits-calendar-list"></div>
                 </div>
             </div>
 
@@ -900,6 +928,57 @@
                     <div class="reports-bar-chart-wrap">
                         <canvas id="reportsAssetsCashTrendChart"></canvas>
                     </div>
+                </div>
+
+                <div class="card">
+                    <h2>Historia majątku</h2>
+                    <p class="reports-hint">Snapshoty miesięczne — automatycznie przy zmianie miesiąca.</p>
+                        <button type="button" class="btn-outline assets-snapshot-btn" onclick="saveAssetSnapshotNow()">Zapisz stan teraz</button>
+                    <div id="reports-assets-snapshots-list" class="assets-snapshots-list"></div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2>Trend wartości netto</h2>
+                    <div class="reports-bar-chart-wrap">
+                        <canvas id="reportsNetWorthTrendChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2>Alokacja w czasie</h2>
+                    <div class="reports-bar-chart-wrap">
+                        <canvas id="reportsAllocationTrendChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Przepływy majątku</h2>
+                    <p class="reports-hint">Ile poszło na aktywa, spłaty i zmianę gotówki w wybranym okresie.</p>
+                    <div id="reports-wealth-flows"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Cele i płynność</h2>
+                    <div id="reports-assets-goals"></div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2>Dywersyfikacja</h2>
+                    <p class="reports-hint">Udział każdej pozycji w majątku.</p>
+                    <div class="reports-bar-chart-wrap reports-debt-split-wrap">
+                        <canvas id="reportsDiversificationChart"></canvas>
+                    </div>
+                    <div id="reports-diversification-legend" class="reports-debt-split-legend"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Limit IKZE w roku</h2>
+                    <div id="reports-ikze-limit"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Hipoteka vs emerytura</h2>
+                    <div id="reports-mortgage-retirement"></div>
                 </div>
             </div>
 
@@ -1124,6 +1203,7 @@
     <script src="js/reports-core.js"></script>
     <script src="js/assets.js"></script>
     <script src="js/cash.js"></script>
+    <script src="js/asset-analytics.js"></script>
     <script src="js/investments.js"></script>
     <script src="js/loans.js"></script>
     <script src="js/settings.js"></script>

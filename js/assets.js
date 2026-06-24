@@ -51,7 +51,8 @@ function getDefaultAsset(type = 'investment') {
         endDate: '',
         retirementKind: 'PPK',
         institution: '',
-        includeInSummary: true
+        includeInSummary: true,
+        goalTarget: 0
     };
 }
 
@@ -87,6 +88,7 @@ function normalizeAsset(raw) {
             asset.institution = (asset.institution || '').trim();
         }
     }
+    asset.goalTarget = Math.max(0, parseFloat(asset.goalTarget) || 0);
 
     return asset;
 }
@@ -766,6 +768,10 @@ function renderAssetDetails() {
         );
     } else if (asset.type === 'cash') {
         rows.push(assetDetailRow('Saldo', `${(asset.amount || 0).toFixed(2)} ${asset.currency}`));
+        if (asset.goalTarget > 0) {
+            const pct = Math.min(100, Math.round((getAssetValueInPln(asset) / asset.goalTarget) * 100));
+            rows.push(assetDetailRow('Cel', `${formatPlnAmount(asset.goalTarget)} (${pct}%)`));
+        }
     } else if (asset.type === 'retirement') {
         rows.push(
             assetDetailRow('Rodzaj', RETIREMENT_KIND_LABELS[asset.retirementKind] || asset.retirementKind || '—'),
@@ -823,6 +829,8 @@ function populateAssetEditForm() {
     const retirementKind = document.getElementById('asset-retirement-kind-input');
     if (retirementKind) retirementKind.value = asset.retirementKind || 'PPK';
     document.getElementById('asset-institution-input').value = asset.institution || '';
+    const goalInput = document.getElementById('asset-goal-input');
+    if (goalInput) goalInput.value = asset.goalTarget || '';
 
     toggleAssetEditFields(asset.type);
 }
@@ -856,6 +864,8 @@ function saveAssetDetails() {
         if (!payload.name && payload.ticker) payload.name = payload.ticker;
     } else {
         payload.amount = parseFloat(document.getElementById('asset-amount-input')?.value) || 0;
+        const goalVal = parseFloat(document.getElementById('asset-goal-input')?.value);
+        if (!Number.isNaN(goalVal)) payload.goalTarget = Math.max(0, goalVal);
         if (type === 'deposit') {
             payload.interestRate = parseFloat(document.getElementById('asset-rate-input')?.value) || 0;
             payload.endDate = document.getElementById('asset-end-input')?.value || '';
@@ -867,8 +877,11 @@ function saveAssetDetails() {
         }
     }
 
-    const saved = updateAssetInState(payload);
     const wasNew = isDraftAssetActive();
+    const saved = updateAssetInState(payload);
+    if (typeof recordAssetValueHistory === 'function') {
+        recordAssetValueHistory(saved, wasNew ? 'create' : 'manual');
+    }
     draftAsset = null;
     activeAssetId = saved.id;
     saveState();
