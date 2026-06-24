@@ -57,6 +57,29 @@ function normalizeLoansArray(loans, legacyLoan) {
     return [];
 }
 
+function mergeLoansById(...loanLists) {
+    const map = new Map();
+    loanLists.flat().forEach((raw) => {
+        if (!raw || typeof raw !== 'object') return;
+        const loan = normalizeLoan(raw);
+        if (!loan.id) return;
+        const prev = map.get(loan.id);
+        if (!prev) {
+            map.set(loan.id, loan);
+            return;
+        }
+        const prevScore = (prev.totalAmount || 0) + (prev.currentCapitalLeft || 0);
+        const nextScore = (loan.totalAmount || 0) + (loan.currentCapitalLeft || 0);
+        map.set(loan.id, nextScore >= prevScore ? loan : prev);
+    });
+    return [...map.values()];
+}
+
+function getLoansFromPersistedRaw(raw) {
+    if (!raw || typeof raw !== 'object') return [];
+    return normalizeLoansArray(raw.loans, raw.loan);
+}
+
 function getLoans() {
     return (appState.loans || []).map(normalizeLoan);
 }

@@ -273,14 +273,31 @@ function syncMbankConsolidationLoanFields() {
     return changed;
 }
 
+function ensureMissingSeedLoans() {
+    migrateLoansArray();
+    const snapshots = [
+        getPekaoLoanSnapshot,
+        getAliorRtvLoanSnapshot,
+        getVelobankLoanSnapshot,
+        getMbankConsolidationLoanSnapshot
+    ];
+    let changed = false;
+    snapshots.forEach((getSnapshot) => {
+        const snapshot = getSnapshot();
+        if (!appState.loans.some((l) => l.id === snapshot.id)) {
+            appState.loans.push(normalizeLoan(snapshot));
+            changed = true;
+        }
+    });
+    return changed;
+}
+
 function runLoanMigrations() {
     migrateLoansArray();
     return migrateLoanToPekaoIfNeeded()
-        || ensureAliorRtvLoan()
+        || ensureMissingSeedLoans()
         || syncAliorRtvLoanFields()
         || seedAliorRtvPayments()
-        || ensureVelobankLoan()
-        || ensureMbankConsolidationLoan()
         || syncMbankConsolidationLoanFields();
 }
 

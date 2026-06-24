@@ -104,16 +104,26 @@ function migrateCategoryData() {
     return changed;
 }
 
-function normalizeAppState(raw) {
+function applyRemoteAppState(raw, extraLoanSources = []) {
     const hadUiFields = !!(raw && ('currentType' in raw || 'selectedMainCategory' in raw || 'selectedSubCategory' in raw));
-    appState = getPersistedState(raw);
+    const base = getPersistedState(raw);
+    appState = {
+        ...base,
+        loans: mergeLoansById(base.loans, ...extraLoanSources)
+    };
     migrateLoansArray();
     categoryTree = appState.categoryTree;
     return hadUiFields;
 }
+
+function normalizeAppState(raw) {
+    return applyRemoteAppState(raw);
+}
+
 function initData() {
     if (localStorage.getItem(STORAGE_KEY)) {
-        const hadUiFields = normalizeAppState(JSON.parse(localStorage.getItem(STORAGE_KEY)));
+        const localRaw = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        const hadUiFields = applyRemoteAppState(localRaw);
         const hadMigration = migrateCategoryData() || migrateLoanCategoryTree();
         const hadLoanMigration = runLoanMigrations();
         if (hadUiFields) localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
@@ -125,7 +135,13 @@ function initData() {
     stateRef.onSnapshot((docSnap) => {
         const statusEl = document.getElementById('sync-status');
         if (docSnap.exists) {
-            const hadUiFields = normalizeAppState(docSnap.data());
+            let localLoans = [];
+            try {
+                const localRaw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+                localLoans = getLoansFromPersistedRaw(localRaw);
+            } catch { /* ignore */ }
+
+            const hadUiFields = applyRemoteAppState(docSnap.data(), localLoans);
             const hadMigration = migrateCategoryData() || migrateLoanCategoryTree();
             const hadLoanMigration = runLoanMigrations();
             localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
