@@ -45,12 +45,44 @@ function normalizeLoanDetails(raw) {
 }
 
 const PEKAO_CONTRACT_NUMBER = '00621649687/2/KH/25082025';
+const GHOST_MORTGAGE_CAPITAL_CEILING = 550000;
+const LEGACY_TEST_CAPITAL = 412500;
+const LEGACY_TEST_TOTAL = 500000;
+const LEGACY_TEST_RATE = 6.75;
+
+function isLegacyTestLoan(loan) {
+    const l = normalizeLoan(loan);
+    if (l.details?.contractNumber === PEKAO_CONTRACT_NUMBER) return false;
+    if (l.id === 'loan-pekao' && (l.currentCapitalLeft || 0) >= 600000) return false;
+    if (l.id === 'loan-primary') return true;
+    const cap = l.currentCapitalLeft || 0;
+    const total = l.totalAmount || 0;
+    const rate = l.interestRate || 0;
+    if (Math.abs(cap - LEGACY_TEST_CAPITAL) < 0.01) return true;
+    if (Math.abs(total - LEGACY_TEST_TOTAL) < 0.01 && Math.abs(rate - LEGACY_TEST_RATE) < 0.01) return true;
+    return false;
+}
+
+function purgeLegacyTestLoans() {
+    migrateLoansArray();
+    let changed = false;
+    if (appState.loan && isLegacyTestLoan(appState.loan)) {
+        delete appState.loan;
+        changed = true;
+    }
+    const before = appState.loans.length;
+    appState.loans = appState.loans.filter((l) => !isLegacyTestLoan(l));
+    return changed || appState.loans.length !== before;
+}
 
 function isGhostMortgageLoan(loan) {
     const l = normalizeLoan(loan);
     if (!isMortgageLoan(l)) return false;
     if (l.details?.contractNumber === PEKAO_CONTRACT_NUMBER) return false;
     if (l.id === 'loan-pekao' && l.currentCapitalLeft >= 600000) return false;
+    if (l.id === 'loan-primary') return true;
+    const cap = l.currentCapitalLeft || 0;
+    if (!l.details?.contractNumber && cap > 0 && cap < GHOST_MORTGAGE_CAPITAL_CEILING) return true;
     return !l.details?.contractNumber;
 }
 
@@ -58,6 +90,23 @@ function purgeGhostMortgageLoans() {
     migrateLoansArray();
     const before = appState.loans.length;
     appState.loans = appState.loans.filter((l) => !isGhostMortgageLoan(l));
+    return appState.loans.length !== before;
+}
+
+function dedupeMortgageLoans() {
+    migrateLoansArray();
+    const mortgages = appState.loans.filter((l) => isMortgageLoan(l));
+    if (mortgages.length <= 1) return false;
+
+    const normalized = mortgages.map(normalizeLoan);
+    const pekao = normalized.find(
+        (l) => l.details?.contractNumber === PEKAO_CONTRACT_NUMBER || l.id === 'loan-pekao'
+    );
+    const keeper = pekao || normalized.reduce((best, l) =>
+        ((l.currentCapitalLeft || 0) > (best.currentCapitalLeft || 0)) ? l : best
+    );
+    const before = appState.loans.length;
+    appState.loans = appState.loans.filter((l) => !isMortgageLoan(l) || normalizeLoan(l).id === keeper.id);
     return appState.loans.length !== before;
 }
 
@@ -275,36 +324,77 @@ function syncMbankConsolidationLoanFields() {
     return changed;
 }
 
+function normalizeSeedLoanIds() {
+    migrateLoansArray();
+    let changed = false;
+
+    const renames = [
+        { findFn: findAliorRtvLoanIndex, targetId: ALIOR_RTV_LOAN_ID },
+        { findFn: findVelobankLoanIndex, targetId: VELOBANK_LOAN_ID },
+        { findFn: findMbankConsolidationLoanIndex, targetId: MBANK_CONSOLIDATION_LOAN_ID }
+    ];
+
+    renames.forEach(({ findFn, targetId }) => {
+        const idx = findFn();
+        if (idx < 0) return;
+        if (appState.loans[idx].id !== targetId) {
+            appState.loans[idx] = normalizeLoan({ ...appState.loans[idx], id: targetId });
+            changed = true;
+        }
+    });
+
+    const idCounts = {};
+    appState.loans.forEach((l) => { idCounts[l.id] = (idCounts[l.id] || 0) + 1; });
+    Object.entries(idCounts).forEach(([id, count]) => {
+        if (count <= 1) return;
+        let kept = false;
+        appState.loans = appState.loans.filter((l) => {
+            if (l.id !== id) return true;
+            if (!kept) { kept = true; return true; }
+            changed = true;
+            return false;
+        });
+    });
+
+    return changed;
+}
+
 function ensureMissingSeedLoans() {
     migrateLoansArray();
-    const snapshots = [
-        getPekaoLoanSnapshot,
-        getAliorRtvLoanSnapshot,
-        getVelobankLoanSnapshot,
-        getMbankConsolidationLoanSnapshot
-    ];
     let changed = false;
-    snapshots.forEach((getSnapshot) => {
-        const snapshot = getSnapshot();
-        if (snapshot.id === 'loan-pekao') {
-            if (appState.loans.some((l) => l.id === snapshot.id || isMortgageLoan(l))) return;
-        } else if (appState.loans.some((l) => l.id === snapshot.id)) {
-            return;
-        }
-        appState.loans.push(normalizeLoan(snapshot));
+
+    if (!appState.loans.some((l) => l.id === 'loan-pekao' || isMortgageLoan(l))) {
+        appState.loans.push(normalizeLoan(getPekaoLoanSnapshot()));
         changed = true;
-    });
+    }
+    if (findAliorRtvLoanIndex() < 0) {
+        appState.loans.push(normalizeLoan(getAliorRtvLoanSnapshot()));
+        changed = true;
+    }
+    if (findVelobankLoanIndex() < 0) {
+        appState.loans.push(normalizeLoan(getVelobankLoanSnapshot()));
+        changed = true;
+    }
+    if (findMbankConsolidationLoanIndex() < 0) {
+        appState.loans.push(normalizeLoan(getMbankConsolidationLoanSnapshot()));
+        changed = true;
+    }
+
     return changed;
 }
 
 function runLoanMigrations() {
     migrateLoansArray();
-    return purgeGhostMortgageLoans()
-        || migrateLoanToPekaoIfNeeded()
-        || ensureMissingSeedLoans()
-        || syncAliorRtvLoanFields()
-        || seedAliorRtvPayments()
-        || syncMbankConsolidationLoanFields();
+    const a = purgeLegacyTestLoans();
+    const b = purgeGhostMortgageLoans();
+    const c = normalizeSeedLoanIds();
+    const d = dedupeMortgageLoans();
+    const e = migrateLoanToPekaoIfNeeded();
+    const f = ensureMissingSeedLoans();
+    const g = syncAliorRtvLoanFields();
+    const h = seedAliorRtvPayments();
+    const i = syncMbankConsolidationLoanFields();
+    return a || b || c || d || e || f || g || h || i;
 }
 
 function getPekaoLoanSnapshot() {

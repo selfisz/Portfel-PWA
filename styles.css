@@ -725,6 +725,24 @@ h2 {
     padding: 10px 6px;
 }
 
+.flex-toggle--4 {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+}
+
+.flex-toggle--4 .toggle-btn {
+    font-size: 0.72rem;
+    padding: 9px 4px;
+}
+
+.toggle-btn.active.card {
+    background: #0d9488;
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(13, 148, 136, 0.35);
+}
+
 .add-loan-hint {
     margin: 0 0 16px;
 }
@@ -829,9 +847,28 @@ input:focus, select:focus {
     margin-bottom: 14px;
 }
 
-#view-add .flex-toggle--3 .toggle-btn {
-    font-size: 0.78rem;
-    padding: 9px 5px;
+#view-add .flex-toggle--3 .toggle-btn,
+#view-add .flex-toggle--4 .toggle-btn {
+    font-size: 0.68rem;
+    padding: 8px 3px;
+}
+
+#view-add #credit-card-purchase-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#view-add #credit-card-purchase-wrapper.hidden {
+    display: none !important;
+}
+
+#view-add #credit-card-checkbox-wrapper {
+    margin-bottom: 0;
+}
+
+#view-add .credit-card-select-group {
+    margin-bottom: 0;
 }
 
 #view-add .form-group {
@@ -1884,9 +1921,176 @@ html[data-theme="light"] .grid-item.selected {
 .cal-day-amount {
     font-size: 0.58rem;
     font-weight: 700;
-    color: var(--danger);
     line-height: 1.15;
     white-space: nowrap;
+}
+
+.cal-day-amount.expense {
+    color: var(--danger);
+}
+
+.cal-day-amount.income {
+    color: var(--success);
+}
+
+.cal-day-amount.debt {
+    color: #7c3aed;
+}
+
+.cal-day-debt-count {
+    font-size: 0.5rem;
+    color: var(--text-muted);
+    line-height: 1;
+}
+
+.reports-calendar-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+
+.cal-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.cal-legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    display: inline-block;
+}
+
+.cal-legend-swatch--expense {
+    background: rgba(220, 38, 38, 0.35);
+}
+
+.cal-legend-swatch--income {
+    background: rgba(22, 163, 74, 0.35);
+}
+
+.cal-legend-swatch--both {
+    background: linear-gradient(145deg, rgba(220, 38, 38, 0.35) 55%, rgba(22, 163, 74, 0.35) 55%);
+}
+
+.cal-cell--debt-est {
+    border-style: dashed;
+}
+
+.debt-cal-month-total {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.88rem;
+}
+
+.debt-peak-highlight {
+    margin-top: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--accent-soft);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.debt-peak-highlight .label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.debt-freedom-row {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+}
+
+.debt-freedom-row:last-child {
+    border-bottom: none;
+}
+
+.debt-freedom-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.debt-freedom-date {
+    font-size: 0.82rem;
+    color: var(--accent);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.debt-freedom-bar {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--border);
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.debt-freedom-bar span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--accent), #7c3aed);
+}
+
+.debt-freedom-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.calendar-day-total.debt {
+    color: #7c3aed;
+    font-weight: 700;
+}
+
+.calendar-day-scheduled {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.calendar-day-scheduled-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+}
+
+.calendar-day-scheduled-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 0.84rem;
+}
+
+.calendar-day-scheduled-row em {
+    font-style: normal;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+}
+
+.heat-dot--income {
+    box-shadow: inset 0 0 0 2px rgba(22, 163, 74, 0.85);
 }
 
 .cal-day-cats {
@@ -2591,6 +2795,273 @@ html[data-theme="light"] .grid-item.selected {
 
 .networth-total { grid-column: 1 / -1; }
 
+.reports-debt-dsr {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.reports-debt-dsr-box {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.reports-debt-dsr-hero {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.reports-debt-dsr-hero strong {
+    font-size: 1.5rem;
+}
+
+.reports-debt-dsr-hint {
+    margin: 0;
+}
+
+.reports-debt-dsr-grid {
+    margin-top: 4px;
+}
+
+.reports-debt-forecast,
+.reports-debt-overpayment {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.reports-debt-forecast-box,
+.reports-debt-overpayment-box {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.debt-forecast-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.debt-forecast-row:last-child {
+    border-bottom: none;
+}
+
+.debt-forecast-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.debt-forecast-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.debt-forecast-meta .label {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+}
+
+.debt-forecast-date {
+    font-size: 0.82rem;
+    color: var(--accent);
+    font-weight: 700;
+}
+
+.debt-compare-section {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.compare-grid--debt {
+    margin-top: 8px;
+}
+
+.debt-compare-details {
+    margin-top: 12px;
+}
+
+.debt-compare-row {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 0.8fr;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.78rem;
+}
+
+.debt-compare-row--head {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.debt-compare-row em {
+    font-style: normal;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+}
+
+.reports-debt-split-wrap {
+    max-width: 280px;
+    margin: 0 auto;
+}
+
+.reports-debt-split-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.reports-debt-split-item {
+    display: grid;
+    grid-template-columns: 10px 1fr auto auto;
+    gap: 8px;
+    align-items: center;
+    font-size: 0.78rem;
+}
+
+.reports-debt-split-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.reports-debt-split-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reports-debt-split-item em {
+    font-style: normal;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+}
+
+.analysis-section-nav--5 .toggle-btn {
+    font-size: 0.62rem;
+    padding: 9px 3px;
+}
+
+.debts-scenario-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.debts-scenario-chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.debts-scenario-chips .toggle-btn {
+    flex: 1;
+    min-width: 72px;
+}
+
+.debt-interest-row,
+.debt-ltv-row {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.debt-interest-row:last-of-type,
+.debt-ltv-row:last-of-type {
+    border-bottom: none;
+}
+
+.debt-interest-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.debt-interest-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.debt-interest-amounts {
+    display: flex;
+    gap: 14px;
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.debt-interest-amounts .label {
+    display: block;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+}
+
+.debt-interest-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    font-size: 0.88rem;
+}
+
+.debt-ltv-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.debt-ltv-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.debt-scenario-result {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.debt-scenario-highlight {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--accent-soft);
+}
+
+.reports-debts-hero-card {
+    margin-bottom: 0;
+}
+
 .reports-calendar-header {
     flex-wrap: wrap;
 }
@@ -2876,6 +3347,198 @@ html[data-theme="light"] .grid-item.selected {
     color: var(--text);
     font-size: 0.75rem;
     line-height: 1.45;
+}
+
+.credit-cards-section {
+    margin-bottom: 14px;
+}
+
+.credit-cards-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.credit-cards-section-title {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.credit-cards-add-btn {
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 7px 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.credit-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.credit-card-tile {
+    margin-bottom: 0;
+}
+
+.credit-card-tile-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.credit-card-title {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.credit-card-limit-badge {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.credit-card-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.credit-card-stat-label {
+    display: block;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
+.credit-card-stat-available {
+    color: var(--success);
+}
+
+.credit-card-tile-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.credit-card-action-btn {
+    flex: 1;
+    border: none;
+    border-radius: 10px;
+    padding: 9px 10px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    background: var(--accent);
+    color: #fff;
+}
+
+.credit-card-action-btn--muted {
+    background: var(--input-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.credit-cards-dashboard-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.credit-card-dashboard-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+}
+
+.credit-card-dashboard-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.credit-card-dashboard-info strong {
+    font-size: 0.9rem;
+}
+
+.credit-card-dashboard-meta {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.credit-card-detail-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.credit-card-movements-title {
+    margin: 0 0 10px;
+    font-size: 0.85rem;
+}
+
+.credit-card-movement-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+}
+
+.credit-card-movement-label {
+    font-weight: 600;
+}
+
+.credit-card-movement-meta {
+    grid-column: 1;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.credit-card-movement-amount {
+    grid-row: 1 / span 2;
+    align-self: center;
+    font-weight: 700;
+}
+
+.credit-card-empty-card {
+    margin-bottom: 0;
+}
+
+.credit-card-quick-panel {
+    max-width: 400px;
+}
+
+.credit-card-quick-meta {
+    margin: 0 0 14px;
+}
+
+.credit-clickable {
+    cursor: pointer;
+}
+
+.tx-badge--card {
+    margin-left: 4px;
+    font-size: 0.72rem;
 }
 
 .loans-fab {

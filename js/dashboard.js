@@ -220,6 +220,7 @@ function renderUpcomingLoanInstallments() {
 
 function renderDashboard() {
     renderUpcomingLoanInstallments();
+    renderDashboardCreditCards();
     updateDashboardPeriodResetVisibility();
     const { startDate, endDate } = getDashboardDates();
     const searchQuery = document.getElementById('db-search').value.toLowerCase().trim();
@@ -357,13 +358,14 @@ function renderDashboard() {
         const globalIndex = appState.transactions.indexOf(t);
         const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
         const isRec = t.recurringId ? '<span class="tx-badge">&#10227;</span>' : '';
+        const isCard = t.creditCardId ? '<span class="tx-badge tx-badge--card" title="Karta kredytowa">&#128179;</span>' : '';
         const metaText = searchQuery ? `${formatTxDate(t.date)} · ${t.mainCategory}` : t.mainCategory;
         const row = document.createElement('div');
         row.className = 'tx-row';
         row.innerHTML = `
             ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
             <div class="tx-info">
-                <div class="tx-title">${title}${isRec}</div>
+                <div class="tx-title">${title}${isRec}${isCard}</div>
                 <div class="tx-meta">${metaText}</div>
                 ${t.note ? `<div class="tx-note">${t.note}</div>` : ''}
             </div>

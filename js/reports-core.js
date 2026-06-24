@@ -123,6 +123,23 @@ function getExpenseHeatColor(amount, maxAmount) {
     return `rgba(248, 113, 113, ${0.12 + ratio * 0.55})`;
 }
 
+function getIncomeHeatColor(amount, maxAmount) {
+    if (!amount || amount <= 0) return 'transparent';
+    const ratio = Math.min(amount / (maxAmount || 1), 1);
+    if (isLightTheme()) return `rgba(22, 163, 74, ${0.12 + ratio * 0.45})`;
+    return `rgba(74, 222, 128, ${0.14 + ratio * 0.5})`;
+}
+
+function blendCalendarHeat(expense, expenseMax, income, incomeMax) {
+    const e = expense > 0 ? getExpenseHeatColor(expense, expenseMax) : null;
+    const i = income > 0 ? getIncomeHeatColor(income, incomeMax) : null;
+    if (e && i) {
+        if (isLightTheme()) return `linear-gradient(145deg, ${e} 55%, ${i} 55%)`;
+        return `linear-gradient(145deg, ${e} 55%, ${i} 55%)`;
+    }
+    return e || i || 'var(--input-bg)';
+}
+
 function syncReportsCalendarToPeriod(period) {
     const now = new Date();
     if (reportsLastPeriod === period && reportsCalendarYear !== null) return;
@@ -184,7 +201,11 @@ function shiftReportsCalendarMonth(delta) {
             reportsCalendarYear--;
         }
     }
-    renderReportsCalendar();
+    if (typeof renderReportsCalendarView === 'function') {
+        renderReportsCalendarView();
+    } else {
+        renderReportsCalendar();
+    }
 }
 
 function renderReportsCalendar() {
@@ -199,17 +220,20 @@ function renderReportsCalendar() {
 
     const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
     const monthEnd = new Date(year, month + 1, 0).toISOString().split('T')[0];
-    const monthExpenses = appState.transactions.filter(
-        (t) => t.type === 'expense' && t.date >= monthStart && t.date <= monthEnd
-    );
+    const monthTx = appState.transactions.filter((t) => t.date >= monthStart && t.date <= monthEnd);
 
-    const byDay = {};
-    monthExpenses.forEach((t) => {
-        if (!byDay[t.date]) byDay[t.date] = 0;
-        byDay[t.date] += t.amount;
+    const expenseByDay = {};
+    const incomeByDay = {};
+    monthTx.forEach((t) => {
+        if (t.type === 'expense') {
+            expenseByDay[t.date] = (expenseByDay[t.date] || 0) + t.amount;
+        } else if (t.type === 'income') {
+            incomeByDay[t.date] = (incomeByDay[t.date] || 0) + t.amount;
+        }
     });
 
-    const maxDay = Math.max(0, ...Object.values(byDay));
+    const maxExpense = Math.max(0, ...Object.values(expenseByDay));
+    const maxIncome = Math.max(0, ...Object.values(incomeByDay));
     const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const today = new Date().toISOString().split('T')[0];
@@ -220,20 +244,25 @@ function renderReportsCalendar() {
 
     for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const data = byDay[dateStr];
+        const expense = expenseByDay[dateStr] || 0;
+        const income = incomeByDay[dateStr] || 0;
         const todayClass = dateStr === today ? ' cal-cell--today' : '';
         const clickable = ' cal-cell--clickable';
-        if (data) {
-            const heat = getExpenseHeatColor(data, maxDay);
-            parts.push(`<button type="button" class="cal-cell${todayClass}${clickable}" data-date="${dateStr}" style="background:${heat}" onclick="openCalendarDay('${dateStr}')">
+        const flags = `${expense ? ' cal-cell--has-expense' : ''}${income ? ' cal-cell--has-income' : ''}`;
+        const heat = (expense || income)
+            ? blendCalendarHeat(expense, maxExpense, income, maxIncome)
+            : '';
+        const bgStyle = heat ? ` style="background:${heat}"` : '';
+        const expenseLine = expense
+            ? `<span class="cal-day-amount expense">−${formatCompactPln(expense)}</span>`
+            : '';
+        const incomeLine = income
+            ? `<span class="cal-day-amount income">+${formatCompactPln(income)}</span>`
+            : '';
+        parts.push(`<button type="button" class="cal-cell${todayClass}${clickable}${flags}" data-date="${dateStr}"${bgStyle} onclick="openCalendarDay('${dateStr}')">
                 <span class="cal-day-num">${day}</span>
-                <span class="cal-day-amount">${formatCompactPln(data)} zł</span>
+                ${expenseLine}${incomeLine}
             </button>`);
-        } else {
-            parts.push(`<button type="button" class="cal-cell${todayClass}${clickable}" data-date="${dateStr}" onclick="openCalendarDay('${dateStr}')">
-                <span class="cal-day-num">${day}</span>
-            </button>`);
-        }
     }
 
     grid.innerHTML = parts.join('');

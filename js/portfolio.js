@@ -52,11 +52,14 @@ function normalizeLoan(raw) {
 }
 
 function normalizeLoansArray(loans, legacyLoan) {
+    const dropLegacy = (list) => list.filter((loan) => !isLegacyTestLoan(loan));
+
     if (Array.isArray(loans) && loans.length) {
-        return loans.map(normalizeLoan);
+        return dropLegacy(loans.map(normalizeLoan));
     }
     if (legacyLoan && typeof legacyLoan === 'object') {
         const one = normalizeLoan(legacyLoan);
+        if (isLegacyTestLoan(one)) return [];
         if (!one.id) one.id = 'loan-primary';
         return [one];
     }
@@ -67,8 +70,9 @@ function mergeLoansById(...loanLists) {
     const map = new Map();
     loanLists.flat().forEach((raw) => {
         if (!raw || typeof raw !== 'object') return;
+        if (isLegacyTestLoan(raw)) return;
         const loan = normalizeLoan(raw);
-        if (!loan.id) return;
+        if (!loan.id || isLegacyTestLoan(loan)) return;
         const prev = map.get(loan.id);
         if (!prev) {
             map.set(loan.id, loan);
@@ -148,10 +152,16 @@ function getLoanCapitalLeft() {
     return getActiveLoans().reduce((sum, loan) => sum + (loan.currentCapitalLeft || 0), 0);
 }
 
+function getCreditCardDebtTotal() {
+    if (typeof getActiveCreditCards !== 'function') return 0;
+    return getActiveCreditCards().reduce((sum, card) => sum + (card.currentBalance || 0), 0);
+}
+
 function getLoanSummaryTotal() {
-    return getActiveLoans()
+    const loanTotal = getActiveLoans()
         .filter((loan) => loan.includeInSummary !== false)
         .reduce((sum, loan) => sum + (loan.currentCapitalLeft || 0), 0);
+    return loanTotal + getCreditCardDebtTotal();
 }
 
 function getLoanSummaryCount() {

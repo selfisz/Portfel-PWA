@@ -4,6 +4,8 @@ let categoryEditorType = 'expense';
 let appState = {
     transactions: [],
     loans: [],
+    creditCards: [],
+    creditCardMovements: [],
     investments: [],
     categoryBudgets: {}
 };
@@ -23,6 +25,12 @@ let reportsChartInstance = null;
 let reportsTrendChartInstance = null;
 let reportsYoyChartInstance = null;
 let reportsDowChartInstance = null;
+let reportsDebtChartInstance = null;
+let reportsDebtTrendChartInstance = null;
+let reportsDebtSplitChartInstance = null;
+let reportsDebtsTabChartInstance = null;
+let reportsDebtsTabSplitInstance = null;
+let reportsDebtPeakChartInstance = null;
 let reportsViewType = 'expense';
 let reportsRankLevel = 'main';
 let reportsCalendarYear = null;
@@ -33,6 +41,8 @@ function getPersistedState(raw = appState) {
     return {
         transactions: Array.isArray(data.transactions) ? data.transactions : [],
         loans: normalizeLoansArray(data.loans, data.loan),
+        creditCards: Array.isArray(data.creditCards) ? data.creditCards : [],
+        creditCardMovements: Array.isArray(data.creditCardMovements) ? data.creditCardMovements : [],
         investments: Array.isArray(data.investments) ? data.investments : [],
         categoryTree: data.categoryTree && typeof data.categoryTree === 'object'
             ? data.categoryTree
@@ -45,11 +55,16 @@ function getPersistedState(raw = appState) {
 
 function migrateLoansArray() {
     if (Array.isArray(appState.loans) && appState.loans.length) {
-        appState.loans = appState.loans.map(normalizeLoan);
+        appState.loans = appState.loans.map(normalizeLoan).filter((l) => !isLegacyTestLoan(l));
         delete appState.loan;
         return false;
     }
     if (appState.loan && typeof appState.loan === 'object') {
+        if (isLegacyTestLoan(appState.loan)) {
+            delete appState.loan;
+            appState.loans = [];
+            return true;
+        }
         appState.loans = normalizeLoansArray(null, appState.loan);
         delete appState.loan;
         return true;
@@ -105,12 +120,13 @@ function migrateCategoryData() {
     return changed;
 }
 
-function applyRemoteAppState(raw, extraLoanSources = []) {
+function applyRemoteAppState(raw, extraLoanSources = [], extraCreditCardSources = []) {
     const hadUiFields = !!(raw && ('currentType' in raw || 'selectedMainCategory' in raw || 'selectedSubCategory' in raw));
     const base = getPersistedState(raw);
     appState = {
         ...base,
-        loans: mergeLoansById(base.loans, ...extraLoanSources)
+        loans: mergeLoansById(base.loans, ...extraLoanSources),
+        creditCards: mergeCreditCardsById(base.creditCards, ...extraCreditCardSources)
     };
     migrateLoansArray();
     categoryTree = appState.categoryTree;
@@ -127,8 +143,9 @@ function initData() {
         const hadUiFields = applyRemoteAppState(localRaw);
         const hadMigration = migrateCategoryData() || migrateLoanCategoryTree();
         const hadLoanMigration = runLoanMigrations();
+        const hadCardMigration = runCreditCardMigrations();
         if (hadUiFields) localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-        if (hadMigration || hadLoanMigration) saveState();
+        if (hadMigration || hadLoanMigration || hadCardMigration) saveState();
         checkAndProcessRecurringTransactions();
         refreshCurrentView();
     }
@@ -137,16 +154,19 @@ function initData() {
         const statusEl = document.getElementById('sync-status');
         if (docSnap.exists) {
             let localLoans = [];
+            let localCreditCards = [];
             try {
                 const localRaw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
                 localLoans = getLoansFromPersistedRaw(localRaw);
+                localCreditCards = Array.isArray(localRaw?.creditCards) ? localRaw.creditCards : [];
             } catch { /* ignore */ }
 
-            const hadUiFields = applyRemoteAppState(docSnap.data(), localLoans);
+            const hadUiFields = applyRemoteAppState(docSnap.data(), localLoans, localCreditCards);
             const hadMigration = migrateCategoryData() || migrateLoanCategoryTree();
             const hadLoanMigration = runLoanMigrations();
+            const hadCardMigration = runCreditCardMigrations();
             localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-            if (hadUiFields || hadMigration || hadLoanMigration) saveState();
+            if (hadUiFields || hadMigration || hadLoanMigration || hadCardMigration) saveState();
             statusEl.className = 'online';
             refreshCurrentView();
         } else {

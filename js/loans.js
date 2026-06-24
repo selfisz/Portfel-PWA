@@ -57,12 +57,15 @@ function toggleLoansArchive() {
 
 function renderLoans() {
     if (runLoanMigrations()) saveState();
+    if (runCreditCardMigrations()) saveState();
     appState.loans = getLoans();
 
     const activeLoans = getActiveLoans();
     const archivedLoans = getArchivedLoans();
+    const cardDebt = getCreditCardDebtTotal();
     const summaryTotal = getLoanSummaryTotal();
     const summaryCount = getLoanSummaryCount();
+    const hasDebtSummary = activeLoans.length > 0 || cardDebt > 0;
     const totalHero = document.getElementById('loans-total-hero');
     const totalCapitalEl = document.getElementById('loans-total-capital');
     const totalMetaEl = document.getElementById('loans-total-meta');
@@ -71,19 +74,27 @@ function renderLoans() {
     const archiveList = document.getElementById('loans-archive-list');
     const archiveCount = document.getElementById('loans-archive-count');
 
-    if (totalHero) totalHero.classList.toggle('hidden', !activeLoans.length);
-    if (totalCapitalEl && activeLoans.length) totalCapitalEl.textContent = formatPlnAmount(summaryTotal);
+    if (totalHero) totalHero.classList.toggle('hidden', !hasDebtSummary);
+    if (totalCapitalEl && hasDebtSummary) totalCapitalEl.textContent = formatPlnAmount(summaryTotal);
     if (totalMetaEl) {
-        if (!activeLoans.length) {
+        if (!hasDebtSummary) {
             totalMetaEl.classList.add('hidden');
-        } else if (summaryCount < activeLoans.length) {
-            totalMetaEl.textContent = `${summaryCount} z ${activeLoans.length} kredytów w sumie`;
-            totalMetaEl.classList.remove('hidden');
-        } else if (activeLoans.length > 1) {
-            totalMetaEl.textContent = `${activeLoans.length} aktywne kredyty`;
-            totalMetaEl.classList.remove('hidden');
         } else {
-            totalMetaEl.classList.add('hidden');
+            const parts = [];
+            if (activeLoans.length && summaryCount < activeLoans.length) {
+                parts.push(`${summaryCount} z ${activeLoans.length} kredytów w sumie`);
+            } else if (activeLoans.length > 1) {
+                parts.push(`${activeLoans.length} aktywne kredyty`);
+            }
+            if (cardDebt > 0) {
+                parts.push(`karty ${formatPlnAmount(cardDebt)}`);
+            }
+            if (parts.length) {
+                totalMetaEl.textContent = parts.join(' · ');
+                totalMetaEl.classList.remove('hidden');
+            } else {
+                totalMetaEl.classList.add('hidden');
+            }
         }
     }
     renderLoansSummaryChips(activeLoans);
@@ -118,6 +129,7 @@ function renderLoans() {
     }
     renderLoanPaymentsFilter(activeLoans);
     renderLoanRecentPayments();
+    renderCreditCardsSection();
 }
 
 function renderLoansSummaryChips(activeLoans) {

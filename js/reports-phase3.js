@@ -4,7 +4,7 @@ const ANALYSIS_SECTION_KEY = 'analysis_section';
 const ANALYSIS_PERIOD_KEY = 'analysis_period_mode';
 let analysisSection = 'overview';
 
-const ANALYSIS_SECTIONS = ['overview', 'calendar', 'charts', 'details'];
+const ANALYSIS_SECTIONS = ['overview', 'calendar', 'charts', 'debts', 'details'];
 const PERIOD_MODES = ['year', 'month', 'range', 'compare'];
 
 function shiftArrayIndex(items, current, delta) {
@@ -118,9 +118,9 @@ function setAnalysisSection(section) {
         document.getElementById(`btn-analysis-${id}`)?.classList.toggle('active', id === section);
     });
 
-    if (section === 'charts') {
+    if (section === 'charts' || section === 'debts' || section === 'calendar') {
         requestAnimationFrame(() => {
-            [reportsChartInstance, reportsTrendChartInstance, reportsYoyChartInstance, reportsDowChartInstance]
+            [reportsChartInstance, reportsTrendChartInstance, reportsYoyChartInstance, reportsDowChartInstance, reportsDebtChartInstance, reportsDebtTrendChartInstance, reportsDebtSplitChartInstance, reportsDebtsTabChartInstance, reportsDebtsTabSplitInstance, reportsDebtPeakChartInstance]
                 .forEach((chart) => chart?.resize());
         });
     }
@@ -134,7 +134,8 @@ function initAnalysisSection() {
     setAnalysisSection(analysisSection);
 }
 
-let reportsPeriodMode = 'year';
+let debtsScenarioLoanId = null;
+let debtsScenarioExtra = 500;
 let reportsCalendarView = 'month';
 let calendarDayDate = null;
 let calendarDayFilter = 'all';
@@ -295,7 +296,87 @@ function renderReportsCompare(ctx) {
                 <div class="compare-stat"><span>Bilans</span><strong>${formatPlnAmount(b.balance)}</strong><em>${delta(b.balance, a.balance)}</em></div>
                 <div class="compare-stat"><span>Oszczędności</span><strong>${b.savings}%</strong><em>${delta(b.savings, a.savings)}</em></div>
             </div>
+        </div>
+        ${buildDebtCompareHtml(ctx)}`;
+}
+
+function getDebtPaymentsForBounds(start, end, txList) {
+    const loanPayments = txList
+        .filter((t) => t.type === 'expense' && isLoanOrDebtPayment(t))
+        .reduce((s, t) => s + t.amount, 0);
+    const cardRepayments = sumCardRepaymentsInRange(start, end);
+    return { loanPayments, cardRepayments, total: loanPayments + cardRepayments };
+}
+
+function buildDebtCompareHtml(ctx) {
+    const debtA = getDebtPaymentsForBounds(ctx.periodA.start, ctx.periodA.end, ctx.periodA.tx);
+    const debtB = getDebtPaymentsForBounds(ctx.periodB.start, ctx.periodB.end, ctx.periodB.tx);
+    const delta = (curr, prev) => {
+        if (!prev) return curr > 0 ? '+100%' : '0%';
+        const pct = Math.round(((curr - prev) / prev) * 100);
+        return `${pct >= 0 ? '+' : ''}${pct}%`;
+    };
+
+    const loanRows = getActiveLoans().map((loan) => {
+        const name = escapeHtml(getLoanDisplayName(loan));
+        const a = ctx.periodA.tx
+            .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
+            .reduce((s, t) => s + t.amount, 0);
+        const b = ctx.periodB.tx
+            .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
+            .reduce((s, t) => s + t.amount, 0);
+        if (!a && !b) return '';
+        return `<div class="debt-compare-row">
+            <span>${name}</span>
+            <strong>${formatPlnAmount(a)}</strong>
+            <strong>${formatPlnAmount(b)}</strong>
+            <em>${delta(b, a)}</em>
         </div>`;
+    }).filter(Boolean).join('');
+
+    const cardRows = getActiveCreditCards().map((card) => {
+        const name = escapeHtml(card.name);
+        const a = getCreditCardMovementsInRange(ctx.periodA.start, ctx.periodA.end)
+            .filter((m) => m.cardId === card.id && m.type === 'repayment')
+            .reduce((s, m) => s + m.amount, 0);
+        const b = getCreditCardMovementsInRange(ctx.periodB.start, ctx.periodB.end)
+            .filter((m) => m.cardId === card.id && m.type === 'repayment')
+            .reduce((s, m) => s + m.amount, 0);
+        if (!a && !b) return '';
+        return `<div class="debt-compare-row">
+            <span>${name} (karta)</span>
+            <strong>${formatPlnAmount(a)}</strong>
+            <strong>${formatPlnAmount(b)}</strong>
+            <em>${delta(b, a)}</em>
+        </div>`;
+    }).filter(Boolean).join('');
+
+    const detailRows = loanRows + cardRows;
+    const detailBlock = detailRows
+        ? `<div class="debt-compare-details">
+            <div class="debt-compare-row debt-compare-row--head">
+                <span>Pozycja</span><span>Okres A</span><span>Okres B</span><span>Zmiana</span>
+            </div>
+            ${detailRows}
+        </div>`
+        : '';
+
+    return `<div class="debt-compare-section">
+        <h3 class="analysis-subsection-label">Spłaty długów</h3>
+        <div class="compare-grid compare-grid--debt">
+            <div class="compare-col">
+                <div class="compare-stat"><span>Razem spłaty</span><strong class="expense">${formatPlnAmount(debtA.total)}</strong></div>
+                <div class="compare-stat"><span>Raty kredytów</span><strong>${formatPlnAmount(debtA.loanPayments)}</strong></div>
+                <div class="compare-stat"><span>Spłaty kart</span><strong>${formatPlnAmount(debtA.cardRepayments)}</strong></div>
+            </div>
+            <div class="compare-col">
+                <div class="compare-stat"><span>Razem spłaty</span><strong class="expense">${formatPlnAmount(debtB.total)}</strong><em>${delta(debtB.total, debtA.total)}</em></div>
+                <div class="compare-stat"><span>Raty kredytów</span><strong>${formatPlnAmount(debtB.loanPayments)}</strong><em>${delta(debtB.loanPayments, debtA.loanPayments)}</em></div>
+                <div class="compare-stat"><span>Spłaty kart</span><strong>${formatPlnAmount(debtB.cardRepayments)}</strong><em>${delta(debtB.cardRepayments, debtA.cardRepayments)}</em></div>
+            </div>
+        </div>
+        ${detailBlock}
+    </div>`;
 }
 
 function renderReportsFlow(ctx) {
@@ -654,6 +735,10 @@ function setReportsCalendarView(view) {
     document.getElementById('reports-calendar-grid')?.classList.toggle('hidden', view === 'year');
     document.getElementById('reports-year-heatmap')?.classList.toggle('hidden', view === 'month');
     document.getElementById('reports-calendar-nav')?.classList.toggle('hidden', view === 'year');
+    document.getElementById('reports-calendar-legend')?.classList.toggle('hidden', view === 'year');
+    document.getElementById('reports-debt-calendar-card')?.classList.toggle('hidden', view === 'year');
+    document.getElementById('reports-debt-peak-card')?.classList.toggle('hidden', view === 'year');
+    document.getElementById('reports-debt-freedom-card')?.classList.toggle('hidden', view === 'year');
     renderReportsCalendarView();
 }
 
@@ -662,7 +747,363 @@ function renderReportsCalendarView() {
         renderReportsYearHeatmap();
     } else {
         renderReportsCalendar();
+        renderDebtCalendarSection();
     }
+}
+
+function addMonthsToDate(isoDate, months) {
+    const d = new Date(`${isoDate}T12:00:00`);
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString().split('T')[0];
+}
+
+function getLoanInstallmentDay(loan) {
+    if (!loan?.nextInstallmentDue) return null;
+    const day = parseInt(loan.nextInstallmentDue.split('-')[2], 10);
+    return Number.isNaN(day) ? null : day;
+}
+
+function getLoanPayoffEndDate(loan) {
+    const capital = loan.currentCapitalLeft || 0;
+    if (!capital) return null;
+    if (loan.details?.endDate) return loan.details.endDate;
+    const today = new Date().toISOString().split('T')[0];
+    if (loan.details?.remainingInstallments > 0) {
+        return addMonthsToDate(today, loan.details.remainingInstallments);
+    }
+    if (loan.nextInstallmentAmount > 0) {
+        const months = Math.ceil(capital / loan.nextInstallmentAmount);
+        return addMonthsToDate(today, months);
+    }
+    return null;
+}
+
+function getCardRepaymentHint(card) {
+    if (!(card.currentBalance > 0)) return null;
+    const movements = (appState.creditCardMovements || [])
+        .filter((m) => m.cardId === card.id && m.type === 'repayment')
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(-8);
+    if (!movements.length) return null;
+    const days = movements.map((m) => parseInt(m.date.split('-')[2], 10)).filter((d) => !Number.isNaN(d));
+    if (!days.length) return null;
+    const avgDay = Math.round(days.reduce((s, d) => s + d, 0) / days.length);
+    const avgAmt = getRecentCardRepaymentAverage(card.id);
+    if (avgAmt < 1) return null;
+    return { day: avgDay, amount: avgAmt, estimated: true };
+}
+
+function getEffectiveDueDay(dueDay, year, monthIndex) {
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    return Math.min(dueDay, daysInMonth);
+}
+
+function getScheduledDebtPaymentsOnDate(dateStr) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const monthIndex = month - 1;
+    const items = [];
+
+    getActiveLoans().forEach((loan) => {
+        if (!(loan.nextInstallmentAmount > 0 && loan.nextInstallmentDue && loan.currentCapitalLeft > 0)) return;
+        const dueDay = getLoanInstallmentDay(loan);
+        if (!dueDay) return;
+        if (getEffectiveDueDay(dueDay, year, monthIndex) !== day) return;
+        const firstYm = loan.nextInstallmentDue.slice(0, 7);
+        const curYm = dateStr.slice(0, 7);
+        if (curYm < firstYm) return;
+        if (curYm === firstYm && day < getEffectiveDueDay(dueDay, year, monthIndex)) return;
+        const payoffEnd = getLoanPayoffEndDate(loan);
+        if (payoffEnd && dateStr > payoffEnd) return;
+        items.push({
+            type: 'loan',
+            id: loan.id,
+            name: getLoanDisplayName(loan),
+            amount: loan.nextInstallmentAmount,
+            estimated: false
+        });
+    });
+
+    getActiveCreditCards().forEach((card) => {
+        const hint = getCardRepaymentHint(card);
+        if (!hint) return;
+        if (getEffectiveDueDay(hint.day, year, monthIndex) !== day) return;
+        items.push({
+            type: 'card',
+            id: card.id,
+            name: card.name,
+            amount: hint.amount,
+            estimated: true
+        });
+    });
+
+    return items;
+}
+
+function buildDebtPeakSeries(monthsAhead = 24) {
+    const labels = [];
+    const totals = [];
+    const now = new Date();
+
+    for (let i = 0; i < monthsAhead; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        const year = d.getFullYear();
+        const monthIndex = d.getMonth();
+        const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+        labels.push(d.toLocaleDateString('pl-PL', { month: 'short', year: '2-digit' }));
+
+        let total = 0;
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            getScheduledDebtPaymentsOnDate(dateStr).forEach((p) => { total += p.amount; });
+        }
+        totals.push(total);
+    }
+
+    const peakValue = Math.max(0, ...totals);
+    const peakIdx = totals.indexOf(peakValue);
+    return { labels, totals, peakIdx, peakValue, peakLabel: labels[peakIdx] || '' };
+}
+
+function buildDebtFreedomTimeline() {
+    const today = new Date().toISOString().split('T')[0];
+    const items = [];
+
+    getActiveLoans().forEach((loan) => {
+        if (!(loan.currentCapitalLeft > 0)) return;
+        const est = estimateLoanPayoff(loan);
+        const endDate = getLoanPayoffEndDate(loan);
+        items.push({
+            kind: 'loan',
+            id: loan.id,
+            name: getLoanDisplayName(loan),
+            endDate,
+            label: est.label,
+            detail: est.detail,
+            amount: loan.currentCapitalLeft || 0
+        });
+    });
+
+    getActiveCreditCards().forEach((card) => {
+        if (!(card.currentBalance > 0)) return;
+        const est = estimateCardPayoff(card);
+        let endDate = null;
+        const monthMatch = /^~(\d+)\s*mies/.exec(est.label || '');
+        if (monthMatch) endDate = addMonthsToDate(today, parseInt(monthMatch[1], 10));
+        items.push({
+            kind: 'card',
+            id: card.id,
+            name: card.name,
+            endDate,
+            label: est.label,
+            detail: est.detail,
+            amount: card.currentBalance
+        });
+    });
+
+    return items.sort((a, b) => {
+        if (!a.endDate && !b.endDate) return a.name.localeCompare(b.name, 'pl');
+        if (!a.endDate) return 1;
+        if (!b.endDate) return -1;
+        return a.endDate.localeCompare(b.endDate);
+    });
+}
+
+function renderDebtCalendarSection() {
+    renderDebtCalendarGrid();
+    renderDebtPeakChart();
+    renderDebtFreedomTimeline();
+}
+
+function renderDebtCalendarGrid() {
+    const grid = document.getElementById('reports-debt-calendar-grid');
+    const totalEl = document.getElementById('reports-debt-calendar-month-total');
+    const cardEl = document.getElementById('reports-debt-calendar-card');
+    if (!grid || reportsCalendarYear === null) return;
+
+    const loans = getActiveLoans().filter((l) => l.nextInstallmentAmount > 0 && l.nextInstallmentDue);
+    const cards = getActiveCreditCards().filter((c) => c.currentBalance > 0);
+    const hasHints = cards.some((c) => getCardRepaymentHint(c));
+
+    if (!loans.length && !hasHints) {
+        if (cardEl) cardEl.classList.add('hidden');
+        return;
+    }
+    cardEl?.classList.remove('hidden');
+
+    const year = reportsCalendarYear;
+    const month = reportsCalendarMonth;
+    const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date().toISOString().split('T')[0];
+
+    const byDay = {};
+    let monthTotal = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const payments = getScheduledDebtPaymentsOnDate(dateStr);
+        if (payments.length) {
+            byDay[dateStr] = payments;
+            monthTotal += payments.reduce((s, p) => s + p.amount, 0);
+        }
+    }
+
+    const maxDay = Math.max(0, ...Object.values(byDay).map((list) => list.reduce((s, p) => s + p.amount, 0)));
+    const parts = ['<div class="cal-weekday">Pn</div>', '<div class="cal-weekday">Wt</div>', '<div class="cal-weekday">Śr</div>', '<div class="cal-weekday">Cz</div>', '<div class="cal-weekday">Pt</div>', '<div class="cal-weekday">Sb</div>', '<div class="cal-weekday">Nd</div>'];
+
+    for (let i = 0; i < firstDow; i++) parts.push('<div class="cal-cell cal-cell--empty"></div>');
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const payments = byDay[dateStr];
+        const todayClass = dateStr === today ? ' cal-cell--today' : '';
+        if (payments) {
+            const total = payments.reduce((s, p) => s + p.amount, 0);
+            const ratio = maxDay > 0 ? total / maxDay : 1;
+            const heat = isLightTheme()
+                ? `rgba(124, 58, 237, ${0.15 + ratio * 0.45})`
+                : `rgba(167, 139, 250, ${0.18 + ratio * 0.5})`;
+            const hasEstimate = payments.some((p) => p.estimated);
+            parts.push(`<button type="button" class="cal-cell cal-cell--clickable cal-cell--debt${hasEstimate ? ' cal-cell--debt-est' : ''}${todayClass}" style="background:${heat}" onclick="openCalendarDay('${dateStr}')">
+                <span class="cal-day-num">${day}</span>
+                <span class="cal-day-amount debt">${formatCompactPln(total)}</span>
+                <span class="cal-day-debt-count">${payments.length}×</span>
+            </button>`);
+        } else {
+            parts.push(`<button type="button" class="cal-cell cal-cell--clickable${todayClass}" onclick="openCalendarDay('${dateStr}')">
+                <span class="cal-day-num">${day}</span>
+            </button>`);
+        }
+    }
+
+    grid.innerHTML = parts.join('');
+
+    if (totalEl) {
+        totalEl.innerHTML = monthTotal > 0
+            ? `<strong>Planowane spłaty w tym miesiącu: ${formatPlnAmount(monthTotal)}</strong>
+               <span class="reports-hint">Raty z umów${hasHints ? ' + szac. spłaty kart (wg ostatnich mies.)' : ''}.</span>`
+            : '<p class="reports-hint">Brak zaplanowanych rat w tym miesiącu.</p>';
+    }
+}
+
+function renderDebtPeakChart() {
+    const canvas = document.getElementById('reportsDebtPeakChart');
+    const summaryEl = document.getElementById('reports-debt-peak-summary');
+    const cardEl = document.getElementById('reports-debt-peak-card');
+    if (!canvas) return;
+
+    const series = buildDebtPeakSeries(24);
+    if (!series.totals.some((v) => v > 0)) {
+        cardEl?.classList.add('hidden');
+        if (reportsDebtPeakChartInstance) {
+            reportsDebtPeakChartInstance.destroy();
+            reportsDebtPeakChartInstance = null;
+        }
+        return;
+    }
+    cardEl?.classList.remove('hidden');
+
+    if (reportsDebtPeakChartInstance) reportsDebtPeakChartInstance.destroy();
+
+    const theme = getReportsChartTheme();
+    const peakColors = series.totals.map((_, i) => (
+        i === series.peakIdx ? 'rgba(124, 58, 237, 0.95)' : 'rgba(124, 58, 237, 0.42)'
+    ));
+
+    reportsDebtPeakChartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: series.labels,
+            datasets: [{
+                label: 'Raty i spłaty',
+                data: series.totals,
+                backgroundColor: peakColors,
+                borderRadius: 6,
+                borderSkipped: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 2.2,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: theme.tooltipBg,
+                    callbacks: {
+                        label: (ctx) => formatPlnAmount(ctx.parsed.y)
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: theme.legendColor, maxRotation: 45, minRotation: 0, font: { size: 10 } },
+                    grid: { display: false }
+                },
+                y: {
+                    ticks: { color: theme.legendColor, callback: (v) => `${Math.round(v / 1000)}k` },
+                    grid: { color: theme.gridColor }
+                }
+            }
+        }
+    });
+
+    if (summaryEl && series.peakValue > 0) {
+        summaryEl.innerHTML = `<div class="debt-peak-highlight">
+            <span class="label">Szczyt obciążenia</span>
+            <strong>${formatPlnAmount(series.peakValue)}</strong>
+            <span class="reports-hint">w ${escapeHtml(series.peakLabel)} — najwyższa suma planowanych rat w kolejnych 24 mies.</span>
+        </div>`;
+    }
+}
+
+function renderDebtFreedomTimeline() {
+    const el = document.getElementById('reports-debt-freedom-timeline');
+    const cardEl = document.getElementById('reports-debt-freedom-card');
+    if (!el) return;
+
+    const items = buildDebtFreedomTimeline();
+    if (!items.length) {
+        cardEl?.classList.add('hidden');
+        el.innerHTML = '';
+        return;
+    }
+    cardEl?.classList.remove('hidden');
+
+    const today = new Date().toISOString().split('T')[0];
+    const dated = items.filter((i) => i.endDate);
+    const maxMonths = dated.length
+        ? Math.max(...dated.map((i) => {
+            const d = new Date(`${i.endDate}T12:00:00`);
+            const n = new Date(`${today}T12:00:00`);
+            return Math.max(1, (d.getFullYear() - n.getFullYear()) * 12 + (d.getMonth() - n.getMonth()));
+        }))
+        : 1;
+
+    el.innerHTML = items.map((item) => {
+        const monthsLeft = item.endDate
+            ? Math.max(0, (() => {
+                const d = new Date(`${item.endDate}T12:00:00`);
+                const n = new Date(`${today}T12:00:00`);
+                return (d.getFullYear() - n.getFullYear()) * 12 + (d.getMonth() - n.getMonth());
+            })())
+            : null;
+        const pct = monthsLeft !== null ? Math.min(100, Math.round((monthsLeft / maxMonths) * 100)) : 8;
+        const dateLabel = item.endDate ? formatTxDate(item.endDate) : item.label;
+        const openFn = item.kind === 'loan'
+            ? `openLoanDetails('${escapeHtml(item.id)}')`
+            : `openCreditCardDetails('${escapeHtml(item.id)}')`;
+        return `<div class="debt-freedom-row ${item.kind}-clickable" role="button" tabindex="0" onclick="${openFn}" onkeydown="if (event.key==='Enter') ${openFn}">
+            <div class="debt-freedom-head">
+                <strong>${escapeHtml(item.name)}</strong>
+                <span class="debt-freedom-date">${escapeHtml(dateLabel)}</span>
+            </div>
+            <div class="debt-freedom-bar"><span style="width:${pct}%"></span></div>
+            <div class="debt-freedom-meta">
+                <span>${formatPlnAmount(item.amount)} pozostało</span>
+                <span>${escapeHtml(item.detail || item.label)}</span>
+            </div>
+        </div>`;
+    }).join('');
 }
 
 function renderReportsYearHeatmap() {
@@ -676,11 +1117,18 @@ function renderReportsYearHeatmap() {
     const yearExpenses = appState.transactions.filter(
         (t) => t.type === 'expense' && t.date.startsWith(String(year))
     );
-    const byDay = {};
+    const yearIncome = appState.transactions.filter(
+        (t) => t.type === 'income' && t.date.startsWith(String(year))
+    );
+    const byDayExpense = {};
+    const byDayIncome = {};
     yearExpenses.forEach((t) => {
-        byDay[t.date] = (byDay[t.date] || 0) + t.amount;
+        byDayExpense[t.date] = (byDayExpense[t.date] || 0) + t.amount;
     });
-    const maxDay = Math.max(0, ...Object.values(byDay));
+    yearIncome.forEach((t) => {
+        byDayIncome[t.date] = (byDayIncome[t.date] || 0) + t.amount;
+    });
+    const maxDay = Math.max(0, ...Object.values(byDayExpense));
 
     const months = [];
     for (let m = 0; m < 12; m++) {
@@ -688,10 +1136,16 @@ function renderReportsYearHeatmap() {
         const cells = [];
         for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = `${year}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            const amt = byDay[dateStr] || 0;
-            const heat = getExpenseHeatColor(amt, maxDay);
-            cells.push(`<button type="button" class="heat-dot${amt ? ' heat-dot--active' : ''}" style="background:${heat}"
-                title="${d}: ${amt ? formatPlnAmount(amt) : '0 zł'}" onclick="openCalendarDay('${dateStr}')"></button>`);
+            const expenseAmt = byDayExpense[dateStr] || 0;
+            const incomeAmt = byDayIncome[dateStr] || 0;
+            const heat = getExpenseHeatColor(expenseAmt, maxDay);
+            const incomeClass = incomeAmt ? ' heat-dot--income' : '';
+            const title = [
+                expenseAmt ? `Wydatki: ${formatPlnAmount(expenseAmt)}` : null,
+                incomeAmt ? `Wpływy: ${formatPlnAmount(incomeAmt)}` : null
+            ].filter(Boolean).join(' · ') || '0 zł';
+            cells.push(`<button type="button" class="heat-dot${expenseAmt ? ' heat-dot--active' : ''}${incomeClass}" style="background:${heat}"
+                title="${d}: ${title}" onclick="openCalendarDay('${dateStr}')"></button>`);
         }
         const monthName = new Date(year, m, 1).toLocaleDateString('pl-PL', { month: 'short' });
         months.push(`<div class="heat-month">
@@ -756,21 +1210,39 @@ function renderCalendarDayPanel() {
 
     const expenseTotal = dayTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
     const incomeTotal = dayTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const scheduled = getScheduledDebtPaymentsOnDate(calendarDayDate);
+    const scheduledTotal = scheduled.reduce((s, p) => s + p.amount, 0);
 
     summaryEl.innerHTML = `<div class="calendar-day-summary-row">
         <span class="calendar-day-weekday">${weekday.charAt(0).toUpperCase() + weekday.slice(1)}</span>
         <div class="calendar-day-totals">
             ${expenseTotal > 0 ? `<span class="calendar-day-total expense">−${formatPlnAmount(expenseTotal)}</span>` : ''}
             ${incomeTotal > 0 ? `<span class="calendar-day-total income">+${formatPlnAmount(incomeTotal)}</span>` : ''}
+            ${scheduledTotal > 0 ? `<span class="calendar-day-total debt">◎ ${formatPlnAmount(scheduledTotal)}</span>` : ''}
         </div>
     </div>`;
 
-    if (!dayTx.length) {
+    const scheduledHtml = scheduled.length
+        ? `<div class="calendar-day-scheduled">
+            <div class="calendar-day-scheduled-title">Planowane spłaty</div>
+            ${scheduled.map((p) => `<div class="calendar-day-scheduled-row">
+                <span>${escapeHtml(p.name)}${p.estimated ? ' <em>(szac.)</em>' : ''}</span>
+                <strong>${formatPlnAmount(p.amount)}</strong>
+            </div>`).join('')}
+        </div>`
+        : '';
+
+    if (!dayTx.length && !scheduled.length) {
         listEl.innerHTML = '<div class="empty-state"><p>Brak transakcji</p></div>';
         return;
     }
 
-    listEl.innerHTML = dayTx.map((t) => {
+    if (!dayTx.length) {
+        listEl.innerHTML = scheduledHtml + '<div class="empty-state"><p>Brak transakcji tego dnia</p></div>';
+        return;
+    }
+
+    listEl.innerHTML = scheduledHtml + dayTx.map((t) => {
         const globalIndex = appState.transactions.indexOf(t);
         const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
         const meta = t.subCategory === '[Bez podkategorii]' ? '' : t.mainCategory;
@@ -877,24 +1349,599 @@ function closeMonthDrill() {
     document.body.style.overflow = '';
 }
 
+function getPeriodBoundsFromCtx(ctx) {
+    if (ctx.rangeStart && ctx.rangeEnd) {
+        return { start: ctx.rangeStart, end: ctx.rangeEnd };
+    }
+    if (ctx.mode === 'year' && ctx.period !== 'all') {
+        return { start: `${ctx.period}-01-01`, end: `${ctx.period}-12-31` };
+    }
+    if (!ctx.periodTx.length) {
+        const y = new Date().getFullYear();
+        return { start: `${y}-01-01`, end: `${y}-12-31` };
+    }
+    const dates = ctx.periodTx.map((t) => t.date).sort();
+    return { start: dates[0], end: dates[dates.length - 1] };
+}
+
+function getCreditCardMovementsInRange(start, end) {
+    return (appState.creditCardMovements || [])
+        .map(normalizeCreditCardMovement)
+        .filter(Boolean)
+        .filter((m) => {
+            if (start && m.date < start) return false;
+            if (end && m.date > end) return false;
+            return true;
+        });
+}
+
+function monthKeyToDateRange(key) {
+    const { year, month, day } = key;
+    if (day !== undefined) {
+        const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        return { start: date, end: date };
+    }
+    const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const end = new Date(year, month + 1, 0).toISOString().split('T')[0];
+    return { start, end };
+}
+
+function sumLoanDebtPaymentsInRange(start, end) {
+    return getTransactionsInRange(start, end)
+        .filter((t) => t.type === 'expense' && isLoanOrDebtPayment(t))
+        .reduce((s, t) => s + t.amount, 0);
+}
+
+function sumCardRepaymentsInRange(start, end) {
+    return getCreditCardMovementsInRange(start, end)
+        .filter((m) => m.type === 'repayment')
+        .reduce((s, m) => s + m.amount, 0);
+}
+
+function getDebtPaymentsInPeriod(ctx) {
+    const loanPayments = ctx.periodTx
+        .filter((t) => t.type === 'expense' && isLoanOrDebtPayment(t))
+        .reduce((s, t) => s + t.amount, 0);
+    const { start, end } = getPeriodBoundsFromCtx(ctx);
+    const cardRepayments = sumCardRepaymentsInRange(start, end);
+    return { loanPayments, cardRepayments, total: loanPayments + cardRepayments };
+}
+
+function getChartParamsFromCtx(ctx) {
+    let chartPeriod = ctx.period;
+    let chartRangeStart = ctx.rangeStart;
+    let chartRangeEnd = ctx.rangeEnd;
+    if (ctx.mode === 'month') {
+        chartPeriod = 'month';
+    } else if (ctx.mode === 'compare' && ctx.periodA) {
+        chartPeriod = 'range';
+        chartRangeStart = ctx.periodA.start;
+        chartRangeEnd = ctx.periodA.end;
+    }
+    return { chartPeriod, chartRangeStart, chartRangeEnd };
+}
+
+function buildDebtPaymentsMonthData(ctx) {
+    const { chartPeriod, chartRangeStart, chartRangeEnd } = getChartParamsFromCtx(ctx);
+    const { monthLabels, monthKeys } = buildReportsMonthChartData(
+        chartPeriod,
+        ctx.periodTx,
+        chartRangeStart,
+        chartRangeEnd
+    );
+    const loanData = [];
+    const cardData = [];
+    monthKeys.forEach((key) => {
+        const { start, end } = monthKeyToDateRange(key);
+        loanData.push(sumLoanDebtPaymentsInRange(start, end));
+        cardData.push(sumCardRepaymentsInRange(start, end));
+    });
+    return { monthLabels, loanData, cardData };
+}
+
+function sumCardDebtIncreasesInRange(start, end) {
+    const transfers = getCreditCardMovementsInRange(start, end)
+        .filter((m) => m.type === 'transfer_out')
+        .reduce((s, m) => s + m.amount, 0);
+    const purchases = getTransactionsInRange(start, end)
+        .filter((t) => t.type === 'expense' && t.creditCardId)
+        .reduce((s, t) => s + t.amount, 0);
+    return transfers + purchases;
+}
+
+function sumLoanPaymentsForLoanInRange(loan, start, end) {
+    return getTransactionsInRange(start, end)
+        .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
+        .reduce((s, t) => s + t.amount, 0);
+}
+
+function buildDebtBalanceTrendData(ctx) {
+    const { chartPeriod, chartRangeStart, chartRangeEnd } = getChartParamsFromCtx(ctx);
+    const { monthLabels, monthKeys } = buildReportsMonthChartData(
+        chartPeriod,
+        ctx.periodTx,
+        chartRangeStart,
+        chartRangeEnd
+    );
+    if (!monthKeys.length) {
+        return { monthLabels: [], totalData: [], loanData: [], cardData: [] };
+    }
+
+    const loanEnd = getLoanCapitalLeft();
+    const cardEnd = getCreditCardDebtTotal();
+    const totalData = new Array(monthKeys.length);
+    const loanData = new Array(monthKeys.length);
+    const cardData = new Array(monthKeys.length);
+
+    totalData[totalData.length - 1] = loanEnd + cardEnd;
+    loanData[loanData.length - 1] = loanEnd;
+    cardData[cardData.length - 1] = cardEnd;
+
+    for (let i = monthKeys.length - 2; i >= 0; i -= 1) {
+        const { start, end } = monthKeyToDateRange(monthKeys[i + 1]);
+        const loanPayments = sumLoanDebtPaymentsInRange(start, end);
+        const cardRepayments = sumCardRepaymentsInRange(start, end);
+        const cardIncreases = sumCardDebtIncreasesInRange(start, end);
+
+        loanData[i] = Math.max(0, loanData[i + 1] + loanPayments);
+        cardData[i] = Math.max(0, cardData[i + 1] + cardRepayments - cardIncreases);
+        totalData[i] = loanData[i] + cardData[i];
+    }
+
+    return { monthLabels, totalData, loanData, cardData };
+}
+
+function addMonthsToToday(months) {
+    const d = new Date();
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString().split('T')[0];
+}
+
+function getRecentCardRepaymentAverage(cardId, months = 3) {
+    const end = new Date().toISOString().split('T')[0];
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - months);
+    const start = startDate.toISOString().split('T')[0];
+    const repayments = getCreditCardMovementsInRange(start, end)
+        .filter((m) => m.cardId === cardId && m.type === 'repayment');
+    if (!repayments.length) return 0;
+    const byMonth = {};
+    repayments.forEach((m) => {
+        const key = m.date.slice(0, 7);
+        byMonth[key] = (byMonth[key] || 0) + m.amount;
+    });
+    const monthTotals = Object.values(byMonth);
+    return monthTotals.reduce((s, v) => s + v, 0) / monthTotals.length;
+}
+
+function estimateLoanPayoff(loan) {
+    const capital = loan.currentCapitalLeft || 0;
+    if (!capital) return { label: 'Spłacony', detail: '' };
+
+    if (loan.details?.endDate) {
+        return {
+            label: formatTxDate(loan.details.endDate),
+            detail: 'termin z umowy'
+        };
+    }
+    if (loan.details?.remainingInstallments > 0) {
+        const months = loan.details.remainingInstallments;
+        return {
+            label: `~${months} mies.`,
+            detail: `${loan.details.remainingInstallments} rat wg umowy`
+        };
+    }
+    if (loan.nextInstallmentAmount > 0) {
+        const months = Math.ceil(capital / loan.nextInstallmentAmount);
+        return {
+            label: `~${months} mies.`,
+            detail: `przy racie ${formatPlnAmount(loan.nextInstallmentAmount)}`
+        };
+    }
+    return { label: '—', detail: 'brak danych o racie' };
+}
+
+function estimateCardPayoff(card) {
+    const balance = card.currentBalance || 0;
+    if (!balance) return { label: 'Spłacona', detail: '' };
+
+    const avg = getRecentCardRepaymentAverage(card.id);
+    if (avg < 1) {
+        return { label: '—', detail: 'brak ostatnich spłat do wyliczenia' };
+    }
+    const months = Math.ceil(balance / avg);
+    return {
+        label: `~${months} mies.`,
+        detail: `przy śr. ${formatPlnAmount(avg)}/mies. (3 mies.)`
+    };
+}
+
+function classifyLoanPaymentAmount(loan, amount) {
+    const inst = loan.nextInstallmentAmount || 0;
+    if (!inst || amount <= inst * 1.05) {
+        return { regular: amount, over: 0 };
+    }
+    return { regular: inst, over: amount - inst };
+}
+
+function analyzeLoanPaymentsInPeriod(ctx) {
+    let regular = 0;
+    let over = 0;
+    getActiveLoans().forEach((loan) => {
+        ctx.periodTx
+            .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
+            .forEach((t) => {
+                const noteOver = /nadpłat|nadplat/i.test(t.note || '');
+                if (noteOver) {
+                    over += t.amount;
+                    return;
+                }
+                const split = classifyLoanPaymentAmount(loan, t.amount);
+                regular += split.regular;
+                over += split.over;
+            });
+    });
+    return { regular, over, total: regular + over };
+}
+
+function buildDebtSplitData(ctx) {
+    const { start, end } = getPeriodBoundsFromCtx(ctx);
+    const slices = [];
+
+    getActiveLoans().forEach((loan) => {
+        const amount = ctx.periodTx
+            .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
+            .reduce((s, t) => s + t.amount, 0);
+        if (amount > 0) slices.push({ label: getLoanDisplayName(loan), amount });
+    });
+
+    getActiveCreditCards().forEach((card) => {
+        const amount = getCreditCardMovementsInRange(start, end)
+            .filter((m) => m.cardId === card.id && m.type === 'repayment')
+            .reduce((s, m) => s + m.amount, 0);
+        if (amount > 0) slices.push({ label: `${card.name} (karta)`, amount });
+    });
+
+    slices.sort((a, b) => b.amount - a.amount);
+    return slices;
+}
+
+function renderReportsDebtTrendChart(ctx) {
+    const canvas = document.getElementById('reportsDebtTrendChart');
+    if (!canvas) return;
+
+    const { monthLabels, totalData, loanData, cardData } = buildDebtBalanceTrendData(ctx);
+    const theme = getReportsChartTheme();
+    const chartCtx = canvas.getContext('2d');
+    if (reportsDebtTrendChartInstance) reportsDebtTrendChartInstance.destroy();
+
+    if (!monthLabels.length) return;
+
+    const totalColor = isLightTheme() ? 'rgba(15, 23, 42, 0.9)' : 'rgba(245, 245, 245, 0.9)';
+    const loanColor = isLightTheme() ? 'rgba(99, 102, 241, 0.85)' : 'rgba(129, 140, 248, 0.85)';
+    const cardColor = isLightTheme() ? 'rgba(13, 148, 136, 0.85)' : 'rgba(45, 212, 191, 0.85)';
+
+    reportsDebtTrendChartInstance = new Chart(chartCtx, {
+        type: 'line',
+        data: {
+            labels: monthLabels,
+            datasets: [
+                {
+                    label: 'Razem',
+                    data: totalData,
+                    borderColor: totalColor,
+                    backgroundColor: 'transparent',
+                    tension: 0.3,
+                    pointRadius: 3,
+                    borderWidth: 2.5
+                },
+                {
+                    label: 'Kredyty',
+                    data: loanData,
+                    borderColor: loanColor,
+                    backgroundColor: 'transparent',
+                    tension: 0.3,
+                    pointRadius: 2,
+                    borderWidth: 1.5,
+                    borderDash: [4, 4]
+                },
+                {
+                    label: 'Karty',
+                    data: cardData,
+                    borderColor: cardColor,
+                    backgroundColor: 'transparent',
+                    tension: 0.3,
+                    pointRadius: 2,
+                    borderWidth: 1.5,
+                    borderDash: [4, 4]
+                }
+            ]
+        },
+        options: getReportsChartOptions(theme)
+    });
+}
+
+function renderReportsDebtSplitChart(ctx, canvasId = 'reportsDebtSplitChart', legendId = 'reports-debt-split-legend') {
+    const canvas = document.getElementById(canvasId);
+    const legendEl = document.getElementById(legendId);
+    if (!canvas) return;
+
+    const slices = buildDebtSplitData(ctx);
+    const isTabChart = canvasId === 'reportsDebtsSplitChart';
+    if (isTabChart) {
+        if (reportsDebtsTabSplitInstance) reportsDebtsTabSplitInstance.destroy();
+    } else if (reportsDebtSplitChartInstance) {
+        reportsDebtSplitChartInstance.destroy();
+    }
+
+    if (!slices.length) {
+        if (legendEl) legendEl.innerHTML = '<p class="reports-hint">Brak spłat w wybranym okresie.</p>';
+        return;
+    }
+
+    const labels = slices.map((s) => s.label);
+    const values = slices.map((s) => s.amount);
+    const colors = getChartSliceColors(labels, 'expense');
+    const borderColor = getChartBorderColor();
+
+    const chart = new Chart(canvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{
+                data: values,
+                backgroundColor: colors,
+                borderColor,
+                borderWidth: 3,
+                borderRadius: 5,
+                spacing: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 1.35,
+            cutout: '58%',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: getReportsChartTheme().tooltipBg,
+                    callbacks: {
+                        label: (context) => `${context.label}: ${formatPlnAmount(context.parsed)}`
+                    }
+                }
+            }
+        }
+    });
+
+    if (isTabChart) reportsDebtsTabSplitInstance = chart;
+    else reportsDebtSplitChartInstance = chart;
+
+    if (legendEl) {
+        const total = values.reduce((s, v) => s + v, 0);
+        legendEl.innerHTML = slices.map((slice, i) => {
+            const pct = total > 0 ? Math.round((slice.amount / total) * 100) : 0;
+            return `<div class="reports-debt-split-item">
+                <span class="reports-debt-split-dot" style="background:${colors[i]}"></span>
+                <span class="reports-debt-split-label">${escapeHtml(slice.label)}</span>
+                <strong>${formatPlnAmount(slice.amount)}</strong>
+                <em>${pct}%</em>
+            </div>`;
+        }).join('');
+    }
+}
+
+function renderReportsDebtForecast(targetId = 'reports-debt-forecast') {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+
+    const loans = getActiveLoans();
+    const cards = getActiveCreditCards();
+    if (!loans.length && !cards.length) {
+        el.innerHTML = '';
+        return;
+    }
+
+    const loanRows = loans.map((loan) => {
+        const est = estimateLoanPayoff(loan);
+        return `<div class="debt-forecast-row loan-clickable" role="button" tabindex="0"
+            onclick="openLoanDetails('${escapeHtml(loan.id)}')"
+            onkeydown="if (event.key === 'Enter') openLoanDetails('${escapeHtml(loan.id)}')">
+            <div class="debt-forecast-info">
+                <strong>${escapeHtml(getLoanDisplayName(loan))}</strong>
+                <span class="reports-hint">${est.detail}</span>
+            </div>
+            <div class="debt-forecast-meta">
+                <span class="label">Kapitał</span>
+                <strong>${formatPlnAmount(loan.currentCapitalLeft || 0)}</strong>
+                <span class="debt-forecast-date">${est.label}</span>
+            </div>
+        </div>`;
+    }).join('');
+
+    const cardRows = cards.map((card) => {
+        const est = estimateCardPayoff(card);
+        return `<div class="debt-forecast-row credit-clickable" role="button" tabindex="0"
+            onclick="openCreditCardDetails('${escapeHtml(card.id)}')"
+            onkeydown="if (event.key === 'Enter') openCreditCardDetails('${escapeHtml(card.id)}')">
+            <div class="debt-forecast-info">
+                <strong>${escapeHtml(card.name)}</strong>
+                <span class="reports-hint">${est.detail}</span>
+            </div>
+            <div class="debt-forecast-meta">
+                <span class="label">Zadłużenie</span>
+                <strong>${formatPlnAmount(card.currentBalance)}</strong>
+                <span class="debt-forecast-date">${est.label}</span>
+            </div>
+        </div>`;
+    }).join('');
+
+    el.innerHTML = `
+        <div class="reports-debt-forecast-box">
+            <h3 class="analysis-subsection-label">Prognoza spłaty</h3>
+            <p class="reports-hint">Szacunek na podstawie rat z umowy lub średniej spłat kart.</p>
+            ${loanRows}${cardRows}
+        </div>`;
+}
+
+function renderReportsDebtOverpayment(ctx, targetId = 'reports-debt-overpayment') {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+
+    const { regular, over, total } = analyzeLoanPaymentsInPeriod(ctx);
+    if (!total) {
+        el.innerHTML = '';
+        return;
+    }
+
+    const overPct = Math.round((over / total) * 100);
+    el.innerHTML = `
+        <div class="reports-debt-overpayment-box">
+            <h3 class="analysis-subsection-label">Raty vs nadpłaty (kredyty)</h3>
+            <div class="loan-report-grid">
+                <div><span class="label">Raty</span><strong>${formatPlnAmount(regular)}</strong></div>
+                <div><span class="label">Nadpłaty</span><strong class="income">${formatPlnAmount(over)}</strong></div>
+                <div><span class="label">Razem</span><strong class="expense">${formatPlnAmount(total)}</strong></div>
+                <div><span class="label">Udział nadpłat</span><strong>${overPct}%</strong></div>
+            </div>
+            <div class="progress-bar-bg" style="margin-top:12px">
+                <div class="progress-bar-fill" style="width:${overPct}%;background:var(--success)"></div>
+            </div>
+        </div>`;
+}
+
 function renderReportsNetWorth() {
     const el = document.getElementById('reports-net-worth');
     if (!el) return;
 
     const assets = getPortfolioValuePln();
-    const loanLeft = getLoanCapitalLeft();
-    const net = calcNetWorthPln();
+    const loanDebt = getLoanCapitalLeft();
+    const cardDebt = getCreditCardDebtTotal();
+    const totalDebt = loanDebt + cardDebt;
+    const net = assets - totalDebt;
 
     el.innerHTML = `
         <div class="networth-grid">
             <div><span class="label">Aktywa</span><strong class="income">${formatPlnAmount(assets)}</strong></div>
-            <div><span class="label">Kredyty</span><strong class="expense">−${formatPlnAmount(loanLeft)}</strong></div>
+            <div><span class="label">Kredyty (kapitał)</span><strong class="expense">−${formatPlnAmount(loanDebt)}</strong></div>
+            <div><span class="label">Karty kredytowe</span><strong class="expense">−${formatPlnAmount(cardDebt)}</strong></div>
+            <div><span class="label">Razem zobowiązania</span><strong class="expense">−${formatPlnAmount(totalDebt)}</strong></div>
             <div class="networth-total"><span class="label">Wartość netto</span><strong style="color:${net >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatPlnAmount(net)}</strong></div>
         </div>`;
 }
 
-function renderReportsLoanSummary(ctx) {
-    const el = document.getElementById('reports-loan-summary');
+function renderReportsDebtDsr(ctx) {
+    const el = document.getElementById('reports-debt-dsr');
+    if (!el) return;
+
+    const income = ctx.periodTx
+        .filter((t) => t.type === 'income')
+        .reduce((s, t) => s + t.amount, 0);
+    const { loanPayments, cardRepayments, total } = getDebtPaymentsInPeriod(ctx);
+    const dsr = income > 0 ? Math.round((total / income) * 100) : null;
+    const dsrClass = dsr === null ? '' : (dsr > 40 ? 'expense' : (dsr > 25 ? '' : 'income'));
+
+    el.innerHTML = `
+        <div class="reports-debt-dsr-box">
+            <div class="reports-debt-dsr-hero">
+                <span class="label">Obciążenie dochodem (DSR)</span>
+                <strong class="${dsrClass}">${dsr !== null ? `${dsr}%` : '—'}</strong>
+            </div>
+            <p class="reports-hint reports-debt-dsr-hint">Udział wpływów przeznaczony na spłaty w wybranym okresie.</p>
+            <div class="loan-report-grid reports-debt-dsr-grid">
+                <div><span class="label">Raty kredytów</span><strong class="expense">${formatPlnAmount(loanPayments)}</strong></div>
+                <div><span class="label">Spłaty kart</span><strong class="expense">${formatPlnAmount(cardRepayments)}</strong></div>
+                <div><span class="label">Razem spłaty</span><strong class="expense">${formatPlnAmount(total)}</strong></div>
+                <div><span class="label">Wpływy w okresie</span><strong class="income">${formatPlnAmount(income)}</strong></div>
+            </div>
+        </div>`;
+}
+
+function renderReportsCreditCardSummary(ctx, targetId = 'reports-credit-card-summary') {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+
+    const cards = getActiveCreditCards();
+    if (!cards.length) {
+        el.innerHTML = '';
+        return;
+    }
+
+    const { start, end } = getPeriodBoundsFromCtx(ctx);
+
+    el.innerHTML = `<div class="analysis-subsection-label">Karty kredytowe</div>` + cards.map((card) => {
+        const available = getCreditCardAvailable(card);
+        const usedPct = card.limit > 0 ? Math.round((card.currentBalance / card.limit) * 100) : 0;
+        const cardId = escapeHtml(card.id);
+        const repayments = getCreditCardMovementsInRange(start, end)
+            .filter((m) => m.cardId === card.id && m.type === 'repayment')
+            .reduce((s, m) => s + m.amount, 0);
+        const transfers = getCreditCardMovementsInRange(start, end)
+            .filter((m) => m.cardId === card.id && m.type === 'transfer_out')
+            .reduce((s, m) => s + m.amount, 0);
+
+        return `<div class="analysis-loan-click credit-clickable" role="button" tabindex="0"
+            onclick="openCreditCardDetails('${cardId}')" onkeydown="if (event.key === 'Enter') openCreditCardDetails('${cardId}')">
+            <div class="analysis-subsection-label">${escapeHtml(card.name)}</div>
+            <div class="loan-report-grid">
+                <div><span class="label">Zadłużenie</span><strong>${formatPlnAmount(card.currentBalance)}</strong></div>
+                <div><span class="label">Wykorzystanie</span><strong>${usedPct}%</strong></div>
+                <div><span class="label">Spłaty w okresie</span><strong class="expense">${formatPlnAmount(repayments)}</strong></div>
+                <div><span class="label">Przelewy z karty</span><strong>${formatPlnAmount(transfers)}</strong></div>
+            </div>
+            <div class="progress-bar-bg" style="margin-top:12px"><div class="progress-bar-fill" style="width:${Math.min(100, usedPct)}%;background:var(--accent)"></div></div>
+            <p class="reports-hint" style="margin-top:8px">Wolne: ${formatPlnAmount(available)} z ${formatPlnAmount(card.limit)}</p>
+        </div>`;
+    }).join('');
+}
+
+function renderReportsDebtPaymentsChart(ctx, canvasId = 'reportsDebtChart') {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+
+    const { monthLabels, loanData, cardData } = buildDebtPaymentsMonthData(ctx);
+    const theme = getReportsChartTheme();
+    const chartCtx = canvas.getContext('2d');
+    const isTabChart = canvasId === 'reportsDebtsChart';
+    if (isTabChart) {
+        if (reportsDebtsTabChartInstance) reportsDebtsTabChartInstance.destroy();
+    } else if (reportsDebtChartInstance) {
+        reportsDebtChartInstance.destroy();
+    }
+
+    const debtColor = isLightTheme() ? 'rgba(99, 102, 241, 0.85)' : 'rgba(129, 140, 248, 0.85)';
+    const cardColor = isLightTheme() ? 'rgba(13, 148, 136, 0.85)' : 'rgba(45, 212, 191, 0.85)';
+
+    const chart = new Chart(chartCtx, {
+        type: 'bar',
+        data: {
+            labels: monthLabels,
+            datasets: [
+                {
+                    label: 'Raty kredytów',
+                    data: loanData,
+                    backgroundColor: debtColor,
+                    borderRadius: 6,
+                    borderSkipped: false
+                },
+                {
+                    label: 'Spłaty kart',
+                    data: cardData,
+                    backgroundColor: cardColor,
+                    borderRadius: 6,
+                    borderSkipped: false
+                }
+            ]
+        },
+        options: getReportsChartOptions(theme)
+    });
+
+    if (isTabChart) reportsDebtsTabChartInstance = chart;
+    else reportsDebtChartInstance = chart;
+}
+
+function renderReportsLoanSummary(ctx, targetId = 'reports-loan-summary') {
+    const el = document.getElementById(targetId);
     if (!el) return;
 
     const loans = getActiveLoans();
@@ -979,6 +2026,224 @@ function buildReportsPrintHtml(ctx, savingsRate) {
         </tbody></table></body></html>`;
 }
 
+function estimateAnnualInterest(loan) {
+    const capital = loan.currentCapitalLeft || 0;
+    const rate = loan.interestRate || 0;
+    if (!capital || !rate) return 0;
+    return capital * (rate / 100);
+}
+
+function simulateOverpaymentMonths(loan, extraMonthly) {
+    const capital = loan.currentCapitalLeft || 0;
+    const installment = loan.nextInstallmentAmount || 0;
+    if (!capital || !installment) return null;
+
+    let baseMonths;
+    if (loan.details?.remainingInstallments > 0) {
+        baseMonths = loan.details.remainingInstallments;
+    } else {
+        baseMonths = Math.ceil(capital / installment);
+    }
+
+    const extra = Math.max(0, extraMonthly);
+    const totalPayment = installment + extra;
+    const newMonths = Math.ceil(capital / totalPayment);
+    const annualInterestSaved = estimateAnnualInterest(loan) * (Math.max(0, baseMonths - newMonths) / 12);
+
+    return {
+        baseMonths,
+        newMonths,
+        savedMonths: Math.max(0, baseMonths - newMonths),
+        installment,
+        extraMonthly: extra,
+        totalPayment,
+        annualInterestSaved
+    };
+}
+
+function populateDebtsScenarioLoanSelect() {
+    const select = document.getElementById('debts-scenario-loan');
+    if (!select) return;
+    const loans = getActiveLoans().filter((l) => l.nextInstallmentAmount > 0 && l.currentCapitalLeft > 0);
+    if (!loans.length) {
+        select.innerHTML = '<option value="">— brak —</option>';
+        select.disabled = true;
+        debtsScenarioLoanId = null;
+        return;
+    }
+    select.disabled = false;
+    if (!debtsScenarioLoanId || !loans.some((l) => l.id === debtsScenarioLoanId)) {
+        debtsScenarioLoanId = loans[0].id;
+    }
+    select.innerHTML = loans.map((l) =>
+        `<option value="${escapeHtml(l.id)}"${l.id === debtsScenarioLoanId ? ' selected' : ''}>${escapeHtml(getLoanDisplayName(l))}</option>`
+    ).join('');
+}
+
+function setDebtsScenarioExtra(amount) {
+    debtsScenarioExtra = amount;
+    const input = document.getElementById('debts-scenario-extra');
+    if (input) input.value = String(amount);
+    document.querySelectorAll('.debts-scenario-chips .toggle-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.textContent === `+${amount}`);
+    });
+    onDebtsScenarioChange();
+}
+
+function onDebtsScenarioChange() {
+    debtsScenarioLoanId = document.getElementById('debts-scenario-loan')?.value || debtsScenarioLoanId;
+    debtsScenarioExtra = parseFloat(document.getElementById('debts-scenario-extra')?.value) || 0;
+    renderReportsDebtScenarios(getReportsPeriodContext());
+}
+
+function renderReportsDebtsHero(ctx) {
+    const totalEl = document.getElementById('reports-debts-hero-total');
+    const metaEl = document.getElementById('reports-debts-hero-meta');
+    if (!totalEl) return;
+
+    const totalDebt = getLoanSummaryTotal();
+    const loanDebt = getLoanCapitalLeft();
+    const cardDebt = getCreditCardDebtTotal();
+    const { loanPayments, cardRepayments, total } = getDebtPaymentsInPeriod(ctx);
+    const income = ctx.periodTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const dsr = income > 0 ? Math.round((total / income) * 100) : null;
+
+    totalEl.textContent = formatPlnAmount(totalDebt);
+    if (metaEl) {
+        metaEl.textContent = [
+            `kredyty ${formatPlnAmount(loanDebt)}`,
+            `karty ${formatPlnAmount(cardDebt)}`,
+            `spłaty w okresie ${formatPlnAmount(total)}`,
+            dsr !== null ? `DSR ${dsr}%` : ''
+        ].filter(Boolean).join(' · ');
+    }
+}
+
+function renderReportsDebtInterest() {
+    const el = document.getElementById('reports-debt-interest');
+    if (!el) return;
+
+    const loans = getActiveLoans().filter((l) => (l.currentCapitalLeft || 0) > 0);
+    if (!loans.length) {
+        el.innerHTML = '<p class="reports-hint">Brak aktywnych kredytów.</p>';
+        return;
+    }
+
+    let totalAnnual = 0;
+    const rows = loans.map((loan) => {
+        const annual = estimateAnnualInterest(loan);
+        const monthly = annual / 12;
+        totalAnnual += annual;
+        const loanId = escapeHtml(loan.id);
+        return `<div class="debt-interest-row loan-clickable" role="button" tabindex="0"
+            onclick="openLoanDetails('${loanId}')" onkeydown="if (event.key === 'Enter') openLoanDetails('${loanId}')">
+            <div class="debt-interest-info">
+                <strong>${escapeHtml(getLoanDisplayName(loan))}</strong>
+                <span class="reports-hint">${loan.interestRate ? `${loan.interestRate}%` : 'brak stopy'} · kapitał ${formatPlnAmount(loan.currentCapitalLeft)}</span>
+            </div>
+            <div class="debt-interest-amounts">
+                <div><span class="label">/ rok</span><strong class="expense">${formatPlnAmount(annual)}</strong></div>
+                <div><span class="label">/ mies.</span><strong>${formatPlnAmount(monthly)}</strong></div>
+            </div>
+        </div>`;
+    }).join('');
+
+    el.innerHTML = `${rows}
+        <div class="debt-interest-total">
+            <span>Łączny szacunek odsetek / rok</span>
+            <strong class="expense">${formatPlnAmount(totalAnnual)}</strong>
+        </div>`;
+}
+
+function renderReportsDebtLtv() {
+    const el = document.getElementById('reports-debt-ltv');
+    if (!el) return;
+
+    const mortgages = getActiveLoans().filter((l) => isMortgageLoan(l) && (l.details?.propertyValue || 0) > 0);
+    if (!mortgages.length) {
+        el.innerHTML = '<p class="reports-hint">Brak hipoteki z wartością nieruchomości w szczegółach umowy.</p>';
+        return;
+    }
+
+    el.innerHTML = mortgages.map((loan) => {
+        const propertyValue = loan.details.propertyValue;
+        const capital = loan.currentCapitalLeft || 0;
+        const ltv = propertyValue > 0 ? (capital / propertyValue) * 100 : 0;
+        const contractLtv = loan.details.ltvPercent || 0;
+        const loanId = escapeHtml(loan.id);
+        const ltvClass = ltv > 80 ? 'expense' : '';
+
+        return `<div class="debt-ltv-row loan-clickable" role="button" tabindex="0"
+            onclick="openLoanDetails('${loanId}')" onkeydown="if (event.key === 'Enter') openLoanDetails('${loanId}')">
+            <div class="debt-ltv-head">
+                <strong>${escapeHtml(getLoanDisplayName(loan))}</strong>
+                <span class="debt-ltv-value ${ltvClass}">${ltv.toFixed(1)}% LTV</span>
+            </div>
+            <div class="loan-report-grid">
+                <div><span class="label">Kapitał</span><strong>${formatPlnAmount(capital)}</strong></div>
+                <div><span class="label">Wartość nieruchomości</span><strong>${formatPlnAmount(propertyValue)}</strong></div>
+                <div><span class="label">LTV z umowy</span><strong>${contractLtv ? `${contractLtv}%` : '—'}</strong></div>
+                <div><span class="label">Wolny kapitał</span><strong class="income">${formatPlnAmount(Math.max(0, propertyValue - capital))}</strong></div>
+            </div>
+            <div class="progress-bar-bg" style="margin-top:12px">
+                <div class="progress-bar-fill" style="width:${Math.min(100, ltv)}%;background:${ltv > 80 ? 'var(--danger)' : 'var(--accent)'}"></div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderReportsDebtScenarios(ctx) {
+    const el = document.getElementById('reports-debt-scenarios');
+    if (!el) return;
+
+    const loan = getLoanById(debtsScenarioLoanId);
+    if (!loan) {
+        el.innerHTML = '<p class="reports-hint">Wybierz kredyt z ratą, aby policzyć scenariusz.</p>';
+        return;
+    }
+
+    const sim = simulateOverpaymentMonths(loan, debtsScenarioExtra);
+    if (!sim) {
+        el.innerHTML = '<p class="reports-hint">Brak danych o racie dla tego kredytu.</p>';
+        return;
+    }
+
+    const savedYears = Math.floor(sim.savedMonths / 12);
+    const savedRemMonths = sim.savedMonths % 12;
+    const savedLabel = sim.savedMonths
+        ? (savedYears > 0 ? `${savedYears} lat ${savedRemMonths} mies.` : `${sim.savedMonths} mies.`)
+        : 'brak skrócenia';
+
+    el.innerHTML = `
+        <div class="debt-scenario-result">
+            <div class="loan-report-grid">
+                <div><span class="label">Obecna rata</span><strong>${formatPlnAmount(sim.installment)}</strong></div>
+                <div><span class="label">Z nadpłatą +${formatPlnAmount(sim.extraMonthly)}</span><strong class="income">${formatPlnAmount(sim.totalPayment)}</strong></div>
+                <div><span class="label">Czas spłaty teraz</span><strong>~${sim.baseMonths} mies.</strong></div>
+                <div><span class="label">Po nadpłacie</span><strong>~${sim.newMonths} mies.</strong></div>
+            </div>
+            <div class="debt-scenario-highlight">
+                <span>Skrócenie</span>
+                <strong class="income">${savedLabel}</strong>
+            </div>
+            <p class="reports-hint">Szacunek uproszczony: stała rata + nadpłata, bez zmian oprocentowania. Oszczędność odsetek ~${formatPlnAmount(sim.annualInterestSaved)} (przybliżenie).</p>
+        </div>`;
+}
+
+function renderReportsDebtsSection(ctx) {
+    renderReportsDebtsHero(ctx);
+    renderReportsDebtInterest();
+    renderReportsDebtLtv();
+    populateDebtsScenarioLoanSelect();
+    renderReportsDebtScenarios(ctx);
+    renderReportsDebtForecast('reports-debts-forecast');
+    renderReportsDebtOverpayment(ctx, 'reports-debts-overpayment');
+    renderReportsLoanSummary(ctx, 'reports-debts-loans');
+    renderReportsCreditCardSummary(ctx, 'reports-debts-cards');
+    renderReportsDebtPaymentsChart(ctx, 'reportsDebtsChart');
+    renderReportsDebtSplitChart(ctx, 'reportsDebtsSplitChart', 'reports-debts-split-legend');
+}
+
 function exportReportsPdf() {
     const ctx = getReportsPeriodContext();
     const savingsRate = summarizePeriod(ctx.periodTx).savings;
@@ -1001,7 +2266,16 @@ function renderPhase3Reports(ctx, savingsRate) {
     renderReportsCategoryTrends();
     renderReportsForecast(ctx);
     renderReportsNetWorth();
+    renderReportsDebtDsr(ctx);
     renderReportsLoanSummary(ctx);
+    renderReportsCreditCardSummary(ctx);
+    renderReportsDebtForecast();
+    renderReportsDebtOverpayment(ctx);
+    renderReportsDebtPaymentsChart(ctx);
+    renderReportsDebtTrendChart(ctx);
+    renderReportsDebtSplitChart(ctx);
+    renderReportsDebtsSection(ctx);
+    renderDebtCalendarSection();
     renderReportsYearReview(ctx);
 
     const printEl = document.getElementById('reports-print-meta');

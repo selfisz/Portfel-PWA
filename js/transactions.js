@@ -28,41 +28,69 @@ function switchView(viewId, title, element) {
         document.getElementById('tx-note').value = '';
         document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
         document.getElementById('tx-recurring').checked = false;
+        const ccCheckbox = document.getElementById('tx-credit-card');
+        if (ccCheckbox) ccCheckbox.checked = false;
+        onCreditCardPurchaseToggle();
         document.getElementById('btn-loan-payment')?.classList.remove('hidden');
+        document.getElementById('btn-card-payment')?.classList.remove('hidden');
         setFormMode('expense');
         focusAmountField();
     }
 }
 
-function setFormMode(mode) {
-    if (editingTxIndex !== null && mode === 'loan') return;
-
+function setAddFormPanels(mode) {
     const isLoan = mode === 'loan';
+    const isCard = mode === 'card';
+    const isStandard = mode === 'expense' || mode === 'income';
+
+    document.getElementById('add-form-standard')?.classList.toggle('hidden', !isStandard);
+    document.getElementById('add-form-loan')?.classList.toggle('hidden', !isLoan);
+    document.getElementById('add-form-card')?.classList.toggle('hidden', !isCard);
+    document.getElementById('add-sticky-standard')?.classList.toggle('hidden', !isStandard);
+    document.getElementById('add-sticky-loan')?.classList.toggle('hidden', !isLoan);
+    document.getElementById('add-sticky-card')?.classList.toggle('hidden', !isCard);
+}
+
+function setFormMode(mode) {
+    if (editingTxIndex !== null && (mode === 'loan' || mode === 'card')) return;
+
     formState.formMode = mode;
+    const isLoan = mode === 'loan';
+    const isCard = mode === 'card';
+    const isStandard = mode === 'expense' || mode === 'income';
 
     document.getElementById('btn-expense')?.classList.toggle('active', mode === 'expense');
     document.getElementById('btn-income')?.classList.toggle('active', mode === 'income');
-    document.getElementById('btn-loan-payment')?.classList.toggle('active', mode === 'loan');
-    document.getElementById('add-form-standard')?.classList.toggle('hidden', isLoan);
-    document.getElementById('add-form-loan')?.classList.toggle('hidden', !isLoan);
-    document.getElementById('add-sticky-standard')?.classList.toggle('hidden', isLoan);
-    document.getElementById('add-sticky-loan')?.classList.toggle('hidden', !isLoan);
+    document.getElementById('btn-loan-payment')?.classList.toggle('active', isLoan);
+    document.getElementById('btn-card-payment')?.classList.toggle('active', isCard);
+    setAddFormPanels(mode);
 
     const recurringWrapper = document.getElementById('recurring-wrapper');
+    const creditCardWrapper = document.getElementById('credit-card-purchase-wrapper');
     if (recurringWrapper) {
-        recurringWrapper.style.display = isLoan || editingTxIndex !== null ? 'none' : 'flex';
+        recurringWrapper.style.display = !isStandard || editingTxIndex !== null ? 'none' : 'flex';
+    }
+    if (creditCardWrapper) {
+        creditCardWrapper.style.display = !isStandard || editingTxIndex !== null || formState.currentType !== 'expense' ? 'none' : 'block';
     }
 
-    if (mode === 'expense' || mode === 'income') {
+    if (isStandard) {
         setTransactionType(mode, true);
         document.getElementById('form-header').innerText = editingTxIndex !== null
             ? 'Edytuj transakcję'
             : 'Nowa transakcja';
+        populateCreditCardSelectors();
         return;
     }
 
-    populateAddLoanPaymentForm();
-    document.getElementById('form-header').innerText = 'Spłata kredytu';
+    if (isLoan) {
+        populateAddLoanPaymentForm();
+        document.getElementById('form-header').innerText = 'Spłata kredytu';
+        return;
+    }
+
+    populateAddCreditCardForm();
+    document.getElementById('form-header').innerText = 'Operacja na karcie';
 }
 
 function setTransactionType(type, keepSelection = false) {
@@ -71,8 +99,16 @@ function setTransactionType(type, keepSelection = false) {
     document.getElementById('btn-expense').classList.toggle('active', type === 'expense');
     document.getElementById('btn-income').classList.toggle('active', type === 'income');
     document.getElementById('btn-loan-payment')?.classList.remove('active');
-    document.getElementById('add-form-standard')?.classList.remove('hidden');
-    document.getElementById('add-form-loan')?.classList.add('hidden');
+    document.getElementById('btn-card-payment')?.classList.remove('active');
+    setAddFormPanels(type);
+    const creditCardWrapper = document.getElementById('credit-card-purchase-wrapper');
+    if (creditCardWrapper) {
+        creditCardWrapper.style.display = type === 'expense' && editingTxIndex === null ? 'block' : 'none';
+    }
+    if (type === 'expense') {
+        const ccCheckbox = document.getElementById('tx-credit-card');
+        if (ccCheckbox && !ccCheckbox.checked) onCreditCardPurchaseToggle();
+    }
     if (!keepSelection) {
         formState.selectedMainCategory = '';
         formState.selectedSubCategory = '';
@@ -124,6 +160,8 @@ function saveTransaction() {
     const date = document.getElementById('tx-date').value;
     const note = document.getElementById('tx-note').value;
     const isRecurring = document.getElementById('tx-recurring').checked;
+    const paidWithCard = document.getElementById('tx-credit-card')?.checked;
+    const creditCardId = document.getElementById('tx-credit-card-select')?.value;
 
     if (!amount || !formState.selectedMainCategory || !formState.selectedSubCategory || !date) {
         return alert('Uzupełnij kwotę i kategorie.');
@@ -138,6 +176,13 @@ function saveTransaction() {
         note
     };
 
+    if (paidWithCard && formState.currentType === 'expense') {
+        if (!creditCardId) return alert('Wybierz kartę kredytową.');
+        txData.creditCardId = creditCardId;
+    }
+
+    const previousTx = editingTxIndex !== null ? { ...appState.transactions[editingTxIndex] } : null;
+
     if (editingTxIndex !== null) {
         if (appState.transactions[editingTxIndex].recurringId) {
             txData.recurringId = appState.transactions[editingTxIndex].recurringId;
@@ -148,6 +193,8 @@ function saveTransaction() {
         if (isRecurring) txData.recurringId = 'rec_' + Date.now();
         appState.transactions.unshift(txData);
     }
+
+    syncCreditCardOnTransactionSave(txData, previousTx);
     addRecentCategory(txData.type, txData.mainCategory, txData.subCategory);
     appState.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
     saveState();
@@ -161,10 +208,22 @@ function editTransaction(index) {
     document.getElementById('form-header').innerText = 'Edytuj transakcję';
     document.getElementById('btn-cancel-edit').style.display = 'block';
     document.getElementById('recurring-wrapper').style.display = 'none';
+    document.getElementById('credit-card-purchase-wrapper').style.display = tx.type === 'expense' ? 'block' : 'none';
     document.getElementById('btn-loan-payment')?.classList.add('hidden');
+    document.getElementById('btn-card-payment')?.classList.add('hidden');
     document.getElementById('tx-amount').value = tx.amount;
     document.getElementById('tx-date').value = tx.date;
     document.getElementById('tx-note').value = tx.note || '';
+    const ccCheckbox = document.getElementById('tx-credit-card');
+    if (ccCheckbox) {
+        ccCheckbox.checked = !!(tx.creditCardId && tx.type === 'expense');
+        populateCreditCardSelectors();
+        if (tx.creditCardId) {
+            const select = document.getElementById('tx-credit-card-select');
+            if (select) select.value = tx.creditCardId;
+        }
+        onCreditCardPurchaseToggle();
+    }
     formState.selectedMainCategory = tx.mainCategory;
     formState.selectedSubCategory = tx.subCategory;
     setFormMode(tx.type);
@@ -174,6 +233,8 @@ function editTransaction(index) {
 
 function deleteTransaction(index) {
     if (confirm('Na pewno usunąć?')) {
+        const tx = appState.transactions[index];
+        syncCreditCardOnTransactionDelete(tx);
         appState.transactions.splice(index, 1);
         saveState();
         renderDashboard();
