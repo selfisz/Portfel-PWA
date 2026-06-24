@@ -653,7 +653,6 @@ function renderDepositsCalendarList() {
         return;
     }
     card?.classList.remove('hidden');
-    const today = new Date().toISOString().split('T')[0];
     const sorted = [...deposits].sort((a, b) => a.endDate.localeCompare(b.endDate));
     el.innerHTML = sorted.map((asset) => {
         const days = typeof daysUntilDate === 'function' ? daysUntilDate(asset.endDate) : null;

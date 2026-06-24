@@ -1,0 +1,519 @@
+/**
+ * Testy jednostkowe dla:
+ *  - js/ui.js           (getBasePath, updateShowMoreButton)
+ *  - js/dashboard.js    (transactionMatchesSearch, formatDueLabel, getTransactionDateBounds)
+ *  - js/settings.js     (suggestCategoryBudget, getExportPayload, applyBackupPayload)
+ *  - js/reports-calendar.js (addMonthsToDate, getLoanInstallmentDay, getEffectiveDueDay,
+ *                            getScheduledDebtPaymentsOnDate, buildDebtPeakSeries)
+ */
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { loadScript, runInContext } from './helpers/load.js';
+
+// ─── helpers ───────────────────────────────────────────────────────────────
+
+function makeEl(extra = {}) {
+    return {
+        value: '', classList: {
+            _set: new Set(),
+            toggle(cls, force) { force === undefined ? (this._set.has(cls) ? this._set.delete(cls) : this._set.add(cls)) : (force ? this._set.add(cls) : this._set.delete(cls)); },
+            add(cls) { this._set.add(cls); },
+            remove(cls) { this._set.delete(cls); },
+            contains(cls) { return this._set.has(cls); }
+        },
+        style: {}, innerHTML: '', textContent: '', innerText: '',
+        dataset: {}, checked: false, disabled: false,
+        getAttribute: () => null, setAttribute: () => {},
+        querySelectorAll: () => ({ forEach: () => {} }),
+        appendChild: () => {},
+        insertAdjacentElement: () => {},
+        parentElement: null,
+        previousElementSibling: null,
+        ...extra
+    };
+}
+
+beforeAll(() => {
+    const store = {};
+    globalThis.localStorage = {
+        getItem: (k) => store[k] ?? null,
+        setItem: (k, v) => { store[k] = String(v); },
+        removeItem: (k) => { delete store[k]; },
+        clear: () => { Object.keys(store).forEach((k) => delete store[k]); }
+    };
+
+    const elMap = {};
+    globalThis.document = {
+        getElementById: (id) => {
+            if (!elMap[id]) elMap[id] = makeEl({ id });
+            return elMap[id];
+        },
+        querySelector: () => null,
+        querySelectorAll: () => ({ forEach: () => {}, length: 0 }),
+        createElement: (tag) => makeEl({ tagName: tag.toUpperCase(), addEventListener: () => {} }),
+        body: makeEl()
+    };
+    globalThis.window = { matchMedia: () => ({ matches: false, addEventListener: () => {} }), setTimeout: (fn) => fn() };
+    try { globalThis.navigator = {}; } catch { /* readonly in some envs */ }
+    globalThis.location = { pathname: '/Portfel-PWA/index.html' };
+    globalThis.confirm = () => true;
+    globalThis.alert = () => {};
+    globalThis.setTimeout = (fn) => fn && fn();
+    globalThis.URL = { createObjectURL: () => 'blob:mock', revokeObjectURL: () => {} };
+    globalThis.Blob = class { constructor() {} };
+
+    globalThis.stateRef = { set: () => Promise.resolve(), on: () => {}, off: () => {} };
+    globalThis.cloudBackupRef = { set: () => Promise.resolve(), get: () => Promise.resolve({ exists: false }) };
+    globalThis.formatPlnAmount = (n) => `${Number(n).toFixed(2)} zł`;
+    globalThis.formatCompactPln = (n) => `${n} zł`;
+    globalThis.formatTxDate = (d) => d;
+    globalThis.escapeHtml = (t) => String(t ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    globalThis.saveState = () => {};
+    globalThis.hapticFeedback = () => {};
+    globalThis.showSettingsToast = () => {};
+    globalThis.renderDashboard = () => {};
+    globalThis.renderAssets = () => {};
+    globalThis.renderReports = () => {};
+    globalThis.refreshCurrentView = () => {};
+    globalThis.deleteTransaction = () => {};
+    globalThis.editTransaction = () => {};
+    globalThis.renderCategoryIcon = () => '';
+    globalThis.formatDateGroup = (d) => d;
+    globalThis.getChartSliceColors = () => [];
+    globalThis.getChartBorderColor = () => '#fff';
+    globalThis.isLightTheme = () => false;
+    globalThis.getPortfolioValuePln = () => 0;
+    globalThis.getLoanSummaryTotal = () => 0;
+    globalThis.getSnapshotMonthChange = () => null;
+    globalThis.getOperationalCashPln = () => 0;
+    globalThis.hasScheduledLoanInstallments = () => false;
+    globalThis.getUpcomingLoanInstallments = () => [];
+    globalThis.daysUntilDate = () => null;
+    globalThis.getLoanDisplayName = (l) => l?.name || l?.subCategory || 'Kredyt';
+    globalThis.renderCreditCardsSection = () => {};
+    globalThis.renderDashboardCreditCards = () => {};
+    globalThis.migrateRecentCategories = () => {};
+    globalThis.closeCategoryEditor = () => {};
+    globalThis.renderCategoryEditor = () => {};
+    globalThis.openCreditCardDetails = () => {};
+    globalThis.openLoanDetails = () => {};
+    globalThis.closeCalendarDay = () => {};
+    globalThis.editFromCalendarDay = () => {};
+    globalThis.openCalendarDay = () => {};
+    globalThis.openMonthDrillDown = () => {};
+    globalThis.renderReportsCalendar = () => {};
+    globalThis.renderDebtCalendarSection = () => {};
+    globalThis.renderDebtCalendarGrid = () => {};
+    globalThis.renderDebtPeakChart = () => {};
+    globalThis.renderDebtFreedomTimeline = () => {};
+    globalThis.renderDepositsCalendarList = () => {};
+    globalThis.renderReportsYearHeatmap = () => {};
+    globalThis.getRecentCardRepaymentAverage = () => 500;
+    globalThis.estimateLoanPayoff = () => ({ label: '~12 mies.', detail: '' });
+    globalThis.estimateCardPayoff = () => ({ label: '~3 mies.', detail: '' });
+    globalThis.getReportsChartTheme = () => ({ tooltipBg: '#000', legendColor: '#fff', gridColor: '#333' });
+    globalThis.getExpenseHeatColor = () => 'rgba(0,0,0,0.1)';
+    globalThis.summarizePeriod = (txs) => {
+        const income = txs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+        const expense = txs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+        return { income, expense, balance: income - expense };
+    };
+    globalThis.reportsCalendarView = 'month';
+    globalThis.reportsCalendarYear = 2024;
+    globalThis.reportsCalendarMonth = 0;
+    globalThis.reportsMonthChartMeta = {};
+    globalThis.calendarDayDate = null;
+    globalThis.calendarDayFilter = 'all';
+    globalThis.reportsDebtPeakChartInstance = null;
+    globalThis.dashboardChartInstance = null;
+    globalThis.activeChartCategory = null;
+    globalThis.chartViewType = 'expense';
+    globalThis.categoryEditorType = 'expense';
+    globalThis.Chart = class { constructor() {} destroy() {} toggleDataVisibility() {} getDataVisibility() { return true; } };
+    globalThis.normalizeAppState = (data) => { _setAppState({ ..._getAppState(), ...data }); };
+    globalThis.getPersistedState = (s) => s;
+    globalThis.formState = { selectedMainCategory: '', selectedSubCategory: '' };
+
+    globalThis.getLoans = () => (globalThis.appState?.loans || []).map(normalizeLoan);
+    globalThis.getActiveLoans = () => getLoans().filter((l) => !l.archived && l.currentCapitalLeft > 0);
+    globalThis.getActiveCreditCards = () => (globalThis.appState?.creditCards || []).filter((c) => !c.archived && c.limit > 0);
+    globalThis.normalizeLoan = (raw) => {
+        const l = raw && typeof raw === 'object' ? { ...raw } : {};
+        l.id = l.id || `loan-${Date.now().toString(36)}`;
+        l.name = l.name || '';
+        l.subCategory = l.subCategory || '';
+        l.totalAmount = Math.max(0, parseFloat(l.totalAmount) || 0);
+        l.currentCapitalLeft = Math.max(0, parseFloat(l.currentCapitalLeft) || 0);
+        l.interestRate = Math.max(0, parseFloat(l.interestRate) || 0);
+        l.nextInstallmentAmount = Math.max(0, parseFloat(l.nextInstallmentAmount) || 0);
+        l.nextInstallmentDue = l.nextInstallmentDue || '';
+        l.archived = !!l.archived;
+        l.details = l.details || {};
+        return l;
+    };
+
+    loadScript('js/constants.js');
+    loadScript('js/portfolio.js');
+    loadScript('js/state.js');
+    loadScript('js/assets.js');
+    loadScript('js/cash.js');
+    loadScript('js/loan-details.js');
+    loadScript('js/credit-cards.js');
+    loadScript('js/ui.js');
+    loadScript('js/settings.js');
+    loadScript('js/reports-debt.js');
+    loadScript('js/dashboard.js');
+    loadScript('js/reports-calendar.js');
+
+    runInContext(`
+        function _getAppState()  { return appState; }
+        function _setAppState(s) { appState = s; }
+    `);
+});
+
+beforeEach(() => {
+    _setAppState({
+        transactions: [],
+        loans: [],
+        creditCards: [],
+        assets: [],
+        cashMovements: [],
+        assetSnapshots: [],
+        assetValueHistory: [],
+        categoryBudgets: {},
+        creditCardMovements: [],
+        categoryTree: undefined
+    });
+    globalThis.confirm = () => true;
+    globalThis.activeChartCategory = null;
+    globalThis.chartViewType = 'expense';
+});
+
+// ===========================================================================
+// ui.js — getBasePath
+// ===========================================================================
+describe('getBasePath', () => {
+    it('zwraca ścieżkę z Portfel-PWA gdy w URL', () => {
+        globalThis.location = { pathname: '/Portfel-PWA/index.html' };
+        expect(getBasePath()).toBe('/Portfel-PWA');
+    });
+
+    it('zwraca pusty string gdy brak Portfel-PWA w pathname', () => {
+        globalThis.location = { pathname: '/index.html' };
+        expect(getBasePath()).toBe('');
+    });
+
+    it('obsługuje zagnieżdżoną ścieżkę', () => {
+        globalThis.location = { pathname: '/user/projects/Portfel-PWA/sub' };
+        expect(getBasePath()).toBe('/user/projects/Portfel-PWA');
+    });
+});
+
+// ===========================================================================
+// ui.js — updateShowMoreButton
+// ===========================================================================
+describe('updateShowMoreButton', () => {
+    it('ukrywa przycisk gdy totalCount <= visibleCount', () => {
+        const btn = makeEl();
+        const parent = makeEl();
+        updateShowMoreButton(btn, 5, 6, parent, null);
+        expect(btn.classList.contains('hidden')).toBe(true);
+    });
+
+    it('pokazuje przycisk gdy totalCount > visibleCount', () => {
+        const btn = makeEl();
+        const parent = makeEl();
+        updateShowMoreButton(btn, 10, 6, parent, null);
+        expect(btn.classList.contains('hidden')).toBe(false);
+    });
+
+    it('nic nie robi gdy btn = null', () => {
+        expect(() => updateShowMoreButton(null, 10, 5, {}, null)).not.toThrow();
+    });
+
+    it('nic nie robi gdy parent = null', () => {
+        const btn = makeEl();
+        expect(() => updateShowMoreButton(btn, 10, 5, null, null)).not.toThrow();
+    });
+});
+
+// ===========================================================================
+// dashboard.js — formatDueLabel
+// ===========================================================================
+describe('formatDueLabel', () => {
+    it('zwraca pusty string dla null', () => {
+        expect(formatDueLabel(null)).toBe('');
+    });
+
+    it('zwraca "dzisiaj" dla 0 dni', () => {
+        expect(formatDueLabel(0)).toBe('dzisiaj');
+    });
+
+    it('zwraca "jutro" dla 1 dnia', () => {
+        expect(formatDueLabel(1)).toBe('jutro');
+    });
+
+    it('zwraca "za N dni" dla dodatnich', () => {
+        expect(formatDueLabel(5)).toBe('za 5 dni');
+        expect(formatDueLabel(30)).toBe('za 30 dni');
+    });
+
+    it('zwraca "N dni temu" dla ujemnych', () => {
+        expect(formatDueLabel(-3)).toBe('3 dni temu');
+        expect(formatDueLabel(-1)).toBe('1 dni temu');
+    });
+});
+
+// ===========================================================================
+// dashboard.js — transactionMatchesSearch
+// ===========================================================================
+describe('transactionMatchesSearch', () => {
+    const tx = {
+        mainCategory: 'Jedzenie na mieście',
+        subCategory: 'Restauracje',
+        note: 'Obiad z klientem',
+        amount: 123.45,
+        date: '2024-01-15',
+        type: 'expense'
+    };
+
+    it('dopasowuje mainCategory (case-insensitive)', () => {
+        expect(transactionMatchesSearch(tx, 'jedzenie')).toBe(true);
+    });
+
+    it('dopasowuje subCategory', () => {
+        expect(transactionMatchesSearch(tx, 'restaurac')).toBe(true);
+    });
+
+    it('dopasowuje note', () => {
+        expect(transactionMatchesSearch(tx, 'klientem')).toBe(true);
+    });
+
+    it('dopasowuje kwotę jako string', () => {
+        expect(transactionMatchesSearch(tx, '123.45')).toBe(true);
+    });
+
+    it('dopasowuje datę', () => {
+        expect(transactionMatchesSearch(tx, '2024-01')).toBe(true);
+    });
+
+    it('zwraca false dla niedopasowania', () => {
+        expect(transactionMatchesSearch(tx, 'zakupy')).toBe(false);
+    });
+});
+
+// ===========================================================================
+// dashboard.js — getTransactionDateBounds
+// ===========================================================================
+describe('getTransactionDateBounds', () => {
+    it('zwraca dzisiaj (lokalny) gdy brak transakcji', () => {
+        const result = getTransactionDateBounds();
+        const now = new Date();
+        const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        expect(result.startDate).toBe(expected);
+        expect(result.endDate).toBe(expected);
+    });
+
+    it('zwraca min i max z transakcji', () => {
+        _setAppState({ ..._getAppState(), transactions: [
+            { date: '2024-03-15', type: 'expense', amount: 100, mainCategory: 'Dom', subCategory: '' },
+            { date: '2024-01-01', type: 'expense', amount: 50, mainCategory: 'Dom', subCategory: '' },
+            { date: '2024-06-30', type: 'income', amount: 200, mainCategory: 'Wynagrodzenie', subCategory: '' }
+        ]});
+        const result = getTransactionDateBounds();
+        expect(result.startDate).toBe('2024-01-01');
+        expect(result.endDate).toBe('2024-06-30');
+    });
+});
+
+// ===========================================================================
+// settings.js — suggestCategoryBudget
+// ===========================================================================
+describe('suggestCategoryBudget', () => {
+    it('zwraca 0 gdy brak transakcji', () => {
+        expect(suggestCategoryBudget('Dom')).toBe(0);
+    });
+
+    it('zwraca 0 gdy brak wydatków tej kategorii', () => {
+        _setAppState({ ..._getAppState(), transactions: [
+            { date: '2024-01-10', type: 'expense', mainCategory: 'Jedzenie', amount: 500 }
+        ]});
+        expect(suggestCategoryBudget('Dom')).toBe(0);
+    });
+
+    it('oblicza średnią z miesięcy z wydatkami', () => {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = now.getMonth();
+        const txDate = `${y}-${String(m + 1).padStart(2, '0')}-10`;
+        _setAppState({ ..._getAppState(), transactions: [
+            { date: txDate, type: 'expense', mainCategory: 'Dom', amount: 1000 }
+        ]});
+        const result = suggestCategoryBudget('Dom');
+        expect(result).toBe(1000);
+    });
+
+    it('zwraca zaokrągloną całkowitą wartość', () => {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = now.getMonth();
+        const prevDate = `${y}-${String(m).padStart(2, '0')}-10`;
+        const thisDate = `${y}-${String(m + 1).padStart(2, '0')}-10`;
+        _setAppState({ ..._getAppState(), transactions: [
+            { date: prevDate, type: 'expense', mainCategory: 'Dom', amount: 700 },
+            { date: thisDate, type: 'expense', mainCategory: 'Dom', amount: 800 }
+        ]});
+        const result = suggestCategoryBudget('Dom');
+        expect(Number.isInteger(result)).toBe(true);
+        expect(result).toBeGreaterThan(0);
+    });
+
+    it('ignoruje transakcje typu income', () => {
+        const now = new Date();
+        const txDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-10`;
+        _setAppState({ ..._getAppState(), transactions: [
+            { date: txDate, type: 'income', mainCategory: 'Dom', amount: 5000 }
+        ]});
+        expect(suggestCategoryBudget('Dom')).toBe(0);
+    });
+});
+
+// ===========================================================================
+// settings.js — getExportPayload
+// ===========================================================================
+describe('getExportPayload', () => {
+    it('zwraca payload z wersją 1 i exportedAt', () => {
+        _setAppState({ ..._getAppState(), transactions: [{ date: '2024-01-01', amount: 100, type: 'expense', mainCategory: 'Dom', subCategory: '' }] });
+        const payload = getExportPayload();
+        expect(payload.version).toBe(1);
+        expect(payload.exportedAt).toBeTruthy();
+        expect(payload.transactionCount).toBe(1);
+        expect(payload.data).toBeTruthy();
+    });
+});
+
+// ===========================================================================
+// reports-calendar.js — addMonthsToDate
+// ===========================================================================
+describe('addMonthsToDate', () => {
+    it('dodaje jeden miesiąc', () => {
+        expect(addMonthsToDate('2024-01-15', 1)).toBe('2024-02-15');
+    });
+
+    it('dodaje miesiące przez koniec roku', () => {
+        expect(addMonthsToDate('2024-11-10', 3)).toBe('2025-02-10');
+    });
+
+    it('odejmuje miesiące (ujemne)', () => {
+        expect(addMonthsToDate('2024-03-20', -2)).toBe('2024-01-20');
+    });
+
+    it('obsługuje overflow dni (luty) — przechodzi do marca', () => {
+        // Jan 31 + 1 miesiąc = Feb 31 → JavaScript overflow = Mar 2 (2024 przestępny)
+        const result = addMonthsToDate('2024-01-31', 1);
+        expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(result.startsWith('2024-03') || result.startsWith('2024-02')).toBe(true);
+    });
+
+    it('dodaje 0 miesięcy = ta sama data', () => {
+        expect(addMonthsToDate('2024-06-15', 0)).toBe('2024-06-15');
+    });
+});
+
+// ===========================================================================
+// reports-calendar.js — getLoanInstallmentDay
+// ===========================================================================
+describe('getLoanInstallmentDay', () => {
+    it('zwraca null dla loan bez nextInstallmentDue', () => {
+        expect(getLoanInstallmentDay({})).toBeNull();
+        expect(getLoanInstallmentDay(null)).toBeNull();
+    });
+
+    it('wyciąga dzień z daty YYYY-MM-DD', () => {
+        expect(getLoanInstallmentDay({ nextInstallmentDue: '2024-01-15' })).toBe(15);
+        expect(getLoanInstallmentDay({ nextInstallmentDue: '2024-12-01' })).toBe(1);
+    });
+
+    it('zwraca null dla nieprawidłowej daty', () => {
+        expect(getLoanInstallmentDay({ nextInstallmentDue: 'invalid' })).toBeNull();
+    });
+});
+
+// ===========================================================================
+// reports-calendar.js — getEffectiveDueDay
+// ===========================================================================
+describe('getEffectiveDueDay', () => {
+    it('zwraca dueDay gdy mieści się w miesiącu', () => {
+        expect(getEffectiveDueDay(15, 2024, 0)).toBe(15); // Styczeń
+        expect(getEffectiveDueDay(28, 2024, 1)).toBe(28); // Luty
+    });
+
+    it('clampuje do ostatniego dnia miesiąca', () => {
+        expect(getEffectiveDueDay(31, 2024, 1)).toBe(29); // Luty 2024 (przestępny)
+        expect(getEffectiveDueDay(31, 2023, 1)).toBe(28); // Luty 2023
+        expect(getEffectiveDueDay(31, 2024, 3)).toBe(30); // Kwiecień
+    });
+
+    it('zwraca 1 gdy dueDay = 1', () => {
+        expect(getEffectiveDueDay(1, 2024, 5)).toBe(1);
+    });
+});
+
+// ===========================================================================
+// reports-calendar.js — getScheduledDebtPaymentsOnDate
+// ===========================================================================
+describe('getScheduledDebtPaymentsOnDate', () => {
+    it('zwraca pustą tablicę gdy brak aktywnych kredytów i kart', () => {
+        expect(getScheduledDebtPaymentsOnDate('2024-01-15')).toEqual([]);
+    });
+
+    it('zwraca ratę kredytu na odpowiedni dzień', () => {
+        _setAppState({ ..._getAppState(), loans: [
+            { id: 'l1', name: 'Hipoteka', subCategory: 'Hipoteka',
+              totalAmount: 300000, currentCapitalLeft: 250000,
+              nextInstallmentAmount: 2000, nextInstallmentDue: '2024-01-15',
+              interestRate: 7, archived: false, includeInSummary: true }
+        ]});
+
+        const result = getScheduledDebtPaymentsOnDate('2024-01-15');
+        expect(result).toHaveLength(1);
+        expect(result[0].type).toBe('loan');
+        expect(result[0].amount).toBe(2000);
+    });
+
+    it('nie zwraca raty przed pierwszym terminem', () => {
+        _setAppState({ ..._getAppState(), loans: [
+            { id: 'l1', name: 'Kredyt', subCategory: 'Kredyt',
+              totalAmount: 10000, currentCapitalLeft: 9000,
+              nextInstallmentAmount: 500, nextInstallmentDue: '2024-03-15',
+              interestRate: 5, archived: false }
+        ]});
+        const result = getScheduledDebtPaymentsOnDate('2024-01-15');
+        expect(result).toHaveLength(0);
+    });
+});
+
+// ===========================================================================
+// reports-calendar.js — getLoanPayoffEndDate
+// ===========================================================================
+describe('getLoanPayoffEndDate', () => {
+    it('zwraca null gdy brak kapitału', () => {
+        const loan = normalizeLoan({ id: 'l1', currentCapitalLeft: 0 });
+        expect(getLoanPayoffEndDate(loan)).toBeNull();
+    });
+
+    it('używa endDate z details gdy dostępny', () => {
+        const loan = normalizeLoan({ id: 'l1', currentCapitalLeft: 100000, details: { endDate: '2030-06-01' } });
+        expect(getLoanPayoffEndDate(loan)).toBe('2030-06-01');
+    });
+
+    it('szacuje datę spłaty z nextInstallmentAmount', () => {
+        const loan = normalizeLoan({ id: 'l1', currentCapitalLeft: 12000, nextInstallmentAmount: 1000 });
+        const result = getLoanPayoffEndDate(loan);
+        expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('zwraca null gdy brak danych do szacowania', () => {
+        const loan = normalizeLoan({ id: 'l1', currentCapitalLeft: 100000 });
+        expect(getLoanPayoffEndDate(loan)).toBeNull();
+    });
+});

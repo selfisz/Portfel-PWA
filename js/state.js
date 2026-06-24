@@ -220,7 +220,8 @@ function refreshCurrentView() {
 }
 
 function checkAndProcessRecurringTransactions() {
-    const currentMonthStr = new Date().toISOString().substring(0, 7);
+    const today = new Date();
+    const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
     const recurringTxs = appState.transactions.filter(t => t.recurringId);
     const uniqueRecurringGroups = [...new Set(recurringTxs.map(t => t.recurringId))];
 
@@ -229,7 +230,11 @@ function checkAndProcessRecurringTransactions() {
         const history = recurringTxs.filter(t => t.recurringId === recId);
         const alreadyAddedThisMonth = history.some(t => t.date.startsWith(currentMonthStr));
         if (!alreadyAddedThisMonth) {
-            const clonedTx = { ...history[0] };
+            // Klonujemy najnowsze wystąpienie (nie pierwsze) żeby zachować aktualne dane
+            const latestTx = history.reduce((newest, t) =>
+                t.date > newest.date ? t : newest
+            , history[0]);
+            const clonedTx = { ...latestTx };
             clonedTx.date = `${currentMonthStr}-01`;
             appState.transactions.unshift(clonedTx);
             changesMade = true;

@@ -208,7 +208,7 @@ function suggestCategoryBudget(mainCategory) {
     for (let i = 0; i < 6; i++) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-        const end = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+        const end = localIsoDate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
         const sum = appState.transactions
             .filter((t) => t.type === 'expense' && t.mainCategory === mainCategory && t.date >= start && t.date <= end)
             .reduce((s, t) => s + t.amount, 0);

@@ -36,7 +36,7 @@ function normalizeCreditCardMovement(raw) {
         cardId: raw.cardId,
         type,
         amount,
-        date: raw.date || new Date().toISOString().split('T')[0],
+        date: raw.date || localIsoDate(new Date()),
         note: raw.note || ''
     };
 }
@@ -281,7 +281,7 @@ function confirmCreditCardQuickAction() {
         cardId,
         type,
         amount,
-        new Date().toISOString().split('T')[0],
+        localIsoDate(new Date()),
         note
     );
     if (!updated) return;
@@ -564,7 +564,7 @@ function populateAddCreditCardForm() {
     }
     const dateInput = document.getElementById('add-credit-card-date');
     if (dateInput && !dateInput.value) {
-        dateInput.value = new Date().toISOString().split('T')[0];
+        dateInput.value = localIsoDate(new Date());
     }
 }
 
@@ -572,7 +572,7 @@ function saveCreditCardMovementFromAdd() {
     const cardId = document.getElementById('add-credit-card-select')?.value;
     const type = document.getElementById('add-credit-card-type')?.value || 'repayment';
     const amount = parseFloat(document.getElementById('add-credit-card-amount')?.value);
-    const date = document.getElementById('add-credit-card-date')?.value || new Date().toISOString().split('T')[0];
+    const date = document.getElementById('add-credit-card-date')?.value || localIsoDate(new Date());
     const note = document.getElementById('add-credit-card-note')?.value.trim() || '';
 
     if (!cardId) {

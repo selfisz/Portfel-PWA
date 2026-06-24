@@ -191,15 +191,22 @@ function advanceLoanDueDate(isoDate) {
     const d = new Date(`${isoDate}T12:00:00`);
     if (Number.isNaN(d.getTime())) return isoDate;
     d.setMonth(d.getMonth() + 1);
-    return d.toISOString().split('T')[0];
+    return localIsoDate(d);
+}
+
+function localIsoDate(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
 }
 
 function getMonthDateBounds(date = new Date()) {
     const start = new Date(date.getFullYear(), date.getMonth(), 1);
     const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
     return {
-        startDate: start.toISOString().split('T')[0],
-        endDate: end.toISOString().split('T')[0]
+        startDate: localIsoDate(start),
+        endDate: localIsoDate(end)
     };
 }
 
@@ -219,11 +226,11 @@ function hasScheduledLoanInstallments() {
 
 function daysUntilDate(isoDate) {
     if (!isoDate) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayStr = localIsoDate(new Date());
+    const todayNoon = new Date(`${todayStr}T12:00:00`);
     const target = new Date(`${isoDate}T12:00:00`);
     if (Number.isNaN(target.getTime())) return null;
-    return Math.round((target - today) / 86400000);
+    return Math.round((target - todayNoon) / 86400000);
 }
 
 function getLoanTotalAmount(loan) {

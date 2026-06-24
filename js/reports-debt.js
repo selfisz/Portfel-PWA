@@ -33,7 +33,7 @@ function monthKeyToDateRange(key) {
         return { start: date, end: date };
     }
     const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const end = new Date(year, month + 1, 0).toISOString().split('T')[0];
+    const end = localIsoDate(new Date(year, month + 1, 0));
     return { start, end };
 }
 
@@ -145,14 +145,14 @@ function buildDebtBalanceTrendData(ctx) {
 function addMonthsToToday(months) {
     const d = new Date();
     d.setMonth(d.getMonth() + months);
-    return d.toISOString().split('T')[0];
+    return localIsoDate(d);
 }
 
 function getRecentCardRepaymentAverage(cardId, months = 3) {
-    const end = new Date().toISOString().split('T')[0];
+    const end = localIsoDate(new Date());
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - months);
-    const start = startDate.toISOString().split('T')[0];
+    const start = localIsoDate(startDate);
     const repayments = getCreditCardMovementsInRange(start, end)
         .filter((m) => m.cardId === cardId && m.type === 'repayment');
     if (!repayments.length) return 0;

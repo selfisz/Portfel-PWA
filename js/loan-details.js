@@ -83,7 +83,9 @@ function isGhostMortgageLoan(loan) {
     if (l.id === 'loan-primary') return true;
     const cap = l.currentCapitalLeft || 0;
     if (!l.details?.contractNumber && cap > 0 && cap < GHOST_MORTGAGE_CAPITAL_CEILING) return true;
-    return !l.details?.contractNumber;
+    // Kredyt hipoteczny bez numeru umowy i bez kapitału — ghost
+    if (!l.details?.contractNumber && cap === 0 && (l.totalAmount || 0) > 0) return true;
+    return false;
 }
 
 function purgeGhostMortgageLoans() {
@@ -315,7 +317,11 @@ function syncMbankConsolidationLoanFields() {
     });
 
     const details = { ...(loan.details || {}), ...snapshot.details };
-    if (JSON.stringify(loan.details || {}) !== JSON.stringify(details)) {
+    const currentKeys = Object.keys(details).sort();
+    const prevKeys = Object.keys(loan.details || {}).sort();
+    const detailsChanged = currentKeys.length !== prevKeys.length
+        || currentKeys.some((k) => details[k] !== (loan.details || {})[k]);
+    if (detailsChanged) {
         loan.details = details;
         changed = true;
     }

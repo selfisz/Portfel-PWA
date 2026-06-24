@@ -127,10 +127,7 @@ function getIncomeHeatColor(amount, maxAmount) {
 function blendCalendarHeat(expense, expenseMax, income, incomeMax) {
     const e = expense > 0 ? getExpenseHeatColor(expense, expenseMax) : null;
     const i = income > 0 ? getIncomeHeatColor(income, incomeMax) : null;
-    if (e && i) {
-        if (isLightTheme()) return `linear-gradient(145deg, ${e} 55%, ${i} 55%)`;
-        return `linear-gradient(145deg, ${e} 55%, ${i} 55%)`;
-    }
+    if (e && i) return `linear-gradient(145deg, ${e} 55%, ${i} 55%)`;
     return e || i || 'var(--input-bg)';
 }
 
@@ -213,7 +210,7 @@ function renderReportsCalendar() {
     labelEl.textContent = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
 
     const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const monthEnd = new Date(year, month + 1, 0).toISOString().split('T')[0];
+    const monthEnd = localIsoDate(new Date(year, month + 1, 0));
     const monthTx = appState.transactions.filter((t) => t.date >= monthStart && t.date <= monthEnd);
 
     const expenseByDay = {};
@@ -230,7 +227,7 @@ function renderReportsCalendar() {
     const maxIncome = Math.max(0, ...Object.values(incomeByDay));
     const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const today = new Date().toISOString().split('T')[0];
+    const today = localIsoDate(new Date());
 
     const parts = ['<div class="cal-weekday">Pn</div>', '<div class="cal-weekday">Wt</div>', '<div class="cal-weekday">Śr</div>', '<div class="cal-weekday">Cz</div>', '<div class="cal-weekday">Pt</div>', '<div class="cal-weekday">Sb</div>', '<div class="cal-weekday">Nd</div>'];
 
@@ -331,7 +328,7 @@ function calcReportsDailyAverage(period, periodTx) {
     if (period === 'all') {
         const cutoff = new Date(now);
         cutoff.setDate(cutoff.getDate() - 29);
-        const cutoffStr = cutoff.toISOString().split('T')[0];
+        const cutoffStr = localIsoDate(cutoff);
         const recentTotal = expenses
             .filter((t) => t.date >= cutoffStr)
             .reduce((sum, t) => sum + t.amount, 0);
@@ -445,7 +442,7 @@ function renderReportsTrendChart(period, periodTx, rangeStart, rangeEnd) {
 
 function getMonthExpenseTotal(year, month, sourceTx) {
     const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const monthEnd = new Date(year, month + 1, 0).toISOString().split('T')[0];
+    const monthEnd = localIsoDate(new Date(year, month + 1, 0));
     return sourceTx
         .filter((t) => t.type === 'expense' && t.date >= monthStart && t.date <= monthEnd)
         .reduce((sum, t) => sum + t.amount, 0);
@@ -686,7 +683,7 @@ function buildReportsMonthChartData(period, periodTx, rangeStart, rangeEnd) {
             const year = cursor.getFullYear();
             const month = cursor.getMonth();
             const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-            const monthEnd = new Date(year, month + 1, 0).toISOString().split('T')[0];
+            const monthEnd = localIsoDate(new Date(year, month + 1, 0));
             const monthTx = periodTx.filter((t) => t.date >= monthStart && t.date <= monthEnd);
             monthLabels.push(cursor.toLocaleDateString('pl-PL', { month: 'short', year: '2-digit' }));
             monthKeys.push({ year, month });
@@ -703,7 +700,7 @@ function buildReportsMonthChartData(period, periodTx, rangeStart, rangeEnd) {
             const year = monthDate.getFullYear();
             const month = monthDate.getMonth();
             const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-            const monthEnd = new Date(year, month + 1, 0).toISOString().split('T')[0];
+            const monthEnd = localIsoDate(new Date(year, month + 1, 0));
             const monthTx = periodTx.filter(t => t.date >= monthStart && t.date <= monthEnd);
             monthLabels.push(monthDate.toLocaleDateString('pl-PL', { month: 'short', year: '2-digit' }));
             monthKeys.push({ year, month });
@@ -718,7 +715,7 @@ function buildReportsMonthChartData(period, periodTx, rangeStart, rangeEnd) {
     for (let month = 0; month < monthCount; month++) {
         const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
         const monthEndDate = new Date(year, month + 1, 0);
-        const monthEnd = monthEndDate.toISOString().split('T')[0];
+        const monthEnd = localIsoDate(monthEndDate);
         const monthTx = periodTx.filter(t => t.date >= monthStart && t.date <= monthEnd);
         monthLabels.push(monthEndDate.toLocaleDateString('pl-PL', { month: 'short' }));
         monthKeys.push({ year, month });

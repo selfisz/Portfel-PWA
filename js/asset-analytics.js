@@ -36,7 +36,7 @@ function normalizeAssetValueHistoryEntry(raw) {
     return {
         id: raw.id || `avh-${Date.now().toString(36)}`,
         assetId: raw.assetId || '',
-        date: raw.date || new Date().toISOString().split('T')[0],
+        date: raw.date || localIsoDate(new Date()),
         valuePln,
         note: raw.note || '',
         source: raw.source || 'manual'
@@ -70,7 +70,7 @@ function buildCurrentSnapshotPayload(monthKey, source = 'manual') {
     return normalizeAssetSnapshot({
         id: `snap-${monthKey}`,
         monthKey,
-        date: new Date().toISOString().split('T')[0],
+        date: localIsoDate(new Date()),
         totalAssets,
         shortAssets: horizons.short,
         longAssets: horizons.long,
@@ -84,7 +84,8 @@ function buildCurrentSnapshotPayload(monthKey, source = 'manual') {
 }
 
 function captureAssetSnapshot(monthKey = null, source = 'manual') {
-    const key = monthKey || new Date().toISOString().slice(0, 7);
+    const _now = new Date();
+    const key = monthKey || `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
     const snapshot = buildCurrentSnapshotPayload(key, source);
     if (!snapshot) return null;
     if (!Array.isArray(appState.assetSnapshots)) appState.assetSnapshots = [];
@@ -98,7 +99,7 @@ function captureAssetSnapshot(monthKey = null, source = 'manual') {
 function autoCaptureAssetSnapshotsIfNeeded() {
     if (!Array.isArray(appState.assetSnapshots)) appState.assetSnapshots = [];
     const now = new Date();
-    const currentKey = now.toISOString().slice(0, 7);
+    const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const snapshots = getAssetSnapshots();
     const last = snapshots[snapshots.length - 1];
     let changed = false;
@@ -147,7 +148,7 @@ function recordAssetValueHistory(asset, source = 'manual', note = '') {
     if (!asset?.id) return null;
     const entry = normalizeAssetValueHistoryEntry({
         assetId: asset.id,
-        date: new Date().toISOString().split('T')[0],
+        date: localIsoDate(new Date()),
         valuePln: getAssetValuePln(asset),
         note,
         source

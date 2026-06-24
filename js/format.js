@@ -8,7 +8,9 @@ function formatDateGroup(dateStr) {
     return d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 function formatPlnAmount(amount) {
-    return `${amount.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
+    const n = Number(amount);
+    if (amount == null || isNaN(n)) return '— zł';
+    return `${n.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
 }
 
 function formatTxDate(dateStr) {
@@ -21,11 +23,14 @@ function escapeHtml(text) {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 function formatCompactPln(amount) {
-    if (amount >= 10000) return `${(amount / 1000).toFixed(0)}k`;
-    if (amount >= 1000) return `${(amount / 1000).toFixed(1)}k`;
+    const abs = Math.abs(amount);
+    const sign = amount < 0 ? '-' : '';
+    if (abs >= 10000) return `${sign}${(abs / 1000).toFixed(0)}k`;
+    if (abs >= 1000) return `${sign}${(abs / 1000).toFixed(1)}k`;
     return `${Math.round(amount)}`;
 }
 function escapeCsvField(value) {

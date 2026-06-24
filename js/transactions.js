@@ -26,7 +26,8 @@ function switchView(viewId, title, element) {
         document.getElementById('recurring-wrapper').style.display = 'flex';
         document.getElementById('tx-amount').value = '';
         document.getElementById('tx-note').value = '';
-        document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
+        const _today = new Date();
+        document.getElementById('tx-date').value = `${_today.getFullYear()}-${String(_today.getMonth() + 1).padStart(2, '0')}-${String(_today.getDate()).padStart(2, '0')}`;
         document.getElementById('tx-recurring').checked = false;
         const linkedAsset = document.getElementById('tx-linked-asset');
         if (linkedAsset) linkedAsset.checked = false;
@@ -223,6 +224,7 @@ function saveTransaction() {
     }
 
     const previousTx = editingTxIndex !== null ? { ...appState.transactions[editingTxIndex] } : null;
+    const savedEditingIndex = editingTxIndex;
 
     if (editingTxIndex !== null) {
         if (appState.transactions[editingTxIndex].recurringId) {
@@ -238,8 +240,8 @@ function saveTransaction() {
     syncCreditCardOnTransactionSave(txData, previousTx);
     if (!syncCashOnTransactionSave(txData, previousTx)) {
         syncCreditCardOnTransactionSave(previousTx || {}, txData);
-        if (editingTxIndex !== null && previousTx) {
-            appState.transactions[editingTxIndex] = previousTx;
+        if (savedEditingIndex !== null && previousTx) {
+            appState.transactions[savedEditingIndex] = previousTx;
         } else {
             appState.transactions.shift();
         }
@@ -248,8 +250,8 @@ function saveTransaction() {
     if (!syncAssetOnTransactionSave(txData, previousTx)) {
         syncCashOnTransactionSave(previousTx || {}, txData);
         syncCreditCardOnTransactionSave(previousTx || {}, txData);
-        if (editingTxIndex !== null && previousTx) {
-            appState.transactions[editingTxIndex] = previousTx;
+        if (savedEditingIndex !== null && previousTx) {
+            appState.transactions[savedEditingIndex] = previousTx;
         } else {
             appState.transactions.shift();
         }

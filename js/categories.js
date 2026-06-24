@@ -55,7 +55,8 @@ const chartCategoryColorsDark = {
 };
 
 function getCategoryColor(category, txType = 'expense') {
-    if (txType === 'income' || categoryTree.income[category]) {
+    const isIncome = txType === 'income' || !!(categoryTree?.income?.[category]);
+    if (isIncome) {
         const palette = isLightTheme() ? incomeCategoryColorsLight : incomeCategoryColorsDark;
         return palette[category] || (isLightTheme() ? '#15803d' : '#4ade80');
     }

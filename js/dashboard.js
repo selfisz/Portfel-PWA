@@ -49,7 +49,7 @@ function updateDashboardPeriodResetVisibility() {
 
 function getTransactionDateBounds() {
     if (!appState.transactions.length) {
-        const today = new Date().toISOString().split('T')[0];
+        const today = localIsoDate(new Date());
         return { startDate: today, endDate: today };
     }
     let min = appState.transactions[0].date;
@@ -66,14 +66,14 @@ function getDashboardDates() {
     let startDate, endDate;
     const now = new Date();
     if (period === 'current-month') {
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+        startDate = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+        endDate = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
     } else if (period === 'previous-month') {
-        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
-        endDate = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+        startDate = localIsoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+        endDate = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 0));
     } else if (period === 'current-year') {
-        startDate = new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
-        endDate = new Date(now.getFullYear(), 11, 31).toISOString().split('T')[0];
+        startDate = localIsoDate(new Date(now.getFullYear(), 0, 1));
+        endDate = localIsoDate(new Date(now.getFullYear(), 11, 31));
     } else if (period === 'previous-year') {
         const y = now.getFullYear() - 1;
         startDate = `${y}-01-01`;

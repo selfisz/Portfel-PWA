@@ -9,7 +9,7 @@ function normalizeCashMovement(raw) {
         assetId: raw.assetId || PRIMARY_CASH_ASSET_ID,
         delta,
         amount: Math.abs(delta),
-        date: raw.date || new Date().toISOString().split('T')[0],
+        date: raw.date || localIsoDate(new Date()),
         note: raw.note || '',
         source: raw.source || 'manual',
         sourceRef: raw.sourceRef || ''

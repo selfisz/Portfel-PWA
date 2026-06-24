@@ -73,7 +73,7 @@ function getReportsMonthValue() {
 function getMonthBoundsFromValue(monthValue) {
     const [year, month] = monthValue.split('-').map(Number);
     const start = `${year}-${String(month).padStart(2, '0')}-01`;
-    const end = new Date(year, month, 0).toISOString().split('T')[0];
+    const end = localIsoDate(new Date(year, month, 0));
     return { start, end, year, monthIndex: month - 1 };
 }
 
@@ -148,10 +148,10 @@ function getTransactionsInRange(start, end) {
 
 function initReportsPeriodDefaults() {
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-    const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
-    const prevEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+    const monthStart = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    const monthEnd = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    const prevStart = localIsoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    const prevEnd = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 0));
 
     const setIfEmpty = (id, val) => {
         const el = document.getElementById(id);
@@ -438,14 +438,14 @@ function getExpenseGroupKey(t, rankLevel) {
 function getSixMonthsAgoDate() {
     const d = new Date();
     d.setMonth(d.getMonth() - 6);
-    return d.toISOString().split('T')[0];
+    return localIsoDate(d);
 }
 
 function detectRecurringExpenses(rankLevel = 'main') {
     const cutoff = getSixMonthsAgoDate();
     const recentCutoff = new Date();
     recentCutoff.setDate(recentCutoff.getDate() - 60);
-    const recentCutoffStr = recentCutoff.toISOString().split('T')[0];
+    const recentCutoffStr = localIsoDate(recentCutoff);
     const now = new Date();
     const fourMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
 
@@ -621,7 +621,7 @@ function getCategoryMonthlyTotals(mainCategory, subCategory, rankLevel, monthsBa
     for (let i = monthsBack - 1; i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-        const end = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+        const end = localIsoDate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
         const sum = appState.transactions
             .filter((t) => {
                 if (t.type !== 'expense' || t.mainCategory !== mainCategory || t.date < start || t.date > end) return false;
@@ -697,13 +697,13 @@ function renderReportsForecast(ctx) {
     if (!el) return;
 
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    const monthStart = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    const monthEnd = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const dayOfMonth = now.getDate();
 
     const monthExpenses = appState.transactions
-        .filter((t) => t.type === 'expense' && t.date >= monthStart && t.date <= now.toISOString().split('T')[0])
+        .filter((t) => t.type === 'expense' && t.date >= monthStart && t.date <= localIsoDate(now))
         .reduce((s, t) => s + t.amount, 0);
 
     const dailyAvg = dayOfMonth > 0 ? monthExpenses / dayOfMonth : 0;

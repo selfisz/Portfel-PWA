@@ -908,7 +908,7 @@ function archiveAsset() {
     updateAssetInState({
         ...asset,
         archived: true,
-        archivedAt: new Date().toISOString().split('T')[0]
+        archivedAt: localIsoDate(new Date())
     });
     saveState();
     closeAssetDetails();

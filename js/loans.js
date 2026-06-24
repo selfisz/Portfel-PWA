@@ -242,7 +242,7 @@ function populateAddLoanPaymentForm(loans = getActiveLoans()) {
     ).join('');
 
     if (dateInput && !dateInput.value) {
-        dateInput.value = new Date().toISOString().split('T')[0];
+        dateInput.value = localIsoDate(new Date());
     }
 }
 
@@ -295,7 +295,7 @@ function saveLoanPaymentFromAdd() {
     }
 
     const amount = parseFloat(document.getElementById('add-loan-payment-amount')?.value);
-    const date = document.getElementById('add-loan-payment-date')?.value || new Date().toISOString().split('T')[0];
+    const date = document.getElementById('add-loan-payment-date')?.value || localIsoDate(new Date());
     const note = document.getElementById('add-loan-payment-note')?.value.trim() || 'Spłata kapitału';
 
     if (!amount || amount <= 0) {
@@ -328,7 +328,7 @@ function payLoanInstallment(loanId) {
     if (!loan || !isLoanActive(loan) || !loan.nextInstallmentAmount) return;
 
     const amount = loan.nextInstallmentAmount;
-    const date = new Date().toISOString().split('T')[0];
+    const date = localIsoDate(new Date());
     const note = `Rata ${getLoanDisplayName(loan)}`;
 
     if (amount > loan.currentCapitalLeft) {

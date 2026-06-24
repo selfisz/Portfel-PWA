@@ -38,7 +38,7 @@ function getLoanPayoffEndDate(loan) {
     const capital = loan.currentCapitalLeft || 0;
     if (!capital) return null;
     if (loan.details?.endDate) return loan.details.endDate;
-    const today = new Date().toISOString().split('T')[0];
+    const today = localIsoDate(new Date());
     if (loan.details?.remainingInstallments > 0) {
         return addMonthsToDate(today, loan.details.remainingInstallments);
     }
@@ -136,7 +136,7 @@ function buildDebtPeakSeries(monthsAhead = 24) {
 }
 
 function buildDebtFreedomTimeline() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = localIsoDate(new Date());
     const items = [];
 
     getActiveLoans().forEach((loan) => {
@@ -206,7 +206,7 @@ function renderDebtCalendarGrid() {
     const month = reportsCalendarMonth;
     const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const today = new Date().toISOString().split('T')[0];
+    const today = localIsoDate(new Date());
 
     const byDay = {};
     let monthTotal = 0;
@@ -341,7 +341,7 @@ function renderDebtFreedomTimeline() {
     }
     cardEl?.classList.remove('hidden');
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = localIsoDate(new Date());
     const dated = items.filter((i) => i.endDate);
     const maxMonths = dated.length
         ? Math.max(...dated.map((i) => {
@@ -582,7 +582,7 @@ function openMonthDrillDown(year, month) {
     if (!overlay || !listEl) return;
 
     const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const end = new Date(year, month + 1, 0).toISOString().split('T')[0];
+    const end = localIsoDate(new Date(year, month + 1, 0));
     const monthTx = appState.transactions.filter((t) => t.date >= start && t.date <= end);
     const label = new Date(year, month, 1).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
 
