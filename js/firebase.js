@@ -90,3 +90,12 @@ async function getCloudBackupPayload() {
 async function fetchAppStateRest() {
     return fetchFirestoreDocumentRest('finances', 'my_state');
 }
+
+function withFirestoreTimeout(promise, ms = 8000) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+            window.setTimeout(() => reject(new Error('Firestore timeout')), ms);
+        })
+    ]);
+}

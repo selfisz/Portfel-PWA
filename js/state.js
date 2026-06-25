@@ -247,7 +247,11 @@ function applyCloudDocument(docSnap, options = {}) {
     const hadUiFields = applyRemoteAppState(mergedRemote, localLoans, localCreditCards);
     const hadMigration = applyMigrations();
     checkAndProcessRecurringTransactions();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
+    } catch (err) {
+        console.error('applyCloudDocument localStorage', err);
+    }
 
     cloudSyncUnlocked = true;
     const finalCount = getTransactionCount(appState);
@@ -264,23 +268,29 @@ function applyCloudDocument(docSnap, options = {}) {
 }
 
 async function pullCloudStateFromServer() {
-    const sources = ['server', 'default'];
-    for (const source of sources) {
-        try {
-            const docSnap = await stateRef.get({ source });
-            return applyCloudDocument(docSnap);
-        } catch (err) {
-            console.warn(`pullCloudStateFromServer(${source})`, err);
-        }
-    }
     if (typeof fetchAppStateRest === 'function') {
         try {
             const data = await fetchAppStateRest();
             if (data && Array.isArray(data.transactions)) {
-                return applyCloudDocument({ exists: true, data: () => data });
+                return applyCloudDocument(
+                    { exists: true, data: () => data },
+                    { readOnly: true }
+                );
             }
         } catch (err) {
             console.warn('pullCloudStateFromServer REST', err);
+        }
+    }
+
+    const sources = ['server', 'default'];
+    for (const source of sources) {
+        try {
+            const docSnap = typeof withFirestoreTimeout === 'function'
+                ? await withFirestoreTimeout(stateRef.get({ source }))
+                : await stateRef.get({ source });
+            return applyCloudDocument(docSnap, { readOnly: true });
+        } catch (err) {
+            console.warn(`pullCloudStateFromServer(${source})`, err);
         }
     }
     return null;
@@ -354,38 +364,46 @@ function initData() {
 
     let syncTimeout = window.setTimeout(() => {
         const statusEl = document.getElementById('sync-status');
-        if (statusEl && !statusEl.className) setSyncStatus('offline', getTransactionCount(appState));
-    }, 12000);
+        if (statusEl && !statusEl.className) {
+            setSyncStatus('offline', getTransactionCount(appState));
+        }
+    }, 15000);
 
     const finishInitialSync = async () => {
-        window.clearTimeout(syncTimeout);
-        let count = await pullCloudStateFromServer();
-        if ((count ?? getTransactionCount(appState)) < 100) {
-            const recovered = await autoRecoverFromCloudBackupIfNeeded();
-            if (recovered) count = getTransactionCount(appState);
-        }
-        if (count === null && getTransactionCount(appState) === 0) {
-            setSyncStatus('offline', 0);
+        try {
+            let count = await pullCloudStateFromServer();
+            if ((count ?? getTransactionCount(appState)) < 100) {
+                const recovered = await autoRecoverFromCloudBackupIfNeeded();
+                if (recovered) count = getTransactionCount(appState);
+            }
+            if (count === null && getTransactionCount(appState) === 0) {
+                setSyncStatus('offline', 0);
+            } else if (count === null && getTransactionCount(appState) > 0) {
+                setSyncStatus('offline', getTransactionCount(appState));
+            }
+        } catch (err) {
+            console.error('finishInitialSync', err);
+            setSyncStatus('offline', getTransactionCount(appState));
+        } finally {
+            window.clearTimeout(syncTimeout);
         }
     };
 
-    finishInitialSync().catch((err) => {
-        console.error('finishInitialSync', err);
-        setSyncStatus('offline', getTransactionCount(appState));
-    });
+    finishInitialSync();
 
     stateRef.onSnapshot((docSnap) => {
         if (docSnap.metadata.fromCache) return;
-        applyCloudDocument(docSnap);
+        applyCloudDocument(docSnap, { readOnly: true });
     }, (error) => {
-        window.clearTimeout(syncTimeout);
         console.error('Błąd synchronizacji', error);
         if (!cloudSyncUnlocked) {
             autoRecoverFromCloudBackupIfNeeded().finally(() => {
-                if (!cloudSyncUnlocked) setSyncStatus('offline', getTransactionCount(appState));
+                if (!cloudSyncUnlocked) {
+                    setSyncStatus('offline', getTransactionCount(appState));
+                }
             });
-        } else {
-            setSyncStatus('offline', getTransactionCount(appState));
+        } else if (getTransactionCount(appState) === 0) {
+            setSyncStatus('offline', 0);
         }
     });
 }
