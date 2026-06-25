@@ -3,6 +3,8 @@
 const ANALYSIS_SECTION_KEY = 'analysis_section';
 const ANALYSIS_PERIOD_KEY = 'analysis_period_mode';
 let analysisSection = 'overview';
+let reportsPeriodMode = 'year';
+let analysisUiInitialized = false;
 
 const ANALYSIS_SECTIONS = ['overview', 'calendar', 'charts', 'assets', 'debts', 'details'];
 const PERIOD_MODES = ['year', 'month', 'range', 'compare'];
@@ -119,7 +121,7 @@ function setAnalysisSection(section) {
     });
 
     const activeBtn = document.getElementById(`btn-analysis-${section}`);
-    activeBtn?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    activeBtn?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'center' });
 
     if (section === 'charts' || section === 'assets' || section === 'debts' || section === 'calendar') {
         requestAnimationFrame(() => {
@@ -127,6 +129,21 @@ function setAnalysisSection(section) {
                 .forEach((chart) => chart?.resize());
         });
     }
+}
+
+function initAnalysisUI() {
+    if (analysisUiInitialized) return;
+    const view = document.getElementById('view-reports');
+    if (!view?.id || view.id !== 'view-reports') return;
+    analysisUiInitialized = true;
+    initReportsPeriodDefaults();
+    initAnalysisPeriodMode();
+    initAnalysisSection();
+    initAnalysisSwipe();
+}
+
+function ensureAnalysisUIInit() {
+    initAnalysisUI();
 }
 
 function initAnalysisSection() {
@@ -780,9 +797,5 @@ function renderPhase3Reports(ctx, savingsRate) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    initReportsPeriodDefaults();
-    initAnalysisPeriodMode();
-    initAnalysisSection();
-    initAnalysisSwipe();
-});
+document.addEventListener('DOMContentLoaded', initAnalysisUI);
+if (document.readyState !== 'loading') initAnalysisUI();

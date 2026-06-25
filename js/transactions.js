@@ -16,7 +16,10 @@ function switchView(viewId, title, element) {
     if (element) element.classList.add('active');
 
     if (viewId === 'dashboard') renderDashboard();
-    if (viewId === 'reports') renderReports();
+    if (viewId === 'reports') {
+        if (typeof ensureAnalysisUIInit === 'function') ensureAnalysisUIInit();
+        renderReports();
+    }
     if (viewId === 'investments') renderInvestments();
     if (viewId === 'loans') renderLoans();
 

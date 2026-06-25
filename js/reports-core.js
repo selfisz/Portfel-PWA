@@ -726,6 +726,7 @@ function buildReportsMonthChartData(period, periodTx, rangeStart, rangeEnd) {
 }
 
 function renderReports() {
+    if (typeof ensureAnalysisUIInit === 'function') ensureAnalysisUIInit();
     populateReportsYearSelect();
     const ctx = typeof getReportsPeriodContext === 'function'
         ? getReportsPeriodContext()

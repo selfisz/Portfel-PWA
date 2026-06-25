@@ -170,13 +170,16 @@ function mergeRemoteTransactions(localRaw, remoteRaw) {
 }
 
 function applyMigrations() {
-    const hadMigration = migrateCategoryData() || migrateLoanCategoryTree();
+    const hadCategory = migrateCategoryData() || migrateLoanCategoryTree();
+    if (getTransactionCount(appState) >= 50) {
+        return hadCategory;
+    }
     const hadLoanMigration = runLoanMigrations();
     const hadCardMigration = runCreditCardMigrations();
     const hadAssetMigration = typeof runAssetMigrations === 'function' ? runAssetMigrations() : false;
     const hadCashMigration = typeof runCashMigrations === 'function' ? runCashMigrations() : false;
     const hadAnalyticsMigration = typeof runAssetAnalyticsMigrations === 'function' ? runAssetAnalyticsMigrations() : false;
-    return hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration || hadAnalyticsMigration;
+    return hadCategory || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration || hadAnalyticsMigration;
 }
 
 function readStoredAppStateRaw() {
@@ -248,13 +251,12 @@ function applyCloudDocument(docSnap, options = {}) {
 
     cloudSyncUnlocked = true;
     const finalCount = getTransactionCount(appState);
+    setSyncStatus('online', finalCount);
 
     const shouldPushRemote = !options.readOnly
         && (mergedTxCount > remoteTxCount || hadUiFields || hadMigration);
     if (shouldPushRemote) {
         saveState({ forceCloud: true });
-    } else {
-        setSyncStatus('online', finalCount);
     }
     refreshCurrentView();
     return finalCount;
