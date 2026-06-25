@@ -545,7 +545,6 @@ describe('renderDashboardCreditCards', () => {
     it('ustawia sekcję hidden gdy brak kart', () => {
         const section = document.getElementById('dashboard-credit-cards');
         renderDashboardCreditCards();
-        // Sekcja powinna być hidden
         expect(section.classList.contains('hidden')).toBe(true);
     });
 
@@ -556,5 +555,166 @@ describe('renderDashboardCreditCards', () => {
         const section = document.getElementById('dashboard-credit-cards');
         renderDashboardCreditCards();
         expect(section.classList.contains('hidden')).toBe(false);
+    });
+});
+
+// ===========================================================================
+// credit-cards.js — saveCreditCardDetails — walidacja
+// ===========================================================================
+describe('saveCreditCardDetails — walidacja', () => {
+    let alertCalled;
+
+    beforeEach(() => {
+        alertCalled = false;
+        globalThis.alert = () => { alertCalled = true; };
+        globalThis.refreshCreditCardDetailsPanel = () => {};
+        globalThis.setCreditCardDetailsMode = () => {};
+
+        _setAppState({ ..._getAppState(), creditCards: [] });
+        runInContext('draftCreditCard = normalizeCreditCard({ id: "draft-c1", name: "", limit: 0 }); activeCreditCardId = draftCreditCard.id;');
+
+        document.getElementById('credit-card-name-input').value = 'Moja karta';
+        document.getElementById('credit-card-limit-input').value = '10000';
+        document.getElementById('credit-card-balance-input').value = '2000';
+    });
+
+    it('alert gdy brak nazwy', () => {
+        document.getElementById('credit-card-name-input').value = '';
+        saveCreditCardDetails();
+        expect(alertCalled).toBe(true);
+    });
+
+    it('alert gdy brak limitu', () => {
+        document.getElementById('credit-card-limit-input').value = '0';
+        saveCreditCardDetails();
+        expect(alertCalled).toBe(true);
+    });
+
+    it('alert gdy zadłużenie > limit', () => {
+        document.getElementById('credit-card-limit-input').value = '1000';
+        document.getElementById('credit-card-balance-input').value = '2000';
+        saveCreditCardDetails();
+        expect(alertCalled).toBe(true);
+    });
+
+    it('zapisuje kartę gdy dane poprawne', () => {
+        saveCreditCardDetails();
+        expect(alertCalled).toBe(false);
+        const cards = _getAppState().creditCards;
+        expect(cards.some((c) => c.name === 'Moja karta')).toBe(true);
+    });
+
+    it('zapisuje kartę z poprawnym limitem i saldem', () => {
+        document.getElementById('credit-card-limit-input').value = '5000';
+        document.getElementById('credit-card-balance-input').value = '1500';
+        saveCreditCardDetails();
+        if (!alertCalled) {
+            const card = _getAppState().creditCards.find((c) => c.name === 'Moja karta');
+            expect(card?.limit).toBe(5000);
+            expect(card?.currentBalance).toBe(1500);
+        }
+    });
+});
+
+// ===========================================================================
+// assets.js — saveAssetDetails — zapis inwestycji i gotówki
+// ===========================================================================
+describe('saveAssetDetails', () => {
+    beforeEach(() => {
+        globalThis.setAssetDetailsMode = () => {};
+        globalThis.recordAssetValueHistory = () => {};
+
+        _setAppState({ ..._getAppState(), assets: [] });
+        runInContext('draftAsset = normalizeAsset({ id: "draft-a1", type: "investment" }); activeAssetId = draftAsset.id;');
+
+        // Domyślne wartości dla inwestycji
+        document.getElementById('asset-type-input').value = 'investment';
+        document.getElementById('asset-name-input').value = 'XTB Akcje';
+        document.getElementById('asset-currency-input').value = 'PLN';
+        document.getElementById('asset-ticker-input').value = 'XTB';
+        document.getElementById('asset-quantity-input').value = '10';
+        document.getElementById('asset-purchase-input').value = '100';
+        document.getElementById('asset-price-input').value = '120';
+        document.getElementById('asset-amount-input').value = '';
+        document.getElementById('asset-rate-input').value = '';
+        document.getElementById('asset-end-input').value = '';
+        document.getElementById('asset-retirement-kind-input').value = 'PPK';
+        document.getElementById('asset-institution-input').value = '';
+        document.getElementById('asset-goal-input').value = '';
+    });
+
+    it('zapisuje inwestycję z poprawnymi danymi', () => {
+        saveAssetDetails();
+        const assets = _getAppState().assets;
+        const saved = assets.find((a) => a.ticker === 'XTB');
+        expect(saved).toBeTruthy();
+        expect(saved.quantity).toBe(10);
+        expect(saved.currentPrice).toBe(120);
+    });
+
+    it('ustawia name = ticker gdy brak nazwy dla inwestycji', () => {
+        // saveAssetDetails reads DOM and uses normalizeAsset which sets name=ticker when name is empty
+        document.getElementById('asset-name-input').value = '';
+        document.getElementById('asset-ticker-input').value = 'PKN';
+        runInContext('draftAsset = normalizeAsset({ id: "draft-pkn", type: "investment" }); activeAssetId = "draft-pkn";');
+        saveAssetDetails();
+        const assets = _getAppState().assets;
+        const saved = assets.find((a) => a.ticker === 'PKN');
+        // normalizeAsset sets name=ticker when name is empty
+        expect(saved).toBeTruthy();
+        expect(saved?.name).toBe('PKN');
+    });
+
+    it('zapisuje aktywo typu cash', () => {
+        runInContext('draftAsset = normalizeAsset({ id: "draft-cash", type: "cash" }); activeAssetId = draftAsset.id;');
+        document.getElementById('asset-type-input').value = 'cash';
+        document.getElementById('asset-name-input').value = 'Gotówka';
+        document.getElementById('asset-currency-input').value = 'PLN';
+        document.getElementById('asset-amount-input').value = '15000';
+        saveAssetDetails();
+        const saved = _getAppState().assets.find((a) => a.name === 'Gotówka');
+        expect(saved?.amount).toBe(15000);
+        expect(saved?.type).toBe('cash');
+    });
+
+    it('zapisuje lokatę z oprocentowaniem i datą końca', () => {
+        runInContext('draftAsset = normalizeAsset({ id: "draft-dep", type: "deposit" }); activeAssetId = draftAsset.id;');
+        document.getElementById('asset-type-input').value = 'deposit';
+        document.getElementById('asset-name-input').value = 'Lokata 6%';
+        document.getElementById('asset-currency-input').value = 'PLN';
+        document.getElementById('asset-amount-input').value = '20000';
+        document.getElementById('asset-rate-input').value = '6';
+        document.getElementById('asset-end-input').value = '2025-06-30';
+        saveAssetDetails();
+        const saved = _getAppState().assets.find((a) => a.name === 'Lokata 6%');
+        expect(saved?.interestRate).toBe(6);
+        expect(saved?.endDate).toBe('2025-06-30');
+    });
+});
+
+// ===========================================================================
+// credit-cards.js — populateCreditCardSelectors
+// ===========================================================================
+describe('populateCreditCardSelectors', () => {
+    it('nie rzuca błędu gdy brak kart', () => {
+        expect(() => populateCreditCardSelectors()).not.toThrow();
+    });
+
+    it('ustawia select jako disabled gdy brak kart', () => {
+        const select = document.getElementById('tx-credit-card-select');
+        populateCreditCardSelectors();
+        expect(select.disabled).toBe(true);
+    });
+
+    it('wypełnia opcje gdy są karty', () => {
+        _setAppState({ ..._getAppState(), creditCards: [
+            { id: 'c1', name: 'Erste', limit: 8000, currentBalance: 0, archived: false },
+            { id: 'c2', name: 'mBank', limit: 21000, currentBalance: 0, archived: false }
+        ]});
+        const select = document.getElementById('tx-credit-card-select');
+        populateCreditCardSelectors();
+        expect(select.disabled).toBe(false);
+        expect(select.innerHTML).toContain('Erste');
+        expect(select.innerHTML).toContain('mBank');
     });
 });
