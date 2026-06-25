@@ -625,14 +625,14 @@ function renderDashboardCreditCards() {
         const debtLabel = card.currentBalance > 0
             ? `Wolne ${formatPlnAmount(available)} · Zadłużenie ${formatPlnAmount(card.currentBalance)}`
             : `Wolne ${formatPlnAmount(available)} · spłacone`;
-        return `<div class="credit-card-dashboard-row credit-clickable" role="button" tabindex="0"
+        return `<div class="dashboard-action-row credit-clickable" role="button" tabindex="0"
             onclick="openCreditCardDetails('${escapeHtml(card.id)}')"
             onkeydown="if (event.key === 'Enter') openCreditCardDetails('${escapeHtml(card.id)}')">
-            <div class="credit-card-dashboard-info">
-                <strong>${escapeHtml(card.name)}</strong>
-                <span class="credit-card-dashboard-meta">${debtLabel}</span>
+            <div class="dashboard-action-info">
+                <strong class="dashboard-action-name">${escapeHtml(card.name)}</strong>
+                <span class="dashboard-action-meta">${debtLabel}</span>
             </div>
-            <button type="button" class="upcoming-loan-pay-btn" onclick="event.stopPropagation(); quickCreditCardRepayment('${escapeHtml(card.id)}')">Spłać</button>
+            <button type="button" class="dashboard-quick-action-btn" onclick="event.stopPropagation(); quickCreditCardRepayment('${escapeHtml(card.id)}')">Spłać</button>
         </div>`;
     }).join('');
 }

@@ -582,12 +582,12 @@ function renderUpcomingLoanInstallments() {
         const days = daysUntilDate(loan.nextInstallmentDue);
         const overdue = days !== null && days < 0;
         const dueLabel = formatDueLabel(days);
-        return `<div class="upcoming-loan-row${overdue ? ' upcoming-loan-row--overdue' : ''}">
-            <div class="upcoming-loan-info">
-                <strong class="upcoming-loan-name">${escapeHtml(getLoanDisplayName(loan))}</strong>
-                <span class="upcoming-loan-meta">${formatPlnAmount(loan.nextInstallmentAmount)} · ${formatTxDate(loan.nextInstallmentDue)}${dueLabel ? ` · ${dueLabel}` : ''}</span>
+        return `<div class="dashboard-action-row${overdue ? ' dashboard-action-row--overdue' : ''}">
+            <div class="dashboard-action-info">
+                <strong class="dashboard-action-name">${escapeHtml(getLoanDisplayName(loan))}</strong>
+                <span class="dashboard-action-meta">${formatPlnAmount(loan.nextInstallmentAmount)} · ${formatTxDate(loan.nextInstallmentDue)}${dueLabel ? ` · ${dueLabel}` : ''}</span>
             </div>
-            <button type="button" class="upcoming-loan-pay-btn" onclick="payLoanInstallment('${escapeHtml(loan.id)}')">Zapłać</button>
+            <button type="button" class="dashboard-quick-action-btn" onclick="payLoanInstallment('${escapeHtml(loan.id)}')">Zapłać</button>
         </div>`;
     }).join('');
 }
@@ -616,7 +616,7 @@ function renderDashboardWealth() {
             <div><span class="label">Gotówka oper.</span><strong>${formatPlnAmount(operational)}</strong></div>
             <div><span class="label">Zobowiązania</span><strong class="expense">${formatPlnAmount(debt)}</strong></div>
         </div>
-        ${monthChange ? `<p class="reports-hint">${monthChange.netWorth >= 0 ? '+' : ''}${formatPlnAmount(monthChange.netWorth)} net worth vs poprz. miesiąc</p>` : ''}`;
+        ${monthChange ? `<p class="dashboard-wealth-hint reports-hint">${monthChange.netWorth >= 0 ? '+' : ''}${formatPlnAmount(monthChange.netWorth)} net worth vs poprz. miesiąc</p>` : ''}`;
 }
 
 function renderDashboard() {
