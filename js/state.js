@@ -134,6 +134,50 @@ function migrateCategoryData() {
     return changed;
 }
 
+function getTransactionCount(raw) {
+    return getPersistedState(raw).transactions.length;
+}
+
+function mergeRemoteTransactions(localRaw, remoteRaw) {
+    const localCount = getTransactionCount(localRaw);
+    const remoteCount = getTransactionCount(remoteRaw);
+    if (localCount > remoteCount) {
+        return getPersistedState(localRaw).transactions;
+    }
+    return getPersistedState(remoteRaw).transactions;
+}
+
+function readStoredAppStateRaw() {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+        try {
+            return JSON.parse(stored);
+        } catch {
+            return null;
+        }
+    }
+    const backupRaw = localStorage.getItem(LOCAL_BACKUP_KEY);
+    if (!backupRaw) return null;
+    try {
+        const payload = JSON.parse(backupRaw);
+        return payload?.data || payload;
+    } catch {
+        return null;
+    }
+}
+
+function setSyncStatus(mode) {
+    const statusEl = document.getElementById('sync-status');
+    if (!statusEl) return;
+    statusEl.className = mode || '';
+    const titles = {
+        '': 'Synchronizacja z chmurą…',
+        online: 'Zsynchronizowano z chmurą',
+        offline: 'Tryb offline — dane zapisane lokalnie'
+    };
+    statusEl.title = titles[mode] || titles[''];
+}
+
 function applyRemoteAppState(raw, extraLoanSources = [], extraCreditCardSources = []) {
     const hadUiFields = !!(raw && ('currentType' in raw || 'selectedMainCategory' in raw || 'selectedSubCategory' in raw));
     const base = getPersistedState(raw);
@@ -155,8 +199,15 @@ function normalizeAppState(raw) {
 }
 
 function initData() {
-    if (localStorage.getItem(STORAGE_KEY)) {
-        const localRaw = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    setSyncStatus('');
+    let localRaw = readStoredAppStateRaw();
+    let restoredFromBackup = false;
+
+    if (localRaw) {
+        if (!localStorage.getItem(STORAGE_KEY)) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(localRaw)));
+            restoredFromBackup = true;
+        }
         const hadUiFields = applyRemoteAppState(localRaw);
         const hadMigration = migrateCategoryData() || migrateLoanCategoryTree();
         const hadLoanMigration = runLoanMigrations();
@@ -165,23 +216,38 @@ function initData() {
         const hadCashMigration = typeof runCashMigrations === 'function' ? runCashMigrations() : false;
         const hadAnalyticsMigration = typeof runAssetAnalyticsMigrations === 'function' ? runAssetAnalyticsMigrations() : false;
         if (hadUiFields) localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-        if (hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration || hadAnalyticsMigration) saveState();
+        if (hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration || hadAnalyticsMigration || restoredFromBackup) saveState();
         checkAndProcessRecurringTransactions();
+        refreshCurrentView();
+    } else {
         refreshCurrentView();
     }
 
-    stateRef.onSnapshot((docSnap) => {
+    const syncTimeout = window.setTimeout(() => {
         const statusEl = document.getElementById('sync-status');
+        if (statusEl && !statusEl.className) setSyncStatus('offline');
+    }, 15000);
+
+    stateRef.onSnapshot((docSnap) => {
+        window.clearTimeout(syncTimeout);
         if (docSnap.exists) {
             let localLoans = [];
             let localCreditCards = [];
+            let localRawBeforeSync = null;
             try {
-                const localRaw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-                localLoans = getLoansFromPersistedRaw(localRaw);
-                localCreditCards = Array.isArray(localRaw?.creditCards) ? localRaw.creditCards : [];
+                localRawBeforeSync = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+                localLoans = getLoansFromPersistedRaw(localRawBeforeSync);
+                localCreditCards = Array.isArray(localRawBeforeSync?.creditCards) ? localRawBeforeSync.creditCards : [];
             } catch { /* ignore */ }
 
-            const hadUiFields = applyRemoteAppState(docSnap.data(), localLoans, localCreditCards);
+            const remoteData = docSnap.data();
+            const localHadMoreTransactions = localRawBeforeSync
+                && getTransactionCount(localRawBeforeSync) > getTransactionCount(remoteData);
+            const mergedRemote = localHadMoreTransactions
+                ? { ...remoteData, transactions: mergeRemoteTransactions(localRawBeforeSync, remoteData) }
+                : remoteData;
+
+            const hadUiFields = applyRemoteAppState(mergedRemote, localLoans, localCreditCards);
             const hadMigration = migrateCategoryData() || migrateLoanCategoryTree();
             const hadLoanMigration = runLoanMigrations();
             const hadCardMigration = runCreditCardMigrations();
@@ -189,15 +255,16 @@ function initData() {
             const hadCashMigration = typeof runCashMigrations === 'function' ? runCashMigrations() : false;
             const hadAnalyticsMigration = typeof runAssetAnalyticsMigrations === 'function' ? runAssetAnalyticsMigrations() : false;
             localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-            if (hadUiFields || hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration || hadAnalyticsMigration) saveState();
-            statusEl.className = 'online';
+            if (localHadMoreTransactions || hadUiFields || hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration || hadAnalyticsMigration) saveState();
+            setSyncStatus('online');
             refreshCurrentView();
         } else {
             saveState();
         }
     }, (error) => {
+        window.clearTimeout(syncTimeout);
         console.error("Błąd synchronizacji", error);
-        document.getElementById('sync-status').className = 'offline';
+        setSyncStatus('offline');
     });
 }
 
@@ -205,10 +272,10 @@ function saveState() {
     const payload = getPersistedState(appState);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     stateRef.set(payload).then(() => {
-        document.getElementById('sync-status').className = 'online';
+        setSyncStatus('online');
     }).catch(err => {
         console.log("Zapisano offline. Zsynchronizuje się później.", err);
-        document.getElementById('sync-status').className = 'offline';
+        setSyncStatus('offline');
     });
 }
 

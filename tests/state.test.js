@@ -338,6 +338,49 @@ describe('migrateLoansArray', () => {
 });
 
 // ---------------------------------------------------------------------------
+// mergeRemoteTransactions / getTransactionCount
+// ---------------------------------------------------------------------------
+describe('mergeRemoteTransactions', () => {
+  it('zachowuje lokalne transakcje gdy jest ich więcej niż w chmurze', () => {
+    const local = { transactions: [
+      { amount: 100, type: 'expense', date: '2024-01-01', mainCategory: 'Dom', subCategory: 'A' },
+      { amount: 200, type: 'expense', date: '2024-02-01', mainCategory: 'Dom', subCategory: 'B' }
+    ]};
+    const remote = { transactions: [] };
+    const merged = mergeRemoteTransactions(local, remote);
+    expect(merged).toHaveLength(2);
+  });
+
+  it('używa transakcji z chmury gdy lokalnie jest ich mniej', () => {
+    const local = { transactions: [] };
+    const remote = { transactions: [
+      { amount: 50, type: 'income', date: '2024-03-01', mainCategory: 'Wynagrodzenie', subCategory: 'A' }
+    ]};
+    const merged = mergeRemoteTransactions(local, remote);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].amount).toBe(50);
+  });
+
+  it('przy równej liczbie preferuje chmurę', () => {
+    const local = { transactions: [{ amount: 10, type: 'expense', date: '2024-01-01', mainCategory: 'Dom', subCategory: 'A' }] };
+    const remote = { transactions: [{ amount: 99, type: 'expense', date: '2024-01-01', mainCategory: 'Dom', subCategory: 'A' }] };
+    const merged = mergeRemoteTransactions(local, remote);
+    expect(merged[0].amount).toBe(99);
+  });
+});
+
+describe('getTransactionCount', () => {
+  it('zwraca 0 dla pustego stanu', () => {
+    expect(getTransactionCount(null)).toBe(0);
+    expect(getTransactionCount({})).toBe(0);
+  });
+
+  it('liczy transakcje w raw', () => {
+    expect(getTransactionCount({ transactions: [{}, {}] })).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // applyRemoteAppState
 // ---------------------------------------------------------------------------
 describe('applyRemoteAppState', () => {
