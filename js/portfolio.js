@@ -210,14 +210,49 @@ function getMonthDateBounds(date = new Date()) {
     };
 }
 
-function getUpcomingLoanInstallments() {
-    const { startDate, endDate } = getMonthDateBounds();
+function getLoanInstallmentsInDateRange(startDate, endDate) {
+    if (!startDate || !endDate) return [];
+
+    if (typeof getScheduledDebtPaymentsOnDate === 'function') {
+        const start = new Date(`${startDate}T12:00:00`);
+        const end = new Date(`${endDate}T12:00:00`);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
+
+        const installments = [];
+        const seen = new Set();
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dateStr = localIsoDate(d);
+            getScheduledDebtPaymentsOnDate(dateStr)
+                .filter((payment) => payment.type === 'loan')
+                .forEach((payment) => {
+                    const key = `${payment.id}|${dateStr}`;
+                    if (seen.has(key)) return;
+                    seen.add(key);
+                    const loan = getLoanById(payment.id);
+                    if (!loan) return;
+                    installments.push({
+                        ...loan,
+                        nextInstallmentDue: dateStr,
+                        nextInstallmentAmount: payment.amount
+                    });
+                });
+        }
+        return installments.sort((a, b) => a.nextInstallmentDue.localeCompare(b.nextInstallmentDue));
+    }
+
     return getActiveLoans()
         .filter((loan) => {
             if (!(loan.nextInstallmentAmount > 0 && loan.nextInstallmentDue)) return false;
             return loan.nextInstallmentDue >= startDate && loan.nextInstallmentDue <= endDate;
         })
         .sort((a, b) => a.nextInstallmentDue.localeCompare(b.nextInstallmentDue));
+}
+
+function getUpcomingLoanInstallments(bounds = null) {
+    const { startDate, endDate } = bounds?.startDate && bounds?.endDate
+        ? bounds
+        : getMonthDateBounds();
+    return getLoanInstallmentsInDateRange(startDate, endDate);
 }
 
 function hasScheduledLoanInstallments() {

@@ -610,6 +610,40 @@ describe('getDashboardDates — timezone fix', () => {
         expect(startDate).toBe(`${prevYear}-01-01`);
         expect(endDate).toBe(`${prevYear}-12-31`);
     });
+
+    it('next-month: zakres to pierwszy i ostatni dzień następnego miesiąca', () => {
+        setSelectValue('next-month');
+        const { startDate, endDate } = getDashboardDates();
+        const now = new Date();
+        const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const expectedStart = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-01`;
+        const expectedEndDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+        const expectedEnd = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(expectedEndDay).padStart(2, '0')}`;
+        expect(startDate).toBe(expectedStart);
+        expect(endDate).toBe(expectedEnd);
+    });
+});
+
+describe('getDashboardForecastTotals', () => {
+    beforeEach(() => {
+        const now = new Date();
+        const txs = [];
+        for (let i = 1; i <= 3; i += 1) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 15);
+            const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-15`;
+            txs.push(
+                { date, type: 'income', amount: 3000 * i, mainCategory: 'Praca', subCategory: 'Pensja' },
+                { date, type: 'expense', amount: 1000 * i, mainCategory: 'Dom', subCategory: 'Czynsz' }
+            );
+        }
+        _setAppState({ ..._getAppState(), transactions: txs });
+    });
+
+    it('liczy średnią wpływów i wydatków z 3 poprzednich miesięcy', () => {
+        const forecast = getDashboardForecastTotals();
+        expect(forecast.income).toBe(6000);
+        expect(forecast.expense).toBe(2000);
+    });
 });
 
 // ===========================================================================

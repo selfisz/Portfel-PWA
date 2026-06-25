@@ -61,6 +61,65 @@ function getTransactionDateBounds() {
     return { startDate: min, endDate: max };
 }
 
+function isDashboardForecastPeriod() {
+    return document.getElementById('dashboard-period-select')?.value === 'next-month';
+}
+
+function getMonthTransactionTotal(year, monthIndex, type) {
+    const startDate = localIsoDate(new Date(year, monthIndex, 1));
+    const endDate = localIsoDate(new Date(year, monthIndex + 1, 0));
+    return appState.transactions
+        .filter((t) => t.type === type && t.date >= startDate && t.date <= endDate)
+        .reduce((sum, t) => sum + t.amount, 0);
+}
+
+function getDashboardForecastTotals(referenceDate = new Date()) {
+    const monthlyIncome = [];
+    const monthlyExpense = [];
+    for (let i = 1; i <= 3; i += 1) {
+        const monthDate = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - i, 1);
+        monthlyIncome.push(getMonthTransactionTotal(monthDate.getFullYear(), monthDate.getMonth(), 'income'));
+        monthlyExpense.push(getMonthTransactionTotal(monthDate.getFullYear(), monthDate.getMonth(), 'expense'));
+    }
+    const average = (values) => (values.length
+        ? values.reduce((sum, value) => sum + value, 0) / values.length
+        : 0);
+    return {
+        income: average(monthlyIncome),
+        expense: average(monthlyExpense)
+    };
+}
+
+function getCategorySumsInRange(startDate, endDate, txType, mainCategoryFilter = null) {
+    const catSums = {};
+    appState.transactions
+        .filter((t) => t.type === txType && t.date >= startDate && t.date <= endDate)
+        .filter((t) => !mainCategoryFilter || t.mainCategory === mainCategoryFilter)
+        .forEach((t) => {
+            const label = mainCategoryFilter
+                ? (t.subCategory === '[Bez podkategorii]' ? 'Ogólne' : t.subCategory)
+                : t.mainCategory;
+            catSums[label] = (catSums[label] || 0) + t.amount;
+        });
+    return catSums;
+}
+
+function getDashboardForecastCategorySums(txType, mainCategoryFilter = null, referenceDate = new Date()) {
+    const monthSums = [];
+    for (let i = 1; i <= 3; i += 1) {
+        const monthDate = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - i, 1);
+        const startDate = localIsoDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 1));
+        const endDate = localIsoDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0));
+        monthSums.push(getCategorySumsInRange(startDate, endDate, txType, mainCategoryFilter));
+    }
+    const keys = new Set(monthSums.flatMap((sums) => Object.keys(sums)));
+    const averaged = {};
+    keys.forEach((key) => {
+        averaged[key] = monthSums.reduce((sum, sums) => sum + (sums[key] || 0), 0) / monthSums.length;
+    });
+    return averaged;
+}
+
 function getDashboardDates() {
     const period = document.getElementById('dashboard-period-select').value;
     let startDate, endDate;
@@ -68,6 +127,9 @@ function getDashboardDates() {
     if (period === 'current-month') {
         startDate = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
         endDate = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    } else if (period === 'next-month') {
+        startDate = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 1));
+        endDate = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 2, 0));
     } else if (period === 'previous-month') {
         startDate = localIsoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
         endDate = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 0));
@@ -166,6 +228,11 @@ function formatDashboardPeriodLabel() {
         const label = now.toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
         return label.charAt(0).toUpperCase() + label.slice(1);
     }
+    if (period === 'next-month') {
+        const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const label = next.toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+        return `${label.charAt(0).toUpperCase() + label.slice(1)} · prognoza`;
+    }
     if (period === 'previous-month') {
         const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const label = prev.toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
@@ -192,9 +259,27 @@ function formatDueLabel(days) {
     return `za ${days} dni`;
 }
 
+function formatDashboardInstallmentsTitle() {
+    const period = document.getElementById('dashboard-period-select')?.value;
+    if (period === 'current-month') return 'Raty w tym miesiącu';
+    if (period === 'next-month') return 'Raty w następnym miesiącu';
+    if (period === 'previous-month') return 'Raty w poprzednim miesiącu';
+    if (period === 'current-year') return 'Raty w bieżącym roku';
+    if (period === 'previous-year') return 'Raty w poprzednim roku';
+    if (period === 'all') return 'Raty (wszystkie terminy)';
+    const { startDate, endDate } = getDashboardDates();
+    if (startDate.slice(0, 7) === endDate.slice(0, 7)) {
+        const [year, month] = startDate.split('-').map(Number);
+        const label = new Date(year, month - 1, 1).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+        return `Raty — ${label.charAt(0).toUpperCase()}${label.slice(1)}`;
+    }
+    return 'Raty w wybranym okresie';
+}
+
 function renderUpcomingLoanInstallments() {
     const section = document.getElementById('dashboard-upcoming-loans');
     const list = document.getElementById('dashboard-upcoming-loans-list');
+    const titleEl = document.getElementById('dashboard-upcoming-loans-title');
     if (!section || !list) return;
 
     if (!hasScheduledLoanInstallments()) {
@@ -203,9 +288,15 @@ function renderUpcomingLoanInstallments() {
     }
 
     section.classList.remove('hidden');
-    const installments = getUpcomingLoanInstallments();
+    if (titleEl) titleEl.textContent = formatDashboardInstallmentsTitle();
+
+    const { startDate, endDate } = getDashboardDates();
+    const installments = getUpcomingLoanInstallments({ startDate, endDate });
+    const emptyLabel = isDashboardForecastPeriod()
+        ? 'Brak zaplanowanych rat w następnym miesiącu.'
+        : 'W tym okresie wszystko spłacone.';
     if (!installments.length) {
-        list.innerHTML = '<p class="upcoming-loans-empty">W tym miesiącu wszystko spłacone.</p>';
+        list.innerHTML = `<p class="upcoming-loans-empty">${emptyLabel}</p>`;
         return;
     }
 
@@ -255,17 +346,29 @@ function renderDashboard() {
     renderDashboardCreditCards();
     renderDashboardWealth();
     updateDashboardPeriodResetVisibility();
+    const forecastMode = isDashboardForecastPeriod();
     const { startDate, endDate } = getDashboardDates();
     const searchQuery = document.getElementById('db-search').value.toLowerCase().trim();
     const dateFilteredTx = appState.transactions.filter(t => t.date >= startDate && t.date <= endDate);
 
-    const totalIncomes = dateFilteredTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-    const totalExpenses = dateFilteredTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+    let totalIncomes;
+    let totalExpenses;
+    if (forecastMode) {
+        const forecast = getDashboardForecastTotals();
+        totalIncomes = forecast.income;
+        totalExpenses = forecast.expense;
+    } else {
+        totalIncomes = dateFilteredTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+        totalExpenses = dateFilteredTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+    }
     const netBalance = totalIncomes - totalExpenses;
 
     document.getElementById('db-period-label').innerText = formatDashboardPeriodLabel();
     document.getElementById('db-total-incomes').innerText = `${totalIncomes.toFixed(2)} zł`;
     document.getElementById('db-total-expenses').innerText = `${totalExpenses.toFixed(2)} zł`;
+    document.getElementById('db-incomes-label').textContent = forecastMode ? 'Wpływy (prognoza)' : 'Wpływy';
+    document.getElementById('db-expenses-label').textContent = forecastMode ? 'Wydatki (prognoza)' : 'Wydatki';
+    document.getElementById('db-forecast-hint')?.classList.toggle('hidden', !forecastMode);
     const netEl = document.getElementById('db-net-balance');
     netEl.innerText = `${netBalance >= 0 ? '+' : ''}${netBalance.toFixed(2)} zł`;
     netEl.style.color = netBalance >= 0 ? '#6ee7b7' : '#fca5a5';
@@ -291,16 +394,22 @@ function renderDashboard() {
     }
 
     const chartTx = dateFilteredTx.filter(t => t.type === chartViewType);
-    const catSums = {};
     const chartTypeLabel = chartViewType === 'income' ? 'wpływów' : 'wydatków';
+    const chartTypeSuffix = forecastMode ? ' (prognoza)' : '';
     document.getElementById('btn-reset-chart').style.display = activeChartCategory ? 'block' : 'none';
     document.getElementById('chart-title').innerText = activeChartCategory
-        ? `Struktura: ${activeChartCategory}`
-        : `Struktura ${chartTypeLabel}`;
+        ? `Struktura: ${activeChartCategory}${chartTypeSuffix}`
+        : `Struktura ${chartTypeLabel}${chartTypeSuffix}`;
     document.getElementById('btn-chart-expense').classList.toggle('active', chartViewType === 'expense');
     document.getElementById('btn-chart-income').classList.toggle('active', chartViewType === 'income');
 
-    if (!activeChartCategory) {
+    const catSums = {};
+    if (forecastMode) {
+        Object.assign(
+            catSums,
+            getDashboardForecastCategorySums(chartViewType, activeChartCategory || null)
+        );
+    } else if (!activeChartCategory) {
         chartTx.forEach(t => { catSums[t.mainCategory] = (catSums[t.mainCategory] || 0) + t.amount; });
     } else {
         chartTx.filter(t => t.mainCategory === activeChartCategory).forEach(t => {
@@ -362,6 +471,13 @@ function renderDashboard() {
 
     const list = document.getElementById('recent-transactions-list');
     list.innerHTML = '';
+
+    if (forecastMode && !searchQuery && !activeChartCategory) {
+        list.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg><p>Prognoza na następny miesiąc — brak rzeczywistych transakcji. Wpływy i wydatki liczone ze średniej 3 poprzednich miesięcy.</p></div>`;
+        const moreBtn = document.getElementById('dashboard-tx-show-more');
+        if (moreBtn) moreBtn.classList.add('hidden');
+        return;
+    }
 
     if (listTx.length === 0) {
         list.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg><p>${searchQuery ? 'Brak wyników wyszukiwania' : 'Brak transakcji w tym okresie'}</p></div>`;

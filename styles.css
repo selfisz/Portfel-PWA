@@ -611,6 +611,14 @@ h2 {
 .hero-stat.income .value { color: var(--hero-income, #6ee7b7); }
 .hero-stat.expense .value { color: var(--hero-expense, #fca5a5); }
 
+.hero-forecast-hint {
+    margin: 10px 0 0;
+    font-size: var(--text-2xs);
+    line-height: 1.35;
+    opacity: 0.82;
+    text-align: center;
+}
+
 .filter-card {
     padding: var(--card-padding-sm);
     background: var(--bg-elevated);

@@ -316,6 +316,34 @@ describe('getUpcomingLoanInstallments', () => {
     });
 });
 
+describe('getLoanInstallmentsInDateRange', () => {
+    it('używa projekcji kalendarza dla następnego miesiąca', () => {
+        const now = new Date();
+        const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const nextMonthEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+        const startDate = localIsoDate(nextMonthStart);
+        const endDate = localIsoDate(nextMonthEnd);
+        const dueThisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-15`;
+
+        _setAppState({ ..._getAppState(), loans: [
+            { id: 'loan-a', subCategory: 'Hipoteczny', totalAmount: 100000, currentCapitalLeft: 90000,
+              nextInstallmentAmount: 2500, nextInstallmentDue: dueThisMonth, archived: false }
+        ]});
+
+        globalThis.getScheduledDebtPaymentsOnDate = (dateStr) => {
+            if (dateStr >= startDate && dateStr <= endDate && dateStr.endsWith('-15')) {
+                return [{ type: 'loan', id: 'loan-a', name: 'Hipoteczny', amount: 2500, estimated: false }];
+            }
+            return [];
+        };
+
+        const result = getLoanInstallmentsInDateRange(startDate, endDate);
+        expect(result).toHaveLength(1);
+        expect(result[0].nextInstallmentDue).toBe(`${nextMonthStart.getFullYear()}-${String(nextMonthStart.getMonth() + 1).padStart(2, '0')}-15`);
+        delete globalThis.getScheduledDebtPaymentsOnDate;
+    });
+});
+
 describe('hasScheduledLoanInstallments', () => {
     it('zwraca false gdy brak kredytów', () => {
         expect(hasScheduledLoanInstallments()).toBe(false);

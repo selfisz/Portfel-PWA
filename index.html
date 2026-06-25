@@ -359,6 +359,7 @@
                 <div class="period-filter-row">
                     <select id="dashboard-period-select" onchange="handleDashboardPeriodChange()">
                         <option value="current-month">Bieżący miesiąc</option>
+                        <option value="next-month">Następny miesiąc (prognoza)</option>
                         <option value="previous-month">Poprzedni miesiąc</option>
                         <option value="current-year">Bieżący rok</option>
                         <option value="previous-year">Poprzedni rok</option>
@@ -380,14 +381,15 @@
                 <div id="db-net-balance" class="hero-balance">0,00 zł</div>
                 <div class="hero-stats">
                     <div class="hero-stat income">
-                        <div class="label">Wpływy</div>
+                        <div id="db-incomes-label" class="label">Wpływy</div>
                         <div id="db-total-incomes" class="value">0,00 zł</div>
                     </div>
                     <div class="hero-stat expense">
-                        <div class="label">Wydatki</div>
+                        <div id="db-expenses-label" class="label">Wydatki</div>
                         <div id="db-total-expenses" class="value">0,00 zł</div>
                     </div>
                 </div>
+                <p id="db-forecast-hint" class="hero-forecast-hint hidden">Średnia z ostatnich 3 miesięcy — wpływy i wydatki są szacunkowe.</p>
             </div>
 
             <div class="card">
@@ -396,7 +398,7 @@
             </div>
 
             <div id="dashboard-upcoming-loans" class="card hidden">
-                <h2>Raty w tym miesiącu</h2>
+                <h2 id="dashboard-upcoming-loans-title">Raty w tym miesiącu</h2>
                 <div id="dashboard-upcoming-loans-list" class="upcoming-loans-list"></div>
             </div>
 
