@@ -451,10 +451,11 @@
                         <button id="btn-loan-payment" type="button" class="toggle-btn loan" onclick="setFormMode('loan')">Kredyt</button>
                         <button id="btn-card-payment" type="button" class="toggle-btn toggle-card" onclick="setFormMode('card')">Karta</button>
                     </div>
+                    <p id="add-form-error" class="add-form-error hidden" role="alert" aria-live="polite"></p>
                     <div id="add-form-standard">
                         <div class="form-group form-group--amount">
                             <label for="tx-amount">Kwota (PLN)</label>
-                            <input type="text" id="tx-amount" inputmode="decimal" placeholder="0,00" autocomplete="off" enterkeyhint="done">
+                            <input type="text" id="tx-amount" inputmode="decimal" placeholder="0,00" autocomplete="off" enterkeyhint="done" oninput="clearAddFormError()">
                         </div>
                         <div class="form-group" id="recent-categories-wrapper" style="display:none;">
                             <label>Ostatnio używane</label>
@@ -470,7 +471,7 @@
                         </div>
                         <div class="form-group">
                             <label>Data</label>
-                            <input type="date" id="tx-date">
+                            <input type="date" id="tx-date" onchange="clearAddFormError()">
                         </div>
                         <div class="form-group">
                             <label>Notatka</label>
@@ -479,6 +480,10 @@
                     </div>
                     <div id="add-form-loan" class="hidden">
                         <p class="reports-hint add-loan-hint">Zmniejsza kapitał kredytu, dodaje wydatek w Długach i odejmuje z gotówki.</p>
+                        <div class="form-group" id="recent-loans-wrapper" style="display:none;">
+                            <label>Ostatnio używane</label>
+                            <div id="recent-loans-row" class="recent-categories"></div>
+                        </div>
                         <div class="form-group">
                             <label class="section-label" for="add-loan-payment-select">Kredyt</label>
                             <select id="add-loan-payment-select"></select>
@@ -498,6 +503,10 @@
                     </div>
                     <div id="add-form-card" class="hidden">
                         <p class="reports-hint add-loan-hint" id="add-credit-card-hint">Zmniejsza zadłużenie — bez wpływu na wydatki w analizie.</p>
+                        <div class="form-group" id="recent-cards-wrapper" style="display:none;">
+                            <label>Ostatnio używane</label>
+                            <div id="recent-cards-row" class="recent-categories"></div>
+                        </div>
                         <div class="form-group">
                             <label class="section-label" for="add-credit-card-type">Operacja</label>
                             <select id="add-credit-card-type" onchange="populateAddCreditCardForm()">

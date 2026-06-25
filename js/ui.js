@@ -2,6 +2,43 @@ function hapticFeedback() {
     if (navigator.vibrate) navigator.vibrate(12);
 }
 
+let appToastTimeout = null;
+
+function showAppToast(message, variant = 'success') {
+    const toast = document.getElementById('settings-toast');
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.remove('hidden', 'settings-toast--success', 'settings-toast--error', 'settings-toast--default');
+    const variantClass = variant === 'error'
+        ? 'settings-toast--error'
+        : variant === 'default'
+            ? 'settings-toast--default'
+            : 'settings-toast--success';
+    toast.classList.add(variantClass);
+    if (appToastTimeout) clearTimeout(appToastTimeout);
+    appToastTimeout = setTimeout(() => {
+        toast.classList.add('hidden');
+        appToastTimeout = null;
+    }, variant === 'error' ? 3600 : 2800);
+}
+
+function clearAddFormError() {
+    const el = document.getElementById('add-form-error');
+    if (!el) return;
+    el.textContent = '';
+    el.classList.add('hidden');
+}
+
+function showAddFormError(message) {
+    const el = document.getElementById('add-form-error');
+    if (!el) return;
+    el.textContent = message;
+    el.classList.remove('hidden');
+    if (typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+}
+
 function cloneCloseIcon() {
     const tpl = document.getElementById('tpl-icon-close');
     return tpl ? tpl.content.firstElementChild.cloneNode(true) : null;

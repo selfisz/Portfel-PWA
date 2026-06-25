@@ -210,12 +210,47 @@ function getChartSliceColors(labels, type = chartViewType) {
     const fallback = generateDistinctHslColors(labels.length, `${activeChartCategory}|${labels.join('|')}`);
     return labels.map((label, i) => chartMap[label] || fallback[i]);
 }
+function getRecentFormScope() {
+    return formState.formMode || formState.currentType || 'expense';
+}
+
+function readRecentFormEntries() {
+    try {
+        return JSON.parse(localStorage.getItem(RECENT_CATEGORIES_KEY) || '[]');
+    } catch {
+        return [];
+    }
+}
+
+function recentFormEntryKey(entry) {
+    const scope = entry.scope || entry.type;
+    if (scope === 'loan') return `loan|${entry.loanId}`;
+    if (scope === 'card') return `card|${entry.cardId}|${entry.cardOperation || 'repayment'}`;
+    return `${scope}|${entry.mainCategory}|${entry.subCategory}`;
+}
+
+function getRecentEntriesForScope(scope) {
+    return readRecentFormEntries()
+        .filter((entry) => (entry.scope || entry.type) === scope)
+        .slice(0, MAX_RECENT_CATEGORIES);
+}
+
+function pushRecentFormEntry(entry) {
+    const scope = entry.scope || entry.type;
+    const normalized = { ...entry, scope };
+    let all = readRecentFormEntries();
+    const key = recentFormEntryKey(normalized);
+    all = all.filter((item) => recentFormEntryKey(item) !== key);
+    all.unshift(normalized);
+    localStorage.setItem(RECENT_CATEGORIES_KEY, JSON.stringify(all.slice(0, MAX_RECENT_CATEGORIES * 4)));
+}
+
 function migrateRecentCategories(mainMap, subRenames, type) {
     try {
-        const recents = JSON.parse(localStorage.getItem(RECENT_CATEGORIES_KEY) || '[]');
+        const recents = readRecentFormEntries();
         let changed = false;
         const migrated = recents.map((entry) => {
-            if (entry.type !== type) return entry;
+            if ((entry.scope || entry.type) !== type) return entry;
             let { mainCategory, subCategory } = entry;
             if (mainMap[mainCategory]) {
                 mainCategory = mainMap[mainCategory];
@@ -235,23 +270,29 @@ function migrateRecentCategories(mainMap, subRenames, type) {
 }
 
 function getRecentCategories(type) {
-    try {
-        const all = JSON.parse(localStorage.getItem(RECENT_CATEGORIES_KEY) || '[]');
-        return all.filter((entry) => entry.type === type).slice(0, MAX_RECENT_CATEGORIES);
-    } catch {
-        return [];
-    }
+    return getRecentEntriesForScope(type).filter((entry) => entry.mainCategory);
+}
+
+function getRecentLoans() {
+    return getRecentEntriesForScope('loan').filter((entry) => entry.loanId);
+}
+
+function getRecentCards() {
+    return getRecentEntriesForScope('card').filter((entry) => entry.cardId);
 }
 
 function addRecentCategory(type, mainCategory, subCategory) {
-    const id = `${type}|${mainCategory}|${subCategory}`;
-    let all = [];
-    try {
-        all = JSON.parse(localStorage.getItem(RECENT_CATEGORIES_KEY) || '[]');
-    } catch { /* ignore */ }
-    all = all.filter((entry) => `${entry.type}|${entry.mainCategory}|${entry.subCategory}` !== id);
-    all.unshift({ type, mainCategory, subCategory });
-    localStorage.setItem(RECENT_CATEGORIES_KEY, JSON.stringify(all.slice(0, MAX_RECENT_CATEGORIES * 3)));
+    pushRecentFormEntry({ type, mainCategory, subCategory });
+}
+
+function addRecentLoan(loanId) {
+    if (!loanId) return;
+    pushRecentFormEntry({ scope: 'loan', loanId });
+}
+
+function addRecentCard(cardId, cardOperation = 'repayment') {
+    if (!cardId) return;
+    pushRecentFormEntry({ scope: 'card', cardId, cardOperation });
 }
 
 function focusAmountField() {
@@ -286,7 +327,7 @@ function createSubCategoryItem(sub) {
     return item;
 }
 
-function renderRecentCategories() {
+function renderRecentCategoryChips() {
     const wrapper = document.getElementById('recent-categories-wrapper');
     const row = document.getElementById('recent-categories-row');
     if (!wrapper || !row) return;
@@ -318,4 +359,99 @@ function renderRecentCategories() {
         };
         row.appendChild(chip);
     });
+}
+
+function renderRecentLoanChips() {
+    const wrapper = document.getElementById('recent-loans-wrapper');
+    const row = document.getElementById('recent-loans-row');
+    const select = document.getElementById('add-loan-payment-select');
+    if (!wrapper || !row) return;
+
+    const recents = getRecentLoans().filter((entry) => {
+        const loan = getLoanById(entry.loanId);
+        return loan && isLoanActive(loan);
+    });
+
+    if (recents.length === 0) {
+        wrapper.style.display = 'none';
+        row.innerHTML = '';
+        return;
+    }
+
+    wrapper.style.display = 'block';
+    row.innerHTML = '';
+    recents.forEach((recent) => {
+        const loan = getLoanById(recent.loanId);
+        if (!loan) return;
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'recent-chip';
+        if (select?.value === recent.loanId) chip.classList.add('selected');
+        chip.innerHTML = `<span>${escapeHtml(getLoanDisplayName(loan))}</span>`;
+        chip.onclick = () => {
+            if (select) select.value = recent.loanId;
+            row.querySelectorAll('.recent-chip').forEach((el) => el.classList.remove('selected'));
+            chip.classList.add('selected');
+        };
+        row.appendChild(chip);
+    });
+}
+
+function renderRecentCardChips() {
+    const wrapper = document.getElementById('recent-cards-wrapper');
+    const row = document.getElementById('recent-cards-row');
+    const select = document.getElementById('add-credit-card-select');
+    const typeSelect = document.getElementById('add-credit-card-type');
+    if (!wrapper || !row) return;
+
+    const recents = getRecentCards().filter((entry) => {
+        const card = getCreditCardById(entry.cardId);
+        return card && !card.archived && card.limit > 0;
+    });
+
+    if (recents.length === 0) {
+        wrapper.style.display = 'none';
+        row.innerHTML = '';
+        return;
+    }
+
+    wrapper.style.display = 'block';
+    row.innerHTML = '';
+    recents.forEach((recent) => {
+        const card = getCreditCardById(recent.cardId);
+        if (!card) return;
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'recent-chip';
+        const opLabel = recent.cardOperation === 'transfer_out' ? 'Przelew' : 'Spłata';
+        const isSelected = select?.value === recent.cardId
+            && (typeSelect?.value || 'repayment') === (recent.cardOperation || 'repayment');
+        if (isSelected) chip.classList.add('selected');
+        chip.innerHTML = `<span>${escapeHtml(card.name)} · ${opLabel}</span>`;
+        chip.onclick = () => {
+            if (typeSelect) typeSelect.value = recent.cardOperation || 'repayment';
+            populateAddCreditCardForm();
+            if (select) select.value = recent.cardId;
+            row.querySelectorAll('.recent-chip').forEach((el) => el.classList.remove('selected'));
+            chip.classList.add('selected');
+        };
+        row.appendChild(chip);
+    });
+}
+
+function renderRecentCategories() {
+    const scope = getRecentFormScope();
+    document.getElementById('recent-categories-wrapper')?.style.setProperty('display', 'none');
+    document.getElementById('recent-loans-wrapper')?.style.setProperty('display', 'none');
+    document.getElementById('recent-cards-wrapper')?.style.setProperty('display', 'none');
+
+    if (scope === 'loan') {
+        renderRecentLoanChips();
+        return;
+    }
+    if (scope === 'card') {
+        renderRecentCardChips();
+        return;
+    }
+    renderRecentCategoryChips();
 }

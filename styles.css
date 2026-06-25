@@ -373,6 +373,35 @@ header {
 
 .settings-toast.hidden { display: none; }
 
+.settings-toast--success {
+    background: var(--success);
+    color: #fff;
+}
+
+.settings-toast--error {
+    background: var(--danger);
+    color: #fff;
+}
+
+.settings-toast--default {
+    background: var(--primary);
+    color: var(--bg);
+}
+
+.add-form-error {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--danger-soft);
+    border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+    color: var(--danger);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.add-form-error.hidden { display: none; }
+
 /* Alert podziału kodu */
 .module-split-banner {
     position: fixed;

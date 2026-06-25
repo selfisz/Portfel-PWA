@@ -244,6 +244,7 @@ function populateAddLoanPaymentForm(loans = getActiveLoans()) {
     if (dateInput && !dateInput.value) {
         dateInput.value = localIsoDate(new Date());
     }
+    renderRecentCategories();
 }
 
 function registerLoanPayment(loanId, amount, date, note, options = {}) {
@@ -308,6 +309,8 @@ function saveLoanPaymentFromAdd() {
 
     const updated = registerLoanPayment(loanId, amount, date, note);
     if (!updated) return;
+
+    addRecentLoan(loanId);
 
     hapticFeedback();
     if (updated.archived) {

@@ -30,10 +30,7 @@ function applyBackupPayload(payload) {
 }
 
 function showSettingsToast(message) {
-    const toast = document.getElementById('settings-toast');
-    toast.textContent = message;
-    toast.classList.remove('hidden');
-    setTimeout(() => toast.classList.add('hidden'), 2800);
+    showAppToast(message, 'success');
 }
 
 async function refreshBackupInfo() {

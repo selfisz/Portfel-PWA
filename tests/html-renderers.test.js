@@ -92,6 +92,7 @@ beforeAll(() => {
     loadScript('js/cash.js');
     loadScript('js/credit-cards.js');
     loadScript('js/loans.js');
+    loadScript('js/ui.js');
     loadScript('js/settings.js');
 
     runInContext(`

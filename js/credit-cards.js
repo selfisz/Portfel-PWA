@@ -587,6 +587,8 @@ function saveCreditCardMovementFromAdd() {
     const updated = registerCreditCardMovement(cardId, type, amount, date, note);
     if (!updated) return;
 
+    addRecentCard(cardId, type);
+
     hapticFeedback();
     showSettingsToast(type === 'repayment' ? 'Spłata karty zapisana' : 'Przelew z karty zapisany');
     document.getElementById('add-credit-card-amount').value = '';

@@ -33,7 +33,7 @@ beforeAll(() => {
   globalThis.isLightTheme = () => true; // domyślnie jasny motyw
 
   // Stuby stanu
-  globalThis.formState = { currentType: 'expense', selectedMainCategory: '', selectedSubCategory: '' };
+  globalThis.formState = { formMode: 'expense', currentType: 'expense', selectedMainCategory: '', selectedSubCategory: '' };
   globalThis.selectMainCategoryForm = () => {};
   globalThis.renderMainCategoriesForm = () => {};
   globalThis.activeChartCategory = null;
@@ -377,6 +377,18 @@ describe('addRecentCategory', () => {
     addRecentCategory('income', 'Wynagrodzenie', 'Podstawa');
     expect(getRecentCategories('expense')).toHaveLength(1);
     expect(getRecentCategories('income')).toHaveLength(1);
+  });
+
+  it('oddziela ostatnie wpisy dla każdej zakładki formularza', () => {
+    addRecentCategory('expense', 'Dom', 'Czynsz');
+    addRecentCategory('income', 'Wynagrodzenie', 'Podstawa');
+    addRecentLoan('loan-a');
+    addRecentCard('card-a', 'repayment');
+    addRecentCard('card-a', 'transfer_out');
+    expect(getRecentCategories('expense')).toHaveLength(1);
+    expect(getRecentCategories('income')).toHaveLength(1);
+    expect(getRecentLoans()).toHaveLength(1);
+    expect(getRecentCards()).toHaveLength(2);
   });
 });
 

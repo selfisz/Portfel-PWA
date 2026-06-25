@@ -84,7 +84,8 @@ function buildFormDom({
     'view-add': makeEl(),
     'sync-status': makeEl(),
     'tx-income-cash-hint': makeEl(),
-    'tx-affects-cash-wrapper': makeEl()
+    'tx-affects-cash-wrapper': makeEl(),
+    'add-form-error': makeEl()
   };
 
   globalThis.document = {
@@ -173,6 +174,7 @@ beforeAll(() => {
   loadScript('js/portfolio.js');
   loadScript('js/state.js');
   loadScript('js/format.js');
+  loadScript('js/ui.js');
   loadScript('js/transactions.js');
 
   // Bridge do wewnętrznych zmiennych state.js i transactions.js
@@ -207,54 +209,69 @@ beforeEach(() => {
 // saveTransaction — walidacja
 // ---------------------------------------------------------------------------
 describe('saveTransaction — walidacja', () => {
-  it('wywołuje alert gdy brak kwoty', () => {
-    const alertSpy = vi.fn();
-    globalThis.alert = alertSpy;
+  it('pokazuje błąd inline gdy brak kwoty', () => {
     buildFormDom({ amount: '' });
     _setFormState({ formMode: 'expense', currentType: 'expense', selectedMainCategory: 'Dom', selectedSubCategory: 'Czynsz' });
     saveTransaction();
-    expect(alertSpy).toHaveBeenCalledWith('Uzupełnij kwotę i kategorie.');
+    expect(document.getElementById('add-form-error').textContent).toBe('Uzupełnij kwotę, kategorię i datę.');
     expect(_getAppState().transactions).toHaveLength(0);
   });
 
-  it('wywołuje alert gdy kwota wynosi 0', () => {
-    const alertSpy = vi.fn();
-    globalThis.alert = alertSpy;
+  it('pokazuje błąd inline gdy kwota wynosi 0', () => {
     buildFormDom({ amount: '0' });
     _setFormState({ formMode: 'expense', currentType: 'expense', selectedMainCategory: 'Dom', selectedSubCategory: 'Czynsz' });
     saveTransaction();
-    expect(alertSpy).toHaveBeenCalled();
+    expect(document.getElementById('add-form-error').textContent).toContain('Uzupełnij');
     expect(_getAppState().transactions).toHaveLength(0);
   });
 
-  it('wywołuje alert gdy brak głównej kategorii', () => {
-    const alertSpy = vi.fn();
-    globalThis.alert = alertSpy;
+  it('pokazuje błąd inline gdy brak głównej kategorii', () => {
     buildFormDom({ amount: '200' });
     _setFormState({ formMode: 'expense', currentType: 'expense', selectedMainCategory: '', selectedSubCategory: 'Czynsz' });
     saveTransaction();
-    expect(alertSpy).toHaveBeenCalled();
+    expect(document.getElementById('add-form-error').textContent).toContain('Uzupełnij');
     expect(_getAppState().transactions).toHaveLength(0);
   });
 
-  it('wywołuje alert gdy brak podkategorii', () => {
-    const alertSpy = vi.fn();
-    globalThis.alert = alertSpy;
+  it('pokazuje błąd inline gdy brak podkategorii', () => {
     buildFormDom({ amount: '200' });
     _setFormState({ formMode: 'expense', currentType: 'expense', selectedMainCategory: 'Dom', selectedSubCategory: '' });
     saveTransaction();
-    expect(alertSpy).toHaveBeenCalled();
+    expect(document.getElementById('add-form-error').textContent).toContain('Uzupełnij');
     expect(_getAppState().transactions).toHaveLength(0);
   });
 
-  it('wywołuje alert gdy brak daty', () => {
-    const alertSpy = vi.fn();
-    globalThis.alert = alertSpy;
+  it('pokazuje błąd inline gdy brak daty', () => {
     buildFormDom({ amount: '200', date: '' });
     _setFormState({ formMode: 'expense', currentType: 'expense', selectedMainCategory: 'Dom', selectedSubCategory: 'Czynsz' });
     saveTransaction();
-    expect(alertSpy).toHaveBeenCalled();
+    expect(document.getElementById('add-form-error').textContent).toContain('Uzupełnij');
     expect(_getAppState().transactions).toHaveLength(0);
+  });
+});
+
+describe('formatTransactionSavedToast', () => {
+  it('formatuje toast dla nowego wydatku', () => {
+    const msg = formatTransactionSavedToast({
+      type: 'expense',
+      mainCategory: 'Przyjemności',
+      subCategory: 'Wycieczki',
+      amount: 450
+    }, false);
+    expect(msg).toContain('Wydatek zapisany');
+    expect(msg).toContain('Przyjemności · Wycieczki');
+    expect(msg).toContain('450,00');
+  });
+
+  it('formatuje toast dla edycji wpływu', () => {
+    const msg = formatTransactionSavedToast({
+      type: 'income',
+      mainCategory: 'Wynagrodzenie',
+      subCategory: 'Podstawa',
+      amount: 8500
+    }, true);
+    expect(msg).toContain('Zaktualizowano');
+    expect(msg).toContain('+');
   });
 });
 

@@ -101,6 +101,7 @@ beforeAll(() => {
     loadScript('js/portfolio.js');
     loadScript('js/state.js');
     loadScript('js/format.js');
+    loadScript('js/ui.js');
     loadScript('js/assets.js');
     loadScript('js/cash.js');
     loadScript('js/credit-cards.js');
@@ -526,35 +527,27 @@ describe('saveTransaction — walidacja', () => {
     });
 
     it('alert gdy brak kwoty', () => {
-        let alertCalled = false;
-        globalThis.alert = () => { alertCalled = true; };
         document.getElementById('tx-amount').value = '';
         saveTransaction();
-        expect(alertCalled).toBe(true);
+        expect(document.getElementById('add-form-error').textContent).toContain('Uzupełnij');
     });
 
     it('alert gdy brak kategorii głównej', () => {
-        let alertCalled = false;
-        globalThis.alert = () => { alertCalled = true; };
         runInContext('formState.selectedMainCategory = "";');
         saveTransaction();
-        expect(alertCalled).toBe(true);
+        expect(document.getElementById('add-form-error').textContent).toContain('Uzupełnij');
     });
 
     it('alert gdy brak podkategorii', () => {
-        let alertCalled = false;
-        globalThis.alert = () => { alertCalled = true; };
         runInContext('formState.selectedSubCategory = "";');
         saveTransaction();
-        expect(alertCalled).toBe(true);
+        expect(document.getElementById('add-form-error').textContent).toContain('Uzupełnij');
     });
 
-    it('alert gdy brak daty', () => {
-        let alertCalled = false;
-        globalThis.alert = () => { alertCalled = true; };
+    it('pokazuje błąd inline gdy brak daty', () => {
         document.getElementById('tx-date').value = '';
         saveTransaction();
-        expect(alertCalled).toBe(true);
+        expect(document.getElementById('add-form-error').textContent).toContain('Uzupełnij');
     });
 
     it('zapisuje transakcję z poprawnymi danymi', () => {
@@ -585,6 +578,13 @@ describe('showSettingsToast', () => {
         toast.classList.add('hidden');
         showSettingsToast('Zapisano');
         expect(toast.classList.contains('hidden')).toBe(false);
+        expect(toast.classList.contains('settings-toast--success')).toBe(true);
+    });
+
+    it('showAppToast error ustawia wariant błędu', () => {
+        const toast = document.getElementById('settings-toast');
+        showAppToast('Coś poszło nie tak', 'error');
+        expect(toast.classList.contains('settings-toast--error')).toBe(true);
     });
 });
 

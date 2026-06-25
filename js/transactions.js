@@ -62,6 +62,7 @@ function setAddFormPanels(mode) {
 function setFormMode(mode) {
     if (editingTxIndex !== null && (mode === 'loan' || mode === 'card')) return;
 
+    clearAddFormError();
     formState.formMode = mode;
     const isLoan = mode === 'loan';
     const isCard = mode === 'card';
@@ -95,11 +96,13 @@ function setFormMode(mode) {
 
     if (isLoan) {
         populateAddLoanPaymentForm();
+        renderRecentCategories();
         document.getElementById('form-header').innerText = 'Spłata kredytu';
         return;
     }
 
     populateAddCreditCardForm();
+    renderRecentCategories();
     document.getElementById('form-header').innerText = 'Operacja na karcie';
 }
 
@@ -156,6 +159,7 @@ function renderMainCategoriesForm() {
 }
 
 function selectMainCategoryForm(cat, element) {
+    clearAddFormError();
     document.querySelectorAll('#main-category-grid .grid-item').forEach((i) => i.classList.remove('selected'));
     if (element) element.classList.add('selected');
     formState.selectedMainCategory = cat;
@@ -182,6 +186,21 @@ function renderSubCategoriesForm(cat) {
     renderRecentCategories();
 }
 
+function formatTransactionCategoryLabel(tx) {
+    const sub = tx.subCategory === '[Bez podkategorii]' ? '' : tx.subCategory;
+    return sub ? `${tx.mainCategory} · ${sub}` : tx.mainCategory;
+}
+
+function formatTransactionSavedToast(tx, isEdit = false) {
+    const sign = tx.type === 'expense' ? '−' : '+';
+    const categoryLabel = formatTransactionCategoryLabel(tx);
+    if (isEdit) {
+        return `Zaktualizowano — ${categoryLabel} · ${sign}${formatPlnAmount(tx.amount)}`;
+    }
+    const verb = tx.type === 'expense' ? 'Wydatek zapisany' : 'Wpływ zapisany';
+    return `${verb} — ${categoryLabel} · ${sign}${formatPlnAmount(tx.amount)}`;
+}
+
 function saveTransaction() {
     const amount = parsePlnInput(document.getElementById('tx-amount').value);
     const date = document.getElementById('tx-date').value;
@@ -192,8 +211,11 @@ function saveTransaction() {
     const affectsCashChecked = document.getElementById('tx-affects-cash')?.checked ?? true;
 
     if (!Number.isFinite(amount) || amount <= 0 || !formState.selectedMainCategory || !formState.selectedSubCategory || !date) {
-        return alert('Uzupełnij kwotę i kategorie.');
+        showAddFormError('Uzupełnij kwotę, kategorię i datę.');
+        return;
     }
+
+    clearAddFormError();
 
     const affectsCash = resolveTransactionAffectsCash(
         formState.currentType,
@@ -218,11 +240,15 @@ function saveTransaction() {
 
     if (linkedAssetId) txData.linkedAssetId = linkedAssetId;
     if (linkedAssetChecked && !linkedAssetId) {
-        return alert('Wybierz aktywo lub odznacz powiązanie.');
+        showAddFormError('Wybierz aktywo lub odznacz powiązanie.');
+        return;
     }
 
     if (paidWithCard && formState.currentType === 'expense') {
-        if (!creditCardId) return alert('Wybierz kartę kredytową.');
+        if (!creditCardId) {
+            showAddFormError('Wybierz kartę kredytową.');
+            return;
+        }
         txData.creditCardId = creditCardId;
     }
 
@@ -248,7 +274,8 @@ function saveTransaction() {
         } else {
             appState.transactions.shift();
         }
-        return alert('Anulowano — nie zmieniono salda gotówki.');
+        showAppToast('Nie zapisano — brak zmiany salda gotówki.', 'error');
+        return;
     }
     if (!syncAssetOnTransactionSave(txData, previousTx)) {
         syncCashOnTransactionSave(previousTx || {}, txData);
@@ -258,12 +285,15 @@ function saveTransaction() {
         } else {
             appState.transactions.shift();
         }
-        return alert('Anulowano — nie zmieniono aktywa.');
+        showAppToast('Nie zapisano — brak zmiany powiązanego aktywa.', 'error');
+        return;
     }
+    const wasEdit = savedEditingIndex !== null;
     addRecentCategory(txData.type, txData.mainCategory, txData.subCategory);
     appState.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
     saveState();
     hapticFeedback();
+    showAppToast(formatTransactionSavedToast(txData, wasEdit), 'success');
     switchView('dashboard', 'Pulpit', document.querySelectorAll('.nav-item')[0]);
 }
 
