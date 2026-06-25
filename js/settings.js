@@ -323,6 +323,9 @@ function closeSettings() {
 }
 
 async function backupToCloud() {
+    const count = getTransactionCount(appState);
+    if (!confirm(`Na pewno wysłać kopię do chmury (${count} trans.)?\nPoprzednia kopia w chmurze zostanie zastąpiona.`)) return;
+
     const btn = document.getElementById('btn-backup-cloud');
     setSettingsButtonBusy(btn, true, 'Wysyłanie…');
     try {
@@ -364,6 +367,8 @@ function backupToPhone() {
 }
 
 async function restoreFromCloud() {
+    if (!confirm('Na pewno przywrócić kopię z chmury?\nObecne dane w aplikacji zostaną zastąpione.')) return;
+
     const btn = document.getElementById('btn-restore-cloud');
     setSettingsButtonBusy(btn, true, 'Pobieranie…');
     let payload;
@@ -385,7 +390,6 @@ async function restoreFromCloud() {
         showSettingsToast('Kopia w chmurze jest pusta', 'error');
         return;
     }
-    if (!confirm(`Przywrócić kopię z chmury (${count} transakcji)? Obecne dane zostaną zastąpione.`)) return;
     setSettingsButtonBusy(btn, true, 'Przywracanie…');
     try {
         applyBackupPayload(payload);
@@ -401,6 +405,7 @@ async function restoreFromCloud() {
 }
 
 function restoreFromPhoneFile() {
+    if (!confirm('Na pewno przywrócić kopię z pliku?\nObecne dane w aplikacji zostaną zastąpione.')) return;
     document.getElementById('backup-file-input').click();
 }
 
@@ -415,7 +420,10 @@ function handleBackupFileSelect(event) {
         try {
             const payload = JSON.parse(reader.result);
             const count = payload.transactionCount || payload.data?.transactions?.length || 0;
-            if (!confirm(`Przywrócić kopię z pliku (${count} transakcji)? Obecne dane zostaną zastąpione.`)) return;
+            if (!count) {
+                showSettingsToast('Plik kopii jest pusty', 'error');
+                return;
+            }
             setSettingsButtonBusy(btn, true, 'Przywracanie…');
             applyBackupPayload(payload);
             localStorage.setItem(LOCAL_BACKUP_KEY, reader.result);
