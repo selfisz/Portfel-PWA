@@ -29,12 +29,35 @@ function applyBackupPayload(payload) {
     }
 }
 
-function showSettingsToast(message) {
-    showAppToast(message, 'success');
+function showSettingsToast(message, variant = 'success') {
+    showAppToast(message, variant);
+}
+
+function setSettingsButtonBusy(btn, busy, busyLabel) {
+    if (!btn) return;
+    if (busy) {
+        if (!btn.dataset.originalTitle) {
+            const titleEl = btn.querySelector('.settings-action-btn-title');
+            btn.dataset.originalTitle = titleEl ? titleEl.textContent : btn.textContent;
+        }
+        btn.disabled = true;
+        btn.classList.add('is-busy');
+        btn.setAttribute('aria-busy', 'true');
+        const titleEl = btn.querySelector('.settings-action-btn-title');
+        if (titleEl && busyLabel) titleEl.textContent = busyLabel;
+    } else {
+        btn.disabled = false;
+        btn.classList.remove('is-busy');
+        btn.removeAttribute('aria-busy');
+        const titleEl = btn.querySelector('.settings-action-btn-title');
+        if (titleEl && btn.dataset.originalTitle) titleEl.textContent = btn.dataset.originalTitle;
+    }
 }
 
 async function refreshBackupInfo() {
-    const infoEl = document.getElementById('backup-cloud-info');
+    const cloudEl = document.getElementById('backup-cloud-info');
+    const localEl = document.getElementById('backup-local-info');
+    if (cloudEl) cloudEl.textContent = 'Sprawdzanie…';
     try {
         const payload = await getCloudBackupPayload();
         if (payload?.exportedAt || payload?.data?.transactions?.length) {
@@ -43,24 +66,32 @@ async function refreshBackupInfo() {
                 ? new Date(typeof exportedAt === 'string' ? exportedAt : exportedAt.toDate?.() || exportedAt).toLocaleString('pl-PL')
                 : '—';
             const count = payload.transactionCount || payload.data?.transactions?.length || '?';
-            infoEl.textContent = `Ostatnia kopia w chmurze: ${date} (${count} transakcji)`;
-        } else {
-            infoEl.textContent = 'Kopia w chmurze: brak zapisanej kopii';
+            if (cloudEl) cloudEl.textContent = `${date} · ${count} trans.`;
+        } else if (cloudEl) {
+            cloudEl.textContent = 'Brak kopii w chmurze';
         }
     } catch {
-        infoEl.textContent = 'Kopia w chmurze: niedostępna (sprawdź połączenie)';
+        if (cloudEl) cloudEl.textContent = 'Niedostępna — brak połączenia';
     }
     const localRaw = localStorage.getItem(LOCAL_BACKUP_KEY);
-    if (localRaw) {
-        try {
-            const local = JSON.parse(localRaw);
-            infoEl.textContent += `\nKopia lokalna: ${new Date(local.exportedAt).toLocaleString('pl-PL')}`;
-        } catch { /* ignore */ }
+    if (localEl) {
+        if (localRaw) {
+            try {
+                const local = JSON.parse(localRaw);
+                const count = local.transactionCount || local.data?.transactions?.length || '?';
+                localEl.textContent = `${new Date(local.exportedAt).toLocaleString('pl-PL')} · ${count} trans.`;
+            } catch {
+                localEl.textContent = 'Nieprawidłowa kopia lokalna';
+            }
+        } else {
+            localEl.textContent = 'Brak kopii lokalnej';
+        }
     }
 }
 
 function openSettings() {
     document.getElementById('settings-overlay').classList.remove('hidden');
+    document.body.classList.add('settings-open');
     const saved = localStorage.getItem(THEME_KEY) || 'auto';
     document.querySelectorAll('.theme-option').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.theme === saved);
@@ -288,9 +319,12 @@ function saveBudgetEditor() {
 
 function closeSettings() {
     document.getElementById('settings-overlay').classList.add('hidden');
+    document.body.classList.remove('settings-open');
 }
 
 async function backupToCloud() {
+    const btn = document.getElementById('btn-backup-cloud');
+    setSettingsButtonBusy(btn, true, 'Wysyłanie…');
     try {
         const payload = getExportPayload();
         await cloudBackupRef.set(payload);
@@ -298,38 +332,61 @@ async function backupToCloud() {
         refreshBackupInfo();
         hapticFeedback();
     } catch (err) {
-        alert('Nie udało się wysłać kopii do chmury. Opublikuj zaktualizowane reguły Firestore (cloud_backup).');
+        showSettingsToast('Nie udało się wysłać kopii', 'error');
         console.error(err);
+    } finally {
+        setSettingsButtonBusy(btn, false);
     }
 }
 
 function backupToPhone() {
-    const payload = getExportPayload();
-    localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(payload));
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `finanse-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    showSettingsToast('Kopia zapisana na telefonie');
-    hapticFeedback();
+    const btn = document.getElementById('btn-backup-phone');
+    setSettingsButtonBusy(btn, true, 'Zapisywanie…');
+    try {
+        const payload = getExportPayload();
+        localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(payload));
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `finanse-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showSettingsToast('Kopia zapisana na telefonie');
+        refreshBackupInfo();
+        hapticFeedback();
+    } catch (err) {
+        showSettingsToast('Nie udało się zapisać kopii', 'error');
+        console.error(err);
+    } finally {
+        setSettingsButtonBusy(btn, false);
+    }
 }
 
 async function restoreFromCloud() {
+    const btn = document.getElementById('btn-restore-cloud');
+    setSettingsButtonBusy(btn, true, 'Pobieranie…');
     let payload;
     try {
         payload = await getCloudBackupPayload();
     } catch (err) {
         console.error('restoreFromCloud get', err);
-        alert(`Nie udało się pobrać kopii z chmury (${err.message || 'brak połączenia'}).`);
+        showSettingsToast('Nie udało się pobrać kopii z chmury', 'error');
+        setSettingsButtonBusy(btn, false);
         return;
     }
-    if (!payload) return alert('Brak kopii zapasowej w chmurze.');
+    setSettingsButtonBusy(btn, false);
+    if (!payload) {
+        showSettingsToast('Brak kopii w chmurze', 'error');
+        return;
+    }
     const count = payload.transactionCount || payload.data?.transactions?.length || 0;
-    if (!count) return alert('Kopia w chmurze jest pusta.');
+    if (!count) {
+        showSettingsToast('Kopia w chmurze jest pusta', 'error');
+        return;
+    }
     if (!confirm(`Przywrócić kopię z chmury (${count} transakcji)? Obecne dane zostaną zastąpione.`)) return;
+    setSettingsButtonBusy(btn, true, 'Przywracanie…');
     try {
         applyBackupPayload(payload);
         showSettingsToast(`Przywrócono ${count} transakcji z chmury`);
@@ -337,7 +394,9 @@ async function restoreFromCloud() {
         hapticFeedback();
     } catch (err) {
         console.error('restoreFromCloud apply', err);
-        alert(err.message || 'Nie udało się przywrócić kopii z chmury.');
+        showSettingsToast(err.message || 'Nie udało się przywrócić kopii', 'error');
+    } finally {
+        setSettingsButtonBusy(btn, false);
     }
 }
 
@@ -348,21 +407,32 @@ function restoreFromPhoneFile() {
 function handleBackupFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
+    const btn = document.getElementById('btn-restore-file');
+    setSettingsButtonBusy(btn, true, 'Wczytywanie…');
     const reader = new FileReader();
     reader.onload = () => {
+        setSettingsButtonBusy(btn, false);
         try {
             const payload = JSON.parse(reader.result);
             const count = payload.transactionCount || payload.data?.transactions?.length || 0;
             if (!confirm(`Przywrócić kopię z pliku (${count} transakcji)? Obecne dane zostaną zastąpione.`)) return;
+            setSettingsButtonBusy(btn, true, 'Przywracanie…');
             applyBackupPayload(payload);
             localStorage.setItem(LOCAL_BACKUP_KEY, reader.result);
             showSettingsToast('Przywrócono kopię z pliku');
             refreshBackupInfo();
             hapticFeedback();
         } catch (err) {
-            alert('Nieprawidłowy plik kopii zapasowej.');
+            showSettingsToast('Nieprawidłowy plik kopii', 'error');
             console.error(err);
+        } finally {
+            setSettingsButtonBusy(btn, false);
         }
+        event.target.value = '';
+    };
+    reader.onerror = () => {
+        setSettingsButtonBusy(btn, false);
+        showSettingsToast('Nie udało się odczytać pliku', 'error');
         event.target.value = '';
     };
     reader.readAsText(file);

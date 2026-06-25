@@ -74,23 +74,64 @@
 
             <div class="settings-section">
                 <div class="section-label">Kategorie</div>
-                <p class="settings-hint">Zmień nazwy kategorii i podkategorii — zmiany obowiązują w całej aplikacji i we wszystkich transakcjach.</p>
-                <button type="button" class="btn-settings-action" onclick="openCategoryEditor()">Edytuj nazwy kategorii</button>
+                <button type="button" class="settings-nav-row" onclick="openCategoryEditor()">
+                    <span class="settings-nav-row-body">
+                        <span class="settings-nav-row-title">Edytuj nazwy kategorii</span>
+                        <span class="settings-nav-row-desc">Zmiany obowiązują w całej aplikacji i transakcjach</span>
+                    </span>
+                    <span class="settings-nav-row-chevron" aria-hidden="true">›</span>
+                </button>
             </div>
 
             <div class="settings-section">
                 <div class="section-label">Budżety</div>
-                <p class="settings-hint">Opcjonalne limity miesięczne. Sugestia na podstawie średniej wydatków z ostatnich 6 miesięcy.</p>
-                <button type="button" class="btn-settings-action" onclick="openBudgetEditor()">Limity kategorii</button>
+                <button type="button" class="settings-nav-row" onclick="openBudgetEditor()">
+                    <span class="settings-nav-row-body">
+                        <span class="settings-nav-row-title">Limity kategorii</span>
+                        <span class="settings-nav-row-desc">Opcjonalne limity miesięczne ze sugestią 6m</span>
+                    </span>
+                    <span class="settings-nav-row-chevron" aria-hidden="true">›</span>
+                </button>
             </div>
 
-            <div class="settings-section">
+            <div class="settings-section settings-section--backup">
                 <div class="section-label">Kopia zapasowa</div>
-                <p class="settings-hint" id="backup-cloud-info">Kopia w chmurze: brak danych</p>
-                <button type="button" class="btn-settings-action" onclick="backupToCloud()">Wyślij kopię do chmury</button>
-                <button type="button" class="btn-settings-action" onclick="backupToPhone()">Zapisz kopię na telefonie</button>
-                <button type="button" class="btn-settings-action" onclick="restoreFromCloud()">Pobierz kopię z chmury</button>
-                <button type="button" class="btn-settings-action" onclick="restoreFromPhoneFile()">Pobierz kopię z pliku</button>
+                <div class="backup-status-grid">
+                    <div class="backup-status-card">
+                        <span class="backup-status-label">Chmura</span>
+                        <span class="backup-status-value" id="backup-cloud-info">Sprawdzanie…</span>
+                    </div>
+                    <div class="backup-status-card">
+                        <span class="backup-status-label">Telefon</span>
+                        <span class="backup-status-value" id="backup-local-info">Brak kopii lokalnej</span>
+                    </div>
+                </div>
+                <div class="settings-action-group">
+                    <span class="settings-action-group-label">Zapisz kopię</span>
+                    <div class="settings-action-grid">
+                        <button type="button" class="settings-action-btn" id="btn-backup-cloud" onclick="backupToCloud()">
+                            <span class="settings-action-btn-title">Chmura</span>
+                            <span class="settings-action-btn-desc">Wyślij do Firebase</span>
+                        </button>
+                        <button type="button" class="settings-action-btn" id="btn-backup-phone" onclick="backupToPhone()">
+                            <span class="settings-action-btn-title">Plik</span>
+                            <span class="settings-action-btn-desc">Pobierz JSON</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="settings-action-group">
+                    <span class="settings-action-group-label">Przywróć kopię</span>
+                    <div class="settings-action-grid">
+                        <button type="button" class="settings-action-btn settings-action-btn--restore" id="btn-restore-cloud" onclick="restoreFromCloud()">
+                            <span class="settings-action-btn-title">Z chmury</span>
+                            <span class="settings-action-btn-desc">Zastąp dane</span>
+                        </button>
+                        <button type="button" class="settings-action-btn settings-action-btn--restore" id="btn-restore-file" onclick="restoreFromPhoneFile()">
+                            <span class="settings-action-btn-title">Z pliku</span>
+                            <span class="settings-action-btn-desc">Wybierz JSON</span>
+                        </button>
+                    </div>
+                </div>
                 <input type="file" id="backup-file-input" accept=".json,application/json" hidden onchange="handleBackupFileSelect(event)">
             </div>
         </div>
