@@ -138,13 +138,44 @@ function getTransactionCount(raw) {
     return getPersistedState(raw).transactions.length;
 }
 
+function transactionFingerprint(tx) {
+    if (!tx || typeof tx !== 'object') return '';
+    return [
+        tx.date || '',
+        tx.type || '',
+        tx.mainCategory || '',
+        tx.subCategory || '',
+        Number(tx.amount || 0).toFixed(2),
+        tx.note || '',
+        tx.recurringId || ''
+    ].join('|');
+}
+
+function unionTransactions(...lists) {
+    const byKey = new Map();
+    lists.flat().forEach((tx) => {
+        const key = transactionFingerprint(tx);
+        if (!key) return;
+        byKey.set(key, tx);
+    });
+    return Array.from(byKey.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
 function mergeRemoteTransactions(localRaw, remoteRaw) {
-    const localCount = getTransactionCount(localRaw);
-    const remoteCount = getTransactionCount(remoteRaw);
-    if (localCount > remoteCount) {
-        return getPersistedState(localRaw).transactions;
-    }
-    return getPersistedState(remoteRaw).transactions;
+    const localTx = localRaw ? getPersistedState(localRaw).transactions : [];
+    const remoteTx = remoteRaw ? getPersistedState(remoteRaw).transactions : [];
+    const memoryTx = Array.isArray(appState?.transactions) ? appState.transactions : [];
+    return unionTransactions(localTx, remoteTx, memoryTx);
+}
+
+function applyMigrations() {
+    const hadMigration = migrateCategoryData() || migrateLoanCategoryTree();
+    const hadLoanMigration = runLoanMigrations();
+    const hadCardMigration = runCreditCardMigrations();
+    const hadAssetMigration = typeof runAssetMigrations === 'function' ? runAssetMigrations() : false;
+    const hadCashMigration = typeof runCashMigrations === 'function' ? runCashMigrations() : false;
+    const hadAnalyticsMigration = typeof runAssetAnalyticsMigrations === 'function' ? runAssetAnalyticsMigrations() : false;
+    return hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration || hadAnalyticsMigration;
 }
 
 function readStoredAppStateRaw() {
@@ -209,57 +240,75 @@ function initData() {
             restoredFromBackup = true;
         }
         const hadUiFields = applyRemoteAppState(localRaw);
-        const hadMigration = migrateCategoryData() || migrateLoanCategoryTree();
-        const hadLoanMigration = runLoanMigrations();
-        const hadCardMigration = runCreditCardMigrations();
-        const hadAssetMigration = typeof runAssetMigrations === 'function' ? runAssetMigrations() : false;
-        const hadCashMigration = typeof runCashMigrations === 'function' ? runCashMigrations() : false;
-        const hadAnalyticsMigration = typeof runAssetAnalyticsMigrations === 'function' ? runAssetAnalyticsMigrations() : false;
-        if (hadUiFields) localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-        if (hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration || hadAnalyticsMigration || restoredFromBackup) saveState();
+        const hadMigration = applyMigrations();
+        if (hadUiFields) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
+        }
+        if (hadMigration || restoredFromBackup) saveState();
         checkAndProcessRecurringTransactions();
         refreshCurrentView();
     } else {
         refreshCurrentView();
     }
 
-    const syncTimeout = window.setTimeout(() => {
+    let syncTimeout = window.setTimeout(() => {
         const statusEl = document.getElementById('sync-status');
         if (statusEl && !statusEl.className) setSyncStatus('offline');
     }, 15000);
 
+    let snapshotGeneration = 0;
+
     stateRef.onSnapshot((docSnap) => {
         window.clearTimeout(syncTimeout);
-        if (docSnap.exists) {
-            let localLoans = [];
-            let localCreditCards = [];
-            let localRawBeforeSync = null;
-            try {
-                localRawBeforeSync = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-                localLoans = getLoansFromPersistedRaw(localRawBeforeSync);
-                localCreditCards = Array.isArray(localRawBeforeSync?.creditCards) ? localRawBeforeSync.creditCards : [];
-            } catch { /* ignore */ }
+        syncTimeout = window.setTimeout(() => {
+            const statusEl = document.getElementById('sync-status');
+            if (statusEl && statusEl.className === 'online') return;
+            if (statusEl && !statusEl.className) setSyncStatus('offline');
+        }, 15000);
 
-            const remoteData = docSnap.data();
-            const localHadMoreTransactions = localRawBeforeSync
-                && getTransactionCount(localRawBeforeSync) > getTransactionCount(remoteData);
-            const mergedRemote = localHadMoreTransactions
-                ? { ...remoteData, transactions: mergeRemoteTransactions(localRawBeforeSync, remoteData) }
-                : remoteData;
+        const generation = ++snapshotGeneration;
 
-            const hadUiFields = applyRemoteAppState(mergedRemote, localLoans, localCreditCards);
-            const hadMigration = migrateCategoryData() || migrateLoanCategoryTree();
-            const hadLoanMigration = runLoanMigrations();
-            const hadCardMigration = runCreditCardMigrations();
-            const hadAssetMigration = typeof runAssetMigrations === 'function' ? runAssetMigrations() : false;
-            const hadCashMigration = typeof runCashMigrations === 'function' ? runCashMigrations() : false;
-            const hadAnalyticsMigration = typeof runAssetAnalyticsMigrations === 'function' ? runAssetAnalyticsMigrations() : false;
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-            if (localHadMoreTransactions || hadUiFields || hadMigration || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration || hadAnalyticsMigration) saveState();
-            setSyncStatus('online');
-            refreshCurrentView();
-        } else {
+        if (!docSnap.exists) {
             saveState();
+            return;
+        }
+
+        let localLoans = [];
+        let localCreditCards = [];
+        let localRawBeforeSync = null;
+        try {
+            localRawBeforeSync = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+            if (localRawBeforeSync === null) localRawBeforeSync = null;
+            localLoans = getLoansFromPersistedRaw(localRawBeforeSync);
+            localCreditCards = Array.isArray(localRawBeforeSync?.creditCards) ? localRawBeforeSync.creditCards : [];
+        } catch { /* ignore */ }
+
+        const remoteData = docSnap.data();
+        const remoteTxCount = getTransactionCount(remoteData);
+        const localTxCount = getTransactionCount(localRawBeforeSync);
+        const memoryTxCount = appState.transactions.length;
+
+        if (docSnap.metadata.fromCache && remoteTxCount < Math.max(localTxCount, memoryTxCount)) {
+            setSyncStatus('online');
+            return;
+        }
+
+        const mergedTransactions = mergeRemoteTransactions(localRawBeforeSync, remoteData);
+        const mergedRemote = { ...remoteData, transactions: mergedTransactions };
+        const mergedTxCount = mergedTransactions.length;
+
+        const hadUiFields = applyRemoteAppState(mergedRemote, localLoans, localCreditCards);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
+
+        const shouldPushRemote = mergedTxCount > remoteTxCount || hadUiFields;
+        if (shouldPushRemote) {
+            saveState();
+        } else {
+            setSyncStatus('online');
+        }
+
+        if (generation === snapshotGeneration) {
+            refreshCurrentView();
         }
     }, (error) => {
         window.clearTimeout(syncTimeout);

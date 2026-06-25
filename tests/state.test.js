@@ -341,7 +341,7 @@ describe('migrateLoansArray', () => {
 // mergeRemoteTransactions / getTransactionCount
 // ---------------------------------------------------------------------------
 describe('mergeRemoteTransactions', () => {
-  it('zachowuje lokalne transakcje gdy jest ich więcej niż w chmurze', () => {
+  it('scala lokalne i zdalne transakcje bez utraty wpisów', () => {
     const local = { transactions: [
       { amount: 100, type: 'expense', date: '2024-01-01', mainCategory: 'Dom', subCategory: 'A' },
       { amount: 200, type: 'expense', date: '2024-02-01', mainCategory: 'Dom', subCategory: 'B' }
@@ -351,7 +351,7 @@ describe('mergeRemoteTransactions', () => {
     expect(merged).toHaveLength(2);
   });
 
-  it('używa transakcji z chmury gdy lokalnie jest ich mniej', () => {
+  it('dodaje brakujące transakcje z chmury', () => {
     const local = { transactions: [] };
     const remote = { transactions: [
       { amount: 50, type: 'income', date: '2024-03-01', mainCategory: 'Wynagrodzenie', subCategory: 'A' }
@@ -361,11 +361,19 @@ describe('mergeRemoteTransactions', () => {
     expect(merged[0].amount).toBe(50);
   });
 
-  it('przy równej liczbie preferuje chmurę', () => {
-    const local = { transactions: [{ amount: 10, type: 'expense', date: '2024-01-01', mainCategory: 'Dom', subCategory: 'A' }] };
-    const remote = { transactions: [{ amount: 99, type: 'expense', date: '2024-01-01', mainCategory: 'Dom', subCategory: 'A' }] };
+  it('przy tym samym wpisie nie duplikuje', () => {
+    const tx = { amount: 10, type: 'expense', date: '2024-01-01', mainCategory: 'Dom', subCategory: 'A' };
+    const local = { transactions: [tx] };
+    const remote = { transactions: [{ ...tx }] };
     const merged = mergeRemoteTransactions(local, remote);
-    expect(merged[0].amount).toBe(99);
+    expect(merged).toHaveLength(1);
+  });
+
+  it('przy różnych wpisach o tej samej liczbie zachowuje oba', () => {
+    const local = { transactions: [{ amount: 10, type: 'expense', date: '2024-01-01', mainCategory: 'Dom', subCategory: 'A' }] };
+    const remote = { transactions: [{ amount: 99, type: 'expense', date: '2024-01-02', mainCategory: 'Dom', subCategory: 'A' }] };
+    const merged = mergeRemoteTransactions(local, remote);
+    expect(merged).toHaveLength(2);
   });
 });
 
