@@ -118,6 +118,9 @@ function setAnalysisSection(section) {
         document.getElementById(`btn-analysis-${id}`)?.classList.toggle('active', id === section);
     });
 
+    const activeBtn = document.getElementById(`btn-analysis-${section}`);
+    activeBtn?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+
     if (section === 'charts' || section === 'assets' || section === 'debts' || section === 'calendar') {
         requestAnimationFrame(() => {
             [reportsChartInstance, reportsTrendChartInstance, reportsYoyChartInstance, reportsDowChartInstance, reportsDebtChartInstance, reportsDebtTrendChartInstance, reportsDebtSplitChartInstance, reportsDebtsTabChartInstance, reportsDebtsTabSplitInstance, reportsDebtPeakChartInstance, reportsAssetAllocationChartInstance, reportsAssetsTabAllocationInstance, reportsCashTrendChartInstance, reportsAssetsTabCashTrendInstance, reportsNetWorthTrendChartInstance, reportsAllocationTrendChartInstance, reportsDiversificationChartInstance]

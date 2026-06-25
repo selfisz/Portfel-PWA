@@ -2,6 +2,133 @@ function hapticFeedback() {
     if (navigator.vibrate) navigator.vibrate(12);
 }
 
+function cloneCloseIcon() {
+    const tpl = document.getElementById('tpl-icon-close');
+    return tpl ? tpl.content.firstElementChild.cloneNode(true) : null;
+}
+
+function createCloseIconButton(onClose, ariaLabel = 'Zamknij') {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-icon';
+    btn.setAttribute('aria-label', ariaLabel);
+    btn.addEventListener('click', onClose);
+    const icon = cloneCloseIcon();
+    if (icon) btn.appendChild(icon);
+    return btn;
+}
+
+function createPanelHeader(title, options = {}) {
+    const header = document.createElement('div');
+    header.className = ['settings-header', options.headerClass].filter(Boolean).join(' ');
+
+    const heading = document.createElement('h2');
+    heading.className = options.titleClass || 'overlay-title';
+    if (options.titleId) heading.id = options.titleId;
+    heading.textContent = title;
+    header.appendChild(heading);
+
+    if (options.actions) {
+        header.appendChild(options.actions);
+    } else if (options.onClose) {
+        header.appendChild(createCloseIconButton(options.onClose, options.closeLabel));
+    }
+
+    return header;
+}
+
+function createDetailsPanelHeaderActions({ editBtnId, viewBtnId, onEdit, onView, onClose }) {
+    const wrap = document.createElement('div');
+    wrap.className = 'loan-details-header-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.id = editBtnId;
+    editBtn.type = 'button';
+    editBtn.className = 'loan-details-header-btn';
+    editBtn.textContent = 'Edytuj';
+    editBtn.addEventListener('click', onEdit);
+
+    const viewBtn = document.createElement('button');
+    viewBtn.id = viewBtnId;
+    viewBtn.type = 'button';
+    viewBtn.className = 'loan-details-header-btn hidden';
+    viewBtn.textContent = 'Podgląd';
+    viewBtn.addEventListener('click', onView);
+
+    wrap.appendChild(editBtn);
+    wrap.appendChild(viewBtn);
+    wrap.appendChild(createCloseIconButton(onClose));
+    return wrap;
+}
+
+function createDetailsPanelHeader(config) {
+    return createPanelHeader(config.title, {
+        headerClass: 'loan-details-header',
+        titleId: config.titleId,
+        actions: createDetailsPanelHeaderActions(config),
+    });
+}
+
+function mountPanelHeader(mountId, header) {
+    const mount = document.getElementById(mountId);
+    if (mount) mount.replaceWith(header);
+}
+
+function initPanelHeaders() {
+    mountPanelHeader('panel-header-settings', createPanelHeader('Ustawienia', { onClose: closeSettings }));
+    mountPanelHeader('panel-header-category-editor', createPanelHeader('Nazwy kategorii', { onClose: closeCategoryEditor }));
+    mountPanelHeader('panel-header-budget-editor', createPanelHeader('Limity kategorii', { onClose: closeBudgetEditor }));
+    mountPanelHeader('panel-header-asset-picker', createPanelHeader('Dodaj aktywo', { onClose: closeAssetPicker }));
+    mountPanelHeader('panel-header-credit-card-quick', createPanelHeader('Spłata karty', {
+        titleId: 'credit-card-quick-title',
+        onClose: closeCreditCardQuickAction,
+    }));
+    mountPanelHeader('panel-header-calendar-day', createPanelHeader('Dzień', {
+        titleId: 'calendar-day-title',
+        onClose: closeCalendarDay,
+    }));
+    mountPanelHeader('panel-header-month-drill', createPanelHeader('Miesiąc', {
+        titleId: 'month-drill-title',
+        onClose: closeMonthDrill,
+    }));
+
+    mountPanelHeader('panel-header-asset-details', createDetailsPanelHeader({
+        titleId: 'asset-details-title',
+        title: 'Aktywo',
+        editBtnId: 'btn-asset-details-edit',
+        viewBtnId: 'btn-asset-details-view',
+        onEdit: () => setAssetDetailsMode('edit'),
+        onView: () => setAssetDetailsMode('view'),
+        onClose: closeAssetDetails,
+    }));
+    mountPanelHeader('panel-header-loan-details', createDetailsPanelHeader({
+        titleId: 'loan-details-title',
+        title: 'Szczegóły kredytu',
+        editBtnId: 'btn-loan-details-edit',
+        viewBtnId: 'btn-loan-details-view',
+        onEdit: () => setLoanDetailsMode('edit'),
+        onView: () => setLoanDetailsMode('view'),
+        onClose: closeLoanDetails,
+    }));
+    mountPanelHeader('panel-header-credit-card-details', createDetailsPanelHeader({
+        titleId: 'credit-card-details-title',
+        title: 'Karta kredytowa',
+        editBtnId: 'btn-credit-card-details-edit',
+        viewBtnId: 'btn-credit-card-details-view',
+        onEdit: () => setCreditCardDetailsMode('edit'),
+        onView: () => setCreditCardDetailsMode('view'),
+        onClose: closeCreditCardDetails,
+    }));
+}
+
+function initOverlayCloseIcons() {
+    document.querySelectorAll('.btn-icon[aria-label="Zamknij"]').forEach((btn) => {
+        btn.textContent = '';
+        const icon = cloneCloseIcon();
+        if (icon) btn.appendChild(icon);
+    });
+}
+
 function getOrCreateShowMoreButton(id, onClick) {
     let btn = document.getElementById(id);
     if (!btn) {

@@ -56,12 +56,7 @@
 
     <div id="settings-overlay" class="settings-overlay hidden" onclick="if (event.target === this) closeSettings()">
         <div class="settings-panel">
-            <div class="settings-header">
-                <h2>Ustawienia</h2>
-                <button type="button" class="btn-icon" onclick="closeSettings()" aria-label="Zamknij">
-                    <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                </button>
-            </div>
+            <div id="panel-header-settings"></div>
 
             <div class="settings-section">
                 <div class="section-label">Wygląd</div>
@@ -103,12 +98,7 @@
 
     <div id="category-editor-overlay" class="settings-overlay category-editor-overlay hidden" onclick="if (event.target === this) closeCategoryEditor()">
         <div class="settings-panel category-editor-panel">
-            <div class="settings-header">
-                <h2>Nazwy kategorii</h2>
-                <button type="button" class="btn-icon" onclick="closeCategoryEditor()" aria-label="Zamknij">
-                    <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                </button>
-            </div>
+            <div id="panel-header-category-editor"></div>
             <div class="flex-toggle category-editor-type-toggle">
                 <button id="btn-category-editor-expense" type="button" class="toggle-btn active expense" onclick="setCategoryEditorType('expense')">Wydatki</button>
                 <button id="btn-category-editor-income" type="button" class="toggle-btn income" onclick="setCategoryEditorType('income')">Wpływy</button>
@@ -120,12 +110,7 @@
 
     <div id="budget-editor-overlay" class="settings-overlay category-editor-overlay hidden" onclick="if (event.target === this) closeBudgetEditor()">
         <div class="settings-panel category-editor-panel">
-            <div class="settings-header">
-                <h2>Limity kategorii</h2>
-                <button type="button" class="btn-icon" onclick="closeBudgetEditor()" aria-label="Zamknij">
-                    <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                </button>
-            </div>
+            <div id="panel-header-budget-editor"></div>
             <p class="settings-hint">Puste pole = brak limitu. Przycisk „6m” wstawia średnią z ostatnich 6 miesięcy.</p>
             <div id="budget-editor-list" class="category-editor-list"></div>
             <button type="button" class="btn-submit category-editor-save" onclick="saveBudgetEditor()">Zapisz limity</button>
@@ -134,12 +119,7 @@
 
     <div id="asset-picker-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeAssetPicker()">
         <div class="calendar-day-panel asset-picker-panel" onclick="event.stopPropagation()">
-            <div class="settings-header">
-                <h2>Dodaj aktywo</h2>
-                <button type="button" class="btn-icon" onclick="closeAssetPicker()" aria-label="Zamknij">
-                    <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                </button>
-            </div>
+            <div id="panel-header-asset-picker"></div>
             <p class="reports-hint">Inwestycje, lokaty, gotówka i PPK/IKZE — bez nieruchomości i auta.</p>
             <div class="asset-picker-grid">
                 <button type="button" class="asset-picker-btn" onclick="startNewAsset('investment')">
@@ -168,16 +148,7 @@
 
     <div id="asset-details-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeAssetDetails()">
         <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
-            <div class="settings-header loan-details-header">
-                <h2 id="asset-details-title">Aktywo</h2>
-                <div class="loan-details-header-actions">
-                    <button id="btn-asset-details-edit" type="button" class="loan-details-header-btn" onclick="setAssetDetailsMode('edit')">Edytuj</button>
-                    <button id="btn-asset-details-view" type="button" class="loan-details-header-btn hidden" onclick="setAssetDetailsMode('view')">Podgląd</button>
-                    <button type="button" class="btn-icon" onclick="closeAssetDetails()" aria-label="Zamknij">
-                        <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                    </button>
-                </div>
-            </div>
+            <div id="panel-header-asset-details"></div>
             <div id="asset-details-content" class="loan-details-content"></div>
             <div id="asset-details-actions" class="asset-details-actions-wrap"></div>
             <div id="asset-details-edit" class="loan-details-edit hidden">
@@ -275,16 +246,7 @@
 
     <div id="loan-details-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeLoanDetails()">
         <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
-            <div class="settings-header loan-details-header">
-                <h2 id="loan-details-title">Szczegóły kredytu</h2>
-                <div class="loan-details-header-actions">
-                    <button id="btn-loan-details-edit" type="button" class="loan-details-header-btn" onclick="setLoanDetailsMode('edit')">Edytuj</button>
-                    <button id="btn-loan-details-view" type="button" class="loan-details-header-btn hidden" onclick="setLoanDetailsMode('view')">Podgląd</button>
-                    <button type="button" class="btn-icon" onclick="closeLoanDetails()" aria-label="Zamknij">
-                        <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                    </button>
-                </div>
-            </div>
+            <div id="panel-header-loan-details"></div>
             <div id="loan-details-content" class="loan-details-content"></div>
             <div id="loan-details-edit" class="loan-details-edit hidden">
                 <p class="reports-hint">Podkategoria łączy kredyt z transakcjami w kategorii Długi. Brakuje na liście? Dodaj w Ustawienia → Kategorie.</p>
@@ -330,16 +292,7 @@
 
     <div id="credit-card-details-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeCreditCardDetails()">
         <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
-            <div class="settings-header loan-details-header">
-                <h2 id="credit-card-details-title">Karta kredytowa</h2>
-                <div class="loan-details-header-actions">
-                    <button id="btn-credit-card-details-edit" type="button" class="loan-details-header-btn" onclick="setCreditCardDetailsMode('edit')">Edytuj</button>
-                    <button id="btn-credit-card-details-view" type="button" class="loan-details-header-btn hidden" onclick="setCreditCardDetailsMode('view')">Podgląd</button>
-                    <button type="button" class="btn-icon" onclick="closeCreditCardDetails()" aria-label="Zamknij">
-                        <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                    </button>
-                </div>
-            </div>
+            <div id="panel-header-credit-card-details"></div>
             <div id="credit-card-details-content" class="loan-details-content"></div>
             <div id="credit-card-details-edit" class="loan-details-edit hidden">
                 <div class="form-group">
@@ -366,12 +319,7 @@
 
     <div id="credit-card-quick-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeCreditCardQuickAction()">
         <div class="calendar-day-panel credit-card-quick-panel" onclick="event.stopPropagation()">
-            <div class="settings-header">
-                <h2 id="credit-card-quick-title">Spłata karty</h2>
-                <button type="button" class="btn-icon" onclick="closeCreditCardQuickAction()" aria-label="Zamknij">
-                    <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                </button>
-            </div>
+            <div id="panel-header-credit-card-quick"></div>
             <p id="credit-card-quick-meta" class="reports-hint credit-card-quick-meta"></p>
             <div class="form-group">
                 <label class="section-label" for="credit-card-quick-amount">Kwota (PLN)</label>
@@ -386,12 +334,7 @@
 
     <div id="calendar-day-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeCalendarDay()">
         <div class="calendar-day-panel">
-            <div class="settings-header">
-                <h2 id="calendar-day-title">Dzień</h2>
-                <button type="button" class="btn-icon" onclick="closeCalendarDay()" aria-label="Zamknij">
-                    <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                </button>
-            </div>
+            <div id="panel-header-calendar-day"></div>
             <div id="calendar-day-summary" class="calendar-day-summary"></div>
             <div class="calendar-day-filter-row">
                 <label class="section-label" for="calendar-day-filter">Filtr</label>
@@ -403,12 +346,7 @@
 
     <div id="month-drill-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeMonthDrill()">
         <div class="calendar-day-panel">
-            <div class="settings-header">
-                <h2 id="month-drill-title">Miesiąc</h2>
-                <button type="button" class="btn-icon" onclick="closeMonthDrill()" aria-label="Zamknij">
-                    <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                </button>
-            </div>
+            <div id="panel-header-month-drill"></div>
             <div id="month-drill-summary"></div>
             <div id="month-drill-list" class="calendar-day-list"></div>
         </div>
@@ -660,7 +598,7 @@
                         <span>–</span>
                         <input type="date" id="reports-compare-a-end" onchange="renderReports()">
                     </div>
-                    <label class="section-label" style="margin-top:10px">Okres B</label>
+                    <label class="section-label reports-period-label--spacing">Okres B</label>
                     <div class="reports-date-row">
                         <input type="date" id="reports-compare-b-start" onchange="renderReports()">
                         <span>–</span>
@@ -674,14 +612,14 @@
             </div>
 
             <div id="analysis-section-swipe" class="analysis-swipe-zone">
-            <div class="analysis-section-nav flex-toggle analysis-section-nav--6">
-                <button id="btn-analysis-overview" type="button" class="toggle-btn active" onclick="setAnalysisSection('overview')">Przegląd</button>
-                <button id="btn-analysis-calendar" type="button" class="toggle-btn" onclick="setAnalysisSection('calendar')">Kalendarz</button>
-                <button id="btn-analysis-charts" type="button" class="toggle-btn" onclick="setAnalysisSection('charts')">Wykresy</button>
-                <button id="btn-analysis-assets" type="button" class="toggle-btn" onclick="setAnalysisSection('assets')">Aktywa</button>
-                <button id="btn-analysis-debts" type="button" class="toggle-btn" onclick="setAnalysisSection('debts')">Długi</button>
-                <button id="btn-analysis-details" type="button" class="toggle-btn" onclick="setAnalysisSection('details')">Szczegóły</button>
-            </div>
+            <nav class="analysis-section-nav" aria-label="Sekcje analizy">
+                <button id="btn-analysis-overview" type="button" class="analysis-nav-btn active" onclick="setAnalysisSection('overview')">Przegląd</button>
+                <button id="btn-analysis-calendar" type="button" class="analysis-nav-btn" onclick="setAnalysisSection('calendar')">Kalendarz</button>
+                <button id="btn-analysis-charts" type="button" class="analysis-nav-btn" onclick="setAnalysisSection('charts')">Wykresy</button>
+                <button id="btn-analysis-assets" type="button" class="analysis-nav-btn" onclick="setAnalysisSection('assets')">Aktywa</button>
+                <button id="btn-analysis-debts" type="button" class="analysis-nav-btn" onclick="setAnalysisSection('debts')">Długi</button>
+                <button id="btn-analysis-details" type="button" class="analysis-nav-btn" onclick="setAnalysisSection('details')">Szczegóły</button>
+            </nav>
             <p class="analysis-swipe-hint">Przesuń w lewo / prawo, by zmienić sekcję</p>
 
             <div class="analysis-sections-body">
@@ -1187,6 +1125,10 @@
     </nav>
 
     <div id="reports-print-meta" class="hidden" aria-hidden="true"></div>
+
+    <template id="tpl-icon-close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+    </template>
 
     <script src="js/constants.js"></script>
     <script src="js/firebase.js"></script>
