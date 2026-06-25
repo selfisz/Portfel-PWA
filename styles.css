@@ -2075,6 +2075,10 @@ html:not([data-theme="dark"]) .grid-item.selected {
     cursor: pointer;
 }
 
+.chart-legend-item:not(button) {
+    cursor: default;
+}
+
 .chart-legend-item--hidden {
     opacity: 0.4;
 }

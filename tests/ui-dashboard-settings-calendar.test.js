@@ -747,6 +747,84 @@ describe('transactionMatchesChartDrill', () => {
     });
 });
 
+describe('getDashboardChartTransactionSums', () => {
+    it('tworzy segmenty po pojedynczych transakcjach', () => {
+        const txs = [
+            { date: '2024-06-03', type: 'expense', mainCategory: 'Długi', subCategory: 'Hipoteka', amount: 200, note: 'Rata' },
+            { date: '2024-06-10', type: 'expense', mainCategory: 'Długi', subCategory: 'Hipoteka', amount: 50, note: 'Odsetki' }
+        ];
+        const { sums, truncated, totalCount } = getDashboardChartTransactionSums(txs);
+        expect(totalCount).toBe(2);
+        expect(truncated).toBe(false);
+        expect(Object.keys(sums)).toHaveLength(2);
+        expect(Object.values(sums).reduce((s, v) => s + v, 0)).toBeCloseTo(250);
+    });
+
+    it('grupuje nadmiar wpisów w Pozostałe', () => {
+        const txs = Array.from({ length: 10 }, (_, i) => ({
+            date: `2024-06-${String(i + 1).padStart(2, '0')}`,
+            type: 'expense',
+            mainCategory: 'Długi',
+            subCategory: 'Hipoteka',
+            amount: 100 - i,
+            note: `Tx ${i}`
+        }));
+        const { sums, truncated, totalCount } = getDashboardChartTransactionSums(txs, 8);
+        expect(totalCount).toBe(10);
+        expect(truncated).toBe(true);
+        expect(sums.Pozostałe).toBeDefined();
+        expect(Object.keys(sums)).toHaveLength(8);
+        expect(Object.values(sums).reduce((s, v) => s + v, 0)).toBeCloseTo(955);
+    });
+});
+
+describe('buildDashboardChartSums', () => {
+    beforeEach(() => {
+        runInContext(`
+            activeChartCategory = 'Długi';
+            activeChartSubCategory = 'Hipoteka';
+            chartViewType = 'expense';
+        `);
+    });
+
+    it('na trzecim poziomie zwraca sumy transakcyjne', () => {
+        const chartTx = [
+            { date: '2024-06-01', type: 'expense', mainCategory: 'Długi', subCategory: 'Hipoteka', amount: 300, note: 'A' },
+            { date: '2024-06-02', type: 'expense', mainCategory: 'Długi', subCategory: 'Hipoteka', amount: 100, note: 'B' },
+            { date: '2024-06-03', type: 'expense', mainCategory: 'Długi', subCategory: 'Inne', amount: 999, note: 'X' }
+        ];
+        const { sums, truncated } = buildDashboardChartSums(chartTx, false);
+        expect(truncated).toBe(false);
+        expect(Object.values(sums).reduce((s, v) => s + v, 0)).toBeCloseTo(400);
+        expect(Object.keys(sums)).toHaveLength(2);
+    });
+
+    it('na drugim poziomie agreguje podkategorie', () => {
+        runInContext('activeChartSubCategory = null;');
+        const chartTx = [
+            { date: '2024-06-01', type: 'expense', mainCategory: 'Długi', subCategory: 'Hipoteka', amount: 300 },
+            { date: '2024-06-02', type: 'expense', mainCategory: 'Długi', subCategory: '[Bez podkategorii]', amount: 50 }
+        ];
+        const { sums } = buildDashboardChartSums(chartTx, false);
+        expect(sums.Hipoteka).toBeCloseTo(300);
+        expect(sums.Ogólne).toBeCloseTo(50);
+    });
+});
+
+describe('isDashboardChartTransactionLevel', () => {
+    it('jest true gdy wybrano podkategorię poza prognozą', () => {
+        runInContext(`activeChartSubCategory = 'Hipoteka';`);
+        document.getElementById('dashboard-period-select').value = 'current-month';
+        expect(isDashboardChartTransactionLevel()).toBe(true);
+    });
+
+    it('jest false w trybie prognozy', () => {
+        runInContext(`activeChartSubCategory = 'Hipoteka';`);
+        document.getElementById('dashboard-period-select').value = 'next-month';
+        expect(isDashboardChartTransactionLevel()).toBe(false);
+    });
+});
+
 // ===========================================================================
 // settings.js — applyBackupPayload
 // ===========================================================================

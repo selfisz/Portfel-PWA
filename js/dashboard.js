@@ -1,5 +1,6 @@
 let dashboardTxVisibleCount = LIST_PAGE_SIZE;
 let dashboardTxListSignature = '';
+const CHART_DRILL_TX_MAX_SLICES = 16;
 
 function resetDashboardTxListPagination() {
     dashboardTxVisibleCount = LIST_PAGE_SIZE;
@@ -424,6 +425,93 @@ function transactionMatchesChartDrill(t, type, mainCategory, subCategoryLabel = 
     return getTransactionSubCategoryLabel(t) === subCategoryLabel;
 }
 
+function isDashboardChartTransactionLevel() {
+    return Boolean(activeChartSubCategory && !isDashboardForecastPeriod());
+}
+
+function getChartTransactionLabel(t, usedLabels = null) {
+    const used = usedLabels || new Set();
+    let title = (t.note || '').trim();
+    if (!title) {
+        title = t.subCategory && t.subCategory !== '[Bez podkategorii]'
+            ? t.subCategory
+            : t.mainCategory;
+    }
+    if (title.length > 32) title = `${title.slice(0, 30)}…`;
+    const dateShort = typeof formatTxDate === 'function'
+        ? formatTxDate(t.date).replace(/\s+\d{4}$/, '').trim()
+        : t.date;
+    let label = `${dateShort} · ${title}`;
+    let candidate = label;
+    let n = 2;
+    while (used.has(candidate)) {
+        candidate = `${label} (${n})`;
+        n += 1;
+    }
+    used.add(candidate);
+    return candidate;
+}
+
+function getDashboardChartTransactionSums(transactions, maxSlices = CHART_DRILL_TX_MAX_SLICES) {
+    const sorted = [...transactions].sort((a, b) => {
+        if (b.amount !== a.amount) return b.amount - a.amount;
+        const byDate = b.date.localeCompare(a.date);
+        if (byDate !== 0) return byDate;
+        return String(b.note || '').localeCompare(String(a.note || ''), 'pl');
+    });
+
+    if (!sorted.length) return { sums: {}, truncated: false, totalCount: 0 };
+
+    if (sorted.length <= maxSlices) {
+        const sums = {};
+        const used = new Set();
+        sorted.forEach((t) => {
+            sums[getChartTransactionLabel(t, used)] = t.amount;
+        });
+        return { sums, truncated: false, totalCount: sorted.length };
+    }
+
+    const sums = {};
+    const used = new Set();
+    sorted.slice(0, maxSlices - 1).forEach((t) => {
+        sums[getChartTransactionLabel(t, used)] = t.amount;
+    });
+    sums.Pozostałe = sorted.slice(maxSlices - 1).reduce((sum, t) => sum + t.amount, 0);
+    return { sums, truncated: true, totalCount: sorted.length };
+}
+
+function buildDashboardChartSums(chartTx, forecastMode) {
+    if (forecastMode) {
+        return {
+            sums: getDashboardForecastCategorySums(chartViewType, activeChartCategory || null),
+            truncated: false
+        };
+    }
+    if (!activeChartCategory) {
+        const sums = {};
+        chartTx.forEach((t) => {
+            sums[t.mainCategory] = (sums[t.mainCategory] || 0) + t.amount;
+        });
+        return { sums, truncated: false };
+    }
+    if (activeChartSubCategory) {
+        const drillTx = chartTx.filter((t) => transactionMatchesChartDrill(
+            t,
+            chartViewType,
+            activeChartCategory,
+            activeChartSubCategory
+        ));
+        const { sums, truncated } = getDashboardChartTransactionSums(drillTx);
+        return { sums, truncated };
+    }
+    const sums = {};
+    chartTx.filter((t) => t.mainCategory === activeChartCategory).forEach((t) => {
+        const label = getTransactionSubCategoryLabel(t);
+        sums[label] = (sums[label] || 0) + t.amount;
+    });
+    return { sums, truncated: false };
+}
+
 function formatLegendCategoryName(name) {
     return escapeHtml(String(name ?? ''))
         .replace(/\/(\s*)/g, '/<wbr>$1');
@@ -452,25 +540,30 @@ function renderChartLegend(catSums, sliceColors, labels) {
 
     legendEl.innerHTML = entries.map(({ label, amount, color, index }) => {
         const pct = total > 0 ? Math.round((amount / total) * 100) : 0;
-        const isDrillable = !activeChartCategory || !activeChartSubCategory;
-        const isActive = activeChartSubCategory === label;
+        const txLevel = isDashboardChartTransactionLevel();
+        const isDrillable = !txLevel && (!activeChartCategory || !activeChartSubCategory);
+        const isActive = !txLevel && activeChartSubCategory === label;
         const classNames = [
             'chart-legend-item',
             isDrillable ? 'chart-legend-item--drill' : '',
             isActive ? 'chart-legend-item--active' : '',
-            activeChartCategory && !isDrillable && !isActive ? 'chart-legend-item--selectable' : ''
+            activeChartCategory && !isDrillable && !isActive && !txLevel ? 'chart-legend-item--selectable' : ''
         ].filter(Boolean).join(' ');
-        return `<button type="button" class="${classNames}" data-index="${index}" data-label="${label.replace(/"/g, '&quot;')}">
+        const tag = isDrillable ? 'button' : 'div';
+        const attrs = isDrillable
+            ? ` type="button" data-index="${index}" data-label="${label.replace(/"/g, '&quot;')}"`
+            : '';
+        return `<${tag} class="${classNames}"${attrs}>
             <span class="chart-legend-swatch" style="background:${color}"></span>
             <span class="chart-legend-text">
                 <span class="chart-legend-name">${formatLegendCategoryName(label)}</span>
                 <span class="chart-legend-amount">${formatPlnAmount(amount)}</span>
             </span>
             <span class="chart-legend-pct">${pct}%</span>
-        </button>`;
+        </${tag}>`;
     }).join('');
 
-    legendEl.querySelectorAll('.chart-legend-item').forEach((btn) => {
+    legendEl.querySelectorAll('.chart-legend-item--drill').forEach((btn) => {
         btn.addEventListener('click', () => {
             if (!activeChartCategory) {
                 activeChartCategory = btn.dataset.label;
@@ -680,27 +773,26 @@ function renderDashboard() {
     const chartTypeLabel = chartViewType === 'income' ? 'wpływów' : 'wydatków';
     const chartTypeSuffix = forecastMode ? ' (prognoza)' : '';
     document.getElementById('btn-reset-chart').style.display = activeChartCategory ? 'block' : 'none';
-    document.getElementById('chart-title').innerText = activeChartSubCategory
-        ? `Struktura: ${activeChartCategory} › ${activeChartSubCategory}${chartTypeSuffix}`
-        : activeChartCategory
-            ? `Struktura: ${activeChartCategory}${chartTypeSuffix}`
-            : `Struktura ${chartTypeLabel}${chartTypeSuffix}`;
+    const txChartLevel = isDashboardChartTransactionLevel();
+    const chartTitleEl = document.getElementById('chart-title');
+    if (chartTitleEl) {
+        if (txChartLevel) {
+            chartTitleEl.innerText = `Transakcje: ${activeChartCategory} › ${activeChartSubCategory}${chartTypeSuffix}`;
+        } else if (activeChartSubCategory) {
+            chartTitleEl.innerText = `Struktura: ${activeChartCategory} › ${activeChartSubCategory}${chartTypeSuffix}`;
+        } else if (activeChartCategory) {
+            chartTitleEl.innerText = `Struktura: ${activeChartCategory}${chartTypeSuffix}`;
+        } else {
+            chartTitleEl.innerText = `Struktura ${chartTypeLabel}${chartTypeSuffix}`;
+        }
+    }
     document.getElementById('btn-chart-expense').classList.toggle('active', chartViewType === 'expense');
     document.getElementById('btn-chart-income').classList.toggle('active', chartViewType === 'income');
 
-    const catSums = {};
-    if (forecastMode) {
-        Object.assign(
-            catSums,
-            getDashboardForecastCategorySums(chartViewType, activeChartCategory || null)
-        );
-    } else if (!activeChartCategory) {
-        chartTx.forEach(t => { catSums[t.mainCategory] = (catSums[t.mainCategory] || 0) + t.amount; });
-    } else {
-        chartTx.filter(t => t.mainCategory === activeChartCategory).forEach(t => {
-            const label = t.subCategory === '[Bez podkategorii]' ? 'Ogólne' : t.subCategory;
-            catSums[label] = (catSums[label] || 0) + t.amount;
-        });
+    const { sums: catSums, truncated: chartDrillTruncated } = buildDashboardChartSums(chartTx, forecastMode);
+    const centerSubEl = document.querySelector('.chart-center-sub');
+    if (centerSubEl) {
+        centerSubEl.textContent = txChartLevel && chartDrillTruncated ? 'top wpisów' : 'razem';
     }
 
     const ctxDash = document.getElementById('dashboardChart').getContext('2d');
@@ -741,6 +833,7 @@ function renderDashboard() {
                 },
                 onClick: (event, elements, chart) => {
                     if (!elements[0]) return;
+                    if (isDashboardChartTransactionLevel()) return;
                     const label = chart.data.labels[elements[0].index];
                     if (!activeChartCategory) {
                         activeChartCategory = label;
