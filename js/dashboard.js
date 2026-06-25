@@ -20,6 +20,7 @@ function getDashboardTxListSignature(listTx, searchQuery) {
         endDate,
         searchQuery,
         activeChartCategory || '',
+        activeChartSubCategory || '',
         chartViewType,
         listTx.length,
         listTx[0]?.date ?? '',
@@ -290,14 +291,17 @@ function formatForecastPlanSourceBadge(source) {
     return labels[source] || 'plan';
 }
 
-function renderDashboardForecastPlan(listEl, startDate, endDate, categoryFilter = null, typeFilter = null) {
+function renderDashboardForecastPlan(listEl, startDate, endDate, categoryFilter = null, typeFilter = null, subCategoryFilter = null) {
     const { items: allItems, summary } = getDashboardForecastPlanItems(startDate, endDate);
     let items = allItems;
 
     if (categoryFilter) {
         items = items.filter((item) => {
             if (item.source.startsWith('variable-')) return false;
-            return item.mainCategory === categoryFilter && item.type === typeFilter;
+            if (item.mainCategory !== categoryFilter || item.type !== typeFilter) return false;
+            if (!subCategoryFilter) return true;
+            return item.title === subCategoryFilter
+                || (subCategoryFilter === 'Ogólne' && item.title === item.mainCategory);
         });
     }
 
@@ -410,6 +414,16 @@ function transactionMatchesSearch(t, searchQuery) {
         t.date.includes(searchQuery);
 }
 
+function getTransactionSubCategoryLabel(t) {
+    return t.subCategory === '[Bez podkategorii]' ? 'Ogólne' : t.subCategory;
+}
+
+function transactionMatchesChartDrill(t, type, mainCategory, subCategoryLabel = null) {
+    if (t.type !== type || t.mainCategory !== mainCategory) return false;
+    if (!subCategoryLabel) return true;
+    return getTransactionSubCategoryLabel(t) === subCategoryLabel;
+}
+
 function formatLegendCategoryName(name) {
     return escapeHtml(String(name ?? ''))
         .replace(/\/(\s*)/g, '/<wbr>$1');
@@ -438,7 +452,15 @@ function renderChartLegend(catSums, sliceColors, labels) {
 
     legendEl.innerHTML = entries.map(({ label, amount, color, index }) => {
         const pct = total > 0 ? Math.round((amount / total) * 100) : 0;
-        return `<button type="button" class="chart-legend-item${activeChartCategory ? '' : ' chart-legend-item--drill'}" data-index="${index}" data-label="${label.replace(/"/g, '&quot;')}">
+        const isDrillable = !activeChartCategory || !activeChartSubCategory;
+        const isActive = activeChartSubCategory === label;
+        const classNames = [
+            'chart-legend-item',
+            isDrillable ? 'chart-legend-item--drill' : '',
+            isActive ? 'chart-legend-item--active' : '',
+            activeChartCategory && !isDrillable && !isActive ? 'chart-legend-item--selectable' : ''
+        ].filter(Boolean).join(' ');
+        return `<button type="button" class="${classNames}" data-index="${index}" data-label="${label.replace(/"/g, '&quot;')}">
             <span class="chart-legend-swatch" style="background:${color}"></span>
             <span class="chart-legend-text">
                 <span class="chart-legend-name">${formatLegendCategoryName(label)}</span>
@@ -452,19 +474,20 @@ function renderChartLegend(catSums, sliceColors, labels) {
         btn.addEventListener('click', () => {
             if (!activeChartCategory) {
                 activeChartCategory = btn.dataset.label;
+                activeChartSubCategory = null;
                 renderDashboard();
                 return;
             }
-            if (!dashboardChartInstance) return;
-            const chartIndex = parseInt(btn.dataset.index, 10);
-            dashboardChartInstance.toggleDataVisibility(chartIndex);
-            btn.classList.toggle('chart-legend-item--hidden', !dashboardChartInstance.getDataVisibility(chartIndex));
+            const label = btn.dataset.label;
+            activeChartSubCategory = activeChartSubCategory === label ? null : label;
+            renderDashboard();
         });
     });
 }
 
 function resetDashboardChart() {
     activeChartCategory = null;
+    activeChartSubCategory = null;
     renderDashboard();
 }
 
@@ -472,6 +495,7 @@ function setChartViewType(type) {
     if (chartViewType === type) return;
     chartViewType = type;
     activeChartCategory = null;
+    activeChartSubCategory = null;
     renderDashboard();
 }
 
@@ -644,16 +668,23 @@ function renderDashboard() {
     if (searchQuery) {
         listTx = appState.transactions.filter(t => transactionMatchesSearch(t, searchQuery));
     } else if (activeChartCategory) {
-        listTx = listTx.filter(t => t.type === chartViewType && t.mainCategory === activeChartCategory);
+        listTx = listTx.filter((t) => transactionMatchesChartDrill(
+            t,
+            chartViewType,
+            activeChartCategory,
+            activeChartSubCategory
+        ));
     }
 
     const chartTx = dateFilteredTx.filter(t => t.type === chartViewType);
     const chartTypeLabel = chartViewType === 'income' ? 'wpływów' : 'wydatków';
     const chartTypeSuffix = forecastMode ? ' (prognoza)' : '';
     document.getElementById('btn-reset-chart').style.display = activeChartCategory ? 'block' : 'none';
-    document.getElementById('chart-title').innerText = activeChartCategory
-        ? `Struktura: ${activeChartCategory}${chartTypeSuffix}`
-        : `Struktura ${chartTypeLabel}${chartTypeSuffix}`;
+    document.getElementById('chart-title').innerText = activeChartSubCategory
+        ? `Struktura: ${activeChartCategory} › ${activeChartSubCategory}${chartTypeSuffix}`
+        : activeChartCategory
+            ? `Struktura: ${activeChartCategory}${chartTypeSuffix}`
+            : `Struktura ${chartTypeLabel}${chartTypeSuffix}`;
     document.getElementById('btn-chart-expense').classList.toggle('active', chartViewType === 'expense');
     document.getElementById('btn-chart-income').classList.toggle('active', chartViewType === 'income');
 
@@ -709,10 +740,15 @@ function renderDashboard() {
                     }
                 },
                 onClick: (event, elements, chart) => {
-                    if (elements[0] && !activeChartCategory) {
-                        activeChartCategory = chart.data.labels[elements[0].index];
-                        renderDashboard();
+                    if (!elements[0]) return;
+                    const label = chart.data.labels[elements[0].index];
+                    if (!activeChartCategory) {
+                        activeChartCategory = label;
+                        activeChartSubCategory = null;
+                    } else {
+                        activeChartSubCategory = activeChartSubCategory === label ? null : label;
                     }
+                    renderDashboard();
                 }
             }
         });
@@ -725,7 +761,17 @@ function renderDashboard() {
 
     const txTitleEl = document.getElementById('dashboard-tx-title');
     const txHintEl = document.getElementById('dashboard-tx-list-hint');
-    if (txTitleEl) txTitleEl.textContent = forecastMode && !searchQuery ? 'Plan na następny miesiąc' : 'Transakcje';
+    if (txTitleEl) {
+        if (forecastMode && !searchQuery) {
+            txTitleEl.textContent = 'Plan na następny miesiąc';
+        } else if (!searchQuery && activeChartSubCategory) {
+            txTitleEl.textContent = `Transakcje — ${activeChartSubCategory}`;
+        } else if (!searchQuery && activeChartCategory) {
+            txTitleEl.textContent = `Transakcje — ${activeChartCategory}`;
+        } else {
+            txTitleEl.textContent = 'Transakcje';
+        }
+    }
     if (txHintEl) txHintEl.classList.toggle('hidden', forecastMode && !searchQuery);
 
     const list = document.getElementById('recent-transactions-list');
@@ -737,7 +783,8 @@ function renderDashboard() {
             startDate,
             endDate,
             activeChartCategory || null,
-            chartViewType
+            chartViewType,
+            activeChartSubCategory || null
         );
         const moreBtn = document.getElementById('dashboard-tx-show-more');
         if (moreBtn) moreBtn.classList.add('hidden');

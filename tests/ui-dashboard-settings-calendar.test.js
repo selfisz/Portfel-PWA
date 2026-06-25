@@ -126,6 +126,7 @@ beforeAll(() => {
     globalThis.reportsDebtPeakChartInstance = null;
     globalThis.dashboardChartInstance = null;
     globalThis.activeChartCategory = null;
+    globalThis.activeChartSubCategory = null;
     globalThis.chartViewType = 'expense';
     globalThis.categoryEditorType = 'expense';
     globalThis.Chart = class { constructor() {} destroy() {} toggleDataVisibility() {} getDataVisibility() { return true; } };
@@ -185,6 +186,7 @@ beforeEach(() => {
     });
     globalThis.confirm = () => true;
     globalThis.activeChartCategory = null;
+    globalThis.activeChartSubCategory = null;
     globalThis.chartViewType = 'expense';
 });
 
@@ -715,6 +717,33 @@ describe('getDashboardForecastPlanItems', () => {
         const { items, summary } = getDashboardForecastPlanItems(startDate, endDate);
         expect(summary.fixedExpense).toBeGreaterThanOrEqual(2500);
         expect(items.some((item) => item.source === 'debt-loan')).toBe(true);
+    });
+});
+
+describe('transactionMatchesChartDrill', () => {
+    it('filtruje po podkategorii w ramach kategorii głównej', () => {
+        const tx = {
+            type: 'expense',
+            mainCategory: 'Rozrywka',
+            subCategory: 'Wycieczki',
+            amount: 100,
+            date: '2024-06-01'
+        };
+        expect(transactionMatchesChartDrill(tx, 'expense', 'Rozrywka', 'Wycieczki')).toBe(true);
+        expect(transactionMatchesChartDrill(tx, 'expense', 'Rozrywka', 'Gierki')).toBe(false);
+        expect(transactionMatchesChartDrill(tx, 'expense', 'Rozrywka', null)).toBe(true);
+    });
+
+    it('mapuje Ogólne na brak podkategorii', () => {
+        const tx = {
+            type: 'expense',
+            mainCategory: 'Dom',
+            subCategory: '[Bez podkategorii]',
+            amount: 50,
+            date: '2024-06-01'
+        };
+        expect(transactionMatchesChartDrill(tx, 'expense', 'Dom', 'Ogólne')).toBe(true);
+        expect(getTransactionSubCategoryLabel(tx)).toBe('Ogólne');
     });
 });
 

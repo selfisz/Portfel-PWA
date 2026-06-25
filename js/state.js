@@ -22,6 +22,7 @@ let formState = {
 
 let editingTxIndex = null;
 let activeChartCategory = null;
+let activeChartSubCategory = null;
 let chartViewType = 'expense';
 let dashboardChartInstance = null;
 let reportsChartInstance = null;
