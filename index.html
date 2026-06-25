@@ -355,29 +355,28 @@
 
     <div class="container">
         <div id="view-dashboard" class="app-view active">
-            <div class="card filter-card">
-                <div class="period-filter-row">
-                    <select id="dashboard-period-select" onchange="handleDashboardPeriodChange()">
-                        <option value="current-month">Bieżący miesiąc</option>
-                        <option value="next-month">Następny miesiąc (prognoza)</option>
-                        <option value="previous-month">Poprzedni miesiąc</option>
-                        <option value="current-year">Bieżący rok</option>
-                        <option value="previous-year">Poprzedni rok</option>
-                        <option value="all">Wszystko</option>
-                        <option value="custom">Niestandardowy okres</option>
-                    </select>
-                    <button type="button" id="dashboard-period-reset" class="period-reset-btn hidden" onclick="resetDashboardPeriod()" aria-label="Przywróć bieżący miesiąc" title="Bieżący miesiąc">
+            <div class="card hero-card">
+                <div class="hero-period-row">
+                    <label class="hero-period-select-wrap">
+                        <span id="db-period-label" class="hero-period-label">Bieżący miesiąc</span>
+                        <select id="dashboard-period-select" class="hero-period-select" aria-label="Okres" onchange="handleDashboardPeriodChange()">
+                            <option value="current-month">Bieżący miesiąc</option>
+                            <option value="next-month">Następny miesiąc (prognoza)</option>
+                            <option value="previous-month">Poprzedni miesiąc</option>
+                            <option value="current-year">Bieżący rok</option>
+                            <option value="previous-year">Poprzedni rok</option>
+                            <option value="all">Wszystko</option>
+                            <option value="custom">Niestandardowy okres</option>
+                        </select>
+                    </label>
+                    <button type="button" id="dashboard-period-reset" class="hero-period-reset hidden" onclick="resetDashboardPeriod()" aria-label="Przywróć bieżący miesiąc" title="Bieżący miesiąc">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v4l5-5-5-5v4z"/></svg>
                     </button>
                 </div>
-                <div id="dashboard-custom-dates">
+                <div id="dashboard-custom-dates" class="hero-custom-dates">
                     <input type="date" id="db-start-date" onchange="renderDashboard()">
                     <input type="date" id="db-end-date" onchange="renderDashboard()">
                 </div>
-            </div>
-
-            <div class="card hero-card">
-                <div class="hero-label" id="db-period-label">Bieżący miesiąc</div>
                 <div id="db-net-balance" class="hero-balance">0,00 zł</div>
                 <div class="hero-stats">
                     <div class="hero-stat income">
@@ -389,12 +388,11 @@
                         <div id="db-total-expenses" class="value">0,00 zł</div>
                     </div>
                 </div>
+                <div class="hero-budget">
+                    <span class="hero-budget-label">Zużycie wpływów</span>
+                    <div class="progress-bar-bg hero-progress-bar"><div id="budget-progress-fill" class="progress-bar-fill"></div></div>
+                </div>
                 <p id="db-forecast-hint" class="hero-forecast-hint hidden">Średnia z ostatnich 3 miesięcy — wpływy i wydatki są szacunkowe.</p>
-            </div>
-
-            <div class="card">
-                <div class="budget-label">Zużycie wpływów</div>
-                <div class="progress-bar-bg"><div id="budget-progress-fill" class="progress-bar-fill"></div></div>
             </div>
 
             <div id="dashboard-upcoming-loans" class="card hidden">
