@@ -12,4 +12,5 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const stateRef = db.collection('finances').doc('my_state');
 const cloudBackupRef = db.collection('finances').doc('cloud_backup');
-db.enablePersistence().catch(err => console.error("Firebase persistence error:", err));
+// Persistence wyłączone — na iOS PWA powodowało zawieszanie onSnapshot
+// i serwowanie pustego/starego cache zamiast danych z serwera.

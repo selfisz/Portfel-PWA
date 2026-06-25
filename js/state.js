@@ -198,16 +198,108 @@ function readStoredAppStateRaw() {
     }
 }
 
-function setSyncStatus(mode) {
+function setSyncStatus(mode, txCount) {
     const statusEl = document.getElementById('sync-status');
     if (!statusEl) return;
     statusEl.className = mode || '';
+    const countHint = typeof txCount === 'number' ? ` (${txCount} transakcji)` : '';
     const titles = {
         '': 'Synchronizacja z chmurą…',
-        online: 'Zsynchronizowano z chmurą',
+        online: `Zsynchronizowano z chmurą${countHint}`,
         offline: 'Tryb offline — dane zapisane lokalnie'
     };
     statusEl.title = titles[mode] || titles[''];
+}
+
+function readLocalRawBeforeSync() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        return raw === null ? null : raw;
+    } catch {
+        return null;
+    }
+}
+
+function applyCloudDocument(docSnap, options = {}) {
+    if (!docSnap.exists) {
+        cloudSyncUnlocked = true;
+        applyMigrations();
+        checkAndProcessRecurringTransactions();
+        const count = getTransactionCount(appState);
+        if (count > 0) saveState({ forceCloud: true });
+        else setSyncStatus('online', count);
+        refreshCurrentView();
+        return count;
+    }
+
+    const localRawBeforeSync = readLocalRawBeforeSync();
+    const localLoans = getLoansFromPersistedRaw(localRawBeforeSync);
+    const localCreditCards = Array.isArray(localRawBeforeSync?.creditCards) ? localRawBeforeSync.creditCards : [];
+    const remoteData = docSnap.data();
+    const remoteTxCount = getTransactionCount(remoteData);
+    const mergedTransactions = mergeRemoteTransactions(localRawBeforeSync, remoteData);
+    const mergedRemote = { ...remoteData, transactions: mergedTransactions };
+    const mergedTxCount = mergedTransactions.length;
+
+    const hadUiFields = applyRemoteAppState(mergedRemote, localLoans, localCreditCards);
+    const hadMigration = applyMigrations();
+    checkAndProcessRecurringTransactions();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
+
+    cloudSyncUnlocked = true;
+    const finalCount = getTransactionCount(appState);
+
+    const shouldPushRemote = !options.readOnly
+        && (mergedTxCount > remoteTxCount || hadUiFields || hadMigration);
+    if (shouldPushRemote) {
+        saveState({ forceCloud: true });
+    } else {
+        setSyncStatus('online', finalCount);
+    }
+    refreshCurrentView();
+    return finalCount;
+}
+
+async function pullCloudStateFromServer() {
+    const sources = ['server', 'default'];
+    for (const source of sources) {
+        try {
+            const docSnap = await stateRef.get({ source });
+            return applyCloudDocument(docSnap);
+        } catch (err) {
+            console.warn(`pullCloudStateFromServer(${source})`, err);
+        }
+    }
+    return null;
+}
+
+async function autoRecoverFromCloudBackupIfNeeded() {
+    if (getTransactionCount(appState) >= 100) return false;
+    try {
+        let snap = null;
+        try {
+            snap = await cloudBackupRef.get({ source: 'server' });
+        } catch {
+            snap = await cloudBackupRef.get({ source: 'default' });
+        }
+        if (!snap?.exists) return false;
+
+        const payload = snap.data();
+        const backupCount = payload.transactionCount || getTransactionCount(payload.data || payload);
+        if (backupCount <= getTransactionCount(appState)) return false;
+
+        cloudSyncUnlocked = true;
+        applyBackupPayload(payload);
+        if (typeof showSettingsToast === 'function') {
+            showSettingsToast(`Przywrócono ${backupCount} transakcji z kopii w chmurze`);
+        }
+        setSyncStatus('online', backupCount);
+        refreshCurrentView();
+        return true;
+    } catch (err) {
+        console.error('autoRecoverFromCloudBackupIfNeeded', err);
+        return false;
+    }
 }
 
 function applyRemoteAppState(raw, extraLoanSources = [], extraCreditCardSources = []) {
@@ -255,75 +347,39 @@ function initData() {
 
     let syncTimeout = window.setTimeout(() => {
         const statusEl = document.getElementById('sync-status');
-        if (statusEl && !statusEl.className) setSyncStatus('offline');
-    }, 15000);
+        if (statusEl && !statusEl.className) setSyncStatus('offline', getTransactionCount(appState));
+    }, 12000);
 
-    let snapshotGeneration = 0;
+    const finishInitialSync = async () => {
+        window.clearTimeout(syncTimeout);
+        let count = await pullCloudStateFromServer();
+        if ((count ?? getTransactionCount(appState)) < 100) {
+            const recovered = await autoRecoverFromCloudBackupIfNeeded();
+            if (recovered) count = getTransactionCount(appState);
+        }
+        if (count === null && getTransactionCount(appState) === 0) {
+            setSyncStatus('offline', 0);
+        }
+    };
+
+    finishInitialSync().catch((err) => {
+        console.error('finishInitialSync', err);
+        setSyncStatus('offline', getTransactionCount(appState));
+    });
 
     stateRef.onSnapshot((docSnap) => {
-        window.clearTimeout(syncTimeout);
-        syncTimeout = window.setTimeout(() => {
-            const statusEl = document.getElementById('sync-status');
-            if (statusEl && statusEl.className === 'online') return;
-            if (statusEl && !statusEl.className) setSyncStatus('offline');
-        }, 15000);
-
-        const generation = ++snapshotGeneration;
-
-        if (!docSnap.exists) {
-            cloudSyncUnlocked = true;
-            applyMigrations();
-            checkAndProcessRecurringTransactions();
-            if (getTransactionCount(appState) > 0) saveState({ forceCloud: true });
-            return;
-        }
-
-        let localLoans = [];
-        let localCreditCards = [];
-        let localRawBeforeSync = null;
-        try {
-            localRawBeforeSync = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-            if (localRawBeforeSync === null) localRawBeforeSync = null;
-            localLoans = getLoansFromPersistedRaw(localRawBeforeSync);
-            localCreditCards = Array.isArray(localRawBeforeSync?.creditCards) ? localRawBeforeSync.creditCards : [];
-        } catch { /* ignore */ }
-
-        const remoteData = docSnap.data();
-        const remoteTxCount = getTransactionCount(remoteData);
-        const localTxCount = getTransactionCount(localRawBeforeSync);
-        const memoryTxCount = appState.transactions.length;
-
-        if (docSnap.metadata.fromCache && remoteTxCount < Math.max(localTxCount, memoryTxCount)) {
-            setSyncStatus('online');
-            return;
-        }
-
-        const mergedTransactions = mergeRemoteTransactions(localRawBeforeSync, remoteData);
-        const mergedRemote = { ...remoteData, transactions: mergedTransactions };
-        const mergedTxCount = mergedTransactions.length;
-
-        const hadUiFields = applyRemoteAppState(mergedRemote, localLoans, localCreditCards);
-        const hadMigration = applyMigrations();
-        checkAndProcessRecurringTransactions();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-
-        cloudSyncUnlocked = true;
-
-        const shouldPushRemote = mergedTxCount > remoteTxCount || hadUiFields || hadMigration;
-        if (shouldPushRemote) {
-            saveState({ forceCloud: true });
-        } else {
-            setSyncStatus('online');
-        }
-
-        if (generation === snapshotGeneration) {
-            refreshCurrentView();
-        }
+        if (docSnap.metadata.fromCache) return;
+        applyCloudDocument(docSnap);
     }, (error) => {
         window.clearTimeout(syncTimeout);
-        console.error("Błąd synchronizacji", error);
-        cloudSyncUnlocked = true;
-        setSyncStatus('offline');
+        console.error('Błąd synchronizacji', error);
+        if (!cloudSyncUnlocked) {
+            autoRecoverFromCloudBackupIfNeeded().finally(() => {
+                if (!cloudSyncUnlocked) setSyncStatus('offline', getTransactionCount(appState));
+            });
+        } else {
+            setSyncStatus('offline', getTransactionCount(appState));
+        }
     });
 }
 
@@ -332,10 +388,10 @@ function saveState(options = {}) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     if (!cloudSyncUnlocked && !options.forceCloud) return;
     stateRef.set(payload).then(() => {
-        setSyncStatus('online');
+        setSyncStatus('online', payload.transactions.length);
     }).catch(err => {
         console.log("Zapisano offline. Zsynchronizuje się później.", err);
-        setSyncStatus('offline');
+        setSyncStatus('offline', payload.transactions.length);
     });
 }
 
