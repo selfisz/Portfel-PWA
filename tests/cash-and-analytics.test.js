@@ -195,8 +195,8 @@ describe('shouldTransactionAffectCash', () => {
     expect(shouldTransactionAffectCash({ type: 'expense', affectsCash: true })).toBe(true);
   });
 
-  it('wydatek bez flagy NIE wpływa (domyślnie false)', () => {
-    expect(shouldTransactionAffectCash({ type: 'expense' })).toBe(false);
+  it('wydatek bez flagy wpływa na gotówkę (domyślnie tak jak zaznaczony checkbox)', () => {
+    expect(shouldTransactionAffectCash({ type: 'expense' })).toBe(true);
   });
 });
 

@@ -280,14 +280,6 @@ function ensureUserAssetsSeed() {
         if (idx < 0) {
             appState.assets.push(normalized);
             changed = true;
-            return;
-        }
-        const merged = normalizeAsset({ ...appState.assets[idx], ...snapshot });
-        const prev = JSON.stringify(normalizeAsset(appState.assets[idx]));
-        const next = JSON.stringify(merged);
-        if (prev !== next) {
-            appState.assets[idx] = merged;
-            changed = true;
         }
     });
 

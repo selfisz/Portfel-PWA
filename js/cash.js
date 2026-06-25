@@ -129,7 +129,7 @@ function shouldTransactionAffectCash(tx) {
     if (tx.creditCardId) return false;
     if (tx.affectsCash === false) return false;
     if (tx.cashMovementId) return true;
-    return tx.affectsCash === true;
+    return tx.affectsCash !== false;
 }
 
 function resolveTransactionAffectsCash(type, paidWithCard, checkboxChecked) {

@@ -169,6 +169,25 @@ function mergeRemoteTransactions(localRaw, remoteRaw) {
     return unionTransactions(localTx, remoteTx, memoryTx);
 }
 
+function mergeAssetsById(...assetLists) {
+    const map = new Map();
+    assetLists.flat().forEach((raw) => {
+        if (!raw || typeof raw !== 'object' || !raw.id) return;
+        const asset = typeof normalizeAsset === 'function' ? normalizeAsset(raw) : raw;
+        map.set(asset.id, asset);
+    });
+    return [...map.values()];
+}
+
+function mergeCashMovementsById(...movementLists) {
+    const map = new Map();
+    movementLists.flat().forEach((raw) => {
+        if (!raw || typeof raw !== 'object' || !raw.id) return;
+        map.set(raw.id, raw);
+    });
+    return [...map.values()];
+}
+
 function applyMigrations() {
     const hadCategory = migrateCategoryData() || migrateLoanCategoryTree();
     if (getTransactionCount(appState) >= 50) {
@@ -236,8 +255,17 @@ function syncFromRemoteData(remoteData) {
 
     const localLoans = getLoansFromPersistedRaw(localRawBeforeSync);
     const localCreditCards = Array.isArray(localRawBeforeSync?.creditCards) ? localRawBeforeSync.creditCards : [];
+    const localPersisted = localRawBeforeSync
+        ? getPersistedState(localRawBeforeSync)
+        : getPersistedState(appState);
     const mergedTransactions = mergeRemoteTransactions(localRawBeforeSync, remoteData);
-    const mergedRemote = { ...remoteData, transactions: mergedTransactions };
+    const remotePersisted = getPersistedState({ ...remoteData, transactions: mergedTransactions });
+    const mergedRemote = {
+        ...remoteData,
+        transactions: mergedTransactions,
+        assets: mergeAssetsById(remotePersisted.assets, localPersisted.assets),
+        cashMovements: mergeCashMovementsById(remotePersisted.cashMovements, localPersisted.cashMovements)
+    };
 
     applyRemoteAppState(mergedRemote, localLoans, localCreditCards);
     checkAndProcessRecurringTransactions();

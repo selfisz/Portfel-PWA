@@ -755,7 +755,7 @@ h2 {
     line-height: 1.2;
 }
 
-.toggle-btn.active.card {
+.toggle-btn.active.toggle-card {
     background: #0d9488;
     color: #fff;
     box-shadow: 0 4px 14px rgba(13, 148, 136, 0.35);
@@ -847,7 +847,7 @@ input:focus, select:focus {
 .checkbox-wrapper label { margin: 0; font-size: var(--text-base); font-weight: 600; cursor: pointer; }
 
 /* Zakładka Dodaj — hierarchia wizualna */
-#view-add .card {
+#view-add .add-form-card {
     padding: 18px 16px 20px;
     overflow: hidden;
 }

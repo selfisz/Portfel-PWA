@@ -377,6 +377,26 @@ describe('mergeRemoteTransactions', () => {
   });
 });
 
+describe('mergeAssetsById', () => {
+  it('łączy listy aktywów — późniejsza wygrywa przy konflikcie id', () => {
+    const remote = [{ id: 'a1', type: 'cash', amount: 1000 }];
+    const local = [{ id: 'a1', type: 'cash', amount: 900 }];
+    const merged = mergeAssetsById(remote, local);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].amount).toBe(900);
+  });
+});
+
+describe('mergeCashMovementsById', () => {
+  it('łączy ruchy gotówki — późniejsza wygrywa przy konflikcie id', () => {
+    const remote = [{ id: 'm1', delta: 100 }];
+    const local = [{ id: 'm1', delta: -50 }];
+    const merged = mergeCashMovementsById(remote, local);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].delta).toBe(-50);
+  });
+});
+
 describe('getTransactionCount', () => {
   it('zwraca 0 dla pustego stanu', () => {
     expect(getTransactionCount(null)).toBe(0);

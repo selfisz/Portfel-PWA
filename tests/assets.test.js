@@ -438,6 +438,26 @@ describe('getSummaryAssets', () => {
 });
 
 // ===========================================================================
+// ensureUserAssetsSeed
+// ===========================================================================
+describe('ensureUserAssetsSeed', () => {
+  it('dodaje brakujące aktywa z seeda', () => {
+    expect(ensureUserAssetsSeed()).toBe(true);
+    expect(_getAppState().assets.some((a) => a.id === 'asset-cash-total')).toBe(true);
+  });
+
+  it('nie nadpisuje salda istniejącego aktywa', () => {
+    _setAppState({
+      ..._getAppState(),
+      assets: [{ id: 'asset-cash-total', type: 'cash', name: 'Gotówka', amount: 1234.56 }]
+    });
+    ensureUserAssetsSeed();
+    const cash = _getAppState().assets.find((a) => a.id === 'asset-cash-total');
+    expect(cash.amount).toBe(1234.56);
+  });
+});
+
+// ===========================================================================
 // migrateMbankEmeryturaAsset
 // ===========================================================================
 describe('migrateMbankEmeryturaAsset', () => {
