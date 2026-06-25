@@ -14,8 +14,19 @@ function applyBackupPayload(payload) {
         throw new Error('Nieprawidłowy plik kopii zapasowej.');
     }
     normalizeAppState(data);
-    saveState();
-    refreshCurrentView();
+    cloudSyncUnlocked = true;
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
+    } catch (err) {
+        throw new Error('Brak miejsca w pamięci telefonu — zwolnij miejsce w Safari.');
+    }
+    saveState({ forceCloud: true });
+    setSyncStatus('online', getTransactionCount(appState));
+    try {
+        refreshCurrentView();
+    } catch (err) {
+        console.error('refreshCurrentView after restore', err);
+    }
 }
 
 function showSettingsToast(message) {
@@ -28,10 +39,13 @@ function showSettingsToast(message) {
 async function refreshBackupInfo() {
     const infoEl = document.getElementById('backup-cloud-info');
     try {
-        const snap = await cloudBackupRef.get();
-        if (snap.exists && snap.data().exportedAt) {
-            const date = new Date(snap.data().exportedAt).toLocaleString('pl-PL');
-            const count = snap.data().transactionCount || snap.data().data?.transactions?.length || '?';
+        const payload = await getCloudBackupPayload();
+        if (payload?.exportedAt || payload?.data?.transactions?.length) {
+            const exportedAt = payload.exportedAt;
+            const date = exportedAt
+                ? new Date(typeof exportedAt === 'string' ? exportedAt : exportedAt.toDate?.() || exportedAt).toLocaleString('pl-PL')
+                : '—';
+            const count = payload.transactionCount || payload.data?.transactions?.length || '?';
             infoEl.textContent = `Ostatnia kopia w chmurze: ${date} (${count} transakcji)`;
         } else {
             infoEl.textContent = 'Kopia w chmurze: brak zapisanej kopii';
@@ -307,19 +321,26 @@ function backupToPhone() {
 }
 
 async function restoreFromCloud() {
+    let payload;
     try {
-        const snap = await cloudBackupRef.get();
-        if (!snap.exists) return alert('Brak kopii zapasowej w chmurze.');
-        const payload = snap.data();
-        const count = payload.transactionCount || payload.data?.transactions?.length || 0;
-        if (!confirm(`Przywrócić kopię z chmury (${count} transakcji)? Obecne dane zostaną zastąpione.`)) return;
+        payload = await getCloudBackupPayload();
+    } catch (err) {
+        console.error('restoreFromCloud get', err);
+        alert(`Nie udało się pobrać kopii z chmury (${err.message || 'brak połączenia'}).`);
+        return;
+    }
+    if (!payload) return alert('Brak kopii zapasowej w chmurze.');
+    const count = payload.transactionCount || payload.data?.transactions?.length || 0;
+    if (!count) return alert('Kopia w chmurze jest pusta.');
+    if (!confirm(`Przywrócić kopię z chmury (${count} transakcji)? Obecne dane zostaną zastąpione.`)) return;
+    try {
         applyBackupPayload(payload);
-        showSettingsToast('Przywrócono kopię z chmury');
+        showSettingsToast(`Przywrócono ${count} transakcji z chmury`);
         refreshBackupInfo();
         hapticFeedback();
     } catch (err) {
-        alert('Nie udało się pobrać kopii z chmury.');
-        console.error(err);
+        console.error('restoreFromCloud apply', err);
+        alert(err.message || 'Nie udało się przywrócić kopii z chmury.');
     }
 }
 

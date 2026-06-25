@@ -776,7 +776,9 @@ function renderReports() {
         storeReportsMonthChartMeta(chartPeriod, monthLabels, ctx, monthKeys);
     }
 
-    const ctx2 = document.getElementById('reportsMonthsChart').getContext('2d');
+    const chartEl = document.getElementById('reportsMonthsChart');
+    if (!chartEl) return;
+    const ctx2 = chartEl.getContext('2d');
     if (reportsChartInstance) reportsChartInstance.destroy();
 
     const legendColor = getThemeCssVar('--text', '#0f172a', '#f5f5f5');

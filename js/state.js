@@ -254,7 +254,8 @@ function applyCloudDocument(docSnap, options = {}) {
     setSyncStatus('online', finalCount);
 
     const shouldPushRemote = !options.readOnly
-        && (mergedTxCount > remoteTxCount || hadUiFields || hadMigration);
+        && (mergedTxCount > remoteTxCount || hadUiFields || hadMigration)
+        && !(remoteTxCount >= 100 && mergedTxCount < Math.max(50, Math.floor(remoteTxCount * 0.9)));
     if (shouldPushRemote) {
         saveState({ forceCloud: true });
     }
@@ -272,21 +273,27 @@ async function pullCloudStateFromServer() {
             console.warn(`pullCloudStateFromServer(${source})`, err);
         }
     }
+    if (typeof fetchAppStateRest === 'function') {
+        try {
+            const data = await fetchAppStateRest();
+            if (data && Array.isArray(data.transactions)) {
+                return applyCloudDocument({ exists: true, data: () => data });
+            }
+        } catch (err) {
+            console.warn('pullCloudStateFromServer REST', err);
+        }
+    }
     return null;
 }
 
 async function autoRecoverFromCloudBackupIfNeeded() {
     if (getTransactionCount(appState) >= 100) return false;
     try {
-        let snap = null;
-        try {
-            snap = await cloudBackupRef.get({ source: 'server' });
-        } catch {
-            snap = await cloudBackupRef.get({ source: 'default' });
-        }
-        if (!snap?.exists) return false;
+        const payload = typeof getCloudBackupPayload === 'function'
+            ? await getCloudBackupPayload()
+            : null;
+        if (!payload) return false;
 
-        const payload = snap.data();
         const backupCount = payload.transactionCount || getTransactionCount(payload.data || payload);
         if (backupCount <= getTransactionCount(appState)) return false;
 
@@ -295,8 +302,6 @@ async function autoRecoverFromCloudBackupIfNeeded() {
         if (typeof showSettingsToast === 'function') {
             showSettingsToast(`Przywrócono ${backupCount} transakcji z kopii w chmurze`);
         }
-        setSyncStatus('online', backupCount);
-        refreshCurrentView();
         return true;
     } catch (err) {
         console.error('autoRecoverFromCloudBackupIfNeeded', err);
@@ -387,7 +392,13 @@ function initData() {
 
 function saveState(options = {}) {
     const payload = getPersistedState(appState);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch (err) {
+        console.error('localStorage.setItem', err);
+        setSyncStatus('offline', payload.transactions.length);
+        return;
+    }
     if (!cloudSyncUnlocked && !options.forceCloud) return;
     stateRef.set(payload).then(() => {
         setSyncStatus('online', payload.transactions.length);
@@ -398,10 +409,14 @@ function saveState(options = {}) {
 }
 
 function refreshCurrentView() {
-    if (document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();
-    if (document.getElementById('view-reports').classList.contains('active')) renderReports();
-    if (document.getElementById('view-investments').classList.contains('active')) renderInvestments();
-    if (document.getElementById('view-loans').classList.contains('active')) renderLoans();
+    const dash = document.getElementById('view-dashboard');
+    const reports = document.getElementById('view-reports');
+    const investments = document.getElementById('view-investments');
+    const loans = document.getElementById('view-loans');
+    if (dash?.classList.contains('active')) renderDashboard();
+    if (reports?.classList.contains('active')) renderReports();
+    if (investments?.classList.contains('active')) renderInvestments();
+    if (loans?.classList.contains('active')) renderLoans();
 }
 
 function checkAndProcessRecurringTransactions() {
