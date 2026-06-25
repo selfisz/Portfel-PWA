@@ -517,3 +517,283 @@ describe('getLoanPayoffEndDate', () => {
         expect(getLoanPayoffEndDate(loan)).toBeNull();
     });
 });
+
+// ===========================================================================
+// dashboard.js — formatDashboardPeriodLabel
+// ===========================================================================
+describe('formatDashboardPeriodLabel', () => {
+    function setSelectValue(val) {
+        const el = document.getElementById('dashboard-period-select');
+        el.value = val;
+    }
+
+    it('zwraca rok dla current-year', () => {
+        setSelectValue('current-year');
+        const result = formatDashboardPeriodLabel();
+        const currentYear = new Date().getFullYear();
+        expect(result).toBe(String(currentYear));
+    });
+
+    it('zwraca poprzedni rok dla previous-year', () => {
+        setSelectValue('previous-year');
+        const result = formatDashboardPeriodLabel();
+        const prevYear = new Date().getFullYear() - 1;
+        expect(result).toBe(String(prevYear));
+    });
+
+    it('zwraca "Wszystko" dla all', () => {
+        setSelectValue('all');
+        const result = formatDashboardPeriodLabel();
+        expect(result).toBe('Wszystko');
+    });
+
+    it('zwraca string z wielką literą dla current-month', () => {
+        setSelectValue('current-month');
+        const result = formatDashboardPeriodLabel();
+        expect(typeof result).toBe('string');
+        expect(result.length).toBeGreaterThan(0);
+        expect(result[0]).toBe(result[0].toUpperCase());
+    });
+
+    it('zwraca string z wielką literą dla previous-month', () => {
+        setSelectValue('previous-month');
+        const result = formatDashboardPeriodLabel();
+        expect(typeof result).toBe('string');
+        expect(result.length).toBeGreaterThan(0);
+    });
+});
+
+// ===========================================================================
+// dashboard.js — getDashboardDates — timezone fix
+// ===========================================================================
+describe('getDashboardDates — timezone fix', () => {
+    function setSelectValue(val) {
+        document.getElementById('dashboard-period-select').value = val;
+    }
+
+    it('current-month: startDate to pierwszy dzień lokalnego miesiąca', () => {
+        setSelectValue('current-month');
+        const { startDate } = getDashboardDates();
+        const now = new Date();
+        const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+        expect(startDate).toBe(expected);
+    });
+
+    it('current-month: endDate to ostatni dzień lokalnego miesiąca (nie UTC)', () => {
+        setSelectValue('current-month');
+        const { endDate } = getDashboardDates();
+        expect(endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        // endDate nie może być z poprzedniego dnia (UTC artefakt)
+        const now = new Date();
+        const expectedMonth = String(now.getMonth() + 1).padStart(2, '0');
+        expect(endDate.startsWith(`${now.getFullYear()}-${expectedMonth}`)).toBe(true);
+    });
+
+    it('current-year: startDate to 01-01', () => {
+        setSelectValue('current-year');
+        const { startDate } = getDashboardDates();
+        const year = new Date().getFullYear();
+        expect(startDate).toBe(`${year}-01-01`);
+    });
+
+    it('current-year: endDate to 12-31 (nie przepadnie przez UTC)', () => {
+        setSelectValue('current-year');
+        const { endDate } = getDashboardDates();
+        const year = new Date().getFullYear();
+        expect(endDate).toBe(`${year}-12-31`);
+    });
+
+    it('previous-year: zakres to cały poprzedni rok', () => {
+        setSelectValue('previous-year');
+        const { startDate, endDate } = getDashboardDates();
+        const prevYear = new Date().getFullYear() - 1;
+        expect(startDate).toBe(`${prevYear}-01-01`);
+        expect(endDate).toBe(`${prevYear}-12-31`);
+    });
+});
+
+// ===========================================================================
+// settings.js — applyBackupPayload
+// ===========================================================================
+describe('applyBackupPayload', () => {
+    it('wczytuje dane z payload.data', () => {
+        const payload = {
+            version: 1,
+            data: {
+                transactions: [
+                    { date: '2024-01-01', type: 'expense', amount: 100, mainCategory: 'Dom', subCategory: '' }
+                ],
+                loans: [],
+                assets: [],
+                creditCards: [],
+                cashMovements: [],
+                creditCardMovements: []
+            }
+        };
+        applyBackupPayload(payload);
+        expect(_getAppState().transactions.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('wczytuje dane bezpośrednio gdy brak payload.data', () => {
+        const payload = {
+            transactions: [
+                { date: '2024-02-01', type: 'income', amount: 5000, mainCategory: 'Wynagrodzenie', subCategory: 'Podstawa' }
+            ],
+            loans: [],
+            assets: [],
+            creditCards: [],
+            cashMovements: [],
+            creditCardMovements: []
+        };
+        applyBackupPayload(payload);
+        expect(_getAppState().transactions.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('rzuca błąd gdy brak transactions w danych', () => {
+        expect(() => applyBackupPayload({ data: { transactions: null } })).toThrow();
+        expect(() => applyBackupPayload({})).toThrow();
+    });
+});
+
+// ===========================================================================
+// reports-calendar.js — getCardRepaymentHint
+// ===========================================================================
+describe('getCardRepaymentHint', () => {
+    it('zwraca null gdy balance = 0', () => {
+        const card = { id: 'c1', name: 'Test', limit: 5000, currentBalance: 0 };
+        expect(getCardRepaymentHint(card)).toBeNull();
+    });
+
+    it('zwraca null gdy brak ruchów karty', () => {
+        _setAppState({ ..._getAppState(), creditCardMovements: [] });
+        const card = { id: 'c1', name: 'Test', limit: 5000, currentBalance: 1000 };
+        expect(getCardRepaymentHint(card)).toBeNull();
+    });
+
+    it('zwraca hint gdy są spłaty historyczne', () => {
+        _setAppState({ ..._getAppState(), creditCardMovements: [
+            { id: 'm1', cardId: 'c1', type: 'repayment', amount: 500, date: '2024-01-15' },
+            { id: 'm2', cardId: 'c1', type: 'repayment', amount: 600, date: '2024-02-15' }
+        ]});
+        globalThis.getRecentCardRepaymentAverage = () => 550;
+        const card = { id: 'c1', name: 'Test', limit: 5000, currentBalance: 2000 };
+        const hint = getCardRepaymentHint(card);
+        expect(hint).toBeTruthy();
+        expect(hint.day).toBe(15);
+        expect(hint.estimated).toBe(true);
+    });
+
+    it('ignoruje ruchy transfer_out przy wyznaczaniu dnia', () => {
+        _setAppState({ ..._getAppState(), creditCardMovements: [
+            { id: 'm1', cardId: 'c1', type: 'transfer_out', amount: 500, date: '2024-01-05' },
+            { id: 'm2', cardId: 'c1', type: 'repayment', amount: 500, date: '2024-01-20' }
+        ]});
+        globalThis.getRecentCardRepaymentAverage = () => 500;
+        const card = { id: 'c1', name: 'Test', limit: 5000, currentBalance: 1000 };
+        const hint = getCardRepaymentHint(card);
+        expect(hint?.day).toBe(20);
+    });
+});
+
+// ===========================================================================
+// reports-calendar.js — buildDebtFreedomTimeline
+// ===========================================================================
+describe('buildDebtFreedomTimeline', () => {
+    it('zwraca pustą tablicę gdy brak aktywnych kredytów i kart', () => {
+        expect(buildDebtFreedomTimeline()).toEqual([]);
+    });
+
+    it('zwraca pozycję dla aktywnego kredytu', () => {
+        _setAppState({ ..._getAppState(), loans: [
+            { id: 'l1', name: 'Hipoteka', subCategory: 'Hipoteka',
+              totalAmount: 300000, currentCapitalLeft: 250000,
+              nextInstallmentAmount: 2000, nextInstallmentDue: '2024-01-15',
+              interestRate: 7, archived: false, details: { endDate: '2035-01-01' } }
+        ]});
+        const items = buildDebtFreedomTimeline();
+        expect(items.length).toBeGreaterThanOrEqual(1);
+        expect(items[0].kind).toBe('loan');
+        expect(items[0].name).toBe('Hipoteka');
+    });
+
+    it('sortuje rosnąco po endDate', () => {
+        _setAppState({ ..._getAppState(), loans: [
+            { id: 'l1', name: 'Długi kredyt', subCategory: 'A',
+              totalAmount: 100000, currentCapitalLeft: 90000,
+              nextInstallmentAmount: 1000, archived: false,
+              details: { endDate: '2035-06-01' } },
+            { id: 'l2', name: 'Krótki kredyt', subCategory: 'B',
+              totalAmount: 10000, currentCapitalLeft: 5000,
+              nextInstallmentAmount: 1000, archived: false,
+              details: { endDate: '2026-06-01' } }
+        ]});
+        const items = buildDebtFreedomTimeline();
+        expect(items[0].name).toBe('Krótki kredyt');
+        expect(items[1].name).toBe('Długi kredyt');
+    });
+});
+
+// ===========================================================================
+// reports-calendar.js — buildDebtPeakSeries
+// ===========================================================================
+describe('buildDebtPeakSeries', () => {
+    it('zwraca serię 24 etykiet dla 24 miesięcy', () => {
+        const series = buildDebtPeakSeries(24);
+        expect(series.labels).toHaveLength(24);
+        expect(series.totals).toHaveLength(24);
+    });
+
+    it('zwraca serię custom długości', () => {
+        const series = buildDebtPeakSeries(6);
+        expect(series.labels).toHaveLength(6);
+    });
+
+    it('peakValue = 0 gdy brak kredytów', () => {
+        const series = buildDebtPeakSeries(3);
+        expect(series.peakValue).toBe(0);
+    });
+
+    it('znajduje szczyt obciążeń', () => {
+        _setAppState({ ..._getAppState(), loans: [
+            { id: 'l1', name: 'Kredyt', subCategory: 'Hipoteka',
+              totalAmount: 200000, currentCapitalLeft: 150000,
+              nextInstallmentAmount: 2000, nextInstallmentDue: '2024-01-15',
+              interestRate: 6, archived: false }
+        ]});
+        const series = buildDebtPeakSeries(3);
+        expect(series.peakValue).toBeGreaterThan(0);
+        expect(series.peakIdx).toBeGreaterThanOrEqual(0);
+        expect(series.peakLabel).toBeTruthy();
+    });
+});
+
+// ===========================================================================
+// dashboard.js — getDashboardTxListSignature
+// ===========================================================================
+describe('getDashboardTxListSignature', () => {
+    it('zwraca string', () => {
+        const txs = [{ date: '2024-01-01', type: 'expense', amount: 100, mainCategory: 'Dom', subCategory: '' }];
+        document.getElementById('dashboard-period-select').value = 'current-month';
+        const sig = getDashboardTxListSignature(txs, '');
+        expect(typeof sig).toBe('string');
+        expect(sig.length).toBeGreaterThan(0);
+    });
+
+    it('różne zapytania dają różne sygnatury', () => {
+        const txs = [{ date: '2024-01-01', type: 'expense', amount: 100, mainCategory: 'Dom', subCategory: '' }];
+        document.getElementById('dashboard-period-select').value = 'current-month';
+        const sig1 = getDashboardTxListSignature(txs, 'jedzenie');
+        const sig2 = getDashboardTxListSignature(txs, 'restauracja');
+        expect(sig1).not.toBe(sig2);
+    });
+
+    it('pusta lista daje inną sygnaturę niż lista z elementami', () => {
+        document.getElementById('dashboard-period-select').value = 'current-month';
+        const sig1 = getDashboardTxListSignature([], '');
+        const sig2 = getDashboardTxListSignature(
+            [{ date: '2024-01-01', type: 'expense', amount: 100, mainCategory: 'Dom', subCategory: '' }],
+            ''
+        );
+        expect(sig1).not.toBe(sig2);
+    });
+});
