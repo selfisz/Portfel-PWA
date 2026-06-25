@@ -85,6 +85,7 @@ function buildFormDom({
     'sync-status': makeEl(),
     'tx-income-cash-hint': makeEl(),
     'tx-affects-cash-wrapper': makeEl(),
+    'add-form-more-options': makeEl({ open: false }),
     'add-form-error': makeEl()
   };
 
@@ -354,6 +355,15 @@ describe('saveTransaction — nowa transakcja', () => {
     _setFormState({ formMode: 'expense', currentType: 'expense', selectedMainCategory: 'Dom', selectedSubCategory: 'Czynsz' });
     saveTransaction();
     expect(_getEditingTxIndex()).toBeNull();
+  });
+
+  it('po zapisie nowej transakcji czyści kwotę i zostaje na formularzu', () => {
+    const els = buildFormDom({ amount: '250', date: '2024-01-01', note: 'kawa' });
+    _setFormState({ formMode: 'expense', currentType: 'expense', selectedMainCategory: 'Dom', selectedSubCategory: 'Czynsz' });
+    saveTransaction();
+    expect(els['tx-amount'].value).toBe('');
+    expect(els['tx-note'].value).toBe('');
+    expect(_getAppState().transactions).toHaveLength(1);
   });
 });
 

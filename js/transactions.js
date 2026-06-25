@@ -41,6 +41,8 @@ function switchView(viewId, title, element) {
         onCreditCardPurchaseToggle();
         document.getElementById('btn-loan-payment')?.classList.remove('hidden');
         document.getElementById('btn-card-payment')?.classList.remove('hidden');
+        const moreOpts = document.getElementById('add-form-more-options');
+        if (moreOpts) moreOpts.open = false;
         setFormMode('expense');
         focusAmountField();
     }
@@ -91,6 +93,7 @@ function setFormMode(mode) {
         populateCreditCardSelectors();
         populateTransactionAssetSelect();
         updateAddFormCashHints();
+        updateAddFormAmountStyle();
         return;
     }
 
@@ -132,6 +135,37 @@ function setTransactionType(type, keepSelection = false) {
     }
     document.getElementById('sub-category-wrapper').style.display = 'none';
     renderMainCategoriesForm();
+    updateAddFormAmountStyle();
+}
+
+function updateAddFormAmountStyle() {
+    const input = document.getElementById('tx-amount');
+    if (!input) return;
+    input.classList.remove('tx-amount--expense', 'tx-amount--income');
+    if (formState.currentType === 'income') {
+        input.classList.add('tx-amount--income');
+    } else if (formState.currentType === 'expense') {
+        input.classList.add('tx-amount--expense');
+    }
+}
+
+function resetStandardFormAfterSave() {
+    document.getElementById('tx-amount').value = '';
+    document.getElementById('tx-note').value = '';
+    document.getElementById('tx-recurring').checked = false;
+    const ccCheckbox = document.getElementById('tx-credit-card');
+    if (ccCheckbox) ccCheckbox.checked = false;
+    onCreditCardPurchaseToggle();
+    const linkedAsset = document.getElementById('tx-linked-asset');
+    if (linkedAsset) linkedAsset.checked = false;
+    if (typeof updateTransactionAssetHints === 'function') updateTransactionAssetHints();
+    const moreOpts = document.getElementById('add-form-more-options');
+    if (moreOpts) moreOpts.open = false;
+    clearAddFormError();
+    updateAddFormCashHints();
+    updateAddFormAmountStyle();
+    focusAmountField();
+    renderDashboard();
 }
 
 function updateAddFormCashHints() {
@@ -294,7 +328,11 @@ function saveTransaction() {
     saveState();
     hapticFeedback();
     showAppToast(formatTransactionSavedToast(txData, wasEdit), 'success');
-    switchView('dashboard', 'Pulpit', document.querySelectorAll('.nav-item')[0]);
+    if (wasEdit) {
+        switchView('dashboard', 'Pulpit', document.querySelectorAll('.nav-item')[0]);
+    } else {
+        resetStandardFormAfterSave();
+    }
 }
 
 function editTransaction(index) {
@@ -333,6 +371,8 @@ function editTransaction(index) {
     if (linkedAsset) linkedAsset.checked = !!tx.linkedAssetId;
     if (linkedSelect && tx.linkedAssetId) linkedSelect.value = tx.linkedAssetId;
     updateAddFormCashHints();
+    const moreOpts = document.getElementById('add-form-more-options');
+    if (moreOpts) moreOpts.open = !!(tx.creditCardId || tx.linkedAssetId);
     formState.selectedMainCategory = tx.mainCategory;
     formState.selectedSubCategory = tx.subCategory;
     setFormMode(tx.type);

@@ -1227,6 +1227,67 @@ input:focus, select:focus {
     padding: 12px 14px;
     letter-spacing: -0.03em;
     border-radius: var(--radius-sm);
+    transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+#view-add #tx-amount.tx-amount--expense {
+    color: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 42%, var(--border));
+    background: color-mix(in srgb, var(--danger-soft) 40%, var(--input-bg));
+}
+
+#view-add #tx-amount.tx-amount--income {
+    color: var(--success);
+    border-color: color-mix(in srgb, var(--success) 42%, var(--border));
+    background: color-mix(in srgb, var(--success-soft) 40%, var(--input-bg));
+}
+
+.add-form-more-options {
+    margin-bottom: 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    background: var(--input-bg);
+}
+
+.add-form-more-options-summary {
+    padding: 10px 12px;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.add-form-more-options-summary::-webkit-details-marker {
+    display: none;
+}
+
+.add-form-more-options-summary::after {
+    content: '▾';
+    float: right;
+    font-size: 0.85em;
+    opacity: 0.55;
+    transition: transform 0.15s ease;
+}
+
+.add-form-more-options[open] .add-form-more-options-summary::after {
+    transform: rotate(180deg);
+}
+
+.add-form-more-options-body {
+    padding: 0 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#view-add .add-form-more-options .checkbox-wrapper {
+    margin-bottom: 0;
+}
+
+#view-add .add-form-more-options .form-group {
+    margin-bottom: 0;
 }
 
 #view-add input[type="text"],
