@@ -54,6 +54,14 @@ beforeAll(() => {
     globalThis.stateRef = { set: () => Promise.resolve(), on: () => {}, off: () => {} };
 
     globalThis.formatPlnAmount = (n) => `${Number(n).toFixed(2)} zł`;
+    globalThis.formatPlnAmountHtml = (n) => {
+        const text = globalThis.formatPlnAmount(n);
+        const value = text.slice(0, -3);
+        return `<span class="amount-pln"><span class="amount-pln-value">${value}</span><span class="amount-pln-suffix"> zł</span></span>`;
+    };
+    globalThis.setPlnAmountElement = (el, amount) => {
+        if (el) el.innerHTML = globalThis.formatPlnAmountHtml(amount);
+    };
     globalThis.formatCompactPln = (n) => `${n} zł`;
     globalThis.formatTxDate = (d) => d || '';
     globalThis.escapeHtml = (t) => String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -295,7 +303,7 @@ describe('renderCreditCardTileHtml', () => {
     it('zawiera przyciski akcji Spłać i Przelew', () => {
         const html = renderCreditCardTileHtml(makeCard());
         expect(html).toContain('Spłać');
-        expect(html).toContain('Przelew z karty');
+        expect(html).toContain('Przelew');
     });
 
     it('escapuje id karty w onclick', () => {

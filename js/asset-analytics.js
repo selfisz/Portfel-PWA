@@ -62,7 +62,7 @@ function buildCurrentSnapshotPayload(monthKey, source = 'manual') {
     const cardDebt = getCreditCardDebtTotal();
     const totalDebt = loanDebt + cardDebt;
     const totalAssets = getPortfolioValuePln();
-    const byType = { investment: 0, cash: 0, deposit: 0, retirement: 0 };
+    const byType = { investment: 0, cash: 0, deposit: 0, retirement: 0, other: 0 };
     assets.forEach((asset) => {
         const type = asset.type || 'investment';
         if (byType[type] !== undefined) byType[type] += getAssetValuePln(asset);

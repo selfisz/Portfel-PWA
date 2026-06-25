@@ -171,6 +171,9 @@ function getLoanCapitalLeft() {
 }
 
 function getCreditCardDebtTotal() {
+    if (typeof getSummaryCreditCards === 'function') {
+        return getSummaryCreditCards().reduce((sum, card) => sum + (card.currentBalance || 0), 0);
+    }
     if (typeof getActiveCreditCards !== 'function') return 0;
     return getActiveCreditCards().reduce((sum, card) => sum + (card.currentBalance || 0), 0);
 }
@@ -183,7 +186,15 @@ function getLoanSummaryTotal() {
 }
 
 function getLoanSummaryCount() {
-    return getActiveLoans().filter((loan) => loan.includeInSummary !== false).length;
+    const loans = getActiveLoans().filter((loan) => loan.includeInSummary !== false).length;
+    const cards = typeof getSummaryCreditCards === 'function' ? getSummaryCreditCards().length : 0;
+    return loans + cards;
+}
+
+function getDebtSummaryTotalCount() {
+    const loans = getActiveLoans().length;
+    const cards = typeof getActiveCreditCards === 'function' ? getActiveCreditCards().length : 0;
+    return loans + cards;
 }
 
 function advanceLoanDueDate(isoDate) {

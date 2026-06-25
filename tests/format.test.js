@@ -52,6 +52,17 @@ describe('formatPlnAmount', () => {
   });
 });
 
+describe('formatPlnAmountHtml', () => {
+  it('owija kwotę w markup z osobnym sufiksem zł', () => {
+    const html = formatPlnAmountHtml(1234.56);
+    expect(html).toContain('class="amount-pln"');
+    expect(html).toContain('class="amount-pln-value"');
+    expect(html).toContain('class="amount-pln-suffix"');
+    expect(html).toContain(' zł</span>');
+    expect(html).toMatch(/1[\s\u00a0]?234,56/);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // formatCompactPln
 // ---------------------------------------------------------------------------

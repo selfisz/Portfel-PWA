@@ -44,15 +44,44 @@ function getActiveLoan() {
 
 let loansArchiveExpanded = false;
 let loansSummaryExpanded = false;
+let loansAddExpanded = false;
 
 function toggleLoansSummary() {
     loansSummaryExpanded = !loansSummaryExpanded;
     const panel = document.getElementById('loans-summary-panel');
-    const toggle = document.querySelector('.loans-hero-summary-toggle');
+    const toggle = document.querySelector('#loans-summary-block .loans-hero-summary-toggle');
     if (panel) panel.classList.toggle('hidden', !loansSummaryExpanded);
     if (toggle) {
         toggle.setAttribute('aria-expanded', loansSummaryExpanded ? 'true' : 'false');
     }
+}
+
+function toggleLoansAdd() {
+    loansAddExpanded = !loansAddExpanded;
+    const panel = document.getElementById('loans-add-panel');
+    const toggle = document.querySelector('#loans-add-block .loans-hero-add-toggle');
+    if (panel) panel.classList.toggle('hidden', !loansAddExpanded);
+    if (toggle) {
+        toggle.setAttribute('aria-expanded', loansAddExpanded ? 'true' : 'false');
+    }
+}
+
+function collapseLoansAdd() {
+    loansAddExpanded = false;
+    const panel = document.getElementById('loans-add-panel');
+    const toggle = document.querySelector('#loans-add-block .loans-hero-add-toggle');
+    if (panel) panel.classList.add('hidden');
+    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+}
+
+function openNewLoanFromHero() {
+    collapseLoansAdd();
+    openNewLoan();
+}
+
+function openNewCreditCardFromHero() {
+    collapseLoansAdd();
+    openNewCreditCard();
 }
 
 function toggleLoansArchive() {
@@ -76,6 +105,7 @@ function renderLoans() {
     const cardDebt = getCreditCardDebtTotal();
     const summaryTotal = getLoanSummaryTotal();
     const summaryCount = getLoanSummaryCount();
+    const debtItemCount = getDebtSummaryTotalCount();
     const hasDebtSummary = activeLoans.length > 0 || cardDebt > 0;
     const totalHero = document.getElementById('loans-total-hero');
     const totalCapitalEl = document.getElementById('loans-total-capital');
@@ -88,7 +118,7 @@ function renderLoans() {
     const archiveCount = document.getElementById('loans-archive-count');
 
     if (totalHero) totalHero.classList.toggle('hidden', !hasDebtSummary);
-    if (totalCapitalEl && hasDebtSummary) totalCapitalEl.textContent = formatPlnAmount(summaryTotal);
+    if (totalCapitalEl && hasDebtSummary) setPlnAmountElement(totalCapitalEl, summaryTotal);
     if (totalMetaEl) {
         if (!hasDebtSummary) {
             totalMetaEl.classList.add('hidden');
@@ -97,14 +127,15 @@ function renderLoans() {
             const loanCapital = getActiveLoans()
                 .filter((loan) => loan.includeInSummary !== false)
                 .reduce((sum, loan) => sum + (loan.currentCapitalLeft || 0), 0);
+            const summaryCardDebt = typeof getCreditCardDebtTotal === 'function' ? getCreditCardDebtTotal() : cardDebt;
             if (activeLoans.length && loanCapital > 0) {
                 parts.push(`Kredyty ${formatPlnAmount(loanCapital)}`);
             }
-            if (cardDebt > 0) {
-                parts.push(`Karty ${formatPlnAmount(cardDebt)}`);
+            if (summaryCardDebt > 0) {
+                parts.push(`Karty ${formatPlnAmount(summaryCardDebt)}`);
             }
-            if (activeLoans.length && summaryCount < activeLoans.length) {
-                parts.push(`${summaryCount} z ${activeLoans.length} w sumie`);
+            if (debtItemCount >= 2 && summaryCount < debtItemCount) {
+                parts.push(`${summaryCount} z ${debtItemCount} w sumie`);
             }
             if (parts.length) {
                 totalMetaEl.textContent = parts.join(' · ');
@@ -118,7 +149,7 @@ function renderLoans() {
 
     if (loansActiveTotalEl) {
         if (activeLoans.length) {
-            loansActiveTotalEl.textContent = formatPlnAmount(getLoanCapitalLeft());
+            setPlnAmountElement(loansActiveTotalEl, getLoanCapitalLeft());
             loansActiveTotalEl.classList.remove('hidden');
         } else {
             loansActiveTotalEl.classList.add('hidden');
@@ -163,16 +194,26 @@ function renderLoansSummaryChips(activeLoans) {
     const el = document.getElementById('loans-summary-chips');
     const block = document.getElementById('loans-summary-block');
     if (!el) return;
-    if (activeLoans.length < 2) {
+
+    const cards = typeof getActiveCreditCards === 'function' ? getActiveCreditCards() : [];
+    const totalItems = activeLoans.length + cards.length;
+    if (totalItems < 2) {
         el.innerHTML = '';
         block?.classList.add('hidden');
         return;
     }
     block?.classList.remove('hidden');
-    el.innerHTML = activeLoans.map((loan) => {
+
+    const loanChips = activeLoans.map((loan) => {
         const included = loan.includeInSummary !== false;
         return `<button type="button" class="toggle-btn loans-chip${included ? ' active' : ''}" onclick="toggleLoanSummaryInclude('${escapeHtml(loan.id)}')" aria-pressed="${included ? 'true' : 'false'}">${escapeHtml(getLoanDisplayName(loan))}</button>`;
-    }).join('');
+    });
+    const cardChips = cards.map((card) => {
+        const included = card.includeInSummary !== false;
+        const label = card.name?.trim() || 'Karta';
+        return `<button type="button" class="toggle-btn loans-chip${included ? ' active' : ''}" onclick="toggleCreditCardSummaryInclude('${escapeHtml(card.id)}')" aria-pressed="${included ? 'true' : 'false'}">${escapeHtml(label)}</button>`;
+    });
+    el.innerHTML = [...loanChips, ...cardChips].join('');
 }
 
 function toggleLoanSummaryInclude(loanId) {
@@ -189,32 +230,66 @@ function setAllLoansSummaryInclude(included) {
         if (currentlyIncluded === included) return;
         updateLoanInState({ ...loan, includeInSummary: included });
     });
+    if (typeof getActiveCreditCards === 'function') {
+        getActiveCreditCards().forEach((card) => {
+            const currentlyIncluded = card.includeInSummary !== false;
+            if (currentlyIncluded === included) return;
+            updateCreditCardInState({ ...card, includeInSummary: included });
+        });
+    }
     saveState();
     renderLoans();
 }
 
 function setLoanPaymentsFilter(filter) {
-    loanPaymentsFilter = filter;
-    renderLoanPaymentsFilter(getActiveLoans());
+    loanPaymentsFilter = filter || 'all';
+    updateLoanPaymentsFilterLabels();
     renderLoanRecentPayments();
 }
 
+function handleLoanPaymentsFilterChange() {
+    const select = document.getElementById('loans-payments-filter-select');
+    setLoanPaymentsFilter(select?.value || 'all');
+}
+
+function getLoanPaymentsFilterLabel() {
+    if (loanPaymentsFilter === 'all') return 'Wszystkie kredyty';
+    const loan = getLoanById(loanPaymentsFilter);
+    return loan ? getLoanDisplayName(loan) : 'Wszystkie kredyty';
+}
+
+function updateLoanPaymentsFilterLabels() {
+    const label = getLoanPaymentsFilterLabel();
+    const selectLabel = document.getElementById('loans-payments-select-label');
+    const select = document.getElementById('loans-payments-filter-select');
+    if (selectLabel) selectLabel.textContent = label;
+    if (select && select.value !== loanPaymentsFilter) select.value = loanPaymentsFilter;
+}
+
 function renderLoanPaymentsFilter(activeLoans) {
-    const nav = document.getElementById('loans-payments-filter');
-    if (!nav) return;
-    if (!activeLoans.length) {
-        nav.innerHTML = '';
-        nav.classList.add('hidden');
+    const block = document.getElementById('loans-payments-filter-block');
+    const select = document.getElementById('loans-payments-filter-select');
+    if (!block || !select) return;
+
+    if (activeLoans.length < 2) {
+        block.classList.add('hidden');
+        loanPaymentsFilter = 'all';
         return;
     }
-    nav.classList.remove('hidden');
-    const chips = [
-        `<button type="button" class="toggle-btn loans-chip${loanPaymentsFilter === 'all' ? ' active' : ''}" onclick="setLoanPaymentsFilter('all')">Wszystkie</button>`,
+
+    block.classList.remove('hidden');
+    select.innerHTML = [
+        '<option value="all">Wszystkie kredyty</option>',
         ...activeLoans.map((loan) =>
-            `<button type="button" class="toggle-btn loans-chip${loanPaymentsFilter === loan.id ? ' active' : ''}" onclick="setLoanPaymentsFilter('${escapeHtml(loan.id)}')">${escapeHtml(getLoanDisplayName(loan))}</button>`
+            `<option value="${escapeHtml(loan.id)}">${escapeHtml(getLoanDisplayName(loan))}</option>`
         )
-    ];
-    nav.innerHTML = chips.join('');
+    ].join('');
+
+    if (!activeLoans.some((loan) => loan.id === loanPaymentsFilter)) {
+        loanPaymentsFilter = 'all';
+    }
+    select.value = loanPaymentsFilter;
+    updateLoanPaymentsFilterLabels();
 }
 
 function renderLoanCardHtml(loan) {
@@ -239,7 +314,7 @@ function renderLoanCardHtml(loan) {
         </div>
         <div class="loan-card-hero">
             <span class="loan-stat-label">Pozostało</span>
-            <strong class="loan-card-capital">${formatPlnAmount(loan.currentCapitalLeft)}</strong>
+            <strong class="loan-card-capital">${formatPlnAmountHtml(loan.currentCapitalLeft)}</strong>
         </div>
         ${nextLine}
         <div class="progress-bar-bg loan-progress-bar">

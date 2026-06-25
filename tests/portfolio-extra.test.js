@@ -142,6 +142,16 @@ describe('getLoanSummaryTotal', () => {
         ]});
         expect(getLoanSummaryTotal()).toBe(0);
     });
+
+    it('pomija karty z includeInSummary = false', () => {
+        _setAppState({ ..._getAppState(),
+            loans: [],
+            creditCards: [
+                { id: 'c1', name: 'Test', limit: 5000, currentBalance: 2000, archived: false, includeInSummary: false }
+            ]
+        });
+        expect(getLoanSummaryTotal()).toBe(0);
+    });
 });
 
 // ===========================================================================

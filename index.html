@@ -161,7 +161,7 @@
     <div id="asset-picker-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeAssetPicker()">
         <div class="calendar-day-panel asset-picker-panel" onclick="event.stopPropagation()">
             <div id="panel-header-asset-picker"></div>
-            <p class="reports-hint">Inwestycje, lokaty, gotówka i PPK/IKZE — bez nieruchomości i auta.</p>
+            <p class="reports-hint">Inwestycje, lokaty, gotówka, PPK/IKZE i inne — np. nieruchomość lub auto jako szacunkowa wartość.</p>
             <div class="asset-picker-grid">
                 <button type="button" class="asset-picker-btn" onclick="startNewAsset('investment')">
                     <span class="asset-picker-icon">📈</span>
@@ -182,6 +182,11 @@
                     <span class="asset-picker-icon">🛡️</span>
                     <strong>PPK / IKZE</strong>
                     <span>emerytura</span>
+                </button>
+                <button type="button" class="asset-picker-btn" onclick="startNewAsset('other')">
+                    <span class="asset-picker-icon">📦</span>
+                    <strong>Inne</strong>
+                    <span>auto, nieruchomość…</span>
                 </button>
             </div>
         </div>
@@ -250,7 +255,7 @@
                     </div>
                 </div>
 
-                <div data-asset-fields="deposit cash retirement" class="hidden">
+                <div data-asset-fields="deposit cash retirement other" class="hidden">
                     <div class="form-group">
                         <label class="section-label" for="asset-amount-input">Saldo / kwota</label>
                         <input type="number" id="asset-amount-input" min="0" step="0.01" placeholder="0.00">
@@ -307,8 +312,8 @@
         <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
             <div id="panel-header-loan-details"></div>
             <div id="loan-details-content" class="loan-details-content"></div>
-            <div id="loan-details-edit" class="loan-details-edit hidden">
-                <p class="reports-hint">Podkategoria łączy kredyt z transakcjami w kategorii Długi. Brakuje na liście? Dodaj w Ustawienia → Kategorie.</p>
+            <div id="loan-details-edit" class="loan-details-edit obligation-edit-form hidden">
+                <p class="obligation-form-hint">Podkategoria łączy kredyt z transakcjami w kategorii Długi. Brakuje na liście? Dodaj w Ustawienia → Kategorie.</p>
                 <div class="form-group">
                     <label class="section-label" for="loan-name-input">Nazwa</label>
                     <input type="text" id="loan-name-input" placeholder="np. Kredyt hipoteczny" maxlength="60">
@@ -341,7 +346,7 @@
                     <label class="section-label" for="loan-installment-due-input">Termin najbliższej raty</label>
                     <input type="date" id="loan-installment-due-input">
                 </div>
-                <div class="loan-details-edit-actions">
+                <div class="loan-details-edit-actions obligation-form-actions">
                     <button type="button" class="btn-submit" onclick="saveLoanDetails()">Zapisz</button>
                     <button type="button" class="btn-outline loan-details-btn" onclick="cancelLoanEdit()">Anuluj</button>
                 </div>
@@ -353,7 +358,7 @@
         <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
             <div id="panel-header-credit-card-details"></div>
             <div id="credit-card-details-content" class="loan-details-content"></div>
-            <div id="credit-card-details-edit" class="loan-details-edit hidden">
+            <div id="credit-card-details-edit" class="loan-details-edit obligation-edit-form hidden">
                 <div class="form-group">
                     <label class="section-label" for="credit-card-name-input">Nazwa</label>
                     <input type="text" id="credit-card-name-input" placeholder="np. mBank" maxlength="60">
@@ -368,7 +373,7 @@
                         <input type="number" id="credit-card-balance-input" min="0" step="0.01" placeholder="1468.06">
                     </div>
                 </div>
-                <div class="loan-details-edit-actions">
+                <div class="loan-details-edit-actions obligation-form-actions">
                     <button type="button" class="btn-submit btn-submit--form" onclick="saveCreditCardDetails()">Zapisz</button>
                     <button type="button" class="btn-outline loan-details-btn" onclick="cancelCreditCardEdit()">Anuluj</button>
                 </div>
@@ -377,14 +382,14 @@
     </div>
 
     <div id="credit-card-quick-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeCreditCardQuickAction()">
-        <div class="calendar-day-panel credit-card-quick-panel" onclick="event.stopPropagation()">
+        <div class="calendar-day-panel credit-card-quick-panel obligation-quick-panel" onclick="event.stopPropagation()">
             <div id="panel-header-credit-card-quick"></div>
-            <p id="credit-card-quick-meta" class="reports-hint credit-card-quick-meta"></p>
-            <div class="form-group">
+            <p id="credit-card-quick-meta" class="obligation-form-hint credit-card-quick-meta"></p>
+            <div class="form-group obligation-form-group">
                 <label class="section-label" for="credit-card-quick-amount">Kwota (PLN)</label>
                 <input type="number" id="credit-card-quick-amount" step="0.01" min="0" inputmode="decimal" placeholder="0,00" autocomplete="off">
             </div>
-            <div class="loan-details-edit-actions">
+            <div class="loan-details-edit-actions obligation-form-actions">
                 <button type="button" class="btn-submit btn-submit--form" onclick="confirmCreditCardQuickAction()">Zapisz</button>
                 <button type="button" class="btn-outline loan-details-btn" onclick="closeCreditCardQuickAction()">Anuluj</button>
             </div>
@@ -1145,6 +1150,21 @@
                         <nav id="assets-summary-chips" class="assets-hero-summary-chips" aria-label="Aktywa wliczane w sumę"></nav>
                     </div>
                 </div>
+                <div id="assets-add-block" class="assets-hero-summary">
+                    <button type="button" class="assets-hero-add-toggle assets-hero-summary-toggle" onclick="toggleAssetsAdd()" aria-expanded="false" aria-controls="assets-add-panel">
+                        <span>Dodaj aktywo</span>
+                        <svg class="assets-hero-summary-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </button>
+                    <div id="assets-add-panel" class="assets-hero-summary-panel hidden">
+                        <nav class="assets-hero-summary-chips" aria-label="Typ aktywa">
+                            <button type="button" class="toggle-btn loans-chip hero-add-chip" onclick="startNewAssetFromHero('investment')">+ Inwestycja</button>
+                            <button type="button" class="toggle-btn loans-chip hero-add-chip" onclick="startNewAssetFromHero('deposit')">+ Lokata</button>
+                            <button type="button" class="toggle-btn loans-chip hero-add-chip" onclick="startNewAssetFromHero('cash')">+ Gotówka</button>
+                            <button type="button" class="toggle-btn loans-chip hero-add-chip" onclick="startNewAssetFromHero('retirement')">+ PPK / IKZE</button>
+                            <button type="button" class="toggle-btn loans-chip hero-add-chip" onclick="startNewAssetFromHero('other')">+ Inne</button>
+                        </nav>
+                    </div>
+                </div>
             </div>
 
             <nav id="assets-type-filter" class="flex-toggle flex-toggle--3 assets-horizon-filter hidden" aria-label="Filtr aktywów"></nav>
@@ -1162,8 +1182,6 @@
                 <p class="reports-hint loans-archive-hint">Zamknięte pozycje — bez wpływu na sumę majątku.</p>
                 <div id="assets-archive-list" class="assets-archive-list hidden"></div>
             </div>
-
-            <button type="button" class="loans-fab assets-fab" onclick="openNewAssetPicker()" aria-label="Dodaj aktywo">+</button>
         </div>
 
         <div id="view-loans" class="app-view">
@@ -1185,10 +1203,22 @@
                         <nav id="loans-summary-chips" class="loans-hero-summary-chips" aria-label="Kredyty wliczane w sumę"></nav>
                     </div>
                 </div>
+                <div id="loans-add-block" class="loans-hero-summary">
+                    <button type="button" class="loans-hero-add-toggle loans-hero-summary-toggle" onclick="toggleLoansAdd()" aria-expanded="false" aria-controls="loans-add-panel">
+                        <span>Dodaj zobowiązanie</span>
+                        <svg class="loans-hero-summary-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </button>
+                    <div id="loans-add-panel" class="loans-hero-summary-panel hidden">
+                        <nav class="loans-hero-summary-chips" aria-label="Typ zobowiązania">
+                            <button type="button" class="toggle-btn loans-chip hero-add-chip" onclick="openNewLoanFromHero()">+ Kredyt</button>
+                            <button type="button" class="toggle-btn loans-chip hero-add-chip" onclick="openNewCreditCardFromHero()">+ Karta</button>
+                        </nav>
+                    </div>
+                </div>
             </div>
 
             <section id="loans-active-section" class="loans-active-section">
-                <div class="loans-section-head">
+                <div class="loans-section-head loans-active-section-head">
                     <h2 class="loans-section-title">Kredyty</h2>
                     <span id="loans-active-total" class="loans-section-total hidden">—</span>
                 </div>
@@ -1199,15 +1229,20 @@
                 <div class="loans-section-head credit-cards-section-head">
                     <h2 class="credit-cards-section-title loans-section-title">Karty kredytowe</h2>
                     <span id="credit-cards-total" class="loans-section-total hidden">—</span>
-                    <button type="button" class="credit-cards-add-btn" onclick="openNewCreditCard()">+ Karta</button>
                 </div>
                 <div id="credit-cards-list" class="credit-cards-list"></div>
             </section>
 
             <div id="loans-payments-section" class="card loans-payments-section hidden">
                 <div class="loans-payments-head">
-                    <h2 class="loans-section-title">Ostatnie wpłaty</h2>
-                    <nav id="loans-payments-filter" class="loans-chip-nav loans-payments-filter hidden" aria-label="Filtr wpłat"></nav>
+                    <h2 class="loans-section-title loans-payments-title">Ostatnie wpłaty</h2>
+                    <div id="loans-payments-filter-block" class="loans-payments-filter-inline hidden">
+                        <label class="loans-payments-picker" for="loans-payments-filter-select">
+                            <span id="loans-payments-select-label" class="loans-payments-picker-label">Wszystkie kredyty</span>
+                            <svg class="loans-payments-picker-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5z"/></svg>
+                            <select id="loans-payments-filter-select" class="loans-payments-select" aria-label="Filtr wpłat" onchange="handleLoanPaymentsFilterChange()"></select>
+                        </label>
+                    </div>
                 </div>
                 <div id="loan-payments-list" class="loan-payments-list"></div>
             </div>
@@ -1223,8 +1258,6 @@
                 <p class="reports-hint loans-archive-hint">Spłacone kredyty — bez wpływu na sumę zadłużenia.</p>
                 <div id="loans-archive-list" class="loans-archive-list hidden"></div>
             </div>
-
-            <button type="button" class="loans-fab" onclick="openNewLoan()" aria-label="Dodaj kredyt">+</button>
         </div>
     </div>
 

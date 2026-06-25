@@ -1,10 +1,11 @@
-const ASSET_TYPES = ['investment', 'deposit', 'cash', 'retirement'];
+const ASSET_TYPES = ['investment', 'deposit', 'cash', 'retirement', 'other'];
 
 const ASSET_TYPE_LABELS = {
     investment: 'Inwestycja',
     deposit: 'Lokata',
     cash: 'Gotówka',
-    retirement: 'PPK / IKZE'
+    retirement: 'PPK / IKZE',
+    other: 'Inne'
 };
 
 const RETIREMENT_KINDS = ['PPK', 'IKZE', 'EMERYTURA', 'KZP'];
@@ -25,12 +26,14 @@ const ASSET_TYPE_ICONS = {
     investment: '📈',
     deposit: '🏦',
     cash: '💵',
-    retirement: '🛡️'
+    retirement: '🛡️',
+    other: '📦'
 };
 
 let assetsTypeFilter = 'all';
 let assetsArchiveExpanded = false;
 let assetsSummaryExpanded = false;
+let assetsAddExpanded = false;
 let assetDetailsMode = 'view';
 let activeAssetId = null;
 let draftAsset = null;
@@ -441,11 +444,34 @@ function renderAssetsSummaryChips(activeAssets) {
 function toggleAssetsSummary() {
     assetsSummaryExpanded = !assetsSummaryExpanded;
     const panel = document.getElementById('assets-summary-panel');
-    const toggle = document.querySelector('.assets-hero-summary-toggle');
+    const toggle = document.querySelector('#assets-summary-block .assets-hero-summary-toggle');
     if (panel) panel.classList.toggle('hidden', !assetsSummaryExpanded);
     if (toggle) {
         toggle.setAttribute('aria-expanded', assetsSummaryExpanded ? 'true' : 'false');
     }
+}
+
+function toggleAssetsAdd() {
+    assetsAddExpanded = !assetsAddExpanded;
+    const panel = document.getElementById('assets-add-panel');
+    const toggle = document.querySelector('#assets-add-block .assets-hero-add-toggle');
+    if (panel) panel.classList.toggle('hidden', !assetsAddExpanded);
+    if (toggle) {
+        toggle.setAttribute('aria-expanded', assetsAddExpanded ? 'true' : 'false');
+    }
+}
+
+function collapseAssetsAdd() {
+    assetsAddExpanded = false;
+    const panel = document.getElementById('assets-add-panel');
+    const toggle = document.querySelector('#assets-add-block .assets-hero-add-toggle');
+    if (panel) panel.classList.add('hidden');
+    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+}
+
+function startNewAssetFromHero(type) {
+    collapseAssetsAdd();
+    startNewAsset(type);
 }
 
 function renderAssetsHorizonFilter() {
@@ -461,8 +487,8 @@ function renderAssetsHorizonFilter() {
     nav.classList.remove('hidden');
     const chips = [
         { id: 'all', label: 'Wszystkie' },
-        { id: 'short', label: 'Krótkoterminowe' },
-        { id: 'long', label: 'Długoterminowe' }
+        { id: 'short', label: 'Krótkoterm.' },
+        { id: 'long', label: 'Długoterm.' }
     ];
     nav.innerHTML = chips
         .filter((chip) => chip.id === 'all' || (chip.id === 'short' ? shortCount : longCount) > 0 || assetsTypeFilter === chip.id)
@@ -470,7 +496,7 @@ function renderAssetsHorizonFilter() {
             const count = chip.id === 'all'
                 ? getActiveAssets().length
                 : chip.id === 'short' ? shortCount : longCount;
-            return `<button type="button" class="toggle-btn${assetsTypeFilter === chip.id ? ' active' : ''}" onclick="setAssetsTypeFilter('${chip.id}')">${chip.label}<small class="assets-horizon-count">${count}</small></button>`;
+            return `<button type="button" class="toggle-btn${assetsTypeFilter === chip.id ? ' active' : ''}" onclick="setAssetsTypeFilter('${chip.id}')"><span class="assets-horizon-chip-label">${chip.label}</span><span class="assets-horizon-count">${count}</span></button>`;
         })
         .join('');
 }
@@ -490,13 +516,13 @@ function renderAssetsHorizonSection(horizon, assets) {
         sectionAssets.filter((asset) => asset.includeInSummary !== false)
     );
     const hint = horizon === 'short'
-        ? 'Gotówka, Cele, akcje, lokaty'
+        ? 'Gotówka, lokaty, inwestycje, inne'
         : 'PPK, IKZE, emerytura, KZP';
 
     return `<section class="assets-horizon-section">
         <div class="assets-horizon-head">
             <h2 class="assets-horizon-title">${ASSET_HORIZON_LABELS[horizon]}</h2>
-            <span class="assets-horizon-total">${formatPlnAmount(sectionTotal)}</span>
+            <span class="assets-horizon-total">${formatPlnAmountHtml(sectionTotal)}</span>
         </div>
         <p class="reports-hint assets-horizon-hint">${hint}</p>
         <div class="assets-horizon-list">${sectionAssets.map((asset) => renderAssetCardHtml(asset)).join('')}</div>
@@ -539,7 +565,7 @@ function renderInvestmentCardHtml(asset) {
         </div>
         <div class="asset-card-hero">
             <span class="loan-stat-label">Wartość</span>
-            <strong class="asset-card-value">${formatPlnAmount(getAssetValueInPln(asset))}</strong>
+            <strong class="asset-card-value">${formatPlnAmountHtml(getAssetValueInPln(asset))}</strong>
         </div>
         <p class="loan-hero-meta">${escapeHtml(meta)} · <span class="${gainClass}">${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}% (${gainPln >= 0 ? '+' : ''}${formatPlnAmount(gainPln)})</span></p>
     </div>`;
@@ -560,7 +586,7 @@ function renderDepositCardHtml(asset) {
         </div>
         <div class="asset-card-hero">
             <span class="loan-stat-label">Saldo</span>
-            <strong class="asset-card-value">${formatPlnAmount(getAssetValueInPln(asset))}</strong>
+            <strong class="asset-card-value">${formatPlnAmountHtml(getAssetValueInPln(asset))}</strong>
         </div>
         <p class="loan-hero-meta">Oprocentowanie ${escapeHtml(rateLine)}${escapeHtml(endLine)}</p>
     </div>`;
@@ -581,7 +607,25 @@ function renderCashCardHtml(asset) {
         </div>
         <div class="asset-card-hero">
             <span class="loan-stat-label">Saldo</span>
-            <strong class="asset-card-value">${formatPlnAmount(getAssetValueInPln(asset))}</strong>
+            <strong class="asset-card-value">${formatPlnAmountHtml(getAssetValueInPln(asset))}</strong>
+        </div>
+    </div>`;
+}
+
+function renderOtherCardHtml(asset) {
+    return `<div class="card asset-summary-card asset-clickable" role="button" tabindex="0"
+        onclick="openAssetDetails('${escapeHtml(asset.id)}')"
+        onkeydown="if (event.key === 'Enter') openAssetDetails('${escapeHtml(asset.id)}')">
+        <div class="asset-card-head">
+            <span class="asset-type-badge">${ASSET_TYPE_ICONS.other}</span>
+            <div>
+                <h2 class="asset-card-title">${escapeHtml(getAssetDisplayName(asset))}</h2>
+                <p class="asset-card-sub">Inne</p>
+            </div>
+        </div>
+        <div class="asset-card-hero">
+            <span class="loan-stat-label">Wartość</span>
+            <strong class="asset-card-value">${formatPlnAmountHtml(getAssetValueInPln(asset))}</strong>
         </div>
     </div>`;
 }
@@ -601,7 +645,7 @@ function renderRetirementCardHtml(asset) {
         </div>
         <div class="asset-card-hero">
             <span class="loan-stat-label">Saldo</span>
-            <strong class="asset-card-value">${formatPlnAmount(getAssetValueInPln(asset))}</strong>
+            <strong class="asset-card-value">${formatPlnAmountHtml(getAssetValueInPln(asset))}</strong>
         </div>
     </div>`;
 }
@@ -611,6 +655,7 @@ function renderAssetCardHtml(asset) {
         case 'deposit': return renderDepositCardHtml(asset);
         case 'cash': return renderCashCardHtml(asset);
         case 'retirement': return renderRetirementCardHtml(asset);
+        case 'other': return renderOtherCardHtml(asset);
         default: return renderInvestmentCardHtml(asset);
     }
 }
@@ -652,7 +697,7 @@ function renderAssets() {
     renderAssetsSummaryChips(allActive);
 
     if (hero) hero.classList.toggle('hidden', !hasAssets);
-    if (totalEl && hasAssets) totalEl.textContent = formatPlnAmount(total);
+    if (totalEl && hasAssets) setPlnAmountElement(totalEl, total);
     if (metaEl) {
         const investments = summaryAssets.filter((a) => a.type === 'investment');
         if (hasAssets && investments.length) {
@@ -669,7 +714,7 @@ function renderAssets() {
     if (listEl) {
         if (!hasAssets) {
             listEl.innerHTML = `<div class="card asset-empty-card">
-                <p class="loan-empty-hint">Dodaj inwestycje, lokaty, gotówkę lub PPK/IKZE — bez nieruchomości i auta.</p>
+                <p class="loan-empty-hint">Dodaj inwestycje, lokaty, gotówkę, PPK/IKZE lub inne aktywa (np. nieruchomość, auto).</p>
                 <button type="button" class="btn-submit" onclick="openNewAssetPicker()">Dodaj aktywo</button>
             </div>`;
         } else if (!filteredAssets.length) {
@@ -903,6 +948,8 @@ function renderAssetDetails() {
             assetDetailRow('Instytucja', asset.institution || '—'),
             assetDetailRow('Saldo', `${(asset.amount || 0).toFixed(2)} ${asset.currency}`)
         );
+    } else if (asset.type === 'other') {
+        rows.push(assetDetailRow('Wartość', `${(asset.amount || 0).toFixed(2)} ${asset.currency}`));
     }
 
     contentEl.innerHTML = `<div class="loan-details-grid">${rows.join('')}</div>`;

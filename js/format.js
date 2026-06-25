@@ -13,6 +13,18 @@ function formatPlnAmount(amount) {
     return `${n.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
 }
 
+function formatPlnAmountHtml(amount) {
+    const text = formatPlnAmount(amount);
+    if (!text.endsWith(' zł')) return escapeHtml(text);
+    const value = text.slice(0, -3);
+    return `<span class="amount-pln" translate="no"><span class="amount-pln-value">${escapeHtml(value)}</span><span class="amount-pln-suffix"> zł</span></span>`;
+}
+
+function setPlnAmountElement(el, amount) {
+    if (!el) return;
+    el.innerHTML = formatPlnAmountHtml(amount);
+}
+
 function formatTxDate(dateStr) {
     const d = new Date(`${dateStr}T12:00:00`);
     return d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' });

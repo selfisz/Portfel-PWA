@@ -8,7 +8,8 @@ function getDefaultCreditCard() {
         limit: 0,
         currentBalance: 0,
         archived: false,
-        archivedAt: ''
+        archivedAt: '',
+        includeInSummary: true
     };
 }
 
@@ -23,6 +24,11 @@ function normalizeCreditCard(raw) {
     }
     card.archived = !!card.archived;
     card.archivedAt = card.archivedAt || '';
+    if (card.includeInSummary === undefined || card.includeInSummary === null) {
+        card.includeInSummary = true;
+    } else {
+        card.includeInSummary = !!card.includeInSummary;
+    }
     return card;
 }
 
@@ -65,6 +71,18 @@ function getCreditCards() {
 
 function getActiveCreditCards() {
     return getCreditCards().filter((card) => !card.archived && card.limit > 0);
+}
+
+function getSummaryCreditCards() {
+    return getActiveCreditCards().filter((card) => card.includeInSummary !== false);
+}
+
+function toggleCreditCardSummaryInclude(cardId) {
+    const card = getCreditCardById(cardId);
+    if (!card) return;
+    updateCreditCardInState({ ...card, includeInSummary: card.includeInSummary === false });
+    saveState();
+    renderLoans();
 }
 
 function getCreditCardById(id) {
@@ -327,13 +345,13 @@ function renderCreditCardsSection() {
 
     const cards = getActiveCreditCards();
     const allCards = getCreditCards();
-    const cardDebt = getCreditCardDebtTotal();
     section.classList.toggle('hidden', !cards.length && !allCards.length);
 
     if (totalEl) {
-        if (cards.length && cardDebt > 0) {
-            totalEl.textContent = formatPlnAmount(cardDebt);
-            totalEl.classList.remove('hidden');
+        if (cards.length) {
+            const sectionDebt = cards.reduce((sum, card) => sum + (card.currentBalance || 0), 0);
+            setPlnAmountElement(totalEl, sectionDebt);
+            totalEl.classList.toggle('hidden', sectionDebt <= 0);
         } else {
             totalEl.classList.add('hidden');
         }
@@ -364,16 +382,16 @@ function renderCreditCardTileHtml(card) {
             </div>
         </div>
         <div class="credit-card-hero">
-            <span class="credit-card-stat-label">Zadłużenie</span>
-            <strong class="credit-card-debt-value">${formatPlnAmount(card.currentBalance)}</strong>
+            <span class="loan-stat-label">Zadłużenie</span>
+            <strong class="credit-card-debt-value loan-card-capital">${formatPlnAmountHtml(card.currentBalance)}</strong>
         </div>
-        <p class="credit-card-meta">Wolne ${formatPlnAmount(available)} · ${usedPct.toFixed(0)}% limitu</p>
+        <p class="credit-card-meta loan-card-meta">Wolne ${formatPlnAmount(available)} · ${usedPct.toFixed(0)}% limitu</p>
         <div class="progress-bar-bg loan-progress-bar">
             <div class="progress-bar-fill" style="width:${Math.min(100, usedPct)}%;background:var(--accent)"></div>
         </div>
         <div class="credit-card-tile-actions">
-            <button type="button" class="credit-card-action-btn" onclick="event.stopPropagation(); quickCreditCardRepayment('${escapeHtml(card.id)}')">Spłać</button>
-            <button type="button" class="credit-card-action-btn credit-card-action-btn--muted" onclick="event.stopPropagation(); quickCreditCardTransferOut('${escapeHtml(card.id)}')">Przelew z karty</button>
+            <button type="button" class="credit-card-action-btn dashboard-quick-action-btn" onclick="event.stopPropagation(); quickCreditCardRepayment('${escapeHtml(card.id)}')">Spłać</button>
+            <button type="button" class="credit-card-action-btn dashboard-quick-action-btn dashboard-quick-action-btn--muted" onclick="event.stopPropagation(); quickCreditCardTransferOut('${escapeHtml(card.id)}')">Przelew</button>
         </div>
     </div>`;
 }
