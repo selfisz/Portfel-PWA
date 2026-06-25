@@ -166,8 +166,17 @@ describe('shouldTransactionAffectCash', () => {
     expect(shouldTransactionAffectCash(undefined)).toBe(false);
   });
 
-  it('income zawsze wpływa na gotówkę', () => {
+  it('income wpływa na gotówkę gdy brak powiązania z aktywem', () => {
     expect(shouldTransactionAffectCash({ type: 'income' })).toBe(true);
+    expect(shouldTransactionAffectCash({ type: 'income', affectsCash: true })).toBe(true);
+  });
+
+  it('income z linkedAssetId i affectsCash=false NIE wpływa na gotówkę', () => {
+    expect(shouldTransactionAffectCash({
+      type: 'income',
+      linkedAssetId: 'asset-inv-1',
+      affectsCash: false
+    })).toBe(false);
   });
 
   it('wydatek kartą NIE wpływa na gotówkę', () => {
@@ -478,5 +487,81 @@ describe('getIkzeContributionsInYear', () => {
       { date: '2024-01-01', type: 'expense', amount: 500 }
     ]});
     expect(getIkzeContributionsInYear(2024)).toBe(0);
+  });
+});
+
+// ===========================================================================
+// cash.js + asset-analytics.js — sync przy zapisie transakcji (wpływ → aktywa)
+// ===========================================================================
+describe('syncCashOnTransactionSave / syncAssetOnTransactionSave — wpływ', () => {
+  function wireAssetHelpers() {
+    globalThis.normalizeAsset = (raw) => {
+      const a = raw && typeof raw === 'object' ? { ...raw } : {};
+      a.amount = Math.max(0, parseFloat(a.amount) || 0);
+      a.type = a.type || 'cash';
+      return a;
+    };
+    globalThis.getAssetValuePln = (asset) => asset?.amount || 0;
+    globalThis.getAssetById = (id) => _getAppState().assets.find((a) => a.id === id) || null;
+    globalThis.updateAssetInState = (asset) => {
+      const state = _getAppState();
+      const idx = state.assets.findIndex((a) => a.id === asset.id);
+      if (idx >= 0) state.assets[idx] = { ...asset };
+      else state.assets.push({ ...asset });
+      return asset;
+    };
+  }
+
+  beforeEach(() => {
+    wireAssetHelpers();
+    _setAppState({
+      transactions: [],
+      loans: [],
+      creditCards: [],
+      assets: [],
+      cashMovements: [],
+      assetSnapshots: [],
+      assetValueHistory: [],
+      categoryBudgets: {},
+      creditCardMovements: []
+    });
+  });
+
+  it('tworzy gotówkę i zwiększa saldo przy wpływie bez powiązanego aktywa', () => {
+    const tx = {
+      type: 'income',
+      amount: 5000,
+      date: '2024-06-01',
+      note: 'Wynagrodzenie',
+      mainCategory: 'Praca',
+      subCategory: 'Pensja'
+    };
+    expect(syncCashOnTransactionSave(tx)).toBe(true);
+    const cash = _getAppState().assets.find((a) => a.id === PRIMARY_CASH_ASSET_ID);
+    expect(cash).toBeTruthy();
+    expect(cash.amount).toBe(5000);
+    expect(tx.cashMovementId).toBeTruthy();
+  });
+
+  it('wpływ na powiązane aktywo nie zmienia salda gotówki', () => {
+    _setAppState({
+      ..._getAppState(),
+      assets: [{ id: 'asset-savings', type: 'cash', name: 'Oszczędności', amount: 1000 }]
+    });
+    const tx = {
+      type: 'income',
+      amount: 3000,
+      date: '2024-06-01',
+      note: 'Premia',
+      mainCategory: 'Praca',
+      subCategory: 'Premia',
+      linkedAssetId: 'asset-savings',
+      affectsCash: false
+    };
+    expect(syncCashOnTransactionSave(tx)).toBe(true);
+    expect(tx.cashMovementId).toBeUndefined();
+    expect(_getAppState().assets.find((a) => a.id === PRIMARY_CASH_ASSET_ID)).toBeUndefined();
+    expect(syncAssetOnTransactionSave(tx)).toBe(true);
+    expect(_getAppState().assets.find((a) => a.id === 'asset-savings').amount).toBe(4000);
   });
 });

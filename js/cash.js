@@ -21,6 +21,24 @@ function getPrimaryCashAsset() {
     return getAssetById(PRIMARY_CASH_ASSET_ID);
 }
 
+function ensurePrimaryCashAsset() {
+    if (getPrimaryCashAsset()) return true;
+    if (!Array.isArray(appState.assets)) appState.assets = [];
+    const draft = {
+        id: PRIMARY_CASH_ASSET_ID,
+        type: 'cash',
+        name: 'Gotówka',
+        amount: 0
+    };
+    const normalized = typeof normalizeAsset === 'function' ? normalizeAsset(draft) : draft;
+    if (typeof updateAssetInState === 'function') {
+        updateAssetInState(normalized);
+    } else {
+        appState.assets.push(normalized);
+    }
+    return !!getPrimaryCashAsset();
+}
+
 function adjustCashAssetAmount(assetId, delta, options = {}) {
     if (!delta || typeof getAssetById !== 'function') return null;
     const asset = getAssetById(assetId);
@@ -38,6 +56,7 @@ function adjustCashAssetAmount(assetId, delta, options = {}) {
 
 function registerCashMovement({ assetId = PRIMARY_CASH_ASSET_ID, delta, date, note, source, sourceRef }) {
     if (!delta) return null;
+    if (assetId === PRIMARY_CASH_ASSET_ID && !ensurePrimaryCashAsset()) return null;
     const updated = adjustCashAssetAmount(assetId, delta);
     if (!updated) return null;
 
@@ -102,7 +121,10 @@ function syncCashForLoanPayment(loanId, amount, date, note) {
 
 function shouldTransactionAffectCash(tx) {
     if (!tx) return false;
-    if (tx.type === 'income') return true;
+    if (tx.type === 'income') {
+        if (tx.linkedAssetId && tx.affectsCash === false) return false;
+        return true;
+    }
     if (tx.type !== 'expense') return false;
     if (tx.creditCardId) return false;
     if (tx.affectsCash === false) return false;

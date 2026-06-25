@@ -472,7 +472,7 @@
                             <label>Data</label>
                             <input type="date" id="tx-date">
                         </div>
-                        <div class="form-group form-group--last">
+                        <div class="form-group">
                             <label>Notatka</label>
                             <input type="text" id="tx-note" placeholder="Opcjonalny opis">
                         </div>
@@ -522,46 +522,46 @@
                             <input type="text" id="add-credit-card-note" placeholder="Opcjonalny opis" maxlength="80">
                         </div>
                     </div>
-                </div>
-                <div class="add-form-sticky-bar" id="add-form-sticky-bar">
-                    <div id="add-sticky-standard" class="add-sticky-panel">
-                        <p class="reports-hint tx-income-cash-hint hidden" id="tx-income-cash-hint">Wpływ zwiększy saldo gotówki.</p>
-                        <div class="checkbox-wrapper" id="tx-affects-cash-wrapper">
-                            <input type="checkbox" id="tx-affects-cash" checked onchange="updateAddFormCashHints()">
-                            <label for="tx-affects-cash">Z salda (gotówka)</label>
-                        </div>
-                        <div class="checkbox-wrapper hidden" id="tx-linked-asset-wrapper">
-                            <input type="checkbox" id="tx-linked-asset" onchange="updateTransactionAssetHints()">
-                            <label for="tx-linked-asset">Powiąż z aktywem</label>
-                        </div>
-                        <div class="form-group hidden" id="tx-linked-asset-select-wrapper">
-                            <label class="section-label" for="tx-linked-asset-select">Aktywo</label>
-                            <select id="tx-linked-asset-select"></select>
-                            <p class="reports-hint">Wydatek → przelew na aktywo. Wpływ → wpłata bezpośrednio na aktywo.</p>
-                        </div>
-                        <div class="checkbox-wrapper" id="recurring-wrapper">
-                            <input type="checkbox" id="tx-recurring">
-                            <label for="tx-recurring">Cykliczna (co miesiąc)</label>
-                        </div>
-                        <div id="credit-card-purchase-wrapper">
-                            <div class="checkbox-wrapper" id="credit-card-checkbox-wrapper">
-                                <input type="checkbox" id="tx-credit-card" onchange="onCreditCardPurchaseToggle()">
-                                <label for="tx-credit-card">Płatność kartą kredytową</label>
+                    <div class="add-form-options" id="add-form-sticky-bar">
+                        <div id="add-sticky-standard" class="add-sticky-panel">
+                            <p class="reports-hint tx-income-cash-hint hidden" id="tx-income-cash-hint">Wpływ zwiększy saldo gotówki.</p>
+                            <div class="checkbox-wrapper" id="tx-affects-cash-wrapper">
+                                <input type="checkbox" id="tx-affects-cash" checked onchange="updateAddFormCashHints()">
+                                <label for="tx-affects-cash">Z salda (gotówka)</label>
                             </div>
-                            <div class="form-group credit-card-select-group hidden" id="credit-card-select-wrapper">
-                                <label class="section-label" for="tx-credit-card-select">Karta</label>
-                                <select id="tx-credit-card-select"></select>
+                            <div class="checkbox-wrapper hidden" id="tx-linked-asset-wrapper">
+                                <input type="checkbox" id="tx-linked-asset" onchange="updateTransactionAssetHints()">
+                                <label for="tx-linked-asset">Powiąż z aktywem</label>
                             </div>
+                            <div class="form-group hidden" id="tx-linked-asset-select-wrapper">
+                                <label class="section-label" for="tx-linked-asset-select">Aktywo</label>
+                                <select id="tx-linked-asset-select"></select>
+                                <p class="reports-hint">Wydatek → przelew na aktywo. Wpływ → wpłata bezpośrednio na aktywo.</p>
+                            </div>
+                            <div class="checkbox-wrapper" id="recurring-wrapper">
+                                <input type="checkbox" id="tx-recurring">
+                                <label for="tx-recurring">Cykliczna (co miesiąc)</label>
+                            </div>
+                            <div id="credit-card-purchase-wrapper">
+                                <div class="checkbox-wrapper" id="credit-card-checkbox-wrapper">
+                                    <input type="checkbox" id="tx-credit-card" onchange="onCreditCardPurchaseToggle()">
+                                    <label for="tx-credit-card">Płatność kartą kredytową</label>
+                                </div>
+                                <div class="form-group credit-card-select-group hidden" id="credit-card-select-wrapper">
+                                    <label class="section-label" for="tx-credit-card-select">Karta</label>
+                                    <select id="tx-credit-card-select"></select>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-submit btn-submit--form" onclick="saveTransaction()">Zapisz</button>
                         </div>
-                        <button type="button" class="btn-submit btn-submit--form" onclick="saveTransaction()">Zapisz</button>
+                        <div id="add-sticky-loan" class="add-sticky-panel hidden">
+                            <button type="button" class="btn-submit btn-submit--form" onclick="saveLoanPaymentFromAdd()">Zapisz spłatę</button>
+                        </div>
+                        <div id="add-sticky-card" class="add-sticky-panel hidden">
+                            <button type="button" class="btn-submit btn-submit--form" onclick="saveCreditCardMovementFromAdd()">Zapisz</button>
+                        </div>
+                        <button type="button" class="btn-cancel btn-cancel--form" id="btn-cancel-edit" onclick="cancelEdit()">Anuluj edycję</button>
                     </div>
-                    <div id="add-sticky-loan" class="add-sticky-panel hidden">
-                        <button type="button" class="btn-submit btn-submit--form" onclick="saveLoanPaymentFromAdd()">Zapisz spłatę</button>
-                    </div>
-                    <div id="add-sticky-card" class="add-sticky-panel hidden">
-                        <button type="button" class="btn-submit btn-submit--form" onclick="saveCreditCardMovementFromAdd()">Zapisz</button>
-                    </div>
-                    <button type="button" class="btn-cancel btn-cancel--form" id="btn-cancel-edit" onclick="cancelEdit()">Anuluj edycję</button>
                 </div>
             </div>
         </div>

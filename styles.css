@@ -747,6 +747,12 @@ h2 {
 .flex-toggle--4 .toggle-btn {
     font-size: var(--text-xs);
     padding: 9px 4px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.2;
 }
 
 .toggle-btn.active.card {
@@ -863,6 +869,7 @@ input:focus, select:focus {
 #view-add .flex-toggle--4 .toggle-btn {
     font-size: var(--text-xs);
     padding: 11px 4px;
+    min-height: 42px;
 }
 
 #view-add #credit-card-purchase-wrapper {
@@ -953,29 +960,21 @@ input:focus, select:focus {
     display: flex;
     flex-direction: column;
     gap: 0;
-    min-height: calc(100dvh - var(--nav-height) - 56px - var(--safe-top));
 }
 
 .add-form-card {
-    flex: 1;
-    margin-bottom: 0;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
+    margin-bottom: 12px;
 }
 
 #view-add .form-group--last {
     margin-bottom: 8px;
 }
 
+.add-form-options,
 .add-form-sticky-bar {
-    position: sticky;
-    bottom: calc(var(--nav-height) + var(--safe-bottom));
-    z-index: 35;
-    margin: 0 calc(-1 * var(--container-padding)) -8px;
-    padding: 12px var(--container-padding) 10px;
-    background: linear-gradient(180deg, transparent 0%, var(--bg) 18%, var(--bg) 100%);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    margin-top: 16px;
+    padding-top: 4px;
+    border-top: 1px solid var(--border);
 }
 
 .add-sticky-panel {
@@ -4252,6 +4251,10 @@ html:not([data-theme="dark"]) .grid-item.selected {
 
     #view-add .grid-item {
         min-height: 56px;
+    }
+
+    #view-add .flex-toggle--4 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .loan-form-row {
