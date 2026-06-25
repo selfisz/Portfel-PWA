@@ -662,117 +662,112 @@
         </div>
 
         <div id="view-reports" class="app-view">
-            <div id="analysis-period-swipe" class="analysis-swipe-zone card filter-card reports-filter-card analysis-toolbar">
-                <label class="section-label">Okres analizy <span class="analysis-swipe-label">· przesuń ↔</span></label>
-                <div class="reports-period-tabs flex-toggle reports-period-tabs--4">
+            <div id="analysis-period-swipe" class="analysis-swipe-zone card hero-card reports-hero-toolbar analysis-toolbar">
+                <div class="hero-label">Okres analizy <span class="analysis-swipe-label">· przesuń ↔</span></div>
+                <div class="reports-period-tabs flex-toggle flex-toggle--4 reports-period-tabs--4">
                     <button id="btn-reports-mode-year" type="button" class="toggle-btn active" onclick="setReportsPeriodMode('year')">Rok</button>
                     <button id="btn-reports-mode-month" type="button" class="toggle-btn" onclick="setReportsPeriodMode('month')">Miesiąc</button>
                     <button id="btn-reports-mode-range" type="button" class="toggle-btn" onclick="setReportsPeriodMode('range')">Zakres</button>
                     <button id="btn-reports-mode-compare" type="button" class="toggle-btn" onclick="setReportsPeriodMode('compare')">Porównaj</button>
                 </div>
-                <div id="reports-period-year-wrap">
-                    <label class="section-label" for="reports-year-select">Rok</label>
-                    <select id="reports-year-select" onchange="renderReports()"></select>
+                <div class="reports-hero-period-fields">
+                <div id="reports-period-year-wrap" class="reports-hero-field">
+                    <label class="reports-hero-field-label" for="reports-year-select">Rok</label>
+                    <select id="reports-year-select" class="reports-hero-input" onchange="renderReports()"></select>
                 </div>
-                <div id="reports-period-month-wrap" class="hidden">
-                    <label class="section-label" for="reports-period-month">Miesiąc</label>
-                    <input type="month" id="reports-period-month" onchange="onReportsMonthChange()">
+                <div id="reports-period-month-wrap" class="reports-hero-field hidden">
+                    <label class="reports-hero-field-label" for="reports-period-month">Miesiąc</label>
+                    <input type="month" id="reports-period-month" class="reports-hero-input" onchange="onReportsMonthChange()">
                 </div>
-                <div id="reports-period-range-wrap" class="hidden">
-                    <label class="section-label">Zakres dat</label>
-                    <div class="reports-date-row">
-                        <input type="date" id="reports-range-start" onchange="renderReports()">
-                        <span>–</span>
-                        <input type="date" id="reports-range-end" onchange="renderReports()">
+                <div id="reports-period-range-wrap" class="reports-hero-field hidden">
+                    <label class="reports-hero-field-label">Zakres dat</label>
+                    <div class="reports-date-row reports-hero-date-row">
+                        <input type="date" id="reports-range-start" class="reports-hero-input" onchange="renderReports()">
+                        <span class="reports-hero-date-sep">–</span>
+                        <input type="date" id="reports-range-end" class="reports-hero-input" onchange="renderReports()">
                     </div>
                 </div>
-                <div id="reports-period-compare-wrap" class="hidden">
-                    <label class="section-label">Okres A</label>
-                    <div class="reports-date-row">
-                        <input type="date" id="reports-compare-a-start" onchange="renderReports()">
-                        <span>–</span>
-                        <input type="date" id="reports-compare-a-end" onchange="renderReports()">
+                <div id="reports-period-compare-wrap" class="reports-hero-field hidden">
+                    <label class="reports-hero-field-label">Okres A</label>
+                    <div class="reports-date-row reports-hero-date-row">
+                        <input type="date" id="reports-compare-a-start" class="reports-hero-input" onchange="renderReports()">
+                        <span class="reports-hero-date-sep">–</span>
+                        <input type="date" id="reports-compare-a-end" class="reports-hero-input" onchange="renderReports()">
                     </div>
-                    <label class="section-label reports-period-label--spacing">Okres B</label>
-                    <div class="reports-date-row">
-                        <input type="date" id="reports-compare-b-start" onchange="renderReports()">
-                        <span>–</span>
-                        <input type="date" id="reports-compare-b-end" onchange="renderReports()">
+                    <label class="reports-hero-field-label reports-period-label--spacing">Okres B</label>
+                    <div class="reports-date-row reports-hero-date-row">
+                        <input type="date" id="reports-compare-b-start" class="reports-hero-input" onchange="renderReports()">
+                        <span class="reports-hero-date-sep">–</span>
+                        <input type="date" id="reports-compare-b-end" class="reports-hero-input" onchange="renderReports()">
                     </div>
                 </div>
-                <div class="analysis-export-links">
-                    <button type="button" class="btn-text-link" onclick="exportReportsCsv()">CSV</button>
-                    <button type="button" class="btn-text-link" onclick="exportReportsPdf()">PDF</button>
+                </div>
+                <div class="reports-hero-export analysis-export-links">
+                    <button type="button" class="reports-hero-export-btn" onclick="exportReportsCsv()">Eksport CSV</button>
+                    <button type="button" class="reports-hero-export-btn" onclick="exportReportsPdf()">Eksport PDF</button>
                 </div>
             </div>
 
             <div id="analysis-section-swipe" class="analysis-swipe-zone">
-            <nav class="analysis-section-nav" aria-label="Sekcje analizy">
-                <button id="btn-analysis-overview" type="button" class="analysis-nav-btn active" onclick="setAnalysisSection('overview')">Przegląd</button>
-                <button id="btn-analysis-calendar" type="button" class="analysis-nav-btn" onclick="setAnalysisSection('calendar')">Kalendarz</button>
-                <button id="btn-analysis-charts" type="button" class="analysis-nav-btn" onclick="setAnalysisSection('charts')">Wykresy</button>
-                <button id="btn-analysis-assets" type="button" class="analysis-nav-btn" onclick="setAnalysisSection('assets')">Aktywa</button>
-                <button id="btn-analysis-debts" type="button" class="analysis-nav-btn" onclick="setAnalysisSection('debts')">Długi</button>
-                <button id="btn-analysis-details" type="button" class="analysis-nav-btn" onclick="setAnalysisSection('details')">Szczegóły</button>
+            <nav class="analysis-section-nav flex-toggle" aria-label="Sekcje analizy">
+                <button id="btn-analysis-overview" type="button" class="toggle-btn active" onclick="setAnalysisSection('overview')">Przegląd</button>
+                <button id="btn-analysis-calendar" type="button" class="toggle-btn" onclick="setAnalysisSection('calendar')">Kalendarz</button>
+                <button id="btn-analysis-charts" type="button" class="toggle-btn" onclick="setAnalysisSection('charts')">Wykresy</button>
+                <button id="btn-analysis-assets" type="button" class="toggle-btn" onclick="setAnalysisSection('assets')">Aktywa</button>
+                <button id="btn-analysis-debts" type="button" class="toggle-btn" onclick="setAnalysisSection('debts')">Długi</button>
+                <button id="btn-analysis-details" type="button" class="toggle-btn" onclick="setAnalysisSection('details')">Szczegóły</button>
             </nav>
-            <p class="analysis-swipe-hint">Przesuń w lewo / prawo, by zmienić sekcję</p>
 
-            <div class="analysis-sections-body">
+            <div id="analysis-sections-body" class="analysis-sections-body">
             <div id="analysis-section-overview" class="analysis-section">
                 <div id="reports-compare-card" class="card hidden"></div>
 
-                <div class="card reports-summary-card">
+                <div class="card hero-card reports-overview-hero">
                     <div class="hero-label" id="reports-year-label">2026</div>
-                    <div class="reports-summary-grid">
-                        <div class="reports-stat">
-                            <span class="label">Wpływy</span>
-                            <span id="reports-total-income" class="value income">0,00 zł</span>
+                    <div id="reports-net-balance" class="hero-balance">0,00 zł</div>
+                    <div class="hero-stats reports-overview-stats">
+                        <div class="hero-stat income">
+                            <div class="label">Wpływy</div>
+                            <div id="reports-total-income" class="value">0,00 zł</div>
                         </div>
-                        <div class="reports-stat">
-                            <span class="label">Wydatki</span>
-                            <span id="reports-total-expense" class="value expense">0,00 zł</span>
+                        <div class="hero-stat expense">
+                            <div class="label">Wydatki</div>
+                            <div id="reports-total-expense" class="value">0,00 zł</div>
                         </div>
-                        <div class="reports-stat">
-                            <span class="label">Bilans</span>
-                            <span id="reports-net-balance" class="value">0,00 zł</span>
+                        <div class="hero-stat">
+                            <div class="label">Oszczędności</div>
+                            <div id="reports-savings-rate" class="value">0%</div>
                         </div>
-                        <div class="reports-stat">
-                            <span class="label">Oszczędności</span>
-                            <span id="reports-savings-rate" class="value savings">0%</span>
+                        <div class="hero-stat expense">
+                            <div class="label">Średnia dzienna</div>
+                            <div id="reports-daily-avg" class="value">0,00 zł</div>
+                            <div id="reports-daily-avg-hint" class="hero-forecast-hint reports-daily-hint">wydatki / dzień</div>
                         </div>
                     </div>
-                </div>
-
-                <div class="card reports-metrics-row">
-                    <div class="reports-metric-box">
-                        <div class="section-label">Średnia dzienna</div>
-                        <div id="reports-daily-avg" class="reports-metric-value">0,00 zł</div>
-                        <div id="reports-daily-avg-hint" class="reports-metric-hint">wydatki / dzień</div>
-                    </div>
-                    <div class="reports-metric-box">
-                        <div class="section-label">Cel oszczędności</div>
+                    <div class="hero-budget reports-savings-goal">
+                        <span class="hero-budget-label">Cel oszczędności</span>
                         <div class="reports-goal-input-row">
-                            <input type="number" id="savings-goal-input" min="0" max="100" step="1" onchange="saveSavingsGoal()">
+                            <input type="number" id="savings-goal-input" class="reports-hero-goal-input" min="0" max="100" step="1" onchange="saveSavingsGoal()">
                             <span>%</span>
                         </div>
-                        <div class="progress-bar-bg reports-goal-bar"><div id="reports-goal-fill" class="progress-bar-fill"></div></div>
-                        <div id="reports-goal-label" class="reports-metric-hint">0% z 20%</div>
+                        <div class="progress-bar-bg hero-progress-bar reports-goal-bar"><div id="reports-goal-fill" class="progress-bar-fill"></div></div>
+                        <div id="reports-goal-label" class="hero-forecast-hint">0% z 20%</div>
                     </div>
                 </div>
 
-                <div class="card">
-                    <h2>Prognoza miesiąca</h2>
+                <div class="card dashboard-panel">
+                    <h2 class="dashboard-section-title">Prognoza miesiąca</h2>
                     <div id="reports-forecast"></div>
                 </div>
 
-                <div class="card">
-                    <h2>Przepływ środków</h2>
+                <div class="card dashboard-panel">
+                    <h2 class="dashboard-section-title">Przepływ środków</h2>
                     <p class="reports-hint">Wpływy → kategorie wydatków → bilans.</p>
                     <div id="reports-flow-chart" class="reports-flow-chart"></div>
                 </div>
 
-                <div class="card">
-                    <h2>Majątek i zobowiązania</h2>
+                <div class="card dashboard-panel reports-wealth-panel">
+                    <h2 class="dashboard-section-title">Majątek i zobowiązania</h2>
                     <p id="reports-net-worth-change" class="reports-hint hidden"></p>
                     <div id="reports-net-worth"></div>
                     <div id="reports-debt-dsr" class="reports-debt-dsr"></div>
@@ -791,7 +786,7 @@
                             <h2 id="reports-calendar-label">Czerwiec 2026</h2>
                             <button type="button" class="cal-nav-btn" onclick="shiftReportsCalendarMonth(1)" aria-label="Następny miesiąc">&#8250;</button>
                         </div>
-                        <div class="reports-cal-view-toggle flex-toggle">
+                        <div class="reports-cal-view-toggle flex-toggle chart-type-toggle">
                             <button id="btn-cal-month" type="button" class="toggle-btn active" onclick="setReportsCalendarView('month')">Miesiąc</button>
                             <button id="btn-cal-year" type="button" class="toggle-btn" onclick="setReportsCalendarView('year')">Rok</button>
                         </div>
@@ -1094,32 +1089,32 @@
             </div>
 
             <div id="analysis-section-details" class="analysis-section hidden">
-                <div class="card">
+                <div class="card dashboard-panel">
                     <div class="chart-card-header">
-                        <h2 id="reports-top-title">Top kategorie</h2>
+                        <h2 id="reports-top-title" class="dashboard-section-title">Top kategorie</h2>
                         <div class="chart-type-toggle flex-toggle">
                             <button id="btn-reports-expense" type="button" class="toggle-btn active expense" onclick="setReportsViewType('expense')">Wydatki</button>
                             <button id="btn-reports-income" type="button" class="toggle-btn income" onclick="setReportsViewType('income')">Wpływy</button>
                         </div>
                     </div>
-                    <div class="reports-rank-toggle flex-toggle">
+                    <div class="reports-rank-toggle flex-toggle chart-type-toggle">
                         <button id="btn-reports-main" type="button" class="toggle-btn active" onclick="setReportsRankLevel('main')">Kategorie</button>
                         <button id="btn-reports-sub" type="button" class="toggle-btn" onclick="setReportsRankLevel('sub')">Podkategorie</button>
                     </div>
                     <div id="reports-top-categories" class="reports-top-list"></div>
                 </div>
 
-                <div class="card">
-                    <h2>Największe wydatki</h2>
+                <div class="card dashboard-panel">
+                    <h2 class="dashboard-section-title">Największe wydatki</h2>
                     <p class="reports-hint">Bez rat kredytu i spłat długów — same „niespodzianki”.</p>
                     <div id="reports-outliers-list" class="reports-top-list"></div>
                 </div>
 
-                <div class="card">
+                <div class="card dashboard-panel">
                     <div class="chart-card-header">
-                        <h2>Trendy kategorii</h2>
+                        <h2 class="dashboard-section-title">Trendy kategorii</h2>
                     </div>
-                    <div class="reports-rank-toggle flex-toggle">
+                    <div class="reports-rank-toggle flex-toggle chart-type-toggle">
                         <button id="btn-trends-main" type="button" class="toggle-btn active" onclick="setReportsRankLevel('main')">Kategorie</button>
                         <button id="btn-trends-sub" type="button" class="toggle-btn" onclick="setReportsRankLevel('sub')">Podkategorie</button>
                     </div>
@@ -1127,11 +1122,11 @@
                     <div id="reports-trends-list" class="reports-top-list"></div>
                 </div>
 
-                <div class="card">
+                <div class="card dashboard-panel">
                     <div class="chart-card-header">
-                        <h2>Wydatki cykliczne</h2>
+                        <h2 class="dashboard-section-title">Wydatki cykliczne</h2>
                     </div>
-                    <div class="reports-rank-toggle flex-toggle">
+                    <div class="reports-rank-toggle flex-toggle chart-type-toggle">
                         <button id="btn-recurring-main" type="button" class="toggle-btn active" onclick="setReportsRankLevel('main')">Kategorie</button>
                         <button id="btn-recurring-sub" type="button" class="toggle-btn" onclick="setReportsRankLevel('sub')">Podkategorie</button>
                     </div>
@@ -1139,8 +1134,8 @@
                     <div id="reports-recurring-list" class="reports-recurring-list"></div>
                 </div>
 
-                <div class="card">
-                    <h2>Podsumowanie roku</h2>
+                <div class="card dashboard-panel">
+                    <h2 class="dashboard-section-title">Podsumowanie roku</h2>
                     <div id="reports-year-review"></div>
                 </div>
             </div>

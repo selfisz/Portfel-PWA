@@ -630,7 +630,9 @@ function renderReportsOutliers(ctx) {
                 <span class="reports-top-name">${escapeHtml(title)}</span>
                 <span class="reports-top-meta">${formatTxDate(t.date)} · ${escapeHtml(t.mainCategory)}</span>
             </div>
-            <span class="reports-top-pct expense-pct">${formatPlnAmount(t.amount)}</span>
+            <div class="reports-top-col">
+                <span class="reports-top-amount expense">${formatPlnAmount(t.amount)}</span>
+            </div>
         </div>`;
     }).join('');
 }

@@ -642,9 +642,11 @@ function renderReportsTopCategories(periodTx) {
             <div class="reports-top-text">
                 <span class="reports-top-name">${entry.label}</span>
                 ${meta ? `<span class="reports-top-meta">${meta}</span>` : ''}
-                <span class="reports-top-amount">${formatPlnAmount(entry.amount)}</span>
             </div>
-            <span class="reports-top-pct">${pct}%</span>
+            <div class="reports-top-col">
+                <span class="reports-top-amount">${formatPlnAmount(entry.amount)}</span>
+                <span class="reports-top-pct">${pct}%</span>
+            </div>
         </div>`;
     }).join('');
 }
