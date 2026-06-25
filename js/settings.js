@@ -124,6 +124,7 @@ function saveCategoryEditor() {
     const subRenames = [];
     const newTypeTree = {};
 
+    const collectedMainNames = [];
     const groups = document.querySelectorAll('#category-editor-list .category-edit-group');
     for (const group of groups) {
         const mainInput = group.querySelector('.category-edit-input--main');
@@ -149,15 +150,17 @@ function saveCategoryEditor() {
             if (oldSub !== newSub) subRenames.push({ oldMain, oldSub, newSub });
         }
 
+        collectedMainNames.push(newMain);
         if (oldMain !== newMain) mainRenames.push({ oldMain, newMain });
         newTypeTree[newMain] = subs;
     }
 
-    const mainNames = Object.keys(newTypeTree);
-    if (mainNames.length !== new Set(mainNames).size) {
+    if (collectedMainNames.length !== new Set(collectedMainNames).size) {
         alert('Kategorie główne muszą mieć unikalne nazwy.');
         return;
     }
+
+    const mainNames = Object.keys(newTypeTree);
     for (const main of mainNames) {
         const subs = newTypeTree[main];
         if (subs.length !== new Set(subs).size) {
