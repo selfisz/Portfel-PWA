@@ -181,6 +181,33 @@ function getCashMovementsInRange(start, end, assetId = null) {
         });
 }
 
+function getCashMovementForTransaction(tx) {
+    if (!tx?.cashMovementId || !Array.isArray(appState.cashMovements)) return null;
+    return appState.cashMovements.find((m) => m.id === tx.cashMovementId) || null;
+}
+
+function transactionAffectsCashAsset(tx, assetId) {
+    if (!shouldTransactionAffectCash(tx)) return false;
+    const movement = getCashMovementForTransaction(tx);
+    if (movement) {
+        const movementAssetId = movement.assetId || PRIMARY_CASH_ASSET_ID;
+        return movementAssetId === assetId;
+    }
+    return assetId === PRIMARY_CASH_ASSET_ID;
+}
+
+function getCashAffectingTransactions(assetId = PRIMARY_CASH_ASSET_ID, filterType = 'all') {
+    const id = assetId || PRIMARY_CASH_ASSET_ID;
+    return (appState.transactions || [])
+        .filter((tx) => {
+            if (!transactionAffectsCashAsset(tx, id)) return false;
+            if (filterType === 'expense') return tx.type === 'expense';
+            if (filterType === 'income') return tx.type === 'income';
+            return true;
+        })
+        .sort((a, b) => b.date.localeCompare(a.date) || (Number(b.amount) - Number(a.amount)));
+}
+
 function runCashMigrations() {
     if (!Array.isArray(appState.cashMovements)) {
         appState.cashMovements = [];

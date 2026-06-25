@@ -30,9 +30,27 @@ const ASSET_TYPE_ICONS = {
 
 let assetsTypeFilter = 'all';
 let assetsArchiveExpanded = false;
+let assetsSummaryExpanded = false;
 let assetDetailsMode = 'view';
 let activeAssetId = null;
 let draftAsset = null;
+let cashTxFilter = 'all';
+let cashTxPeriod = 'month';
+let cashTxVisibleCount = LIST_PAGE_SIZE;
+let cashTxListSignature = '';
+
+function getCashTxPeriodBounds() {
+    const now = new Date();
+    const start = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    const end = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    return { start, end };
+}
+
+function filterCashTxByPeriod(transactions) {
+    if (cashTxPeriod !== 'month') return transactions;
+    const { start, end } = getCashTxPeriodBounds();
+    return transactions.filter((tx) => tx.date >= start && tx.date <= end);
+}
 
 function getDefaultAsset(type = 'investment') {
     return {
@@ -393,20 +411,28 @@ function toggleAssetSummaryInclude(assetId) {
 
 function renderAssetsSummaryChips(activeAssets) {
     const el = document.getElementById('assets-summary-chips');
-    const label = document.getElementById('assets-summary-label');
+    const block = document.getElementById('assets-summary-block');
     if (!el) return;
     if (activeAssets.length < 2) {
         el.innerHTML = '';
-        el.classList.add('hidden');
-        if (label) label.classList.add('hidden');
+        block?.classList.add('hidden');
         return;
     }
-    el.classList.remove('hidden');
-    if (label) label.classList.remove('hidden');
+    block?.classList.remove('hidden');
     el.innerHTML = activeAssets.map((asset) => {
         const included = asset.includeInSummary !== false;
         return `<button type="button" class="toggle-btn loans-chip${included ? ' active' : ''}" onclick="toggleAssetSummaryInclude('${escapeHtml(asset.id)}')" aria-pressed="${included ? 'true' : 'false'}">${escapeHtml(getAssetDisplayName(asset))}</button>`;
     }).join('');
+}
+
+function toggleAssetsSummary() {
+    assetsSummaryExpanded = !assetsSummaryExpanded;
+    const panel = document.getElementById('assets-summary-panel');
+    const toggle = document.querySelector('.assets-hero-summary-toggle');
+    if (panel) panel.classList.toggle('hidden', !assetsSummaryExpanded);
+    if (toggle) {
+        toggle.setAttribute('aria-expanded', assetsSummaryExpanded ? 'true' : 'false');
+    }
 }
 
 function renderAssetsHorizonFilter() {
@@ -431,7 +457,7 @@ function renderAssetsHorizonFilter() {
             const count = chip.id === 'all'
                 ? getActiveAssets().length
                 : chip.id === 'short' ? shortCount : longCount;
-            return `<button type="button" class="toggle-btn loans-chip${assetsTypeFilter === chip.id ? ' active' : ''}" onclick="setAssetsTypeFilter('${chip.id}')">${chip.label} (${count})</button>`;
+            return `<button type="button" class="toggle-btn${assetsTypeFilter === chip.id ? ' active' : ''}" onclick="setAssetsTypeFilter('${chip.id}')">${chip.label}<small class="assets-horizon-count">${count}</small></button>`;
         })
         .join('');
 }
@@ -598,12 +624,9 @@ function renderAssets() {
     const filteredAssets = filterAssetsByHorizon(allActive);
     const archivedAssets = getArchivedAssets();
     const total = getActiveAssetsTotalPln();
-    const shortTotal = getActiveAssetsTotalPln(getAssetsByHorizon('short').filter((a) => a.includeInSummary !== false));
-    const longTotal = getActiveAssetsTotalPln(getAssetsByHorizon('long').filter((a) => a.includeInSummary !== false));
     const gainPln = getActiveAssetsGainPln();
     const gainPct = getActiveAssetsGainPct();
     const hasAssets = allActive.length > 0;
-    const summaryCount = summaryAssets.length;
 
     const hero = document.getElementById('assets-total-hero');
     const totalEl = document.getElementById('assets-total-value');
@@ -618,20 +641,13 @@ function renderAssets() {
     if (hero) hero.classList.toggle('hidden', !hasAssets);
     if (totalEl && hasAssets) totalEl.textContent = formatPlnAmount(total);
     if (metaEl) {
-        if (!hasAssets) {
-            metaEl.classList.add('hidden');
-        } else {
-            const parts = [];
-            if (summaryCount < allActive.length) {
-                parts.push(`${summaryCount} z ${allActive.length} w sumie`);
-            }
-            parts.push(`krótko ${formatPlnAmount(shortTotal)} · długo ${formatPlnAmount(longTotal)}`);
-            const investments = summaryAssets.filter((a) => a.type === 'investment');
-            if (investments.length) {
-                parts.push(`P/L ${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%`);
-            }
-            metaEl.textContent = parts.join(' · ');
+        const investments = summaryAssets.filter((a) => a.type === 'investment');
+        if (hasAssets && investments.length) {
+            const sign = gainPln >= 0 ? '+' : '−';
+            metaEl.textContent = `Inwestycje P/L: ${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}% (${sign}${formatPlnAmount(Math.abs(gainPln))})`;
             metaEl.classList.remove('hidden');
+        } else {
+            metaEl.classList.add('hidden');
         }
     }
 
@@ -692,6 +708,9 @@ function openAssetDetails(assetId, isNew = false) {
         draftAsset = null;
         activeAssetId = assetId;
     }
+    cashTxFilter = 'all';
+    cashTxPeriod = 'month';
+    resetCashTxListPagination();
     const overlay = document.getElementById('asset-details-overlay');
     if (!overlay) return;
     setAssetDetailsMode('view');
@@ -713,11 +732,11 @@ function closeAssetDetails() {
 
 function setAssetDetailsMode(mode) {
     assetDetailsMode = mode;
-    const viewEl = document.getElementById('asset-details-content');
+    const viewScroll = document.getElementById('asset-details-view-scroll');
     const editEl = document.getElementById('asset-details-edit');
     const btnEdit = document.getElementById('btn-asset-details-edit');
     const btnView = document.getElementById('btn-asset-details-view');
-    if (viewEl) viewEl.classList.toggle('hidden', mode === 'edit');
+    if (viewScroll) viewScroll.classList.toggle('hidden', mode === 'edit');
     if (editEl) editEl.classList.toggle('hidden', mode !== 'edit');
     if (btnEdit) btnEdit.classList.toggle('hidden', mode === 'edit');
     if (btnView) btnView.classList.toggle('hidden', mode !== 'edit');
@@ -727,6 +746,107 @@ function setAssetDetailsMode(mode) {
 
 function assetDetailRow(label, value) {
     return `<div class="loan-detail-row"><span class="label">${escapeHtml(label)}</span><strong>${value}</strong></div>`;
+}
+
+function resetCashTxListPagination() {
+    cashTxVisibleCount = LIST_PAGE_SIZE;
+    cashTxListSignature = '';
+}
+
+function setCashTxFilter(filter) {
+    if (cashTxFilter === filter) return;
+    cashTxFilter = filter;
+    resetCashTxListPagination();
+    renderAssetCashTransactions();
+}
+
+function setCashTxPeriod(period) {
+    if (cashTxPeriod === period) return;
+    cashTxPeriod = period;
+    resetCashTxListPagination();
+    renderAssetCashTransactions();
+}
+
+function showMoreCashTransactions() {
+    cashTxVisibleCount += LIST_PAGE_SIZE;
+    renderAssetCashTransactions();
+}
+
+function openCashTxForEdit(index) {
+    if (!Number.isInteger(index) || index < 0) return;
+    const asset = getActiveAsset();
+    postEditReturnAssetId = asset?.id || null;
+    closeAssetDetails();
+    editTransaction(index);
+}
+
+function returnToAssetAfterEdit(assetId) {
+    if (!assetId) return;
+    switchView('investments', 'Aktywa', document.querySelectorAll('.nav-item')[3]);
+    openAssetDetails(assetId);
+}
+
+function renderAssetCashTransactions() {
+    const section = document.getElementById('asset-cash-tx-section');
+    const list = document.getElementById('asset-cash-tx-list');
+    if (!section || !list) return;
+
+    const asset = getActiveAsset();
+    if (!asset || asset.type !== 'cash' || assetDetailsMode === 'edit') {
+        section.classList.add('hidden');
+        return;
+    }
+
+    section.classList.remove('hidden');
+    document.getElementById('btn-cash-tx-month')?.classList.toggle('active', cashTxPeriod === 'month');
+    document.getElementById('btn-cash-tx-all-period')?.classList.toggle('active', cashTxPeriod === 'all');
+    document.getElementById('btn-cash-tx-all')?.classList.toggle('active', cashTxFilter === 'all');
+    document.getElementById('btn-cash-tx-expense')?.classList.toggle('active', cashTxFilter === 'expense');
+    document.getElementById('btn-cash-tx-income')?.classList.toggle('active', cashTxFilter === 'income');
+
+    const baseTx = typeof getCashAffectingTransactions === 'function'
+        ? getCashAffectingTransactions(asset.id, cashTxFilter)
+        : [];
+    const allTx = filterCashTxByPeriod(baseTx);
+
+    const signature = `${asset.id}|${cashTxFilter}|${cashTxPeriod}|${allTx.length}|${allTx[0]?.date ?? ''}|${allTx[0]?.amount ?? ''}`;
+    if (signature !== cashTxListSignature) {
+        cashTxListSignature = signature;
+        cashTxVisibleCount = LIST_PAGE_SIZE;
+    }
+
+    const visibleTx = allTx.slice(0, cashTxVisibleCount);
+
+    if (!allTx.length) {
+        const periodHint = cashTxPeriod === 'month' ? ' w tym miesiącu' : '';
+        const emptyMsg = cashTxFilter === 'expense'
+            ? `Brak wydatków z salda gotówki${periodHint}`
+            : cashTxFilter === 'income'
+                ? `Brak wpływów na saldo gotówki${periodHint}`
+                : `Brak transakcji powiązanych z tym saldem${periodHint}`;
+        list.innerHTML = `<div class="empty-state asset-cash-tx-empty"><p>${emptyMsg}</p></div>`;
+        const moreBtn = document.getElementById('asset-cash-tx-show-more');
+        if (moreBtn) moreBtn.classList.add('hidden');
+        return;
+    }
+
+    list.innerHTML = visibleTx.map((t) => {
+        const globalIndex = appState.transactions.indexOf(t);
+        const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
+        const sign = t.type === 'expense' ? '−' : '+';
+        const amountClass = t.type === 'expense' ? 'expense' : 'income';
+        const noteSuffix = t.note ? ` · ${escapeHtml(t.note)}` : '';
+        return `<button type="button" class="asset-cash-tx-row" onclick="openCashTxForEdit(${globalIndex})">
+            <div class="asset-cash-tx-row-text">
+                <span class="asset-cash-tx-row-title">${escapeHtml(title)}</span>
+                <span class="asset-cash-tx-row-meta">${formatTxDate(t.date)} · ${escapeHtml(t.mainCategory)}${noteSuffix}</span>
+            </div>
+            <span class="asset-cash-tx-row-amount ${amountClass}">${sign}${formatPlnAmount(t.amount)}</span>
+        </button>`;
+    }).join('');
+
+    const moreBtn = getOrCreateShowMoreButton('asset-cash-tx-show-more', showMoreCashTransactions);
+    updateShowMoreButton(moreBtn, allTx.length, visibleTx.length, section, list);
 }
 
 function renderAssetDetails() {
@@ -783,6 +903,12 @@ function renderAssetDetails() {
                 <button type="button" class="btn-outline loan-details-btn" onclick="${archiveFn}">${archiveLabel}</button>
                 <button type="button" class="btn-outline loan-details-btn asset-delete-btn" onclick="deleteAsset()">Usuń</button>
             </div>`;
+    }
+
+    if (asset.type === 'cash') {
+        renderAssetCashTransactions();
+    } else {
+        document.getElementById('asset-cash-tx-section')?.classList.add('hidden');
     }
 }
 

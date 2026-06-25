@@ -201,6 +201,60 @@ describe('shouldTransactionAffectCash', () => {
 });
 
 // ===========================================================================
+// cash.js — getCashAffectingTransactions
+// ===========================================================================
+describe('getCashAffectingTransactions', () => {
+  beforeEach(() => {
+    _setAppState({
+      ..._getAppState(),
+      transactions: [
+        { type: 'expense', amount: 100, date: '2024-06-01', mainCategory: 'Dom', subCategory: 'Czynsz', cashMovementId: 'cm-exp' },
+        { type: 'income', amount: 5000, date: '2024-06-02', mainCategory: 'Wynagrodzenie', subCategory: 'Podstawa', cashMovementId: 'cm-inc' },
+        { type: 'expense', amount: 200, date: '2024-06-03', mainCategory: 'Zakupy', subCategory: 'Zakupy', creditCardId: 'card-1' },
+        { type: 'expense', amount: 50, date: '2024-06-04', mainCategory: 'Dom', subCategory: 'Media', affectsCash: false }
+      ],
+      cashMovements: [
+        { id: 'cm-exp', assetId: PRIMARY_CASH_ASSET_ID, delta: -100, date: '2024-06-01' },
+        { id: 'cm-inc', assetId: PRIMARY_CASH_ASSET_ID, delta: 5000, date: '2024-06-02' },
+        { id: 'cm-other', assetId: 'asset-cash-cele', delta: -30, date: '2024-06-05' }
+      ]
+    });
+  });
+
+  it('zwraca transakcje wpływające na główne saldo gotówki', () => {
+    const txs = getCashAffectingTransactions(PRIMARY_CASH_ASSET_ID, 'all');
+    expect(txs).toHaveLength(2);
+    expect(txs[0].date).toBe('2024-06-02');
+    expect(txs[1].date).toBe('2024-06-01');
+  });
+
+  it('filtruje wydatki i wpływy', () => {
+    expect(getCashAffectingTransactions(PRIMARY_CASH_ASSET_ID, 'expense')).toHaveLength(1);
+    expect(getCashAffectingTransactions(PRIMARY_CASH_ASSET_ID, 'income')).toHaveLength(1);
+    expect(getCashAffectingTransactions(PRIMARY_CASH_ASSET_ID, 'expense')[0].amount).toBe(100);
+  });
+
+  it('pomija płatności kartą i wydatki bez salda', () => {
+    const txs = getCashAffectingTransactions(PRIMARY_CASH_ASSET_ID, 'all');
+    expect(txs.some((t) => t.creditCardId)).toBe(false);
+    expect(txs.some((t) => t.affectsCash === false)).toBe(false);
+  });
+
+  it('filtruje po assetId ruchu gotówki', () => {
+    _setAppState({
+      ..._getAppState(),
+      transactions: [
+        ..._getAppState().transactions,
+        { type: 'expense', amount: 30, date: '2024-06-05', mainCategory: 'Oszczędności', subCategory: 'Cele', cashMovementId: 'cm-other' }
+      ]
+    });
+    const celeTxs = getCashAffectingTransactions('asset-cash-cele', 'all');
+    expect(celeTxs).toHaveLength(1);
+    expect(celeTxs[0].amount).toBe(30);
+  });
+});
+
+// ===========================================================================
 // cash.js — resolveTransactionAffectsCash
 // ===========================================================================
 describe('resolveTransactionAffectsCash', () => {

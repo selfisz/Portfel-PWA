@@ -329,7 +329,13 @@ function saveTransaction() {
     hapticFeedback();
     showAppToast(formatTransactionSavedToast(txData, wasEdit), 'success');
     if (wasEdit) {
-        switchView('dashboard', 'Pulpit', document.querySelectorAll('.nav-item')[0]);
+        const returnAssetId = postEditReturnAssetId;
+        postEditReturnAssetId = null;
+        if (returnAssetId && typeof returnToAssetAfterEdit === 'function') {
+            returnToAssetAfterEdit(returnAssetId);
+        } else {
+            switchView('dashboard', 'Pulpit', document.querySelectorAll('.nav-item')[0]);
+        }
     } else {
         resetStandardFormAfterSave();
     }
@@ -394,5 +400,11 @@ function deleteTransaction(index) {
 
 function cancelEdit() {
     editingTxIndex = null;
-    switchView('dashboard', 'Pulpit', document.querySelectorAll('.nav-item')[0]);
+    const returnAssetId = postEditReturnAssetId;
+    postEditReturnAssetId = null;
+    if (returnAssetId && typeof returnToAssetAfterEdit === 'function') {
+        returnToAssetAfterEdit(returnAssetId);
+    } else {
+        switchView('dashboard', 'Pulpit', document.querySelectorAll('.nav-item')[0]);
+    }
 }

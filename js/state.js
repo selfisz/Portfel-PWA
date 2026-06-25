@@ -21,6 +21,7 @@ let formState = {
 };
 
 let editingTxIndex = null;
+let postEditReturnAssetId = null;
 let activeChartCategory = null;
 let activeChartSubCategory = null;
 let chartViewType = 'expense';

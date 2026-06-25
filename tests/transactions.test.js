@@ -152,6 +152,7 @@ beforeAll(() => {
   globalThis.focusAmountField = () => {};
   globalThis.resetDashboardTxListPagination = () => {};
   globalThis.resetLoanPaymentsListPagination = () => {};
+  globalThis.returnToAssetAfterEdit = () => {};
 
   // Ładujemy zależności
   globalThis.isMortgageLoan = (loan) => /hipoteczn/i.test(loan?.subCategory || '') || /hipoteczn/i.test(loan?.name || '');

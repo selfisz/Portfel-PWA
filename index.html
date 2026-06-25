@@ -190,7 +190,25 @@
     <div id="asset-details-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeAssetDetails()">
         <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
             <div id="panel-header-asset-details"></div>
-            <div id="asset-details-content" class="loan-details-content"></div>
+            <div id="asset-details-view-scroll" class="asset-details-view-scroll loan-details-content">
+                <div id="asset-details-content" class="asset-details-inner"></div>
+                <div id="asset-cash-tx-section" class="asset-cash-tx-section hidden">
+                    <div class="asset-cash-tx-head">
+                        <span class="section-label">Ruchy z transakcji</span>
+                        <div class="flex-toggle flex-toggle--2 asset-cash-tx-period">
+                            <button type="button" id="btn-cash-tx-month" class="toggle-btn active" onclick="setCashTxPeriod('month')">Ten miesiąc</button>
+                            <button type="button" id="btn-cash-tx-all-period" class="toggle-btn" onclick="setCashTxPeriod('all')">Wszystko</button>
+                        </div>
+                        <div class="flex-toggle flex-toggle--3 asset-cash-tx-filter">
+                            <button type="button" id="btn-cash-tx-all" class="toggle-btn active" onclick="setCashTxFilter('all')">Wszystkie</button>
+                            <button type="button" id="btn-cash-tx-expense" class="toggle-btn expense" onclick="setCashTxFilter('expense')">Wydatki</button>
+                            <button type="button" id="btn-cash-tx-income" class="toggle-btn income" onclick="setCashTxFilter('income')">Wpływy</button>
+                        </div>
+                        <p class="asset-cash-tx-hint">Dotknij transakcję, aby edytować</p>
+                    </div>
+                    <div id="asset-cash-tx-list" class="asset-cash-tx-list"></div>
+                </div>
+            </div>
             <div id="asset-details-actions" class="asset-details-actions-wrap"></div>
             <div id="asset-details-edit" class="loan-details-edit hidden">
                 <div class="form-group">
@@ -1110,14 +1128,21 @@
 
         <div id="view-investments" class="app-view">
             <div id="assets-total-hero" class="card hero-card assets-hero-card hidden">
-                <div class="hero-label">Wartość majątku</div>
-                <div id="assets-total-value" class="hero-balance">—</div>
-                <p id="assets-total-meta" class="loan-hero-meta hidden"></p>
-                <label class="section-label loans-summary-label hidden" id="assets-summary-label">W sumie</label>
-                <nav id="assets-summary-chips" class="loans-chip-nav loans-summary-chips hidden" aria-label="Aktywa w sumie"></nav>
+                <div class="hero-label">Majątek łącznie</div>
+                <div id="assets-total-value" class="hero-balance assets-capital-hero">—</div>
+                <p id="assets-total-meta" class="hero-forecast-hint hidden"></p>
+                <div id="assets-summary-block" class="assets-hero-summary hidden">
+                    <button type="button" class="assets-hero-summary-toggle" onclick="toggleAssetsSummary()" aria-expanded="false" aria-controls="assets-summary-panel">
+                        <span>Dostosuj sumę</span>
+                        <svg class="assets-hero-summary-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </button>
+                    <div id="assets-summary-panel" class="assets-hero-summary-panel hidden">
+                        <nav id="assets-summary-chips" class="assets-hero-summary-chips" aria-label="Aktywa wliczane w sumę"></nav>
+                    </div>
+                </div>
             </div>
 
-            <nav id="assets-type-filter" class="loans-chip-nav assets-chip-nav hidden" aria-label="Filtr aktywów"></nav>
+            <nav id="assets-type-filter" class="flex-toggle flex-toggle--3 assets-horizon-filter hidden" aria-label="Filtr aktywów"></nav>
 
             <div id="assets-list" class="assets-list"></div>
 
