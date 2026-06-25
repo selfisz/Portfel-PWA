@@ -223,75 +223,54 @@ function readLocalRawBeforeSync() {
     }
 }
 
-function applyCloudDocument(docSnap, options = {}) {
-    if (!docSnap.exists) {
+function syncFromRemoteData(remoteData) {
+    const localRawBeforeSync = readLocalRawBeforeSync();
+    const localTxCount = getTransactionCount(localRawBeforeSync ?? appState);
+    const remoteTxCount = getTransactionCount(remoteData);
+
+    if (remoteTxCount === 0 && localTxCount > 0) {
         cloudSyncUnlocked = true;
-        applyMigrations();
-        checkAndProcessRecurringTransactions();
-        const count = getTransactionCount(appState);
-        if (count > 0) saveState({ forceCloud: true });
-        else setSyncStatus('online', count);
-        refreshCurrentView();
-        return count;
+        setSyncStatus('online', localTxCount);
+        return localTxCount;
     }
 
-    const localRawBeforeSync = readLocalRawBeforeSync();
     const localLoans = getLoansFromPersistedRaw(localRawBeforeSync);
     const localCreditCards = Array.isArray(localRawBeforeSync?.creditCards) ? localRawBeforeSync.creditCards : [];
-    const remoteData = docSnap.data();
-    const remoteTxCount = getTransactionCount(remoteData);
     const mergedTransactions = mergeRemoteTransactions(localRawBeforeSync, remoteData);
     const mergedRemote = { ...remoteData, transactions: mergedTransactions };
-    const mergedTxCount = mergedTransactions.length;
 
-    const hadUiFields = applyRemoteAppState(mergedRemote, localLoans, localCreditCards);
-    const hadMigration = applyMigrations();
+    applyRemoteAppState(mergedRemote, localLoans, localCreditCards);
     checkAndProcessRecurringTransactions();
+
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
     } catch (err) {
-        console.error('applyCloudDocument localStorage', err);
+        console.error('syncFromRemoteData localStorage', err);
     }
 
     cloudSyncUnlocked = true;
     const finalCount = getTransactionCount(appState);
     setSyncStatus('online', finalCount);
-
-    const shouldPushRemote = !options.readOnly
-        && (mergedTxCount > remoteTxCount || hadUiFields || hadMigration)
-        && !(remoteTxCount >= 100 && mergedTxCount < Math.max(50, Math.floor(remoteTxCount * 0.9)));
-    if (shouldPushRemote) {
-        saveState({ forceCloud: true });
+    try {
+        refreshCurrentView();
+    } catch (err) {
+        console.error('refreshCurrentView', err);
     }
-    refreshCurrentView();
     return finalCount;
 }
 
-async function pullCloudStateFromServer() {
-    if (typeof fetchAppStateRest === 'function') {
-        try {
-            const data = await fetchAppStateRest();
-            if (data && Array.isArray(data.transactions)) {
-                return applyCloudDocument(
-                    { exists: true, data: () => data },
-                    { readOnly: true }
-                );
-            }
-        } catch (err) {
-            console.warn('pullCloudStateFromServer REST', err);
+async function tryFetchCloudViaRest() {
+    if (typeof fetchAppStateRest !== 'function') return null;
+    try {
+        const fetchPromise = fetchAppStateRest();
+        const data = typeof withFirestoreTimeout === 'function'
+            ? await withFirestoreTimeout(fetchPromise, 12000)
+            : await fetchPromise;
+        if (data?.transactions?.length) {
+            return syncFromRemoteData(data);
         }
-    }
-
-    const sources = ['server', 'default'];
-    for (const source of sources) {
-        try {
-            const docSnap = typeof withFirestoreTimeout === 'function'
-                ? await withFirestoreTimeout(stateRef.get({ source }))
-                : await stateRef.get({ source });
-            return applyCloudDocument(docSnap, { readOnly: true });
-        } catch (err) {
-            console.warn(`pullCloudStateFromServer(${source})`, err);
-        }
+    } catch (err) {
+        console.warn('tryFetchCloudViaRest', err);
     }
     return null;
 }
@@ -307,7 +286,6 @@ async function autoRecoverFromCloudBackupIfNeeded() {
         const backupCount = payload.transactionCount || getTransactionCount(payload.data || payload);
         if (backupCount <= getTransactionCount(appState)) return false;
 
-        cloudSyncUnlocked = true;
         applyBackupPayload(payload);
         if (typeof showSettingsToast === 'function') {
             showSettingsToast(`Przywrócono ${backupCount} transakcji z kopii w chmurze`);
@@ -340,71 +318,73 @@ function normalizeAppState(raw) {
 }
 
 function initData() {
-    cloudSyncUnlocked = false;
-    setSyncStatus('');
     let localRaw = readStoredAppStateRaw();
-    let restoredFromBackup = false;
 
     if (localRaw) {
         if (!localStorage.getItem(STORAGE_KEY)) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(localRaw)));
-            restoredFromBackup = true;
         }
-        const hadUiFields = applyRemoteAppState(localRaw);
-        if (hadUiFields) {
+        applyRemoteAppState(localRaw);
+        applyMigrations();
+        checkAndProcessRecurringTransactions();
+        try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
+        } catch (err) {
+            console.error('initData localStorage', err);
         }
-        if (restoredFromBackup) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
-        }
-        refreshCurrentView();
-    } else {
         refreshCurrentView();
     }
 
-    let syncTimeout = window.setTimeout(() => {
-        const statusEl = document.getElementById('sync-status');
-        if (statusEl && !statusEl.className) {
-            setSyncStatus('offline', getTransactionCount(appState));
-        }
-    }, 15000);
+    cloudSyncUnlocked = getTransactionCount(appState) >= 100;
+    setSyncStatus('');
 
-    const finishInitialSync = async () => {
-        try {
-            let count = await pullCloudStateFromServer();
-            if ((count ?? getTransactionCount(appState)) < 100) {
-                const recovered = await autoRecoverFromCloudBackupIfNeeded();
-                if (recovered) count = getTransactionCount(appState);
-            }
-            if (count === null && getTransactionCount(appState) === 0) {
-                setSyncStatus('offline', 0);
-            } else if (count === null && getTransactionCount(appState) > 0) {
-                setSyncStatus('offline', getTransactionCount(appState));
-            }
-        } catch (err) {
-            console.error('finishInitialSync', err);
-            setSyncStatus('offline', getTransactionCount(appState));
-        } finally {
-            window.clearTimeout(syncTimeout);
-        }
+    const settleSyncIndicator = () => {
+        const count = getTransactionCount(appState);
+        const statusEl = document.getElementById('sync-status');
+        if (!statusEl || statusEl.className) return;
+        if (count > 0) setSyncStatus('online', count);
+        else setSyncStatus('offline', 0);
     };
 
-    finishInitialSync();
+    let syncTimeout = window.setTimeout(settleSyncIndicator, 12000);
+
+    const clearSyncTimeout = () => {
+        window.clearTimeout(syncTimeout);
+        syncTimeout = null;
+    };
+
+    tryFetchCloudViaRest().then((count) => {
+        if (count !== null) clearSyncTimeout();
+        else if (getTransactionCount(appState) < 100) {
+            autoRecoverFromCloudBackupIfNeeded().then((recovered) => {
+                if (recovered) clearSyncTimeout();
+            });
+        }
+    });
 
     stateRef.onSnapshot((docSnap) => {
-        if (docSnap.metadata.fromCache) return;
-        applyCloudDocument(docSnap, { readOnly: true });
+        clearSyncTimeout();
+        if (docSnap.exists) {
+            syncFromRemoteData(docSnap.data());
+            return;
+        }
+        cloudSyncUnlocked = true;
+        const count = getTransactionCount(appState);
+        if (count > 0) saveState({ forceCloud: true });
+        else setSyncStatus('online', 0);
     }, (error) => {
         console.error('Błąd synchronizacji', error);
-        if (!cloudSyncUnlocked) {
-            autoRecoverFromCloudBackupIfNeeded().finally(() => {
-                if (!cloudSyncUnlocked) {
-                    setSyncStatus('offline', getTransactionCount(appState));
+        tryFetchCloudViaRest()
+            .then((count) => {
+                if (count === null && getTransactionCount(appState) < 100) {
+                    return autoRecoverFromCloudBackupIfNeeded();
                 }
+                return count !== null;
+            })
+            .finally(() => {
+                clearSyncTimeout();
+                settleSyncIndicator();
             });
-        } else if (getTransactionCount(appState) === 0) {
-            setSyncStatus('offline', 0);
-        }
     });
 }
 
@@ -417,7 +397,7 @@ function saveState(options = {}) {
         setSyncStatus('offline', payload.transactions.length);
         return;
     }
-    if (!cloudSyncUnlocked && !options.forceCloud) return;
+    if (!cloudSyncUnlocked && !options.forceCloud && payload.transactions.length < 50) return;
     stateRef.set(payload).then(() => {
         setSyncStatus('online', payload.transactions.length);
     }).catch(err => {
