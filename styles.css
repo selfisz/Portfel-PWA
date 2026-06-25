@@ -619,6 +619,145 @@ h2 {
     text-align: center;
 }
 
+.forecast-plan-summary {
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.forecast-plan-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.forecast-plan-block {
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+}
+
+.forecast-plan-block-head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 8px;
+}
+
+.forecast-plan-block-label {
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.forecast-plan-block-total {
+    font-size: var(--text-sm);
+    font-weight: 700;
+}
+
+.forecast-plan-block.income .forecast-plan-block-total { color: var(--success); }
+.forecast-plan-block.expense .forecast-plan-block-total { color: var(--danger); }
+
+.forecast-plan-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.forecast-plan-row-stat {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+}
+
+.forecast-plan-row-stat strong {
+    color: var(--text);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.forecast-plan-balance {
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: var(--accent-soft);
+    text-align: center;
+    font-size: var(--text-sm);
+    font-weight: 700;
+}
+
+.forecast-plan-balance.positive { color: var(--success); }
+.forecast-plan-balance.negative { color: var(--danger); }
+
+.forecast-plan-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.forecast-plan-item:last-child { border-bottom: none; }
+
+.forecast-plan-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.forecast-plan-title {
+    font-weight: 600;
+    font-size: var(--text-base);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.forecast-plan-meta {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.forecast-plan-amount {
+    flex-shrink: 0;
+    font-weight: 700;
+    font-size: var(--text-md);
+}
+
+.forecast-plan-amount.expense { color: var(--danger); }
+.forecast-plan-amount.income { color: var(--success); }
+
+.forecast-plan-badge {
+    display: inline-block;
+    font-size: var(--text-3xs);
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: var(--radius-2xs);
+    margin-left: 6px;
+    vertical-align: middle;
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.forecast-plan-variable-block {
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+}
+
+.forecast-plan-item--variable {
+    border-bottom-style: dashed;
+}
+
+@media (max-width: 360px) {
+    .forecast-plan-summary-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .filter-card {
     padding: var(--card-padding-sm);
     background: var(--bg-elevated);

@@ -646,6 +646,78 @@ describe('getDashboardForecastTotals', () => {
     });
 });
 
+describe('getDashboardForecastPlanItems', () => {
+    beforeEach(() => {
+        const now = new Date();
+        const txs = [];
+        for (let i = 1; i <= 3; i += 1) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 15);
+            const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-15`;
+            txs.push(
+                { date, type: 'income', amount: 3000 * i, mainCategory: 'Praca', subCategory: 'Pensja' },
+                { date, type: 'expense', amount: 1000 * i, mainCategory: 'Dom', subCategory: 'Czynsz' }
+            );
+        }
+        const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        txs.push({
+            date: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
+            type: 'expense',
+            amount: 800,
+            mainCategory: 'Dom',
+            subCategory: 'Czynsz',
+            recurringId: 'rec-czynsz'
+        });
+        txs.push({
+            date: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-10`,
+            type: 'income',
+            amount: 8500,
+            mainCategory: 'Praca',
+            subCategory: 'Pensja',
+            recurringId: 'rec-pensja'
+        });
+        _setAppState({ ..._getAppState(), transactions: txs });
+    });
+
+    it('dzieli prognozę na stałe i zmienne pozycje', () => {
+        const now = new Date();
+        const startDate = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 1));
+        const endDate = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 2, 0));
+        const { items, summary } = getDashboardForecastPlanItems(startDate, endDate);
+
+        expect(summary.totalIncome).toBe(6000);
+        expect(summary.totalExpense).toBe(2000);
+        expect(summary.fixedIncome).toBe(8500);
+        expect(summary.fixedExpense).toBe(800);
+        expect(summary.variableIncome).toBe(0);
+        expect(summary.variableExpense).toBe(1200);
+        expect(items.some((item) => item.source === 'recurring-manual' && item.type === 'income')).toBe(true);
+        expect(items.some((item) => item.source === 'variable-expense')).toBe(true);
+    });
+
+    it('uwzględnia raty kredytów w stałych wydatkach', () => {
+        const now = new Date();
+        const startDate = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 1));
+        const endDate = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 2, 0));
+
+        _setAppState({
+            ..._getAppState(),
+            loans: [{
+                id: 'loan-x',
+                subCategory: 'Hipoteczny',
+                totalAmount: 100000,
+                currentCapitalLeft: 90000,
+                nextInstallmentAmount: 2500,
+                nextInstallmentDue: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-15`,
+                archived: false
+            }]
+        });
+
+        const { items, summary } = getDashboardForecastPlanItems(startDate, endDate);
+        expect(summary.fixedExpense).toBeGreaterThanOrEqual(2500);
+        expect(items.some((item) => item.source === 'debt-loan')).toBe(true);
+    });
+});
+
 // ===========================================================================
 // settings.js — applyBackupPayload
 // ===========================================================================
