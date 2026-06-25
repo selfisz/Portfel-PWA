@@ -1477,17 +1477,17 @@ html:not([data-theme="dark"]) .grid-item.selected {
 .chart-legend {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 7px;
+    gap: 5px;
     margin-top: 2px;
     text-align: left;
 }
 
 .chart-legend-item {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    align-items: flex-start;
+    gap: 5px;
     width: 100%;
-    padding: 8px 10px;
+    padding: 5px 6px;
     border-radius: var(--radius-xs);
     background: var(--input-bg);
     border: 1px solid var(--border);
@@ -1509,9 +1509,9 @@ html:not([data-theme="dark"]) .grid-item.selected {
 }
 
 .chart-legend-swatch {
-    width: 9px;
-    height: 9px;
-    border-radius: 3px;
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
     flex-shrink: 0;
     margin-top: 2px;
     align-self: flex-start;
@@ -1523,31 +1523,37 @@ html:not([data-theme="dark"]) .grid-item.selected {
 }
 
 .chart-legend-name {
-    display: block;
-    font-size: var(--text-sm);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: var(--text-xs);
     font-weight: 600;
     color: var(--text);
     line-height: 1.2;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    word-break: normal;
+    overflow-wrap: normal;
+    hyphens: manual;
+    text-wrap: pretty;
 }
 
 .chart-legend-amount {
     display: block;
-    margin-top: 2px;
-    font-size: var(--text-2xs);
+    margin-top: 1px;
+    font-size: var(--text-3xs);
     font-weight: 600;
     color: var(--text-muted);
-    line-height: 1.2;
+    line-height: 1.15;
 }
 
 .chart-legend-pct {
     flex-shrink: 0;
-    font-size: var(--text-2xs);
+    font-size: var(--text-3xs);
     font-weight: 600;
     color: var(--text-muted);
     opacity: 0.75;
+    margin-top: 1px;
+    line-height: 1.15;
 }
 
 .chart-card {
@@ -1886,10 +1892,6 @@ html:not([data-theme="dark"]) .grid-item.selected {
     .cal-nav-btn {
         width: 32px;
         height: 32px;
-    }
-
-    .chart-legend {
-        grid-template-columns: 1fr;
     }
 
     .credit-card-dashboard-info {
@@ -4184,6 +4186,30 @@ html:not([data-theme="dark"]) .grid-item.selected {
         --hero-padding: 20px 18px;
     }
 
+    .chart-legend {
+        gap: 4px;
+    }
+
+    .chart-legend-item {
+        padding: 4px 5px;
+        gap: 4px;
+    }
+
+    .chart-legend-name {
+        font-size: var(--text-2xs);
+        line-height: 1.15;
+    }
+
+    .chart-legend-amount,
+    .chart-legend-pct {
+        font-size: var(--text-3xs);
+    }
+
+    .chart-legend-swatch {
+        width: 6px;
+        height: 6px;
+    }
+
     .container {
         padding: 12px var(--container-padding) 20px;
     }
@@ -4305,10 +4331,6 @@ html:not([data-theme="dark"]) .grid-item.selected {
     .cal-nav-btn {
         width: 32px;
         height: 32px;
-    }
-
-    .chart-legend {
-        grid-template-columns: 1fr;
     }
 }
 

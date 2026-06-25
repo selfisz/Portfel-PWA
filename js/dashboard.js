@@ -94,6 +94,11 @@ function transactionMatchesSearch(t, searchQuery) {
         t.date.includes(searchQuery);
 }
 
+function formatLegendCategoryName(name) {
+    return escapeHtml(String(name ?? ''))
+        .replace(/\/(\s*)/g, '/<wbr>$1');
+}
+
 function renderChartLegend(catSums, sliceColors, labels) {
     const legendEl = document.getElementById('chart-legend');
     const centerEl = document.getElementById('chart-center-amount');
@@ -120,7 +125,7 @@ function renderChartLegend(catSums, sliceColors, labels) {
         return `<button type="button" class="chart-legend-item${activeChartCategory ? '' : ' chart-legend-item--drill'}" data-index="${index}" data-label="${label.replace(/"/g, '&quot;')}">
             <span class="chart-legend-swatch" style="background:${color}"></span>
             <span class="chart-legend-text">
-                <span class="chart-legend-name">${label}</span>
+                <span class="chart-legend-name">${formatLegendCategoryName(label)}</span>
                 <span class="chart-legend-amount">${formatPlnAmount(amount)}</span>
             </span>
             <span class="chart-legend-pct">${pct}%</span>
