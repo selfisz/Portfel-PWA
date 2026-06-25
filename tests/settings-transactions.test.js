@@ -100,6 +100,7 @@ beforeAll(() => {
     loadScript('js/loan-details.js');
     loadScript('js/portfolio.js');
     loadScript('js/state.js');
+    loadScript('js/format.js');
     loadScript('js/assets.js');
     loadScript('js/cash.js');
     loadScript('js/credit-cards.js');

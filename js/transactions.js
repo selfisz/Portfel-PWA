@@ -183,7 +183,7 @@ function renderSubCategoriesForm(cat) {
 }
 
 function saveTransaction() {
-    const amount = parseFloat(document.getElementById('tx-amount').value);
+    const amount = parsePlnInput(document.getElementById('tx-amount').value);
     const date = document.getElementById('tx-date').value;
     const note = document.getElementById('tx-note').value;
     const isRecurring = document.getElementById('tx-recurring').checked;

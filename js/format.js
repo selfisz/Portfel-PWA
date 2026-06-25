@@ -40,3 +40,28 @@ function escapeCsvField(value) {
     }
     return text;
 }
+
+/** Parsuje kwotę z pola formularza (PL: „12,50”, „1 234,56”, opcjonalnie „ zł”). */
+function parsePlnInput(raw) {
+    if (raw == null) return NaN;
+    let s = String(raw).trim();
+    if (!s) return NaN;
+
+    s = s.replace(/\s*(zł|pln)\s*$/i, '').trim();
+    s = s.replace(/[\s\u00a0\u202f]/g, '');
+
+    const hasComma = s.includes(',');
+    const hasDot = s.includes('.');
+    if (hasComma && hasDot) {
+        if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+            s = s.replace(/\./g, '').replace(',', '.');
+        } else {
+            s = s.replace(/,/g, '');
+        }
+    } else if (hasComma) {
+        s = s.replace(',', '.');
+    }
+
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : NaN;
+}

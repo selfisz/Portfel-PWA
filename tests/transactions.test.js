@@ -172,6 +172,7 @@ beforeAll(() => {
   loadScript('js/loan-details.js');
   loadScript('js/portfolio.js');
   loadScript('js/state.js');
+  loadScript('js/format.js');
   loadScript('js/transactions.js');
 
   // Bridge do wewnętrznych zmiennych state.js i transactions.js
@@ -273,6 +274,13 @@ describe('saveTransaction — nowa transakcja', () => {
     expect(txs[0].subCategory).toBe('Czynsz');
     expect(txs[0].date).toBe('2024-06-15');
     expect(txs[0].note).toBe('test');
+  });
+
+  it('parsuje kwotę wklejoną z przecinkiem (format PL)', () => {
+    buildFormDom({ amount: '47,30', date: '2024-06-15' });
+    _setFormState({ formMode: 'expense', currentType: 'expense', selectedMainCategory: 'Dom', selectedSubCategory: 'Czynsz' });
+    saveTransaction();
+    expect(_getAppState().transactions[0].amount).toBe(47.3);
   });
 
   it('ustawia type na income dla transakcji przychodowej', () => {

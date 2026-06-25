@@ -242,3 +242,37 @@ describe('formatTxDate', () => {
     expect(result).toContain('2024');
   });
 });
+
+// ---------------------------------------------------------------------------
+// parsePlnInput
+// ---------------------------------------------------------------------------
+describe('parsePlnInput', () => {
+  it('parsuje kwotę z przecinkiem dziesiętnym', () => {
+    expect(parsePlnInput('12,50')).toBe(12.5);
+    expect(parsePlnInput('0,99')).toBe(0.99);
+  });
+
+  it('parsuje kwoty bez groszy', () => {
+    expect(parsePlnInput('100')).toBe(100);
+    expect(parsePlnInput('100,00')).toBe(100);
+  });
+
+  it('parsuje format PL z separatorem tysięcy', () => {
+    expect(parsePlnInput('1 234,56')).toBe(1234.56);
+    expect(parsePlnInput('1.234,56')).toBe(1234.56);
+  });
+
+  it('parsuje kwotę z kropką dziesiętną', () => {
+    expect(parsePlnInput('12.50')).toBe(12.5);
+  });
+
+  it('usuwa suffix waluty', () => {
+    expect(parsePlnInput('47,30 zł')).toBe(47.3);
+  });
+
+  it('zwraca NaN dla pustego lub niepoprawnego wejścia', () => {
+    expect(Number.isNaN(parsePlnInput(''))).toBe(true);
+    expect(Number.isNaN(parsePlnInput('abc'))).toBe(true);
+    expect(Number.isNaN(parsePlnInput(null))).toBe(true);
+  });
+});
