@@ -1137,6 +1137,11 @@
                         <svg class="assets-hero-summary-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
                     </button>
                     <div id="assets-summary-panel" class="assets-hero-summary-panel hidden">
+                        <div class="hero-summary-actions">
+                            <button type="button" class="hero-summary-action" onclick="setAllAssetsSummaryInclude(true)">Zaznacz wszystko</button>
+                            <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                            <button type="button" class="hero-summary-action" onclick="setAllAssetsSummaryInclude(false)">Odznacz wszystko</button>
+                        </div>
                         <nav id="assets-summary-chips" class="assets-hero-summary-chips" aria-label="Aktywa wliczane w sumę"></nav>
                     </div>
                 </div>
@@ -1162,31 +1167,52 @@
         </div>
 
         <div id="view-loans" class="app-view">
-            <div id="loans-total-hero" class="card hero-card loan-hero-card hidden">
+            <div id="loans-total-hero" class="card hero-card loans-hero-card hidden">
                 <div class="hero-label">Łącznie do spłaty</div>
                 <div id="loans-total-capital" class="hero-balance loan-capital-hero">—</div>
-                <p id="loans-total-meta" class="loan-hero-meta hidden"></p>
-                <label class="section-label loans-summary-label hidden" id="loans-summary-label">W sumie</label>
-                <nav id="loans-summary-chips" class="loans-chip-nav loans-summary-chips hidden" aria-label="Kredyty w sumie"></nav>
+                <p id="loans-total-meta" class="hero-forecast-hint hidden"></p>
+                <div id="loans-summary-block" class="loans-hero-summary hidden">
+                    <button type="button" class="loans-hero-summary-toggle" onclick="toggleLoansSummary()" aria-expanded="false" aria-controls="loans-summary-panel">
+                        <span>Dostosuj sumę</span>
+                        <svg class="loans-hero-summary-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </button>
+                    <div id="loans-summary-panel" class="loans-hero-summary-panel hidden">
+                        <div class="hero-summary-actions">
+                            <button type="button" class="hero-summary-action" onclick="setAllLoansSummaryInclude(true)">Zaznacz wszystko</button>
+                            <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                            <button type="button" class="hero-summary-action" onclick="setAllLoansSummaryInclude(false)">Odznacz wszystko</button>
+                        </div>
+                        <nav id="loans-summary-chips" class="loans-hero-summary-chips" aria-label="Kredyty wliczane w sumę"></nav>
+                    </div>
+                </div>
             </div>
 
-            <div id="loans-list" class="loans-list"></div>
+            <section id="loans-active-section" class="loans-active-section">
+                <div class="loans-section-head">
+                    <h2 class="loans-section-title">Kredyty</h2>
+                    <span id="loans-active-total" class="loans-section-total hidden">—</span>
+                </div>
+                <div id="loans-list" class="loans-list"></div>
+            </section>
 
-            <div id="credit-cards-section" class="credit-cards-section">
-                <div class="credit-cards-section-head">
-                    <h2 class="credit-cards-section-title">Karty kredytowe</h2>
+            <section id="credit-cards-section" class="credit-cards-section hidden">
+                <div class="loans-section-head credit-cards-section-head">
+                    <h2 class="credit-cards-section-title loans-section-title">Karty kredytowe</h2>
+                    <span id="credit-cards-total" class="loans-section-total hidden">—</span>
                     <button type="button" class="credit-cards-add-btn" onclick="openNewCreditCard()">+ Karta</button>
                 </div>
                 <div id="credit-cards-list" class="credit-cards-list"></div>
-            </div>
+            </section>
 
-            <div class="card">
-                <h2>Ostatnie wpłaty</h2>
-                <nav id="loans-payments-filter" class="loans-chip-nav loans-payments-filter" aria-label="Filtr wpłat"></nav>
+            <div id="loans-payments-section" class="card loans-payments-section hidden">
+                <div class="loans-payments-head">
+                    <h2 class="loans-section-title">Ostatnie wpłaty</h2>
+                    <nav id="loans-payments-filter" class="loans-chip-nav loans-payments-filter hidden" aria-label="Filtr wpłat"></nav>
+                </div>
                 <div id="loan-payments-list" class="loan-payments-list"></div>
             </div>
 
-            <div id="loans-archive-section" class="card loans-archive-section">
+            <div id="loans-archive-section" class="card loans-archive-section hidden">
                 <button type="button" class="loans-archive-toggle" onclick="toggleLoansArchive()" aria-expanded="false" aria-controls="loans-archive-list">
                     <span class="loans-archive-toggle-text">
                         <h2>Archiwum</h2>

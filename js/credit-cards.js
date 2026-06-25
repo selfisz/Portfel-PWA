@@ -322,10 +322,22 @@ function renderCreditCardsSection() {
 
     const section = document.getElementById('credit-cards-section');
     const listEl = document.getElementById('credit-cards-list');
+    const totalEl = document.getElementById('credit-cards-total');
     if (!section || !listEl) return;
 
     const cards = getActiveCreditCards();
-    section.classList.toggle('hidden', !cards.length && !getCreditCards().length);
+    const allCards = getCreditCards();
+    const cardDebt = getCreditCardDebtTotal();
+    section.classList.toggle('hidden', !cards.length && !allCards.length);
+
+    if (totalEl) {
+        if (cards.length && cardDebt > 0) {
+            totalEl.textContent = formatPlnAmount(cardDebt);
+            totalEl.classList.remove('hidden');
+        } else {
+            totalEl.classList.add('hidden');
+        }
+    }
 
     if (!cards.length) {
         listEl.innerHTML = `<div class="card credit-card-empty-card">
@@ -345,19 +357,17 @@ function renderCreditCardTileHtml(card) {
         onclick="openCreditCardDetails('${escapeHtml(card.id)}')"
         onkeydown="if (event.key === 'Enter') openCreditCardDetails('${escapeHtml(card.id)}')">
         <div class="credit-card-tile-head">
-            <h2 class="credit-card-title">${escapeHtml(card.name)}</h2>
-            <span class="credit-card-limit-badge">${card.limit ? formatPlnAmount(card.limit) : '—'}</span>
-        </div>
-        <div class="credit-card-stats">
-            <div class="credit-card-stat">
-                <span class="credit-card-stat-label">Zadłużenie</span>
-                <strong>${formatPlnAmount(card.currentBalance)}</strong>
-            </div>
-            <div class="credit-card-stat">
-                <span class="credit-card-stat-label">Wolne</span>
-                <strong class="credit-card-stat-available">${formatPlnAmount(available)}</strong>
+            <span class="credit-card-type-badge">💳</span>
+            <div>
+                <h2 class="credit-card-title">${escapeHtml(card.name)}</h2>
+                <p class="credit-card-sub">Limit ${card.limit ? formatPlnAmount(card.limit) : '—'}</p>
             </div>
         </div>
+        <div class="credit-card-hero">
+            <span class="credit-card-stat-label">Zadłużenie</span>
+            <strong class="credit-card-debt-value">${formatPlnAmount(card.currentBalance)}</strong>
+        </div>
+        <p class="credit-card-meta">Wolne ${formatPlnAmount(available)} · ${usedPct.toFixed(0)}% limitu</p>
         <div class="progress-bar-bg loan-progress-bar">
             <div class="progress-bar-fill" style="width:${Math.min(100, usedPct)}%;background:var(--accent)"></div>
         </div>

@@ -409,6 +409,19 @@ function toggleAssetSummaryInclude(assetId) {
     }
 }
 
+function setAllAssetsSummaryInclude(included) {
+    getActiveAssets().forEach((asset) => {
+        const currentlyIncluded = asset.includeInSummary !== false;
+        if (currentlyIncluded === included) return;
+        updateAssetInState({ ...asset, includeInSummary: included });
+    });
+    saveState();
+    renderAssets();
+    if (typeof renderReports === 'function' && document.getElementById('view-reports')?.classList.contains('active')) {
+        renderReports();
+    }
+}
+
 function renderAssetsSummaryChips(activeAssets) {
     const el = document.getElementById('assets-summary-chips');
     const block = document.getElementById('assets-summary-block');
