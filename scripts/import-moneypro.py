@@ -148,24 +148,31 @@ def to_firestore_value(value):
 
 
 def upload_to_firestore(app_state: dict) -> None:
-    url = (
-        f"https://firestore.googleapis.com/v1/projects/{FIREBASE_CONFIG['projectId']}"
-        f"/databases/(default)/documents/finances/my_state"
-        f"?key={FIREBASE_CONFIG['apiKey']}"
-    )
-    payload = json.dumps({"fields": to_firestore_value(app_state)["mapValue"]["fields"]}).encode("utf-8")
-    req = request.Request(
-        url,
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="PATCH",
-    )
-    try:
-        with request.urlopen(req) as response:
-            response.read()
-    except error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Firestore HTTP {exc.code}: {body}") from exc
+    export_payload = {
+        "version": 1,
+        "exportedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "transactionCount": len(app_state.get("transactions") or []),
+        "data": app_state,
+    }
+    for doc_id, payload in (("my_state", app_state), ("cloud_backup", export_payload)):
+        url = (
+            f"https://firestore.googleapis.com/v1/projects/{FIREBASE_CONFIG['projectId']}"
+            f"/databases/(default)/documents/finances/{doc_id}"
+            f"?key={FIREBASE_CONFIG['apiKey']}"
+        )
+        body = json.dumps({"fields": to_firestore_value(payload)["mapValue"]["fields"]}).encode("utf-8")
+        req = request.Request(
+            url,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="PATCH",
+        )
+        try:
+            with request.urlopen(req) as response:
+                response.read()
+        except error.HTTPError as exc:
+            body_text = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Firestore {doc_id} HTTP {exc.code}: {body_text}") from exc
 
 
 def main() -> int:
@@ -192,7 +199,7 @@ def main() -> int:
 
     try:
         upload_to_firestore(app_state)
-        firestore_msg = "Firestore: finances/my_state zaktualizowany."
+        firestore_msg = "Firestore: finances/my_state + cloud_backup zaktualizowane."
     except RuntimeError as exc:
         firestore_msg = (
             "Firestore z terminala niedostępny — otwórz scripts/import.html w przeglądarce.\n"
