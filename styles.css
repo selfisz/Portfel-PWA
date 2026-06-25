@@ -2136,6 +2136,67 @@ html:not([data-theme="dark"]) .grid-item.selected {
     padding-bottom: 8px;
 }
 
+.chart-view-filter {
+    margin: 0 0 12px;
+    padding: 10px 0 0;
+    border-top: 1px solid var(--border);
+    text-align: left;
+}
+
+.chart-view-filter-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-align: left;
+}
+
+.chart-view-filter-chevron {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+    opacity: 0.75;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.chart-view-filter-toggle[aria-expanded="true"] .chart-view-filter-chevron {
+    transform: rotate(180deg);
+}
+
+.chart-view-filter-panel {
+    margin-top: 8px;
+}
+
+.chart-view-filter-hint {
+    margin: 6px 0 0;
+    font-size: var(--text-3xs);
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.chart-view-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.chart-view-filter-chips .toggle-btn.loans-chip {
+    font-size: var(--text-2xs);
+    padding: 5px 10px;
+    min-height: 0;
+    border-radius: 999px;
+}
+
 .chart-card-header {
     display: flex;
     align-items: center;

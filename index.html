@@ -483,6 +483,23 @@
                     </div>
                 </div>
                 <button id="btn-reset-chart" class="btn-outline" onclick="resetDashboardChart()">&#8592; Wróć do ogółu</button>
+                <div id="chart-view-filter-block" class="chart-view-filter hidden">
+                    <button type="button" class="chart-view-filter-toggle" onclick="toggleChartViewFilter()" aria-expanded="false" aria-controls="chart-view-filter-panel">
+                        <span>Dostosuj widok</span>
+                        <svg class="chart-view-filter-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </button>
+                    <div id="chart-view-filter-panel" class="chart-view-filter-panel hidden">
+                        <div class="hero-summary-actions">
+                            <button type="button" class="hero-summary-action" onclick="setAllChartViewFilterVisible(true)">Zaznacz wszystko</button>
+                            <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                            <button type="button" class="hero-summary-action" onclick="setAllChartViewFilterVisible(false)">Odznacz wszystko</button>
+                            <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                            <button type="button" id="chart-view-filter-restore" class="hero-summary-action hidden" onclick="restoreChartViewFilterDefault()">Przywróć domyślnie</button>
+                        </div>
+                        <p id="chart-view-filter-hint" class="chart-view-filter-hint hidden"></p>
+                        <nav id="chart-view-filter-chips" class="chart-view-filter-chips" aria-label="Segmenty wykresu"></nav>
+                    </div>
+                </div>
                 <div class="chart-wrapper">
                     <canvas id="dashboardChart"></canvas>
                     <div class="chart-center-label" aria-hidden="true">

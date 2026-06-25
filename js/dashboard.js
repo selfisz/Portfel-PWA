@@ -480,7 +480,186 @@ function getDashboardChartTransactionSums(transactions, maxSlices = CHART_DRILL_
     return { sums, truncated: true, totalCount: sorted.length };
 }
 
-function buildDashboardChartSums(chartTx, forecastMode) {
+function isChartMainCategoryVisible(name) {
+    return !chartHiddenMainCategories[name];
+}
+
+function isChartSubCategoryVisible(mainCategory, subLabel) {
+    const hidden = chartHiddenSubCategories[mainCategory];
+    return !hidden || !hidden[subLabel];
+}
+
+function applyChartViewFilterToSums(sums) {
+    if (isDashboardChartTransactionLevel()) return sums;
+    const filtered = {};
+    if (!activeChartCategory) {
+        Object.keys(sums).forEach((label) => {
+            if (isChartMainCategoryVisible(label)) filtered[label] = sums[label];
+        });
+        return filtered;
+    }
+    if (!activeChartSubCategory) {
+        Object.keys(sums).forEach((label) => {
+            if (isChartSubCategoryVisible(activeChartCategory, label)) filtered[label] = sums[label];
+        });
+        return filtered;
+    }
+    return sums;
+}
+
+function isChartViewFilterActive(level, labels, mainCategory = null) {
+    if (!labels.length) return false;
+    const visibleCount = labels.filter((label) => (
+        level === 'main'
+            ? isChartMainCategoryVisible(label)
+            : isChartSubCategoryVisible(mainCategory, label)
+    )).length;
+    return visibleCount > 0 && visibleCount < labels.length;
+}
+
+function getChartViewFilterLevel() {
+    if (isDashboardChartTransactionLevel()) return null;
+    if (!activeChartCategory) return 'main';
+    if (!activeChartSubCategory) return 'sub';
+    return null;
+}
+
+function toggleChartMainCategoryVisibility(name) {
+    if (chartHiddenMainCategories[name]) {
+        delete chartHiddenMainCategories[name];
+    } else {
+        chartHiddenMainCategories[name] = true;
+    }
+    renderDashboard();
+}
+
+function toggleChartSubCategoryVisibility(mainCategory, subLabel) {
+    if (!chartHiddenSubCategories[mainCategory]) {
+        chartHiddenSubCategories[mainCategory] = {};
+    }
+    if (chartHiddenSubCategories[mainCategory][subLabel]) {
+        delete chartHiddenSubCategories[mainCategory][subLabel];
+        if (!Object.keys(chartHiddenSubCategories[mainCategory]).length) {
+            delete chartHiddenSubCategories[mainCategory];
+        }
+    } else {
+        chartHiddenSubCategories[mainCategory][subLabel] = true;
+    }
+    renderDashboard();
+}
+
+function restoreChartViewFilterDefault() {
+    setAllChartViewFilterVisible(true);
+}
+
+function setAllChartViewFilterVisible(visible) {
+    const level = getChartViewFilterLevel();
+    if (!level) return;
+    const chipsEl = document.getElementById('chart-view-filter-chips');
+    if (!chipsEl) return;
+    const labels = [...chipsEl.querySelectorAll('[data-label]')].map((btn) => btn.dataset.label);
+    if (!labels.length) return;
+    if (level === 'main') {
+        if (visible) {
+            labels.forEach((label) => { delete chartHiddenMainCategories[label]; });
+        } else {
+            labels.forEach((label) => { chartHiddenMainCategories[label] = true; });
+        }
+    } else {
+        const mainCategory = activeChartCategory;
+        if (!mainCategory) return;
+        if (visible) {
+            delete chartHiddenSubCategories[mainCategory];
+        } else {
+            chartHiddenSubCategories[mainCategory] = {};
+            labels.forEach((label) => { chartHiddenSubCategories[mainCategory][label] = true; });
+        }
+    }
+    renderDashboard();
+}
+
+function toggleChartViewFilter() {
+    chartViewFilterExpanded = !chartViewFilterExpanded;
+    const panel = document.getElementById('chart-view-filter-panel');
+    const toggle = document.querySelector('#chart-view-filter-block .chart-view-filter-toggle');
+    if (panel) panel.classList.toggle('hidden', !chartViewFilterExpanded);
+    if (toggle) toggle.setAttribute('aria-expanded', chartViewFilterExpanded ? 'true' : 'false');
+}
+
+function renderChartViewFilter(rawSums) {
+    const block = document.getElementById('chart-view-filter-block');
+    const chipsEl = document.getElementById('chart-view-filter-chips');
+    const hintEl = document.getElementById('chart-view-filter-hint');
+    const restoreBtn = document.getElementById('chart-view-filter-restore');
+    const panel = document.getElementById('chart-view-filter-panel');
+    const toggle = document.querySelector('#chart-view-filter-block .chart-view-filter-toggle');
+    if (!block || !chipsEl) return;
+
+    const level = getChartViewFilterLevel();
+    const labels = Object.keys(rawSums)
+        .sort((a, b) => (rawSums[b] || 0) - (rawSums[a] || 0));
+
+    if (!level || labels.length < 2) {
+        block.classList.add('hidden');
+        chipsEl.innerHTML = '';
+        if (hintEl) hintEl.classList.add('hidden');
+        return;
+    }
+
+    block.classList.remove('hidden');
+    if (panel) panel.classList.toggle('hidden', !chartViewFilterExpanded);
+    if (toggle) toggle.setAttribute('aria-expanded', chartViewFilterExpanded ? 'true' : 'false');
+
+    chipsEl.innerHTML = labels.map((label) => {
+        const visible = level === 'main'
+            ? isChartMainCategoryVisible(label)
+            : isChartSubCategoryVisible(activeChartCategory, label);
+        const safeLabel = escapeHtml(label);
+        const dataLabel = label.replace(/"/g, '&quot;');
+        return `<button type="button" class="toggle-btn loans-chip${visible ? ' active' : ''}" data-label="${dataLabel}" data-filter-level="${level}" aria-pressed="${visible ? 'true' : 'false'}">${safeLabel}</button>`;
+    }).join('');
+
+    if (!chipsEl.dataset.filterBound) {
+        chipsEl.dataset.filterBound = '1';
+        chipsEl.addEventListener('click', (event) => {
+            const btn = event.target.closest('[data-label]');
+            if (!btn) return;
+            const label = btn.dataset.label;
+            if (btn.dataset.filterLevel === 'main') {
+                toggleChartMainCategoryVisibility(label);
+            } else {
+                toggleChartSubCategoryVisibility(activeChartCategory, label);
+            }
+        });
+    }
+
+    if (hintEl) {
+        const visibleCount = labels.filter((label) => (
+            level === 'main'
+                ? isChartMainCategoryVisible(label)
+                : isChartSubCategoryVisible(activeChartCategory, label)
+        )).length;
+        const filterActive = isChartViewFilterActive(level, labels, activeChartCategory);
+        if (filterActive) {
+            const unit = level === 'main' ? 'kategorii' : 'podkategorii';
+            hintEl.textContent = `W wykresie: ${visibleCount} z ${labels.length} ${unit}`;
+            hintEl.classList.remove('hidden');
+        } else {
+            hintEl.classList.add('hidden');
+        }
+        if (restoreBtn) restoreBtn.classList.toggle('hidden', !filterActive);
+    } else if (restoreBtn) {
+        restoreBtn.classList.add('hidden');
+    }
+}
+
+function resetChartViewFilters() {
+    chartHiddenMainCategories = {};
+    chartHiddenSubCategories = {};
+    chartViewFilterExpanded = false;
+}
+
+function computeDashboardChartSums(chartTx, forecastMode) {
     if (forecastMode) {
         return {
             sums: getDashboardForecastCategorySums(chartViewType, activeChartCategory || null),
@@ -510,6 +689,15 @@ function buildDashboardChartSums(chartTx, forecastMode) {
         sums[label] = (sums[label] || 0) + t.amount;
     });
     return { sums, truncated: false };
+}
+
+function buildDashboardChartSums(chartTx, forecastMode) {
+    const { sums: rawSums, truncated } = computeDashboardChartSums(chartTx, forecastMode);
+    return {
+        sums: applyChartViewFilterToSums(rawSums),
+        truncated,
+        rawSums
+    };
 }
 
 function formatLegendCategoryName(name) {
@@ -589,6 +777,7 @@ function setChartViewType(type) {
     chartViewType = type;
     activeChartCategory = null;
     activeChartSubCategory = null;
+    resetChartViewFilters();
     renderDashboard();
 }
 
@@ -789,10 +978,25 @@ function renderDashboard() {
     document.getElementById('btn-chart-expense').classList.toggle('active', chartViewType === 'expense');
     document.getElementById('btn-chart-income').classList.toggle('active', chartViewType === 'income');
 
-    const { sums: catSums, truncated: chartDrillTruncated } = buildDashboardChartSums(chartTx, forecastMode);
+    const { sums: catSums, truncated: chartDrillTruncated, rawSums: chartRawSums } = buildDashboardChartSums(chartTx, forecastMode);
+    renderChartViewFilter(chartRawSums);
+    const filterLevel = getChartViewFilterLevel();
+    const filterLabels = filterLevel ? Object.keys(chartRawSums) : [];
+    const filterActive = filterLevel && isChartViewFilterActive(filterLevel, filterLabels, activeChartCategory);
     const centerSubEl = document.querySelector('.chart-center-sub');
     if (centerSubEl) {
-        centerSubEl.textContent = txChartLevel && chartDrillTruncated ? 'top wpisów' : 'razem';
+        if (txChartLevel && chartDrillTruncated) {
+            centerSubEl.textContent = 'top wpisów';
+        } else if (filterActive) {
+            const visibleCount = filterLabels.filter((label) => (
+                filterLevel === 'main'
+                    ? isChartMainCategoryVisible(label)
+                    : isChartSubCategoryVisible(activeChartCategory, label)
+            )).length;
+            centerSubEl.textContent = `${visibleCount}/${filterLabels.length} w widoku`;
+        } else {
+            centerSubEl.textContent = 'razem';
+        }
     }
 
     const ctxDash = document.getElementById('dashboardChart').getContext('2d');

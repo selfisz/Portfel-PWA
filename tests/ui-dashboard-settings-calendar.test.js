@@ -128,6 +128,9 @@ beforeAll(() => {
     globalThis.activeChartCategory = null;
     globalThis.activeChartSubCategory = null;
     globalThis.chartViewType = 'expense';
+    globalThis.chartHiddenMainCategories = {};
+    globalThis.chartHiddenSubCategories = {};
+    globalThis.chartViewFilterExpanded = false;
     globalThis.categoryEditorType = 'expense';
     globalThis.Chart = class { constructor() {} destroy() {} toggleDataVisibility() {} getDataVisibility() { return true; } };
     globalThis.normalizeAppState = (data) => { _setAppState({ ..._getAppState(), ...data }); };
@@ -808,6 +811,64 @@ describe('buildDashboardChartSums', () => {
         const { sums } = buildDashboardChartSums(chartTx, false);
         expect(sums.Hipoteka).toBeCloseTo(300);
         expect(sums.Ogólne).toBeCloseTo(50);
+    });
+});
+
+describe('filtr widoku wykresu (A/B)', () => {
+    beforeEach(() => {
+        runInContext(`
+            activeChartCategory = null;
+            activeChartSubCategory = null;
+            chartViewType = 'expense';
+            chartHiddenMainCategories = {};
+            chartHiddenSubCategories = {};
+        `);
+    });
+
+    it('wariant A ukrywa kategorie główne z wykresu', () => {
+        const chartTx = [
+            { date: '2024-06-01', type: 'expense', mainCategory: 'Jedzenie', subCategory: 'A', amount: 100 },
+            { date: '2024-06-02', type: 'expense', mainCategory: 'Transport', subCategory: 'B', amount: 200 }
+        ];
+        runInContext(`chartHiddenMainCategories = { Transport: true };`);
+        const { sums, rawSums } = buildDashboardChartSums(chartTx, false);
+        expect(Object.keys(rawSums)).toHaveLength(2);
+        expect(Object.keys(sums)).toHaveLength(1);
+        expect(sums.Jedzenie).toBeCloseTo(100);
+    });
+
+    it('wariant B ukrywa podkategorie w drill-down', () => {
+        runInContext(`
+            activeChartCategory = 'Długi';
+            chartHiddenSubCategories = { Długi: { Hipoteka: true } };
+        `);
+        const chartTx = [
+            { date: '2024-06-01', type: 'expense', mainCategory: 'Długi', subCategory: 'Hipoteka', amount: 300 },
+            { date: '2024-06-02', type: 'expense', mainCategory: 'Długi', subCategory: 'Karta', amount: 50 }
+        ];
+        const { sums } = buildDashboardChartSums(chartTx, false);
+        expect(sums.Hipoteka).toBeUndefined();
+        expect(sums.Karta).toBeCloseTo(50);
+    });
+
+    it('nie filtruje na trzecim poziomie (transakcje)', () => {
+        runInContext(`activeChartCategory = 'Długi'; activeChartSubCategory = 'Hipoteka';`);
+        const chartTx = [
+            { date: '2024-06-01', type: 'expense', mainCategory: 'Długi', subCategory: 'Hipoteka', amount: 300, note: 'A' },
+            { date: '2024-06-02', type: 'expense', mainCategory: 'Długi', subCategory: 'Hipoteka', amount: 100, note: 'B' }
+        ];
+        runInContext(`chartHiddenSubCategories = { Długi: { Hipoteka: true } };`);
+        const { sums } = buildDashboardChartSums(chartTx, false);
+        expect(Object.keys(sums)).toHaveLength(2);
+    });
+
+    it('getChartViewFilterLevel zwraca main lub sub', () => {
+        expect(getChartViewFilterLevel()).toBe('main');
+        runInContext(`activeChartCategory = 'Długi';`);
+        expect(getChartViewFilterLevel()).toBe('sub');
+        runInContext(`activeChartSubCategory = 'Hipoteka';`);
+        document.getElementById('dashboard-period-select').value = 'current-month';
+        expect(getChartViewFilterLevel()).toBe(null);
     });
 });
 

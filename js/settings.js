@@ -230,6 +230,28 @@ function saveCategoryEditor() {
     if (activeChartCategory && mainMap[activeChartCategory]) {
         activeChartCategory = mainMap[activeChartCategory];
     }
+    Object.keys(mainMap).forEach((oldMain) => {
+        const newMain = mainMap[oldMain];
+        if (chartHiddenMainCategories[oldMain]) {
+            chartHiddenMainCategories[newMain] = chartHiddenMainCategories[oldMain];
+            delete chartHiddenMainCategories[oldMain];
+        }
+        if (chartHiddenSubCategories[oldMain]) {
+            chartHiddenSubCategories[newMain] = chartHiddenSubCategories[oldMain];
+            delete chartHiddenSubCategories[oldMain];
+        }
+    });
+    subRenames.forEach((r) => {
+        const mainKey = mainMap[r.oldMain] || r.oldMain;
+        const hidden = chartHiddenSubCategories[mainKey];
+        if (hidden && hidden[r.oldSub]) {
+            hidden[r.newSub] = hidden[r.oldSub];
+            delete hidden[r.oldSub];
+        }
+        if (activeChartSubCategory === r.oldSub && (activeChartCategory === mainKey || activeChartCategory === r.oldMain)) {
+            activeChartSubCategory = r.newSub;
+        }
+    });
     if (formState.selectedMainCategory && mainMap[formState.selectedMainCategory]) {
         formState.selectedMainCategory = mainMap[formState.selectedMainCategory];
     }
