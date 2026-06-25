@@ -46,6 +46,7 @@ let reportsRankLevel = 'main';
 let reportsCalendarYear = null;
 let reportsCalendarMonth = null;
 let reportsLastPeriod = null;
+let cloudSyncUnlocked = false;
 function getPersistedState(raw = appState) {
     const data = raw ?? appState ?? {};
     const persisted = {
@@ -230,6 +231,7 @@ function normalizeAppState(raw) {
 }
 
 function initData() {
+    cloudSyncUnlocked = false;
     setSyncStatus('');
     let localRaw = readStoredAppStateRaw();
     let restoredFromBackup = false;
@@ -240,12 +242,12 @@ function initData() {
             restoredFromBackup = true;
         }
         const hadUiFields = applyRemoteAppState(localRaw);
-        const hadMigration = applyMigrations();
         if (hadUiFields) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
         }
-        if (hadMigration || restoredFromBackup) saveState();
-        checkAndProcessRecurringTransactions();
+        if (restoredFromBackup) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
+        }
         refreshCurrentView();
     } else {
         refreshCurrentView();
@@ -269,7 +271,10 @@ function initData() {
         const generation = ++snapshotGeneration;
 
         if (!docSnap.exists) {
-            saveState();
+            cloudSyncUnlocked = true;
+            applyMigrations();
+            checkAndProcessRecurringTransactions();
+            if (getTransactionCount(appState) > 0) saveState({ forceCloud: true });
             return;
         }
 
@@ -298,11 +303,15 @@ function initData() {
         const mergedTxCount = mergedTransactions.length;
 
         const hadUiFields = applyRemoteAppState(mergedRemote, localLoans, localCreditCards);
+        const hadMigration = applyMigrations();
+        checkAndProcessRecurringTransactions();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
 
-        const shouldPushRemote = mergedTxCount > remoteTxCount || hadUiFields;
+        cloudSyncUnlocked = true;
+
+        const shouldPushRemote = mergedTxCount > remoteTxCount || hadUiFields || hadMigration;
         if (shouldPushRemote) {
-            saveState();
+            saveState({ forceCloud: true });
         } else {
             setSyncStatus('online');
         }
@@ -313,13 +322,15 @@ function initData() {
     }, (error) => {
         window.clearTimeout(syncTimeout);
         console.error("Błąd synchronizacji", error);
+        cloudSyncUnlocked = true;
         setSyncStatus('offline');
     });
 }
 
-function saveState() {
+function saveState(options = {}) {
     const payload = getPersistedState(appState);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    if (!cloudSyncUnlocked && !options.forceCloud) return;
     stateRef.set(payload).then(() => {
         setSyncStatus('online');
     }).catch(err => {
