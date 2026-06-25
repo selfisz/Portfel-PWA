@@ -41,7 +41,7 @@ function escapeCsvField(value) {
     return text;
 }
 
-/** Parsuje kwotę z pola formularza (PL: „12,50”, „1 234,56”, opcjonalnie „ zł”). */
+/** Parsuje kwotę z pola formularza (PL: „12,50”, „12.50”, „1 234,56”, opcjonalnie „ zł”). */
 function parsePlnInput(raw) {
     if (raw == null) return NaN;
     let s = String(raw).trim();
@@ -49,17 +49,20 @@ function parsePlnInput(raw) {
 
     s = s.replace(/\s*(zł|pln)\s*$/i, '').trim();
     s = s.replace(/[\s\u00a0\u202f]/g, '');
+    s = s.replace(/[\u201a\uFF0C]/g, ',');
 
     const hasComma = s.includes(',');
     const hasDot = s.includes('.');
     if (hasComma && hasDot) {
         if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
-            s = s.replace(/\./g, '').replace(',', '.');
+            s = s.replace(/\./g, '').replace(/,/g, '.');
         } else {
             s = s.replace(/,/g, '');
         }
     } else if (hasComma) {
-        s = s.replace(',', '.');
+        s = s.replace(/,/g, '.');
+    } else if (hasDot && /^\d{1,3}(\.\d{3})+$/.test(s)) {
+        s = s.replace(/\./g, '');
     }
 
     const n = parseFloat(s);

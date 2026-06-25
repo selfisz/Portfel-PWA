@@ -2,8 +2,8 @@ const PRIMARY_CASH_ASSET_ID = 'asset-cash-total';
 
 function normalizeCashMovement(raw) {
     if (!raw || typeof raw !== 'object') return null;
-    const delta = parseFloat(raw.delta);
-    if (!delta || Number.isNaN(delta)) return null;
+    const delta = Number(raw.delta);
+    if (!Number.isFinite(delta) || delta === 0) return null;
     return {
         id: raw.id || `cashm-${Date.now().toString(36)}`,
         assetId: raw.assetId || PRIMARY_CASH_ASSET_ID,
@@ -40,12 +40,13 @@ function ensurePrimaryCashAsset() {
 }
 
 function adjustCashAssetAmount(assetId, delta, options = {}) {
-    if (!delta || typeof getAssetById !== 'function') return null;
+    const deltaNum = Number(delta);
+    if (!Number.isFinite(deltaNum) || deltaNum === 0 || typeof getAssetById !== 'function') return null;
     const asset = getAssetById(assetId);
     if (!asset || asset.type !== 'cash') return null;
 
-    const current = asset.amount || 0;
-    const next = current + delta;
+    const current = Number(asset.amount) || 0;
+    const next = current + deltaNum;
     if (next < 0 && !options.skipConfirm) {
         const ok = confirm(`Saldo gotówki spadnie do ${formatPlnAmount(next)}. Kontynuować?`);
         if (!ok) return null;
@@ -55,14 +56,15 @@ function adjustCashAssetAmount(assetId, delta, options = {}) {
 }
 
 function registerCashMovement({ assetId = PRIMARY_CASH_ASSET_ID, delta, date, note, source, sourceRef }) {
-    if (!delta) return null;
+    const deltaNum = Number(delta);
+    if (!Number.isFinite(deltaNum) || deltaNum === 0) return null;
     if (assetId === PRIMARY_CASH_ASSET_ID && !ensurePrimaryCashAsset()) return null;
-    const updated = adjustCashAssetAmount(assetId, delta);
+    const updated = adjustCashAssetAmount(assetId, deltaNum);
     if (!updated) return null;
 
     const movement = normalizeCashMovement({
         assetId,
-        delta,
+        delta: deltaNum,
         date,
         note,
         source,
@@ -146,7 +148,9 @@ function syncCashOnTransactionSave(tx, previousTx = null) {
 
     if (!shouldTransactionAffectCash(tx)) return true;
 
-    const delta = tx.type === 'income' ? tx.amount : -tx.amount;
+    const amount = Number(tx.amount);
+    if (!Number.isFinite(amount) || amount === 0) return true;
+    const delta = tx.type === 'income' ? amount : -amount;
     const movement = registerCashMovement({
         delta,
         date: tx.date,

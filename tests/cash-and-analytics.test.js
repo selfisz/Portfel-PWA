@@ -564,4 +564,18 @@ describe('syncCashOnTransactionSave / syncAssetOnTransactionSave — wpływ', ()
     expect(syncAssetOnTransactionSave(tx)).toBe(true);
     expect(_getAppState().assets.find((a) => a.id === 'asset-savings').amount).toBe(4000);
   });
+
+  it('wpływ z kwotą jako string (kropka) poprawnie zwiększa saldo gotówki', () => {
+    const tx = {
+      type: 'income',
+      amount: '47.30',
+      date: '2024-06-01',
+      note: 'Test',
+      mainCategory: 'Praca',
+      subCategory: 'Premia'
+    };
+    expect(syncCashOnTransactionSave(tx)).toBe(true);
+    const cash = _getAppState().assets.find((a) => a.id === PRIMARY_CASH_ASSET_ID);
+    expect(cash.amount).toBeCloseTo(47.3, 2);
+  });
 });

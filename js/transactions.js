@@ -191,7 +191,7 @@ function saveTransaction() {
     const creditCardId = document.getElementById('tx-credit-card-select')?.value;
     const affectsCashChecked = document.getElementById('tx-affects-cash')?.checked ?? true;
 
-    if (!amount || !formState.selectedMainCategory || !formState.selectedSubCategory || !date) {
+    if (!Number.isFinite(amount) || amount <= 0 || !formState.selectedMainCategory || !formState.selectedSubCategory || !date) {
         return alert('Uzupełnij kwotę i kategorie.');
     }
 

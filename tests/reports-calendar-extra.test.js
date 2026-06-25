@@ -106,6 +106,12 @@ beforeAll(() => {
     runInContext(`
         function _getAppState()      { return appState; }
         function _setAppState(s)     { appState = s; }
+        function _getReportsCalendarYear()  { return reportsCalendarYear; }
+        function _getReportsCalendarMonth() { return reportsCalendarMonth; }
+        function _setReportsCalendarYear(v)  { reportsCalendarYear = v; }
+        function _setReportsCalendarMonth(v) { reportsCalendarMonth = v; }
+        function _getDebtCalendarMonth() { return reportsDebtCalendarMonth; }
+        function _setDebtCalendar(y, m) { reportsDebtCalendarYear = y; reportsDebtCalendarMonth = m; }
     `);
 });
 
@@ -569,5 +575,30 @@ describe('showModuleSplitAlert', () => {
         notice.classList.add('hidden');
         showModuleSplitAlert('js/test.js', 750);
         expect(notice.classList.contains('hidden')).toBe(false);
+    });
+});
+
+// ===========================================================================
+// Niezależna nawigacja kalendarzy
+// ===========================================================================
+describe('shiftReportsDebtCalendarMonth', () => {
+    beforeEach(() => {
+        globalThis.reportsCalendarView = 'month';
+        globalThis.reportsPeriodMode = 'year';
+        _setReportsCalendarYear(2024);
+        _setReportsCalendarMonth(5);
+        _setDebtCalendar(2024, 5);
+    });
+
+    it('strzałki górnego kalendarza nie zmieniają miesiąca kalendarza długów', () => {
+        shiftReportsCalendarMonth(1);
+        expect(_getReportsCalendarMonth()).toBe(6);
+        expect(_getDebtCalendarMonth()).toBe(5);
+    });
+
+    it('strzałki kalendarza długów nie zmieniają górnego kalendarza', () => {
+        shiftReportsDebtCalendarMonth(-1);
+        expect(_getDebtCalendarMonth()).toBe(4);
+        expect(_getReportsCalendarMonth()).toBe(5);
     });
 });

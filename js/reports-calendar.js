@@ -13,6 +13,32 @@ function setReportsCalendarView(view) {
     renderReportsCalendarView();
 }
 
+function ensureReportsDebtCalendarMonth() {
+    if (reportsDebtCalendarYear !== null && reportsDebtCalendarMonth !== null) return;
+    if (reportsCalendarYear !== null && reportsCalendarMonth !== null) {
+        reportsDebtCalendarYear = reportsCalendarYear;
+        reportsDebtCalendarMonth = reportsCalendarMonth;
+        return;
+    }
+    const now = new Date();
+    reportsDebtCalendarYear = now.getFullYear();
+    reportsDebtCalendarMonth = now.getMonth();
+}
+
+function shiftReportsDebtCalendarMonth(delta) {
+    ensureReportsDebtCalendarMonth();
+    reportsDebtCalendarMonth += delta;
+    if (reportsDebtCalendarMonth > 11) {
+        reportsDebtCalendarMonth = 0;
+        reportsDebtCalendarYear++;
+    }
+    if (reportsDebtCalendarMonth < 0) {
+        reportsDebtCalendarMonth = 11;
+        reportsDebtCalendarYear--;
+    }
+    renderDebtCalendarGrid();
+}
+
 function renderReportsCalendarView() {
     if (reportsCalendarView === 'year') {
         renderReportsYearHeatmap();
@@ -190,7 +216,11 @@ function renderDebtCalendarGrid() {
     const grid = document.getElementById('reports-debt-calendar-grid');
     const totalEl = document.getElementById('reports-debt-calendar-month-total');
     const cardEl = document.getElementById('reports-debt-calendar-card');
-    if (!grid || reportsCalendarYear === null) return;
+    const labelEl = document.getElementById('reports-debt-calendar-label');
+    if (!grid) return;
+
+    ensureReportsDebtCalendarMonth();
+    if (reportsDebtCalendarYear === null) return;
 
     const loans = getActiveLoans().filter((l) => l.nextInstallmentAmount > 0 && l.nextInstallmentDue);
     const cards = getActiveCreditCards().filter((c) => c.currentBalance > 0);
@@ -202,8 +232,12 @@ function renderDebtCalendarGrid() {
     }
     cardEl?.classList.remove('hidden');
 
-    const year = reportsCalendarYear;
-    const month = reportsCalendarMonth;
+    const year = reportsDebtCalendarYear;
+    const month = reportsDebtCalendarMonth;
+    if (labelEl) {
+        const monthLabel = new Date(year, month, 1).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+        labelEl.textContent = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+    }
     const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const today = localIsoDate(new Date());

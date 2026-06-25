@@ -711,7 +711,13 @@
                 </div>
 
                 <div id="reports-debt-calendar-card" class="card reports-debt-calendar-card hidden">
-                    <h2>Kalendarz długów</h2>
+                    <div class="reports-calendar-header reports-debt-calendar-header">
+                        <div id="reports-debt-calendar-nav" class="reports-calendar-nav">
+                            <button type="button" class="cal-nav-btn" onclick="shiftReportsDebtCalendarMonth(-1)" aria-label="Poprzedni miesiąc długów">&#8249;</button>
+                            <h2 id="reports-debt-calendar-label">Czerwiec 2026</h2>
+                            <button type="button" class="cal-nav-btn" onclick="shiftReportsDebtCalendarMonth(1)" aria-label="Następny miesiąc długów">&#8250;</button>
+                        </div>
+                    </div>
                     <p class="reports-hint">Dni z ratami kredytów (termin z umowy). Karty — szacunek z ostatnich spłat, przerywana obwódka.</p>
                     <div id="reports-debt-calendar-grid" class="reports-calendar-grid reports-debt-calendar-grid"></div>
                     <div id="reports-debt-calendar-month-total" class="debt-cal-month-total"></div>

@@ -283,6 +283,13 @@ describe('saveTransaction — nowa transakcja', () => {
     expect(_getAppState().transactions[0].amount).toBe(47.3);
   });
 
+  it('parsuje kwotę z kropką dziesiętną', () => {
+    buildFormDom({ amount: '47.30', date: '2024-06-15' });
+    _setFormState({ formMode: 'expense', currentType: 'expense', selectedMainCategory: 'Dom', selectedSubCategory: 'Czynsz' });
+    saveTransaction();
+    expect(_getAppState().transactions[0].amount).toBe(47.3);
+  });
+
   it('ustawia type na income dla transakcji przychodowej', () => {
     buildFormDom({ amount: '5000', date: '2024-06-01' });
     _setFormState({ formMode: 'income', currentType: 'income', selectedMainCategory: 'Wynagrodzenie', selectedSubCategory: 'Podstawa' });

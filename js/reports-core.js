@@ -192,11 +192,7 @@ function shiftReportsCalendarMonth(delta) {
             reportsCalendarYear--;
         }
     }
-    if (typeof renderReportsCalendarView === 'function') {
-        renderReportsCalendarView();
-    } else {
-        renderReportsCalendar();
-    }
+    renderReportsCalendar();
 }
 
 function renderReportsCalendar() {

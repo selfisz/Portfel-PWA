@@ -264,6 +264,12 @@ describe('parsePlnInput', () => {
 
   it('parsuje kwotę z kropką dziesiętną', () => {
     expect(parsePlnInput('12.50')).toBe(12.5);
+    expect(parsePlnInput('47.30')).toBe(47.3);
+  });
+
+  it('parsuje separator tysięcy kropką bez groszy (PL)', () => {
+    expect(parsePlnInput('1.234')).toBe(1234);
+    expect(parsePlnInput('12.345.678')).toBe(12345678);
   });
 
   it('usuwa suffix waluty', () => {
