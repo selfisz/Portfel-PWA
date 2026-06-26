@@ -542,6 +542,38 @@ describe('getIkzeContributionsInYear', () => {
     ]});
     expect(getIkzeContributionsInYear(2024)).toBe(0);
   });
+
+  it('używa ręcznej kwoty wpłat gdy ustawiona w reportPrefs', () => {
+    _setAppState({
+      ..._getAppState(),
+      reportPrefs: { ikzeContributionsByYear: { '2024': 1500 } },
+      transactions: [
+        { date: '2024-03-01', type: 'expense', amount: 500, linkedAssetId: 'ikze-1' }
+      ]
+    });
+    globalThis.getAssetById = (id) => id === 'ikze-1'
+      ? { type: 'retirement', retirementKind: 'IKZE' }
+      : null;
+    expect(getIkzeContributionsInYear(2024)).toBe(1500);
+    globalThis.getAssetById = () => null;
+  });
+});
+
+describe('buildCompareWealthSummary', () => {
+  it('oblicza delty majątku i zobowiązań między końcami okresów', () => {
+    _setAppState({
+      ..._getAppState(),
+      assetSnapshots: [
+        { monthKey: '2024-04', totalAssets: 100000, totalDebt: 40000, netWorth: 60000, loanDebt: 35000, cardDebt: 5000 },
+        { monthKey: '2024-05', totalAssets: 105000, totalDebt: 38000, netWorth: 67000, loanDebt: 34000, cardDebt: 4000 }
+      ]
+    });
+    const result = buildCompareWealthSummary('2024-04-30', '2024-05-31');
+    expect(result.deltaAssets).toBe(5000);
+    expect(result.deltaDebt).toBe(-2000);
+    expect(result.deltaNetWorth).toBe(7000);
+    expect(result.hasBoth).toBe(true);
+  });
 });
 
 // ===========================================================================

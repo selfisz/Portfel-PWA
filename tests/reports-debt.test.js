@@ -308,15 +308,42 @@ describe('simulateOverpaymentMonths', () => {
     const loan = { currentCapitalLeft: 12000, nextInstallmentAmount: 1000, interestRate: 0 };
     const sim = simulateOverpaymentMonths(loan, 200);
     expect(sim).toBeTruthy();
-    expect(sim.baseMonths).toBe(12); // 12000 / 1000
-    expect(sim.newMonths).toBe(10);  // 12000 / 1200
+    expect(sim.mode).toBe('shorten');
+    expect(sim.baseMonths).toBe(12);
+    expect(sim.newMonths).toBe(10);
     expect(sim.savedMonths).toBe(2);
     expect(sim.totalPayment).toBe(1200);
   });
 
+  it('obniża ratę w trybie lower gdy rata jest powyżej minimum', () => {
+    const loan = {
+      currentCapitalLeft: 120000,
+      nextInstallmentAmount: 1500,
+      interestRate: 6,
+      details: { remainingInstallments: 240 }
+    };
+    const sim = simulateOverpaymentMonths(loan, 200, 'lower');
+    expect(sim.mode).toBe('lower');
+    expect(sim.savedPerMonth).toBe(200);
+    expect(sim.newInstallment).toBe(1300);
+  });
+
+  it('obniża ratę po nadpłacie jednorazowej na kapitał', () => {
+    const loan = {
+      currentCapitalLeft: 120000,
+      nextInstallmentAmount: 1500,
+      interestRate: 6,
+      details: { remainingInstallments: 240 }
+    };
+    const scenarios = calculateOverpaymentScenarios(loan, { lumpSum: 460 });
+    expect(scenarios.lower.savedPerMonth).toBeGreaterThan(0);
+    expect(scenarios.lower.monthlyPayment).toBeLessThan(1500);
+    expect(scenarios.shorten.months).toBeLessThan(scenarios.baseline.months);
+  });
+
   it('używa remainingInstallments z umowy jako baseMonths gdy dostępne', () => {
     const loan = {
-      currentCapitalLeft: 12000,
+      currentCapitalLeft: 15000,
       nextInstallmentAmount: 1000,
       details: { remainingInstallments: 15 },
       interestRate: 0
@@ -338,13 +365,16 @@ describe('simulateOverpaymentMonths', () => {
     expect(sim.totalPayment).toBe(1000);
   });
 
-  it('oblicza annualInterestSaved jako przybliżenie', () => {
-    const loan = { currentCapitalLeft: 120000, nextInstallmentAmount: 1000, interestRate: 6 };
-    // estimateAnnualInterest = 120000 * 0.06 = 7200
-    // baseMonths = ceil(120000/1000) = 120, newMonths = ceil(120000/1500) = 80
-    // savedMonths = 40, annualInterestSaved = 7200 * (40/12) = 24000
-    const sim = simulateOverpaymentMonths(loan, 500);
-    expect(sim.annualInterestSaved).toBeCloseTo(7200 * (40 / 12), 0);
+  it('oblicza oszczędność odsetek przy skróceniu okresu', () => {
+    const loan = {
+      currentCapitalLeft: 120000,
+      nextInstallmentAmount: 1000,
+      interestRate: 6,
+      details: { remainingInstallments: 240 }
+    };
+    const scenarios = calculateOverpaymentScenarios(loan, { extraMonthly: 500 });
+    expect(scenarios.savedInterestShorten).toBeGreaterThan(0);
+    expect(scenarios.shorten.months).toBeLessThan(scenarios.baseline.months);
   });
 });
 

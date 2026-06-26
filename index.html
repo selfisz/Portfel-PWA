@@ -381,6 +381,33 @@
         </div>
     </div>
 
+    <div id="ikze-limit-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeIkzeLimitPanel()">
+        <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-ikze-limit"></div>
+            <div id="ikze-limit-content" class="loan-details-content"></div>
+            <div id="ikze-limit-edit" class="loan-details-edit obligation-edit-form hidden">
+                <div class="form-group">
+                    <label class="section-label" for="reports-ikze-limit-input">Roczny limit IKZE (zł)</label>
+                    <input type="number" id="reports-ikze-limit-input" min="0" step="100" inputmode="decimal">
+                </div>
+                <div class="form-group">
+                    <label class="section-label" for="reports-ikze-contributions-input">Wpłaty w tym roku (zł)</label>
+                    <input type="number" id="reports-ikze-contributions-input" min="0" step="50" inputmode="decimal">
+                </div>
+                <p class="reports-hint">Możesz wpisać kwotę ręcznie albo przeliczyć z transakcji powiązanych z IKZE.</p>
+                <div class="ikze-limit-actions">
+                    <button type="button" class="btn-outline" onclick="syncIkzeContributionsFromTransactions()">Przelicz z transakcji</button>
+                    <button type="button" class="btn-outline" onclick="useIkzeContributionsFromTransactions()">Używaj transakcji</button>
+                    <button type="button" class="btn-outline" onclick="resetIkzeAnnualLimit()">Domyślny limit</button>
+                </div>
+                <div class="loan-details-edit-actions obligation-form-actions">
+                    <button type="button" class="btn-submit" onclick="saveIkzeLimitSettings()">Zapisz</button>
+                    <button type="button" class="btn-outline loan-details-btn" onclick="cancelIkzeLimitEdit()">Anuluj</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="credit-card-quick-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeCreditCardQuickAction()">
         <div class="calendar-day-panel credit-card-quick-panel obligation-quick-panel" onclick="event.stopPropagation()">
             <div id="panel-header-credit-card-quick"></div>
@@ -662,60 +689,136 @@
         </div>
 
         <div id="view-reports" class="app-view">
-            <div id="analysis-period-swipe" class="analysis-swipe-zone card hero-card reports-hero-toolbar analysis-toolbar">
-                <div class="hero-label">Okres analizy <span class="analysis-swipe-label">· przesuń ↔</span></div>
-                <div class="reports-period-tabs flex-toggle flex-toggle--4 reports-period-tabs--4">
-                    <button id="btn-reports-mode-year" type="button" class="toggle-btn active" onclick="setReportsPeriodMode('year')">Rok</button>
-                    <button id="btn-reports-mode-month" type="button" class="toggle-btn" onclick="setReportsPeriodMode('month')">Miesiąc</button>
-                    <button id="btn-reports-mode-range" type="button" class="toggle-btn" onclick="setReportsPeriodMode('range')">Zakres</button>
-                    <button id="btn-reports-mode-compare" type="button" class="toggle-btn" onclick="setReportsPeriodMode('compare')">Porównaj</button>
-                </div>
-                <div class="reports-hero-period-fields">
-                <div id="reports-period-year-wrap" class="reports-hero-field">
-                    <label class="reports-hero-field-label" for="reports-year-select">Rok</label>
-                    <select id="reports-year-select" class="reports-hero-input" onchange="renderReports()"></select>
-                </div>
-                <div id="reports-period-month-wrap" class="reports-hero-field hidden">
-                    <label class="reports-hero-field-label" for="reports-period-month">Miesiąc</label>
-                    <input type="month" id="reports-period-month" class="reports-hero-input" onchange="onReportsMonthChange()">
-                </div>
-                <div id="reports-period-range-wrap" class="reports-hero-field hidden">
-                    <label class="reports-hero-field-label">Zakres dat</label>
-                    <div class="reports-date-row reports-hero-date-row">
-                        <input type="date" id="reports-range-start" class="reports-hero-input" onchange="renderReports()">
-                        <span class="reports-hero-date-sep">–</span>
-                        <input type="date" id="reports-range-end" class="reports-hero-input" onchange="renderReports()">
+            <div id="reports-period-hero" class="card hero-card analysis-period-hero">
+                <div class="analysis-period-hero-head">
+                    <div class="hero-label">Okres analizy</div>
+                    <div class="analysis-period-export">
+                        <button type="button" class="hero-summary-action" onclick="exportReportsCsv()">CSV</button>
+                        <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                        <button type="button" class="hero-summary-action" onclick="exportReportsPdf()">PDF</button>
                     </div>
                 </div>
-                <div id="reports-period-compare-wrap" class="reports-hero-field hidden">
-                    <label class="reports-hero-field-label">Okres A</label>
-                    <div class="reports-date-row reports-hero-date-row">
-                        <input type="date" id="reports-compare-a-start" class="reports-hero-input" onchange="renderReports()">
-                        <span class="reports-hero-date-sep">–</span>
-                        <input type="date" id="reports-compare-a-end" class="reports-hero-input" onchange="renderReports()">
-                    </div>
-                    <label class="reports-hero-field-label reports-period-label--spacing">Okres B</label>
-                    <div class="reports-date-row reports-hero-date-row">
-                        <input type="date" id="reports-compare-b-start" class="reports-hero-input" onchange="renderReports()">
-                        <span class="reports-hero-date-sep">–</span>
-                        <input type="date" id="reports-compare-b-end" class="reports-hero-input" onchange="renderReports()">
+                <div class="analysis-period-display-row">
+                    <div id="reports-period-display" class="hero-balance analysis-period-display">—</div>
+                    <button type="button" id="reports-period-reset" class="hero-period-reset hidden" onclick="resetReportsPeriod()" aria-label="Przywróć bieżący miesiąc" title="Bieżący miesiąc">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v4l5-5-5-5v4z"/></svg>
+                    </button>
+                </div>
+                <p id="reports-period-summary" class="hero-forecast-hint">Wyświetlane dane za bieżący miesiąc</p>
+
+                <select id="reports-year-select" class="hidden" aria-hidden="true" tabindex="-1" onchange="renderReports()"></select>
+                <input type="month" id="reports-period-month" class="hidden" aria-hidden="true" tabindex="-1" onchange="onReportsMonthChange()">
+
+                <div id="reports-period-main-block" class="loans-hero-summary">
+                    <button type="button" class="loans-hero-summary-toggle" onclick="toggleReportsPeriodMain()" aria-expanded="false" aria-controls="reports-period-main-panel">
+                        <span>Rok i miesiąc</span>
+                        <svg class="loans-hero-summary-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </button>
+                    <div id="reports-period-main-panel" class="loans-hero-summary-panel hidden">
+                        <div class="analysis-period-subrow">
+                            <span class="analysis-period-sub-label">Rok</span>
+                            <nav id="reports-year-chips" class="loans-hero-summary-chips" aria-label="Rok analizy"></nav>
+                        </div>
+                        <div class="analysis-period-subrow">
+                            <span class="analysis-period-sub-label">Miesiąc</span>
+                            <nav id="reports-month-chips" class="loans-hero-summary-chips analysis-period-chips--months" aria-label="Miesiąc analizy"></nav>
+                        </div>
                     </div>
                 </div>
-                </div>
-                <div class="reports-hero-export analysis-export-links">
-                    <button type="button" class="reports-hero-export-btn" onclick="exportReportsCsv()">Eksport CSV</button>
-                    <button type="button" class="reports-hero-export-btn" onclick="exportReportsPdf()">Eksport PDF</button>
+
+                <div id="reports-period-special-block" class="loans-hero-summary">
+                    <button type="button" class="loans-hero-summary-toggle" onclick="toggleReportsPeriodSpecial()" aria-expanded="false" aria-controls="reports-period-special-panel">
+                        <span>Zakres i porównanie</span>
+                        <svg class="loans-hero-summary-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </button>
+                    <div id="reports-period-special-panel" class="loans-hero-summary-panel hidden">
+                        <nav class="loans-hero-summary-chips analysis-special-mode-chips" aria-label="Niestandardowy okres">
+                            <button id="btn-reports-range-mode" type="button" class="toggle-btn loans-chip" onclick="selectReportsSpecialMode('range')">Zakres dat</button>
+                            <button id="btn-reports-compare-mode" type="button" class="toggle-btn loans-chip" onclick="selectReportsSpecialMode('compare')">Porównaj</button>
+                        </nav>
+                        <div id="reports-period-fields" class="analysis-period-fields">
+                            <div id="reports-period-range-wrap" class="analysis-period-field hidden">
+                                <span class="analysis-period-sub-label">Zakres dat</span>
+                                <div class="reports-hero-date-row analysis-period-date-row">
+                                    <input type="date" id="reports-range-start" class="analysis-period-date-input" aria-label="Początek zakresu">
+                                    <span class="reports-hero-date-sep">–</span>
+                                    <input type="date" id="reports-range-end" class="analysis-period-date-input" aria-label="Koniec zakresu">
+                                </div>
+                            </div>
+                            <div id="reports-period-compare-wrap" class="analysis-period-field hidden">
+                                <nav class="compare-preset-chips" aria-label="Typ porównania">
+                                    <button id="btn-compare-preset-mom" type="button" class="toggle-btn loans-chip" onclick="selectComparePreset('mom')">M–M</button>
+                                    <button id="btn-compare-preset-yoy" type="button" class="toggle-btn loans-chip" onclick="selectComparePreset('yoy')">R–R</button>
+                                    <button id="btn-compare-preset-same-month" type="button" class="toggle-btn loans-chip" onclick="selectComparePreset('same-month')">M rok wcześniej</button>
+                                    <button id="btn-compare-preset-custom" type="button" class="toggle-btn loans-chip" onclick="selectComparePreset('custom')">Własny</button>
+                                </nav>
+                                <div id="compare-preset-mom-wrap" class="compare-preset-panel">
+                                    <div class="compare-pickers-row">
+                                        <div class="compare-picker-col">
+                                            <span class="analysis-period-sub-label">Okres A</span>
+                                            <input type="month" id="reports-compare-a-month" class="analysis-period-month-input" aria-label="Okres A">
+                                        </div>
+                                        <span class="compare-pickers-vs" aria-hidden="true">vs</span>
+                                        <div class="compare-picker-col">
+                                            <span class="analysis-period-sub-label">Okres B</span>
+                                            <input type="month" id="reports-compare-b-month" class="analysis-period-month-input" aria-label="Okres B">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="compare-preset-yoy-wrap" class="compare-preset-panel hidden">
+                                    <div class="compare-pickers-row">
+                                        <div class="compare-picker-col">
+                                            <span class="analysis-period-sub-label">Okres A</span>
+                                            <select id="reports-compare-a-year" class="analysis-period-month-input" aria-label="Rok okresu A"></select>
+                                        </div>
+                                        <span class="compare-pickers-vs" aria-hidden="true">vs</span>
+                                        <div class="compare-picker-col">
+                                            <span class="analysis-period-sub-label">Okres B</span>
+                                            <select id="reports-compare-b-year" class="analysis-period-month-input" aria-label="Rok okresu B"></select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="compare-preset-same-month-wrap" class="compare-preset-panel hidden">
+                                    <span class="analysis-period-sub-label">Miesiąc (okres B)</span>
+                                    <input type="month" id="reports-compare-same-month" class="analysis-period-month-input" aria-label="Miesiąc do porównania" onchange="updateSameMonthCompareHint()">
+                                    <p id="reports-compare-same-month-hint" class="reports-hint compare-same-month-hint"></p>
+                                </div>
+                                <div id="compare-preset-custom-wrap" class="compare-preset-panel hidden">
+                                    <div class="compare-pickers-row compare-pickers-row--dates">
+                                        <div class="compare-picker-col">
+                                            <span class="analysis-period-sub-label">Okres A</span>
+                                            <div class="reports-hero-date-row analysis-period-date-row">
+                                                <input type="date" id="reports-compare-a-start" class="analysis-period-date-input" aria-label="Początek okresu A">
+                                                <span class="reports-hero-date-sep">–</span>
+                                                <input type="date" id="reports-compare-a-end" class="analysis-period-date-input" aria-label="Koniec okresu A">
+                                            </div>
+                                        </div>
+                                        <span class="compare-pickers-vs" aria-hidden="true">vs</span>
+                                        <div class="compare-picker-col">
+                                            <span class="analysis-period-sub-label">Okres B</span>
+                                            <div class="reports-hero-date-row analysis-period-date-row">
+                                                <input type="date" id="reports-compare-b-start" class="analysis-period-date-input" aria-label="Początek okresu B">
+                                                <span class="reports-hero-date-sep">–</span>
+                                                <input type="date" id="reports-compare-b-end" class="analysis-period-date-input" aria-label="Koniec okresu B">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="reports-period-special-confirm" class="analysis-period-confirm-row hidden">
+                                <button type="button" class="toggle-btn loans-chip analysis-period-confirm-btn" onclick="confirmReportsSpecialPeriod()">Zatwierdź</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div id="analysis-section-swipe" class="analysis-swipe-zone">
-            <nav class="analysis-section-nav flex-toggle" aria-label="Sekcje analizy">
-                <button id="btn-analysis-overview" type="button" class="toggle-btn active" onclick="setAnalysisSection('overview')">Przegląd</button>
-                <button id="btn-analysis-calendar" type="button" class="toggle-btn" onclick="setAnalysisSection('calendar')">Kalendarz</button>
-                <button id="btn-analysis-charts" type="button" class="toggle-btn" onclick="setAnalysisSection('charts')">Wykresy</button>
-                <button id="btn-analysis-assets" type="button" class="toggle-btn" onclick="setAnalysisSection('assets')">Aktywa</button>
-                <button id="btn-analysis-debts" type="button" class="toggle-btn" onclick="setAnalysisSection('debts')">Długi</button>
-                <button id="btn-analysis-details" type="button" class="toggle-btn" onclick="setAnalysisSection('details')">Szczegóły</button>
+            <nav class="analysis-tab-grid" aria-label="Sekcje analizy">
+                <button id="btn-analysis-overview" type="button" class="analysis-tab active" onclick="setAnalysisSection('overview')">Przegląd</button>
+                <button id="btn-analysis-expenses" type="button" class="analysis-tab" onclick="setAnalysisSection('expenses')">Wydatki</button>
+                <button id="btn-analysis-assets" type="button" class="analysis-tab" onclick="setAnalysisSection('assets')">Majątek</button>
+                <button id="btn-analysis-debts" type="button" class="analysis-tab" onclick="setAnalysisSection('debts')">Długi</button>
+                <button id="btn-analysis-advanced" type="button" class="analysis-tab analysis-tab--wide" onclick="setAnalysisSection('advanced')">Więcej</button>
             </nav>
 
             <div id="analysis-sections-body" class="analysis-sections-body">
@@ -723,8 +826,8 @@
                 <div id="reports-compare-card" class="card hidden"></div>
 
                 <div class="card hero-card reports-overview-hero">
-                    <div class="hero-label" id="reports-year-label">2026</div>
-                    <div id="reports-net-balance" class="hero-balance">0,00 zł</div>
+                    <div class="hero-label">Saldo okresu</div>
+                    <div id="reports-net-balance" class="hero-balance reports-overview-balance">0,00 zł</div>
                     <div class="hero-stats reports-overview-stats">
                         <div class="hero-stat income">
                             <div class="label">Wpływy</div>
@@ -734,51 +837,81 @@
                             <div class="label">Wydatki</div>
                             <div id="reports-total-expense" class="value">0,00 zł</div>
                         </div>
-                        <div class="hero-stat">
+                        <div class="hero-stat reports-stat-savings">
                             <div class="label">Oszczędności</div>
                             <div id="reports-savings-rate" class="value">0%</div>
                         </div>
-                        <div class="hero-stat expense">
-                            <div class="label">Średnia dzienna</div>
-                            <div id="reports-daily-avg" class="value">0,00 zł</div>
-                            <div id="reports-daily-avg-hint" class="hero-forecast-hint reports-daily-hint">wydatki / dzień</div>
-                        </div>
                     </div>
-                    <div class="hero-budget reports-savings-goal">
-                        <span class="hero-budget-label">Cel oszczędności</span>
-                        <div class="reports-goal-input-row">
-                            <input type="number" id="savings-goal-input" class="reports-hero-goal-input" min="0" max="100" step="1" onchange="saveSavingsGoal()">
-                            <span>%</span>
+                    <div id="reports-mom-summary" class="reports-mom-banner reports-mom-banner--hero hidden" aria-live="polite"></div>
+                    <div class="reports-overview-extras">
+                        <div class="hero-budget reports-savings-goal-bar">
+                            <div class="reports-goal-bar-head">
+                                <span class="hero-budget-label">Cel oszczędności</span>
+                                <span id="reports-goal-label" class="reports-goal-inline-label">0% z 20%</span>
+                            </div>
+                            <div class="progress-bar-bg hero-progress-bar reports-goal-bar"><div id="reports-goal-fill" class="progress-bar-fill"></div></div>
                         </div>
-                        <div class="progress-bar-bg hero-progress-bar reports-goal-bar"><div id="reports-goal-fill" class="progress-bar-fill"></div></div>
-                        <div id="reports-goal-label" class="hero-forecast-hint">0% z 20%</div>
+                        <button type="button" id="reports-goal-toggle" class="reports-overview-link-toggle" onclick="toggleReportsSavingsGoal()" aria-expanded="false" aria-controls="reports-goal-panel">
+                            <span>Ustaw cel oszczędności</span>
+                            <svg class="reports-overview-link-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                        </button>
+                        <div id="reports-goal-panel" class="reports-goal-panel--hero hidden">
+                            <label class="reports-goal-panel-label" for="savings-goal-input">Cel (%)</label>
+                            <div class="reports-goal-input-row">
+                                <input type="number" id="savings-goal-input" class="reports-goal-panel-input reports-goal-panel-input--hero" min="0" max="100" step="1" onchange="saveSavingsGoal()">
+                                <span>%</span>
+                            </div>
+                        </div>
+                        <div class="reports-daily-compact reports-daily-compact--hero">
+                            <span class="reports-daily-compact-label">Średnia dzienna</span>
+                            <strong id="reports-daily-avg" class="reports-daily-compact-value">0,00 zł</strong>
+                            <span id="reports-daily-avg-hint" class="reports-daily-compact-hint">wydatki / dzień</span>
+                        </div>
                     </div>
                 </div>
 
-                <div class="card dashboard-panel">
+                <div id="reports-forecast-card" class="card dashboard-panel hidden">
                     <h2 class="dashboard-section-title">Prognoza miesiąca</h2>
                     <div id="reports-forecast"></div>
                 </div>
 
-                <div class="card dashboard-panel">
-                    <h2 class="dashboard-section-title">Przepływ środków</h2>
-                    <p class="reports-hint">Wpływy → kategorie wydatków → bilans.</p>
-                    <div id="reports-flow-chart" class="reports-flow-chart"></div>
+                <div class="card chart-card dashboard-panel">
+                    <div class="chart-card-header">
+                        <h2 id="reports-structure-title" class="dashboard-section-title">Struktura wydatków</h2>
+                        <div class="chart-type-toggle flex-toggle">
+                            <button id="btn-reports-structure-expense" type="button" class="toggle-btn active expense" onclick="setReportsStructureViewType('expense')">Wydatki</button>
+                            <button id="btn-reports-structure-income" type="button" class="toggle-btn income" onclick="setReportsStructureViewType('income')">Wpływy</button>
+                        </div>
+                    </div>
+                    <button id="btn-reset-reports-structure" type="button" class="btn-outline hidden" onclick="resetReportsStructureChart()">&#8592; Wróć do ogółu</button>
+                    <div class="chart-wrapper">
+                        <canvas id="reportsStructureChart"></canvas>
+                        <div class="chart-center-label" aria-hidden="true">
+                            <div id="reports-structure-center-amount" class="chart-center-amount">0,00 zł</div>
+                            <div id="reports-structure-center-sub" class="chart-center-sub">razem</div>
+                        </div>
+                    </div>
+                    <div id="reports-structure-legend" class="chart-legend"></div>
+                    <div id="reports-structure-tx-block" class="reports-hero-expand hidden">
+                        <button type="button" id="reports-structure-tx-toggle" class="reports-hero-expand-toggle" onclick="toggleReportsStructureTx()" aria-expanded="false" aria-controls="reports-structure-tx-panel">
+                            <span>Pokaż transakcje</span>
+                            <svg class="reports-hero-expand-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                        </button>
+                        <div id="reports-structure-tx-panel" class="reports-hero-expand-panel hidden">
+                            <div id="reports-structure-tx-list" class="reports-tx-list"></div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="card dashboard-panel reports-wealth-panel">
-                    <h2 class="dashboard-section-title">Majątek i zobowiązania</h2>
-                    <p id="reports-net-worth-change" class="reports-hint hidden"></p>
-                    <div id="reports-net-worth"></div>
-                    <div id="reports-debt-dsr" class="reports-debt-dsr"></div>
-                    <div id="reports-loan-summary" class="analysis-loan-block"></div>
-                    <div id="reports-credit-card-summary" class="analysis-loan-block"></div>
-                    <div id="reports-debt-forecast" class="reports-debt-forecast"></div>
-                    <div id="reports-debt-overpayment" class="reports-debt-overpayment"></div>
+                <div class="card reports-months-card">
+                    <h2 id="reports-months-title" class="dashboard-section-title">Trend okresu</h2>
+                    <div class="reports-bar-chart-wrap">
+                        <canvas id="reportsMonthsChart"></canvas>
+                    </div>
                 </div>
             </div>
 
-            <div id="analysis-section-calendar" class="analysis-section hidden">
+            <div id="analysis-section-expenses" class="analysis-section hidden">
                 <div class="card reports-calendar-card">
                     <div class="reports-calendar-header">
                         <div id="reports-calendar-nav" class="reports-calendar-nav">
@@ -800,295 +933,6 @@
                     <div id="reports-year-heatmap" class="reports-year-heatmap hidden"></div>
                 </div>
 
-                <div id="reports-debt-calendar-card" class="card reports-debt-calendar-card hidden">
-                    <div class="reports-calendar-header reports-debt-calendar-header">
-                        <div id="reports-debt-calendar-nav" class="reports-calendar-nav">
-                            <button type="button" class="cal-nav-btn" onclick="shiftReportsDebtCalendarMonth(-1)" aria-label="Poprzedni miesiąc długów">&#8249;</button>
-                            <h2 id="reports-debt-calendar-label">Czerwiec 2026</h2>
-                            <button type="button" class="cal-nav-btn" onclick="shiftReportsDebtCalendarMonth(1)" aria-label="Następny miesiąc długów">&#8250;</button>
-                        </div>
-                    </div>
-                    <p class="reports-hint">Dni z ratami kredytów (termin z umowy). Karty — szacunek z ostatnich spłat, przerywana obwódka.</p>
-                    <div id="reports-debt-calendar-grid" class="reports-calendar-grid reports-debt-calendar-grid"></div>
-                    <div id="reports-debt-calendar-month-total" class="debt-cal-month-total"></div>
-                </div>
-
-                <div id="reports-debt-peak-card" class="card reports-months-card hidden">
-                    <h2>Szczyt obciążenia ratami</h2>
-                    <p class="reports-hint">Suma planowanych rat w kolejnych 24 miesiącach — najwyższy słupek to „peak”.</p>
-                    <div class="reports-bar-chart-wrap">
-                        <canvas id="reportsDebtPeakChart"></canvas>
-                    </div>
-                    <div id="reports-debt-peak-summary"></div>
-                </div>
-
-                <div id="reports-debt-freedom-card" class="card hidden">
-                    <h2>Kiedy uwolnisz się od zobowiązań</h2>
-                    <p class="reports-hint">Prognoza końca spłaty każdego kredytu i karty — im krótszy pasek, tym bliżej wolności.</p>
-                    <div id="reports-debt-freedom-timeline"></div>
-                </div>
-
-                <div id="reports-deposits-calendar-card" class="card hidden">
-                    <h2>Koniec lokat</h2>
-                    <p class="reports-hint">Zbliżające się terminy zakończenia lokat.</p>
-                    <div id="reports-deposits-calendar-list"></div>
-                </div>
-            </div>
-
-            <div id="analysis-section-charts" class="analysis-section hidden">
-                <div class="card reports-months-card">
-                    <h2 id="reports-months-title">Miesiące</h2>
-                    <div class="reports-bar-chart-wrap">
-                        <canvas id="reportsMonthsChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="card reports-months-card">
-                    <h2>Trend wydatków</h2>
-                    <div class="reports-bar-chart-wrap">
-                        <canvas id="reportsTrendChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="card reports-months-card">
-                    <h2>Spłaty długów</h2>
-                    <p class="reports-hint">Raty kredytów (z transakcji) i spłaty kart — miesięcznie w wybranym okresie.</p>
-                    <div class="reports-bar-chart-wrap">
-                        <canvas id="reportsDebtChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="card reports-months-card">
-                    <h2>Trend zadłużenia</h2>
-                    <p class="reports-hint">Szacunek łącznego zadłużenia na koniec miesiąca (kredyty + karty).</p>
-                    <div class="reports-bar-chart-wrap">
-                        <canvas id="reportsDebtTrendChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="card reports-months-card">
-                    <h2>Podział spłat w okresie</h2>
-                    <p class="reports-hint">Udział każdego kredytu i karty w spłatach z wybranego okresu.</p>
-                    <div class="reports-bar-chart-wrap reports-debt-split-wrap">
-                        <canvas id="reportsDebtSplitChart"></canvas>
-                    </div>
-                    <div id="reports-debt-split-legend" class="reports-debt-split-legend"></div>
-                </div>
-
-                <div class="card reports-months-card">
-                    <h2>Alokacja majątku</h2>
-                    <p class="reports-hint">Udział typów aktywów w sumie (zgodnie z chipami w zakładce Aktywa).</p>
-                    <div class="reports-bar-chart-wrap reports-debt-split-wrap">
-                        <canvas id="reportsAssetAllocationChart"></canvas>
-                    </div>
-                    <div id="reports-asset-allocation-legend" class="reports-debt-split-legend"></div>
-                </div>
-
-                <div class="card reports-months-card">
-                    <h2>Trend salda gotówki</h2>
-                    <p class="reports-hint">Szacunek salda operacyjnej gotówki na koniec miesiąca (z ruchów gotówki).</p>
-                    <div class="reports-bar-chart-wrap">
-                        <canvas id="reportsCashTrendChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="analysis-charts-grid">
-                    <div class="card reports-months-card">
-                        <h2 id="reports-yoy-title">Rok do roku</h2>
-                        <div class="reports-bar-chart-wrap">
-                            <canvas id="reportsYoyChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="card reports-months-card">
-                        <h2>Dzień tygodnia</h2>
-                        <div class="reports-bar-chart-wrap reports-dow-chart-wrap">
-                            <canvas id="reportsDowChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="analysis-section-assets" class="analysis-section hidden">
-                <div class="card hero-card reports-assets-hero-card">
-                    <div class="hero-label">Wartość majątku</div>
-                    <div id="reports-assets-hero-total" class="hero-balance">—</div>
-                    <p id="reports-assets-hero-meta" class="loan-hero-meta"></p>
-                </div>
-
-                <div class="card">
-                    <h2>Horyzont inwestycyjny</h2>
-                    <p class="reports-hint">Krótkoterminowe vs długoterminowe — ten sam podział co w zakładce Aktywa.</p>
-                    <div id="reports-assets-horizon"></div>
-                </div>
-
-                <div class="card reports-months-card">
-                    <h2>Struktura majątku</h2>
-                    <p class="reports-hint">Udział typów aktywów w sumie.</p>
-                    <div class="reports-bar-chart-wrap reports-debt-split-wrap">
-                        <canvas id="reportsAssetsAllocationChart"></canvas>
-                    </div>
-                    <div id="reports-assets-allocation-legend" class="reports-debt-split-legend"></div>
-                </div>
-
-                <div class="card">
-                    <h2>Inwestycje — P/L</h2>
-                    <div id="reports-assets-investments"></div>
-                </div>
-
-                <div class="card">
-                    <h2>Emerytura i długi horyzonty</h2>
-                    <p class="reports-hint">PPK, IKZE, emerytura, KZP.</p>
-                    <div id="reports-assets-retirement"></div>
-                </div>
-
-                <div class="card">
-                    <h2>Wszystkie pozycje</h2>
-                    <div id="reports-assets-list"></div>
-                </div>
-
-                <div class="card">
-                    <h2>Majątek a zobowiązania</h2>
-                    <div id="reports-assets-debt-link"></div>
-                </div>
-
-                <div class="card">
-                    <h2>Gotówka a transakcje</h2>
-                    <p class="reports-hint">Bilans wpływów i wydatków z salda vs rzeczywista zmiana operacyjnej gotówki w okresie.</p>
-                    <div id="reports-assets-cash-flow"></div>
-                </div>
-
-                <div class="card reports-months-card">
-                    <h2>Trend salda gotówki</h2>
-                    <div class="reports-bar-chart-wrap">
-                        <canvas id="reportsAssetsCashTrendChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <h2>Historia majątku</h2>
-                    <p class="reports-hint">Snapshoty miesięczne — automatycznie przy zmianie miesiąca.</p>
-                        <button type="button" class="btn-outline assets-snapshot-btn" onclick="saveAssetSnapshotNow()">Zapisz stan teraz</button>
-                    <div id="reports-assets-snapshots-list" class="assets-snapshots-list"></div>
-                </div>
-
-                <div class="card reports-months-card">
-                    <h2>Trend wartości netto</h2>
-                    <div class="reports-bar-chart-wrap">
-                        <canvas id="reportsNetWorthTrendChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="card reports-months-card">
-                    <h2>Alokacja w czasie</h2>
-                    <div class="reports-bar-chart-wrap">
-                        <canvas id="reportsAllocationTrendChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <h2>Przepływy majątku</h2>
-                    <p class="reports-hint">Ile poszło na aktywa, spłaty i zmianę gotówki w wybranym okresie.</p>
-                    <div id="reports-wealth-flows"></div>
-                </div>
-
-                <div class="card">
-                    <h2>Cele i płynność</h2>
-                    <div id="reports-assets-goals"></div>
-                </div>
-
-                <div class="card reports-months-card">
-                    <h2>Dywersyfikacja</h2>
-                    <p class="reports-hint">Udział każdej pozycji w majątku.</p>
-                    <div class="reports-bar-chart-wrap reports-debt-split-wrap">
-                        <canvas id="reportsDiversificationChart"></canvas>
-                    </div>
-                    <div id="reports-diversification-legend" class="reports-debt-split-legend"></div>
-                </div>
-
-                <div class="card">
-                    <h2>Limit IKZE w roku</h2>
-                    <div id="reports-ikze-limit"></div>
-                </div>
-
-                <div class="card">
-                    <h2>Hipoteka vs emerytura</h2>
-                    <div id="reports-mortgage-retirement"></div>
-                </div>
-            </div>
-
-            <div id="analysis-section-debts" class="analysis-section hidden">
-                <div class="card hero-card reports-debts-hero-card">
-                    <div class="hero-label">Zadłużenie</div>
-                    <div id="reports-debts-hero-total" class="hero-balance">—</div>
-                    <p id="reports-debts-hero-meta" class="loan-hero-meta"></p>
-                </div>
-
-                <div class="card">
-                    <h2>Koszt odsetek (szacunek)</h2>
-                    <p class="reports-hint">Kapitał × oprocentowanie — przybliżenie roczne i miesięczne bez pełnej amortyzacji.</p>
-                    <div id="reports-debt-interest"></div>
-                </div>
-
-                <div class="card">
-                    <h2>LTV — hipoteka</h2>
-                    <p class="reports-hint">Stosunek pozostałego kapitału do wartości nieruchomości z umowy.</p>
-                    <div id="reports-debt-ltv"></div>
-                </div>
-
-                <div class="card">
-                    <h2>Scenariusz nadpłaty</h2>
-                    <p class="reports-hint">Ile miesięcy możesz skrócić spłatę przy dodatkowej kwocie co miesiąc.</p>
-                    <div class="debts-scenario-controls">
-                        <div class="form-group">
-                            <label class="section-label" for="debts-scenario-loan">Kredyt</label>
-                            <select id="debts-scenario-loan" onchange="onDebtsScenarioChange()"></select>
-                        </div>
-                        <div class="form-group">
-                            <label class="section-label" for="debts-scenario-extra">Dodatkowa kwota / mies.</label>
-                            <input type="number" id="debts-scenario-extra" min="0" step="50" value="500" inputmode="decimal" onchange="onDebtsScenarioChange()">
-                        </div>
-                        <div class="debts-scenario-chips">
-                            <button type="button" class="toggle-btn loans-chip" onclick="setDebtsScenarioExtra(200)">+200</button>
-                            <button type="button" class="toggle-btn loans-chip active" onclick="setDebtsScenarioExtra(500)">+500</button>
-                            <button type="button" class="toggle-btn loans-chip" onclick="setDebtsScenarioExtra(1000)">+1000</button>
-                        </div>
-                    </div>
-                    <div id="reports-debt-scenarios"></div>
-                </div>
-
-                <div class="card">
-                    <h2>Prognoza i spłaty</h2>
-                    <div id="reports-debts-forecast"></div>
-                    <div id="reports-debts-overpayment"></div>
-                </div>
-
-                <div class="card">
-                    <h2>Kredyty w okresie</h2>
-                    <div id="reports-debts-loans"></div>
-                </div>
-
-                <div class="card">
-                    <h2>Karty kredytowe</h2>
-                    <div id="reports-debts-cards"></div>
-                </div>
-
-                <div class="card reports-months-card">
-                    <h2>Spłaty w okresie</h2>
-                    <div class="reports-bar-chart-wrap">
-                        <canvas id="reportsDebtsChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="card reports-months-card">
-                    <h2>Podział spłat</h2>
-                    <div class="reports-bar-chart-wrap reports-debt-split-wrap">
-                        <canvas id="reportsDebtsSplitChart"></canvas>
-                    </div>
-                    <div id="reports-debts-split-legend" class="reports-debt-split-legend"></div>
-                </div>
-            </div>
-
-            <div id="analysis-section-details" class="analysis-section hidden">
                 <div class="card dashboard-panel">
                     <div class="chart-card-header">
                         <h2 id="reports-top-title" class="dashboard-section-title">Top kategorie</h2>
@@ -1133,12 +977,255 @@
                     <p class="reports-hint">Powtarzające się wydatki z ostatnich miesięcy lub oznaczone ręcznie.</p>
                     <div id="reports-recurring-list" class="reports-recurring-list"></div>
                 </div>
+            </div>
+
+            <div id="analysis-section-advanced" class="analysis-section hidden">
+                <div class="card reports-months-card">
+                    <h2 class="dashboard-section-title">Trend wydatków</h2>
+                    <div class="reports-bar-chart-wrap">
+                        <canvas id="reportsTrendChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="analysis-charts-grid">
+                    <div class="card reports-months-card">
+                        <h2 id="reports-yoy-title" class="dashboard-section-title">Ten miesiąc vs poprzedni</h2>
+                        <div class="reports-bar-chart-wrap">
+                            <canvas id="reportsYoyChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card reports-months-card">
+                        <h2 class="dashboard-section-title">Dzień tygodnia</h2>
+                        <div class="reports-bar-chart-wrap reports-dow-chart-wrap">
+                            <canvas id="reportsDowChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card dashboard-panel">
+                    <h2 class="dashboard-section-title">Przepływ środków</h2>
+                    <p class="reports-hint">Wpływy → kategorie wydatków → bilans.</p>
+                    <div id="reports-flow-chart" class="reports-flow-chart"></div>
+                </div>
 
                 <div class="card dashboard-panel">
                     <h2 class="dashboard-section-title">Podsumowanie roku</h2>
                     <div id="reports-year-review"></div>
                 </div>
+
+                <div class="card reports-months-card">
+                    <h2 class="dashboard-section-title">Alokacja w czasie</h2>
+                    <div class="reports-bar-chart-wrap">
+                        <canvas id="reportsAllocationTrendChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2 id="reports-diversification-title" class="dashboard-section-title">Dywersyfikacja</h2>
+                    <p class="reports-hint">Udział każdej pozycji w majątku — dotknij segment, aby zobaczyć szczegóły.</p>
+                    <button id="btn-reset-reports-diversification" type="button" class="btn-outline reports-allocation-back hidden" onclick="resetReportsDiversificationDrill()">← Wróć do dywersyfikacji</button>
+                    <div class="reports-bar-chart-wrap reports-debt-split-wrap">
+                        <canvas id="reportsDiversificationChart"></canvas>
+                    </div>
+                    <div id="reports-diversification-legend" class="reports-debt-split-legend chart-legend"></div>
+                </div>
+
+                <div class="card ikze-limit-card loan-clickable" id="reports-ikze-limit-card" role="button" tabindex="0"
+                    onclick="openIkzeLimitPanel()" onkeydown="if (event.key === 'Enter') openIkzeLimitPanel()">
+                    <h2 class="dashboard-section-title">Limit IKZE w roku</h2>
+                    <div id="reports-ikze-limit"></div>
+                </div>
+
+                <div class="card">
+                    <h2 class="dashboard-section-title">Hipoteka vs emerytura</h2>
+                    <div id="reports-mortgage-retirement"></div>
+                </div>
             </div>
+
+            <div id="analysis-section-assets" class="analysis-section hidden">
+                <div class="card hero-card reports-assets-hero-card">
+                    <div class="hero-label">Wartość majątku</div>
+                    <div id="reports-assets-hero-total" class="hero-balance">—</div>
+                    <p id="reports-assets-hero-meta" class="loan-hero-meta"></p>
+                </div>
+
+                <div class="card">
+                    <h2>Horyzont inwestycyjny</h2>
+                    <p class="reports-hint">Krótkoterminowe vs długoterminowe — ten sam podział co w zakładce Aktywa.</p>
+                    <div id="reports-assets-horizon"></div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2 id="reports-assets-allocation-title" class="dashboard-section-title">Struktura majątku</h2>
+                    <p class="reports-hint">Udział typów aktywów w sumie — dotknij segment, aby zobaczyć pozycje.</p>
+                    <div class="reports-bar-chart-wrap reports-debt-split-wrap">
+                        <canvas id="reportsAssetsAllocationChart"></canvas>
+                    </div>
+                    <button id="btn-reset-reports-assets-allocation" type="button" class="btn-outline reports-allocation-back hidden" onclick="resetReportsAssetAllocationDrill()">← Wróć do struktury</button>
+                    <div id="reports-assets-allocation-legend" class="reports-debt-split-legend chart-legend"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Inwestycje — P/L</h2>
+                    <div id="reports-assets-investments"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Emerytura i długi horyzonty</h2>
+                    <p class="reports-hint">PPK, IKZE, emerytura, KZP.</p>
+                    <div id="reports-assets-retirement"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Wszystkie pozycje</h2>
+                    <div id="reports-assets-list"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Majątek a zobowiązania</h2>
+                    <div id="reports-assets-debt-link"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Gotówka a transakcje</h2>
+                    <p class="reports-hint">Bilans wpływów i wydatków z salda vs rzeczywista zmiana operacyjnej gotówki w okresie.</p>
+                    <div id="reports-assets-cash-flow"></div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2>Trend salda gotówki</h2>
+                    <div class="reports-bar-chart-wrap">
+                        <canvas id="reportsAssetsCashTrendChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Historia majątku</h2>
+                    <p class="reports-hint">Snapshoty miesięczne — zapisują się automatycznie przy zmianie miesiąca. Trend net worth wymaga co najmniej 2 miesięcy danych.</p>
+                        <button type="button" class="btn-outline assets-snapshot-btn" onclick="saveAssetSnapshotNow()">Zapisz stan teraz</button>
+                    <div id="reports-assets-snapshots-list" class="assets-snapshots-list"></div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2>Trend wartości netto</h2>
+                    <div id="reports-networth-trend-empty" class="reports-chart-empty hidden"></div>
+                    <div id="reports-networth-trend-wrap" class="reports-bar-chart-wrap">
+                        <canvas id="reportsNetWorthTrendChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Przepływy majątku</h2>
+                    <p class="reports-hint">Ile poszło na aktywa, spłaty i zmianę gotówki w wybranym okresie.</p>
+                    <div id="reports-wealth-flows"></div>
+                </div>
+            </div>
+
+            <div id="analysis-section-debts" class="analysis-section hidden">
+                <div class="card hero-card reports-debts-hero-card">
+                    <div class="hero-label">Zadłużenie</div>
+                    <div id="reports-debts-hero-total" class="hero-balance">—</div>
+                    <div class="hero-stats reports-debts-hero-stats">
+                        <div class="hero-stat">
+                            <div class="label">Odsetki / rok</div>
+                            <div id="reports-debts-kpi-interest" class="value">—</div>
+                        </div>
+                        <div class="hero-stat">
+                            <div class="label">Następna rata</div>
+                            <div id="reports-debts-kpi-next" class="value">—</div>
+                        </div>
+                        <div class="hero-stat">
+                            <div class="label">Pełna wolność</div>
+                            <div id="reports-debts-kpi-freedom" class="value">—</div>
+                        </div>
+                    </div>
+                    <p id="reports-debts-hero-meta" class="hero-forecast-hint loan-hero-meta"></p>
+                </div>
+
+                <div class="card debts-panel-card">
+                    <h2 class="dashboard-section-title">Kredyty</h2>
+                    <div id="reports-debt-loans-portfolio"></div>
+                </div>
+
+                <div class="card debts-panel-card" id="reports-debts-cards-wrap">
+                    <h2 class="dashboard-section-title">Karty kredytowe</h2>
+                    <div id="reports-debts-cards"></div>
+                </div>
+
+                <div class="card debts-panel-card">
+                    <h2 class="dashboard-section-title">Raty i terminy</h2>
+                    <div id="reports-debt-installment-summary"></div>
+                    <div id="reports-debt-installment-list"></div>
+                </div>
+
+                <div class="card debts-panel-card">
+                    <h2 class="dashboard-section-title">Kalkulator nadpłaty</h2>
+                    <div class="debts-scenario-controls overpay-calc-form">
+                        <div class="form-group overpay-calc-loan-field">
+                            <label class="section-label" for="debts-overpay-loan">Kredyt</label>
+                            <select id="debts-overpay-loan" onchange="onDebtsOverpayChange()"></select>
+                        </div>
+                        <div id="debts-overpay-loan-summary" class="overpay-calc-loan-summary"></div>
+                        <div class="overpay-calc-row">
+                            <nav class="flex-toggle flex-toggle--2 overpay-calc-kind-toggle" aria-label="Rodzaj nadpłaty">
+                                <button id="btn-overpay-monthly" type="button" class="toggle-btn active" onclick="setDebtsOverpayKind('monthly')">Co miesiąc</button>
+                                <button id="btn-overpay-lump" type="button" class="toggle-btn" onclick="setDebtsOverpayKind('lump')">Jednorazowo</button>
+                            </nav>
+                            <div class="form-group overpay-calc-amount-field">
+                                <input type="number" id="debts-overpay-amount" min="0" step="50" value="" placeholder="Kwota / mies." inputmode="decimal" aria-label="Kwota nadpłaty" onchange="onDebtsOverpayChange()" oninput="onDebtsOverpayChange()">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="reports-debt-overpay-results"></div>
+                </div>
+
+                <div class="card debts-panel-card">
+                    <h2 class="dashboard-section-title">Prognoza wolności od długów</h2>
+                    <div id="reports-debts-freedom-panel"></div>
+                </div>
+
+                <div class="card reports-debts-charts-card debts-panel-card">
+                    <h2 class="dashboard-section-title">Wykresy</h2>
+                    <div class="analysis-charts-grid debts-charts-grid">
+                        <div class="debts-chart-panel">
+                            <h3 class="debts-chart-panel-title">Trend zadłużenia</h3>
+                            <p class="reports-hint">Szacunek zadłużenia na koniec miesiąca.</p>
+                            <div class="reports-bar-chart-wrap debts-chart-wrap">
+                                <canvas id="reportsDebtTrendChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="debts-chart-panel">
+                            <h3 class="debts-chart-panel-title">Spłaty w okresie</h3>
+                            <p class="reports-hint">Kredyty i karty w wybranym okresie.</p>
+                            <div class="reports-bar-chart-wrap debts-chart-wrap">
+                                <canvas id="reportsDebtsChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="debts-chart-panel debts-chart-panel--split">
+                            <h3 id="reports-debt-split-title" class="debts-chart-panel-title">Podział spłat</h3>
+                            <p class="reports-hint">Dotknij segment, aby zobaczyć szczegóły.</p>
+                            <button id="btn-reset-reports-debt-split" type="button" class="btn-outline reports-allocation-back hidden" onclick="resetReportsDebtSplitDrill()">← Wróć do podziału</button>
+                            <div class="reports-bar-chart-wrap reports-debt-split-wrap debts-chart-wrap debts-chart-wrap--donut">
+                                <canvas id="reportsDebtsSplitChart"></canvas>
+                            </div>
+                            <div id="reports-debts-split-legend" class="reports-debt-split-legend chart-legend"></div>
+                        </div>
+                        <div id="reports-debt-peak-panel" class="debts-chart-panel hidden">
+                            <h3 class="debts-chart-panel-title">Szczyt obciążenia ratami</h3>
+                            <p class="reports-hint">Najwyższa suma rat w kolejnych 24 miesiącach.</p>
+                            <div class="reports-bar-chart-wrap debts-chart-wrap">
+                                <canvas id="reportsDebtPeakChart"></canvas>
+                            </div>
+                            <div id="reports-debt-peak-summary"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="reports-deposits-calendar-card" class="card hidden">
+                    <h2>Koniec lokat</h2>
+                    <p class="reports-hint">Zbliżające się terminy zakończenia lokat.</p>
+                    <div id="reports-deposits-calendar-list"></div>
+                </div>
             </div>
             </div>
         </div>
@@ -1309,6 +1396,7 @@
     <script src="js/reports-calendar.js"></script>
     <script src="js/reports-debt.js"></script>
     <script src="js/reports-assets.js"></script>
+    <script src="js/reports-analysis-chart.js"></script>
     <script src="js/reports-phase3.js"></script>
     <script src="js/bootstrap.js"></script>
 </body>

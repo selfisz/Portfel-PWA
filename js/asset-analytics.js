@@ -1,5 +1,11 @@
 const CELE_ASSET_ID = 'asset-cash-mbank-cele';
 const IKZE_ANNUAL_LIMIT_PLN = 8000;
+
+function getIkzeAnnualLimitPln() {
+    const custom = appState.reportPrefs?.ikzeAnnualLimitPln;
+    if (typeof custom === 'number' && custom > 0) return custom;
+    return IKZE_ANNUAL_LIMIT_PLN;
+}
 const MAX_ASSET_SNAPSHOTS = 36;
 const MAX_ASSET_VALUE_HISTORY = 500;
 
@@ -129,6 +135,60 @@ function autoCaptureAssetSnapshotsIfNeeded() {
     }
 
     return changed;
+}
+
+function getSnapshotForMonthKey(monthKey) {
+    const snapshots = getAssetSnapshots();
+    const exact = snapshots.find((s) => s.monthKey === monthKey);
+    if (exact) return exact;
+    return snapshots.filter((s) => s.monthKey <= monthKey).pop() || null;
+}
+
+function isCurrentMonthKey(monthKey) {
+    const now = new Date();
+    return monthKey === `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getWealthAtPeriodEnd(endDate) {
+    if (!endDate) return null;
+    const monthKey = endDate.slice(0, 7);
+    if (isCurrentMonthKey(monthKey) && typeof buildCurrentSnapshotPayload === 'function') {
+        return buildCurrentSnapshotPayload(monthKey, 'live');
+    }
+    return getSnapshotForMonthKey(monthKey);
+}
+
+function buildCompareWealthSummary(periodAEnd, periodBEnd) {
+    const snapA = getWealthAtPeriodEnd(periodAEnd);
+    const snapB = getWealthAtPeriodEnd(periodBEnd);
+    if (!snapA && !snapB) return null;
+
+    const empty = { totalAssets: 0, totalDebt: 0, netWorth: 0, loanDebt: 0, cardDebt: 0 };
+    const a = snapA || empty;
+    const b = snapB || snapA || empty;
+
+    return {
+        a: {
+            assets: a.totalAssets,
+            debt: a.totalDebt,
+            netWorth: a.netWorth,
+            loanDebt: a.loanDebt,
+            cardDebt: a.cardDebt
+        },
+        b: {
+            assets: b.totalAssets,
+            debt: b.totalDebt,
+            netWorth: b.netWorth,
+            loanDebt: b.loanDebt,
+            cardDebt: b.cardDebt
+        },
+        deltaAssets: b.totalAssets - a.totalAssets,
+        deltaDebt: b.totalDebt - a.totalDebt,
+        deltaNetWorth: b.netWorth - a.netWorth,
+        deltaLoanDebt: b.loanDebt - a.loanDebt,
+        deltaCardDebt: b.cardDebt - a.cardDebt,
+        hasBoth: Boolean(snapA && snapB)
+    };
 }
 
 function getSnapshotMonthChange() {
@@ -326,7 +386,7 @@ function buildDiversificationSlices() {
         .sort((a, b) => b.amount - a.amount);
 }
 
-function getIkzeContributionsInYear(year) {
+function getIkzeContributionsFromTransactions(year) {
     const start = `${year}-01-01`;
     const end = `${year}-12-31`;
     return appState.transactions
@@ -337,6 +397,25 @@ function getIkzeContributionsInYear(year) {
                 && (tx.type === 'expense' || tx.type === 'income');
         })
         .reduce((sum, tx) => sum + tx.amount, 0);
+}
+
+function getIkzeManualContributions(year) {
+    const map = appState.reportPrefs?.ikzeContributionsByYear;
+    if (!map || typeof map !== 'object') return null;
+    const key = String(year);
+    if (!(key in map)) return null;
+    const val = parseFloat(map[key]);
+    return Number.isFinite(val) ? Math.max(0, val) : null;
+}
+
+function getIkzeContributionsInYear(year) {
+    const manual = getIkzeManualContributions(year);
+    if (manual !== null) return manual;
+    return getIkzeContributionsFromTransactions(year);
+}
+
+function isIkzeContributionsManual(year) {
+    return getIkzeManualContributions(year) !== null;
 }
 
 function estimateNetWorthPayoffMonths() {

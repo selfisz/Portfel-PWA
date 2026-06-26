@@ -8,7 +8,7 @@ function setReportsCalendarView(view) {
     document.getElementById('reports-calendar-nav')?.classList.toggle('hidden', view === 'year');
     document.getElementById('reports-calendar-legend')?.classList.toggle('hidden', view === 'year');
     document.getElementById('reports-debt-calendar-card')?.classList.toggle('hidden', view === 'year');
-    document.getElementById('reports-debt-peak-card')?.classList.toggle('hidden', view === 'year');
+    document.getElementById('reports-debt-peak-panel')?.classList.toggle('hidden', view === 'year');
     document.getElementById('reports-debt-freedom-card')?.classList.toggle('hidden', view === 'year');
     renderReportsCalendarView();
 }
@@ -208,7 +208,9 @@ function buildDebtFreedomTimeline() {
 function renderDebtCalendarSection() {
     renderDebtCalendarGrid();
     renderDebtPeakChart();
-    renderDebtFreedomTimeline();
+    if (document.getElementById('reports-debt-freedom-timeline')) {
+        renderDebtFreedomTimeline();
+    }
     renderDepositsCalendarList();
 }
 
@@ -294,19 +296,19 @@ function renderDebtCalendarGrid() {
 function renderDebtPeakChart() {
     const canvas = document.getElementById('reportsDebtPeakChart');
     const summaryEl = document.getElementById('reports-debt-peak-summary');
-    const cardEl = document.getElementById('reports-debt-peak-card');
+    const panelEl = document.getElementById('reports-debt-peak-panel');
     if (!canvas) return;
 
     const series = buildDebtPeakSeries(24);
     if (!series.totals.some((v) => v > 0)) {
-        cardEl?.classList.add('hidden');
+        panelEl?.classList.add('hidden');
         if (reportsDebtPeakChartInstance) {
             reportsDebtPeakChartInstance.destroy();
             reportsDebtPeakChartInstance = null;
         }
         return;
     }
-    cardEl?.classList.remove('hidden');
+    panelEl?.classList.remove('hidden');
 
     if (reportsDebtPeakChartInstance) reportsDebtPeakChartInstance.destroy();
 

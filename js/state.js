@@ -10,7 +10,8 @@ let appState = {
     cashMovements: [],
     assetSnapshots: [],
     assetValueHistory: [],
-    categoryBudgets: {}
+    categoryBudgets: {},
+    reportPrefs: {}
 };
 
 let formState = {
@@ -70,6 +71,9 @@ function getPersistedState(raw = appState) {
             : JSON.parse(JSON.stringify(DEFAULT_CATEGORY_TREE)),
         categoryBudgets: data.categoryBudgets && typeof data.categoryBudgets === 'object'
             ? data.categoryBudgets
+            : {},
+        reportPrefs: data.reportPrefs && typeof data.reportPrefs === 'object'
+            ? data.reportPrefs
             : {}
     };
     return persisted;

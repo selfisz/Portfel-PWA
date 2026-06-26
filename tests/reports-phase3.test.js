@@ -204,6 +204,35 @@ describe('summarizePeriod', () => {
   });
 });
 
+describe('getPeriodInclusiveDays', () => {
+  it('liczy dni włącznie z końcowym', () => {
+    expect(getPeriodInclusiveDays('2024-01-01', '2024-01-31')).toBe(31);
+    expect(getPeriodInclusiveDays('2024-02-01', '2024-02-29')).toBe(29);
+  });
+
+  it('zwraca 1 dla brakujących dat', () => {
+    expect(getPeriodInclusiveDays(null, '2024-01-01')).toBe(1);
+  });
+});
+
+describe('buildCompareCategoryMovers', () => {
+  it('sortuje kategorie po największej zmianie bezwzględnej', () => {
+    const txA = [
+      { type: 'expense', amount: 100, mainCategory: 'Jedzenie' },
+      { type: 'expense', amount: 50, mainCategory: 'Transport' }
+    ];
+    const txB = [
+      { type: 'expense', amount: 300, mainCategory: 'Jedzenie' },
+      { type: 'expense', amount: 40, mainCategory: 'Transport' }
+    ];
+    const movers = buildCompareCategoryMovers(txA, txB, 5);
+    expect(movers[0].name).toBe('Jedzenie');
+    expect(movers[0].diff).toBe(200);
+    expect(movers[1].name).toBe('Transport');
+    expect(movers[1].diff).toBe(-10);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // getTransactionsInRange
 // ---------------------------------------------------------------------------

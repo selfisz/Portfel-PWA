@@ -36,6 +36,7 @@ function populateReportsYearSelect() {
 function setReportsViewType(type) {
     if (reportsViewType === type) return;
     reportsViewType = type;
+    reportsTopExpandedKey = null;
     renderReports();
 }
 
@@ -49,6 +50,7 @@ function syncReportsRankToggles() {
 function setReportsRankLevel(level) {
     if (reportsRankLevel === level) return;
     reportsRankLevel = level;
+    reportsTopExpandedKey = null;
     renderReports();
 }
 
@@ -408,6 +410,74 @@ function renderReportsSavingsGoal(savingsRate) {
     label.textContent = `${savingsRate}% z ${goal}%`;
 }
 
+function toggleReportsSavingsGoal() {
+    const panel = document.getElementById('reports-goal-panel');
+    const toggle = document.getElementById('reports-goal-toggle');
+    if (!panel || !toggle) return;
+    const open = panel.classList.toggle('hidden') === false;
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+let reportsTopExpandedKey = null;
+
+function getReportsTopCategoryKey(entry) {
+    if (reportsRankLevel === 'sub' && entry.subCategory) {
+        return `${entry.mainCategory}\u0001${entry.subCategory}`;
+    }
+    return entry.mainCategory;
+}
+
+function getTopCategoryTransactions(entry, periodTx) {
+    const typeTx = periodTx.filter((t) => t.type === reportsViewType);
+    if (reportsRankLevel === 'sub') {
+        return typeTx.filter((t) => {
+            if (t.mainCategory !== entry.mainCategory) return false;
+            if (!entry.subCategory) return true;
+            if (entry.subCategory === '[Bez podkategorii]') {
+                return t.subCategory === '[Bez podkategorii]' || !t.subCategory;
+            }
+            return t.subCategory === entry.subCategory;
+        });
+    }
+    return typeTx.filter((t) => t.mainCategory === entry.mainCategory);
+}
+
+function renderReportsTxListHtml(transactions, limit = 40) {
+    if (!transactions.length) {
+        return '<p class="reports-hint">Brak transakcji.</p>';
+    }
+    return transactions.slice(0, limit).map((t) => {
+        const globalIndex = appState.transactions.indexOf(t);
+        const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
+        const amountClass = t.type === 'expense' ? 'expense' : 'income';
+        const sign = t.type === 'expense' ? '−' : '+';
+        return `<button type="button" class="reports-tx-row" onclick="editTransaction(${globalIndex})">
+            ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
+            <span class="reports-tx-row-text">
+                <span class="reports-tx-row-title">${escapeHtml(title)}</span>
+                <span class="reports-tx-row-meta">${formatTxDate(t.date)} · ${escapeHtml(t.mainCategory)}</span>
+            </span>
+            <span class="reports-tx-row-amount ${amountClass}">${sign}${formatPlnAmount(t.amount)}</span>
+        </button>`;
+    }).join('');
+}
+
+function bindReportsTopCategoriesList() {
+    const topEl = document.getElementById('reports-top-categories');
+    if (!topEl || topEl.dataset.bound === '1') return;
+    topEl.dataset.bound = '1';
+    topEl.addEventListener('click', (event) => {
+        const row = event.target.closest('[data-top-key]');
+        if (!row) return;
+        const key = decodeURIComponent(row.dataset.topKey || '');
+        reportsTopExpandedKey = reportsTopExpandedKey === key ? null : key;
+        const ctx = typeof reportsLastCtx !== 'undefined' && reportsLastCtx
+            ? reportsLastCtx
+            : getReportsPeriodContext();
+        renderReportsTopCategories(ctx.periodTx);
+    });
+}
+
 function renderReportsTrendChart(period, periodTx, rangeStart, rangeEnd) {
     const canvas = document.getElementById('reportsTrendChart');
     if (!canvas) return;
@@ -472,10 +542,15 @@ function renderReportsYoYChart(period, periodTx, reportsCtx) {
     } else if (period === 'month' && reportsCtx?.rangeStart) {
         const [year, monthNum] = reportsCtx.rangeStart.split('-').map(Number);
         const month = monthNum - 1;
-        if (titleEl) titleEl.textContent = 'Ten miesiąc vs rok wcześniej';
-        labels.push(new Date(year, month, 1).toLocaleDateString('pl-PL', { month: 'long' }));
-        currentData.push(getMonthExpenseTotal(year, month, periodTx));
-        prevData.push(getMonthExpenseTotal(year - 1, month, allTx));
+        const prevDate = new Date(year, month - 1, 1);
+        const prevYear = prevDate.getFullYear();
+        const prevMonth = prevDate.getMonth();
+        const curLabel = new Date(year, month, 1).toLocaleDateString('pl-PL', { month: 'short', year: '2-digit' });
+        const prevLabel = prevDate.toLocaleDateString('pl-PL', { month: 'short', year: '2-digit' });
+        if (titleEl) titleEl.textContent = 'Ten miesiąc vs poprzedni';
+        labels.push(curLabel, prevLabel);
+        currentData.push(getMonthExpenseTotal(year, month, periodTx), 0);
+        prevData.push(0, getMonthExpenseTotal(prevYear, prevMonth, allTx));
     } else if (period === 'all') {
         if (titleEl) titleEl.textContent = 'Porównanie rok do roku (ostatnie 6 mies.)';
         for (let offset = 5; offset >= 0; offset--) {
@@ -497,20 +572,22 @@ function renderReportsYoYChart(period, periodTx, reportsCtx) {
         }
     }
 
+    const isMonthCompare = period === 'month' && reportsCtx?.rangeStart;
+
     reportsYoyChartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
             labels,
             datasets: [
                 {
-                    label: period === 'all' ? 'Ten rok' : (period === 'month' ? reportsCtx.rangeStart.slice(0, 4) : String(parseInt(period, 10))),
+                    label: period === 'all' ? 'Ten rok' : (isMonthCompare ? 'Bieżący miesiąc' : String(parseInt(period, 10))),
                     data: currentData,
                     backgroundColor: theme.expenseColor,
                     borderRadius: 5,
                     borderSkipped: false
                 },
                 {
-                    label: period === 'all' ? 'Rok wcześniej' : (period === 'month' ? String(parseInt(reportsCtx.rangeStart.slice(0, 4), 10) - 1) : String(parseInt(period, 10) - 1)),
+                    label: period === 'all' ? 'Rok wcześniej' : (isMonthCompare ? 'Poprzedni miesiąc' : String(parseInt(period, 10) - 1)),
                     data: prevData,
                     backgroundColor: theme.prevYearColor,
                     borderRadius: 5,
@@ -597,6 +674,7 @@ function exportReportsCsv() {
 
 function renderReportsTopCategories(periodTx) {
     const topEl = document.getElementById('reports-top-categories');
+    bindReportsTopCategoriesList();
     document.getElementById('btn-reports-expense').classList.toggle('active', reportsViewType === 'expense');
     document.getElementById('btn-reports-income').classList.toggle('active', reportsViewType === 'income');
     syncReportsRankToggles();
@@ -636,17 +714,26 @@ function renderReportsTopCategories(periodTx) {
     topEl.innerHTML = entries.map((entry, index) => {
         const pct = total > 0 ? Math.round((entry.amount / total) * 100) : 0;
         const meta = reportsRankLevel === 'sub' && entry.subCategory ? entry.mainCategory : '';
-        return `<div class="reports-top-item">
-            <span class="reports-top-rank">${index + 1}</span>
-            ${renderCategoryIcon(entry.mainCategory, 'list', entry.subCategory, reportsViewType)}
-            <div class="reports-top-text">
-                <span class="reports-top-name">${entry.label}</span>
-                ${meta ? `<span class="reports-top-meta">${meta}</span>` : ''}
-            </div>
-            <div class="reports-top-col">
-                <span class="reports-top-amount">${formatPlnAmount(entry.amount)}</span>
-                <span class="reports-top-pct">${pct}%</span>
-            </div>
+        const catKey = getReportsTopCategoryKey(entry);
+        const expanded = reportsTopExpandedKey === catKey;
+        const txs = expanded
+            ? getTopCategoryTransactions(entry, periodTx).sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount)
+            : [];
+        return `<div class="reports-top-group${expanded ? ' reports-top-group--open' : ''}">
+            <button type="button" class="reports-top-item" data-top-key="${encodeURIComponent(catKey)}">
+                <span class="reports-top-rank">${index + 1}</span>
+                ${renderCategoryIcon(entry.mainCategory, 'list', entry.subCategory, reportsViewType)}
+                <div class="reports-top-text">
+                    <span class="reports-top-name">${escapeHtml(entry.label)}</span>
+                    ${meta ? `<span class="reports-top-meta">${escapeHtml(meta)}</span>` : ''}
+                </div>
+                <div class="reports-top-col">
+                    <span class="reports-top-amount">${formatPlnAmount(entry.amount)}</span>
+                    <span class="reports-top-pct">${pct}%</span>
+                </div>
+                <span class="reports-top-chevron" aria-hidden="true">${expanded ? '▾' : '›'}</span>
+            </button>
+            ${expanded ? `<div class="reports-top-tx-list">${renderReportsTxListHtml(txs)}</div>` : ''}
         </div>`;
     }).join('');
 }
@@ -670,7 +757,7 @@ function buildReportsMonthChartData(period, periodTx, rangeStart, rangeEnd) {
             incomeData.push(dayTx.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0));
             expenseData.push(dayTx.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0));
         }
-        return { monthLabels, monthKeys, incomeData, expenseData, title: 'Dni w miesiącu' };
+        return { monthLabels, monthKeys, incomeData, expenseData, title: 'Dni w miesiącu', granularity: 'day' };
     }
 
     if ((period === 'range' || period === 'compare') && rangeStart && rangeEnd) {
@@ -689,7 +776,7 @@ function buildReportsMonthChartData(period, periodTx, rangeStart, rangeEnd) {
             expenseData.push(monthTx.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0));
             cursor = new Date(year, month + 1, 1);
         }
-        return { monthLabels, monthKeys, incomeData, expenseData, title: 'Miesiące w zakresie' };
+        return { monthLabels, monthKeys, incomeData, expenseData, title: 'Miesiące w zakresie', granularity: 'month' };
     }
 
     if (period === 'all') {
@@ -705,7 +792,7 @@ function buildReportsMonthChartData(period, periodTx, rangeStart, rangeEnd) {
             incomeData.push(monthTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0));
             expenseData.push(monthTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0));
         }
-        return { monthLabels, monthKeys, incomeData, expenseData, title: 'Ostatnie 12 miesięcy' };
+        return { monthLabels, monthKeys, incomeData, expenseData, title: 'Ostatnie 12 miesięcy', granularity: 'month' };
     }
 
     const year = parseInt(period, 10);
@@ -720,7 +807,137 @@ function buildReportsMonthChartData(period, periodTx, rangeStart, rangeEnd) {
         incomeData.push(monthTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0));
         expenseData.push(monthTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0));
     }
-    return { monthLabels, monthKeys, incomeData, expenseData, title: 'Miesiące w roku' };
+    return { monthLabels, monthKeys, incomeData, expenseData, title: 'Miesiące w roku', granularity: 'month' };
+}
+
+function renderReportsMonthChart(ctx) {
+    if (!ctx) return;
+    let chartPeriod = ctx.period;
+    let chartRangeStart = ctx.rangeStart;
+    let chartRangeEnd = ctx.rangeEnd;
+    if (ctx.mode === 'month') {
+        chartPeriod = 'month';
+    } else if (ctx.period === 'compare' && ctx.periodA) {
+        chartPeriod = 'range';
+        chartRangeStart = ctx.periodA.start;
+        chartRangeEnd = ctx.periodA.end;
+    }
+
+    const { monthLabels, monthKeys, incomeData, expenseData, title, granularity = 'month' } = buildReportsMonthChartData(
+        chartPeriod,
+        ctx.periodTx,
+        chartRangeStart,
+        chartRangeEnd
+    );
+    const isDaily = granularity === 'day';
+    const monthsTitleEl = document.getElementById('reports-months-title');
+    if (monthsTitleEl) monthsTitleEl.innerText = title;
+    if (typeof storeReportsMonthChartMeta === 'function') {
+        storeReportsMonthChartMeta(chartPeriod, monthLabels, ctx, monthKeys);
+    }
+
+    const chartEl = document.getElementById('reportsMonthsChart');
+    if (!chartEl) return;
+    const wrapEl = chartEl.closest('.reports-bar-chart-wrap');
+    wrapEl?.classList.toggle('reports-bar-chart-wrap--daily', isDaily);
+    wrapEl?.classList.toggle('reports-bar-chart-wrap--monthly', !isDaily);
+    const ctx2 = chartEl.getContext('2d');
+    if (reportsChartInstance) reportsChartInstance.destroy();
+
+    const legendColor = getThemeCssVar('--text', '#0f172a', '#f5f5f5');
+    const gridColor = isLightTheme() ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.08)';
+
+    const monthChartOptions = {
+        responsive: true,
+        maintainAspectRatio: !isDaily,
+        aspectRatio: isDaily ? undefined : 1.35,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: {
+                    color: legendColor,
+                    font: { family: 'DM Sans', weight: '600', size: 11 },
+                    boxWidth: 12,
+                    padding: 14
+                }
+            },
+            tooltip: {
+                backgroundColor: isLightTheme() ? 'rgba(15, 23, 42, 0.92)' : 'rgba(0, 0, 0, 0.88)',
+                titleFont: { family: 'DM Sans', weight: '700' },
+                bodyFont: { family: 'DM Sans', weight: '600' },
+                padding: 12,
+                cornerRadius: 10,
+                callbacks: {
+                    title: (items) => {
+                        if (!isDaily || !items.length) return items[0]?.label ?? '';
+                        return `Dzień ${items[0].label}`;
+                    },
+                    label: (context) => `${context.dataset.label}: ${formatPlnAmount(context.parsed.y)}`
+                }
+            }
+        },
+        scales: {
+            x: {
+                ticks: isDaily ? {
+                    color: legendColor,
+                    font: { family: 'DM Sans', size: 10 },
+                    autoSkip: false,
+                    maxRotation: 0,
+                    callback: (_value, index) => {
+                        const day = parseInt(monthLabels[index], 10);
+                        if (!day) return '';
+                        const last = monthLabels.length;
+                        if (day === 1 || day % 5 === 0 || day === last) return String(day);
+                        return '';
+                    }
+                } : {
+                    color: legendColor,
+                    font: { family: 'DM Sans', size: 10 }
+                },
+                grid: { display: false }
+            },
+            y: {
+                ticks: {
+                    color: legendColor,
+                    font: { family: 'DM Sans', size: 10 },
+                    callback: (value) => (value >= 1000 ? `${Math.round(value / 1000)}k` : value)
+                },
+                grid: { color: gridColor }
+            }
+        }
+    };
+    if (typeof attachReportsMonthChartClick === 'function') attachReportsMonthChartClick(monthChartOptions);
+
+    reportsChartInstance = new Chart(ctx2, {
+        type: 'bar',
+        data: {
+            labels: monthLabels,
+            datasets: [
+                {
+                    label: 'Wpływy',
+                    data: incomeData,
+                    backgroundColor: isLightTheme() ? 'rgba(13, 148, 136, 0.85)' : 'rgba(52, 211, 153, 0.8)',
+                    borderRadius: isDaily ? 3 : 6,
+                    borderSkipped: false,
+                    maxBarThickness: isDaily ? 7 : undefined,
+                    categoryPercentage: isDaily ? 0.92 : undefined,
+                    barPercentage: isDaily ? 0.88 : undefined
+                },
+                {
+                    label: 'Wydatki',
+                    data: expenseData,
+                    backgroundColor: isLightTheme() ? 'rgba(220, 38, 38, 0.8)' : 'rgba(248, 113, 113, 0.8)',
+                    borderRadius: isDaily ? 3 : 6,
+                    borderSkipped: false,
+                    maxBarThickness: isDaily ? 7 : undefined,
+                    categoryPercentage: isDaily ? 0.92 : undefined,
+                    barPercentage: isDaily ? 0.88 : undefined
+                }
+            ]
+        },
+        options: monthChartOptions
+    });
 }
 
 function renderReports() {
@@ -740,25 +957,12 @@ function renderReports() {
             };
         })();
 
-    const { period, periodTx, label, rangeStart, rangeEnd, periodA, mode } = ctx;
-    let chartPeriod = period;
-    let chartRangeStart = rangeStart;
-    let chartRangeEnd = rangeEnd;
-    if (mode === 'month') {
-        chartPeriod = 'month';
-        chartRangeStart = rangeStart;
-        chartRangeEnd = rangeEnd;
-    } else if (period === 'compare' && periodA) {
-        chartPeriod = 'range';
-        chartRangeStart = periodA.start;
-        chartRangeEnd = periodA.end;
-    }
+    const { periodTx, label } = ctx;
     const totalIncome = periodTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
     const totalExpense = periodTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
     const netBalance = totalIncome - totalExpense;
     const savingsRate = totalIncome > 0 ? Math.round((netBalance / totalIncome) * 100) : 0;
 
-    document.getElementById('reports-year-label').innerText = label;
     document.getElementById('reports-total-income').innerText = formatPlnAmount(totalIncome);
     document.getElementById('reports-total-expense').innerText = formatPlnAmount(totalExpense);
     const netEl = document.getElementById('reports-net-balance');
@@ -768,102 +972,5 @@ function renderReports() {
     savingsEl.innerText = `${savingsRate}%`;
     savingsEl.style.color = savingsRate >= 0 ? 'var(--success)' : 'var(--danger)';
 
-    const { monthLabels, monthKeys, incomeData, expenseData, title } = buildReportsMonthChartData(chartPeriod, periodTx, chartRangeStart, chartRangeEnd);
-    document.getElementById('reports-months-title').innerText = title;
-    if (typeof storeReportsMonthChartMeta === 'function') {
-        storeReportsMonthChartMeta(chartPeriod, monthLabels, ctx, monthKeys);
-    }
-
-    const chartEl = document.getElementById('reportsMonthsChart');
-    if (!chartEl) return;
-    const ctx2 = chartEl.getContext('2d');
-    if (reportsChartInstance) reportsChartInstance.destroy();
-
-    const legendColor = getThemeCssVar('--text', '#0f172a', '#f5f5f5');
-    const gridColor = isLightTheme() ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.08)';
-
-    const monthChartOptions = {
-            responsive: true,
-            maintainAspectRatio: true,
-            aspectRatio: 1.35,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        color: legendColor,
-                        font: { family: 'DM Sans', weight: '600', size: 11 },
-                        boxWidth: 12,
-                        padding: 14
-                    }
-                },
-                tooltip: {
-                    backgroundColor: isLightTheme() ? 'rgba(15, 23, 42, 0.92)' : 'rgba(0, 0, 0, 0.88)',
-                    titleFont: { family: 'DM Sans', weight: '700' },
-                    bodyFont: { family: 'DM Sans', weight: '600' },
-                    padding: 12,
-                    cornerRadius: 10,
-                    callbacks: {
-                        label: (context) => `${context.dataset.label}: ${formatPlnAmount(context.parsed.y)}`
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    ticks: { color: legendColor, font: { family: 'DM Sans', size: 10 } },
-                    grid: { display: false }
-                },
-                y: {
-                    ticks: {
-                        color: legendColor,
-                        font: { family: 'DM Sans', size: 10 },
-                        callback: (value) => (value >= 1000 ? `${Math.round(value / 1000)}k` : value)
-                    },
-                    grid: { color: gridColor }
-                }
-            }
-        };
-    if (typeof attachReportsMonthChartClick === 'function') attachReportsMonthChartClick(monthChartOptions);
-
-    reportsChartInstance = new Chart(ctx2, {
-        type: 'bar',
-        data: {
-            labels: monthLabels,
-            datasets: [
-                {
-                    label: 'Wpływy',
-                    data: incomeData,
-                    backgroundColor: isLightTheme() ? 'rgba(13, 148, 136, 0.85)' : 'rgba(52, 211, 153, 0.8)',
-                    borderRadius: 6,
-                    borderSkipped: false
-                },
-                {
-                    label: 'Wydatki',
-                    data: expenseData,
-                    backgroundColor: isLightTheme() ? 'rgba(220, 38, 38, 0.8)' : 'rgba(248, 113, 113, 0.8)',
-                    borderRadius: 6,
-                    borderSkipped: false
-                }
-            ]
-        },
-        options: monthChartOptions
-    });
-
-    if (typeof syncReportsCalendarFromContext === 'function') {
-        syncReportsCalendarFromContext(ctx);
-    } else {
-        syncReportsCalendarToPeriod(chartPeriod === 'range' ? chartRangeStart?.slice(0, 4) : period);
-    }
-    if (typeof renderReportsCalendarView === 'function') {
-        renderReportsCalendarView();
-    } else {
-        renderReportsCalendar();
-    }
-    renderReportsDailyAvg(chartPeriod, periodTx);
-    renderReportsSavingsGoal(savingsRate);
-    renderReportsTrendChart(chartPeriod, periodTx, chartRangeStart, chartRangeEnd);
-    renderReportsYoYChart(chartPeriod, periodTx, ctx);
-    renderReportsDowChart(periodTx);
-    renderReportsRecurring();
-    renderReportsTopCategories(periodTx);
     if (typeof renderPhase3Reports === 'function') renderPhase3Reports(ctx, savingsRate);
 }

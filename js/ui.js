@@ -156,6 +156,15 @@ function initPanelHeaders() {
         onView: () => setCreditCardDetailsMode('view'),
         onClose: closeCreditCardDetails,
     }));
+    mountPanelHeader('panel-header-ikze-limit', createDetailsPanelHeader({
+        titleId: 'ikze-limit-title',
+        title: 'Limit IKZE',
+        editBtnId: 'btn-ikze-limit-edit',
+        viewBtnId: 'btn-ikze-limit-view',
+        onEdit: () => setIkzeLimitMode('edit'),
+        onView: () => setIkzeLimitMode('view'),
+        onClose: closeIkzeLimitPanel,
+    }));
 }
 
 function initOverlayCloseIcons() {

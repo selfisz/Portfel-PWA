@@ -3,11 +3,46 @@
 const ANALYSIS_SECTION_KEY = 'analysis_section';
 const ANALYSIS_PERIOD_KEY = 'analysis_period_mode';
 let analysisSection = 'overview';
-let reportsPeriodMode = 'year';
+let reportsPeriodMode = 'month';
 let analysisUiInitialized = false;
 
-const ANALYSIS_SECTIONS = ['overview', 'calendar', 'charts', 'assets', 'debts', 'details'];
+const ANALYSIS_SECTIONS = ['overview', 'expenses', 'assets', 'debts', 'advanced'];
+const ANALYSIS_SECTION_ALIASES = {
+    calendar: 'expenses',
+    charts: 'advanced',
+    details: 'expenses'
+};
 const PERIOD_MODES = ['year', 'month', 'range', 'compare'];
+const COMPARE_PRESETS = ['mom', 'yoy', 'same-month', 'custom'];
+const ANALYSIS_COMPARE_PRESET_KEY = 'analysis_compare_preset';
+let reportsComparePreset = 'mom';
+let reportsCompareChartInstance = null;
+let reportsCompareWealthChartInstance = null;
+
+let reportsLastCtx = null;
+let reportsLastSavingsRate = 0;
+let reportsContextCacheKey = '';
+const reportsRenderedSections = {};
+
+function normalizeAnalysisSection(section) {
+    if (ANALYSIS_SECTIONS.includes(section)) return section;
+    return ANALYSIS_SECTION_ALIASES[section] || 'overview';
+}
+
+function getReportsContextCacheKey(ctx) {
+    if (!ctx) return '';
+    const parts = [ctx.mode, ctx.period, ctx.label];
+    if (ctx.rangeStart) parts.push(ctx.rangeStart, ctx.rangeEnd);
+    if (ctx.periodA) {
+        parts.push(ctx.periodA.start, ctx.periodA.end, ctx.periodB.start, ctx.periodB.end);
+    }
+    return parts.join('|');
+}
+
+function setAnalysisSectionLoading(section, loading) {
+    document.getElementById(`analysis-section-${section}`)
+        ?.classList.toggle('analysis-section--loading', loading);
+}
 
 function shiftArrayIndex(items, current, delta) {
     const idx = items.indexOf(current);
@@ -53,16 +88,303 @@ function shiftReportsPeriodMode(delta) {
     setReportsPeriodMode(shiftArrayIndex(PERIOD_MODES, reportsPeriodMode, delta));
 }
 
+let reportsPeriodMainExpanded = false;
+let reportsPeriodSpecialExpanded = false;
+
+function collapseReportsPeriodSpecial() {
+    reportsPeriodSpecialExpanded = false;
+    document.getElementById('reports-period-special-panel')?.classList.add('hidden');
+    document.querySelector('#reports-period-special-block .loans-hero-summary-toggle')
+        ?.setAttribute('aria-expanded', 'false');
+}
+
+function confirmReportsSpecialPeriod() {
+    if (reportsPeriodMode === 'compare') {
+        syncCompareDatesFromPreset();
+        const aStart = document.getElementById('reports-compare-a-start')?.value;
+        const aEnd = document.getElementById('reports-compare-a-end')?.value;
+        const bStart = document.getElementById('reports-compare-b-start')?.value;
+        const bEnd = document.getElementById('reports-compare-b-end')?.value;
+        if (!aStart || !aEnd || !bStart || !bEnd) return;
+    } else if (reportsPeriodMode === 'range') {
+        const start = document.getElementById('reports-range-start')?.value;
+        const end = document.getElementById('reports-range-end')?.value;
+        if (!start || !end) return;
+    } else {
+        return;
+    }
+    renderReports();
+    collapseReportsPeriodSpecial();
+}
+
+function isReportsSpecialPeriodComplete() {
+    if (reportsPeriodMode === 'compare') {
+        syncCompareDatesFromPreset();
+        return Boolean(
+            document.getElementById('reports-compare-a-start')?.value
+            && document.getElementById('reports-compare-a-end')?.value
+            && document.getElementById('reports-compare-b-start')?.value
+            && document.getElementById('reports-compare-b-end')?.value
+        );
+    }
+    if (reportsPeriodMode === 'range') {
+        return Boolean(
+            document.getElementById('reports-range-start')?.value
+            && document.getElementById('reports-range-end')?.value
+        );
+    }
+    return false;
+}
+
+function collapseReportsPeriodPanels() {
+    reportsPeriodMainExpanded = false;
+    reportsPeriodSpecialExpanded = false;
+    document.getElementById('reports-period-main-panel')?.classList.add('hidden');
+    document.getElementById('reports-period-special-panel')?.classList.add('hidden');
+    document.querySelector('#reports-period-main-block .loans-hero-summary-toggle')
+        ?.setAttribute('aria-expanded', 'false');
+    document.querySelector('#reports-period-special-block .loans-hero-summary-toggle')
+        ?.setAttribute('aria-expanded', 'false');
+}
+
+function isReportsPeriodDefault() {
+    if (reportsPeriodMode !== 'month') return false;
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    return getReportsMonthValue() === currentMonth;
+}
+
+function updateReportsPeriodResetVisibility() {
+    document.getElementById('reports-period-reset')
+        ?.classList.toggle('hidden', isReportsPeriodDefault());
+}
+
+function resetReportsPeriod() {
+    const now = new Date();
+    const currentYear = String(now.getFullYear());
+    const yearSelect = document.getElementById('reports-year-select');
+    if (yearSelect) yearSelect.value = currentYear;
+    applyReportsPeriodDefaults();
+    collapseReportsPeriodPanels();
+    setReportsPeriodMode('month');
+}
+
+function toggleReportsPeriodMain() {
+    reportsPeriodMainExpanded = !reportsPeriodMainExpanded;
+    const panel = document.getElementById('reports-period-main-panel');
+    const toggle = document.querySelector('#reports-period-main-block .loans-hero-summary-toggle');
+    if (panel) panel.classList.toggle('hidden', !reportsPeriodMainExpanded);
+    if (toggle) toggle.setAttribute('aria-expanded', reportsPeriodMainExpanded ? 'true' : 'false');
+}
+
+function toggleReportsPeriodSpecial() {
+    reportsPeriodSpecialExpanded = !reportsPeriodSpecialExpanded;
+    const panel = document.getElementById('reports-period-special-panel');
+    const toggle = document.querySelector('#reports-period-special-block .loans-hero-summary-toggle');
+    if (panel) panel.classList.toggle('hidden', !reportsPeriodSpecialExpanded);
+    if (toggle) toggle.setAttribute('aria-expanded', reportsPeriodSpecialExpanded ? 'true' : 'false');
+}
+
+function expandReportsPeriodSpecial() {
+    if (reportsPeriodSpecialExpanded) return;
+    reportsPeriodSpecialExpanded = true;
+    document.getElementById('reports-period-special-panel')?.classList.remove('hidden');
+    document.querySelector('#reports-period-special-block .loans-hero-summary-toggle')
+        ?.setAttribute('aria-expanded', 'true');
+}
+
+const ANALYSIS_MONTH_SHORT = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze', 'Lip', 'Sie', 'Wrz', 'Paź', 'Lis', 'Gru'];
+
 function initAnalysisSwipe() {
-    attachHorizontalSwipe(document.querySelector('#analysis-period-swipe .reports-period-tabs'), {
-        onSwipeLeft: () => shiftReportsPeriodMode(1),
-        onSwipeRight: () => shiftReportsPeriodMode(-1),
-        ignoreSelector: 'input, select, textarea'
-    });
     attachHorizontalSwipe(document.getElementById('analysis-sections-body'), {
         onSwipeLeft: () => shiftAnalysisSection(1),
         onSwipeRight: () => shiftAnalysisSection(-1)
     });
+}
+
+function getAnalysisContextYear() {
+    if (reportsPeriodMode === 'month') {
+        return parseInt(getReportsMonthValue().slice(0, 4), 10);
+    }
+    if (reportsPeriodMode === 'year') {
+        const val = document.getElementById('reports-year-select')?.value;
+        if (val && val !== 'all') return parseInt(val, 10);
+    }
+    return new Date().getFullYear();
+}
+
+function renderAnalysisYearChips() {
+    const el = document.getElementById('reports-year-chips');
+    if (!el) return;
+    const years = getTransactionYears();
+    const yearSelect = document.getElementById('reports-year-select');
+    const currentVal = yearSelect?.value || String(new Date().getFullYear());
+    const parts = [
+        `<button type="button" class="toggle-btn loans-chip${reportsPeriodMode === 'year' && currentVal === 'all' ? ' active' : ''}" onclick="selectReportsYear('all')">Całość</button>`
+    ];
+    years.forEach((year) => {
+        const value = String(year);
+        const active = reportsPeriodMode === 'year' && currentVal === value;
+        parts.push(`<button type="button" class="toggle-btn loans-chip${active ? ' active' : ''}" onclick="selectReportsYear('${value}')">${value}</button>`);
+    });
+    el.innerHTML = parts.join('');
+}
+
+function renderAnalysisMonthChips() {
+    const el = document.getElementById('reports-month-chips');
+    if (!el) return;
+    const contextYear = getAnalysisContextYear();
+    const monthValue = getReportsMonthValue();
+    el.innerHTML = ANALYSIS_MONTH_SHORT.map((label, monthIndex) => {
+        const value = `${contextYear}-${String(monthIndex + 1).padStart(2, '0')}`;
+        const active = reportsPeriodMode === 'month' && monthValue === value;
+        return `<button type="button" class="toggle-btn loans-chip analysis-period-month-chip${active ? ' active' : ''}" onclick="selectReportsMonthChip(${contextYear}, ${monthIndex})">${label}</button>`;
+    }).join('');
+}
+
+function selectReportsYear(year) {
+    const yearSelect = document.getElementById('reports-year-select');
+    if (yearSelect) yearSelect.value = year;
+    setReportsPeriodMode('year');
+}
+
+function selectReportsMonthChip(year, monthIndex) {
+    const monthValue = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+    const monthInput = document.getElementById('reports-period-month');
+    if (monthInput) monthInput.value = monthValue;
+    const { year: y, monthIndex: mi } = getMonthBoundsFromValue(monthValue);
+    reportsCalendarYear = y;
+    reportsCalendarMonth = mi;
+    setReportsPeriodMode('month');
+}
+
+function selectReportsSpecialMode(mode) {
+    expandReportsPeriodSpecial();
+    setReportsPeriodMode(mode);
+    if (mode === 'compare') updateComparePresetUI();
+}
+
+function selectComparePreset(preset) {
+    if (!COMPARE_PRESETS.includes(preset)) return;
+    reportsComparePreset = preset;
+    try { localStorage.setItem(ANALYSIS_COMPARE_PRESET_KEY, preset); } catch { /* ignore */ }
+    updateComparePresetUI();
+    if (preset === 'same-month') updateSameMonthCompareHint();
+}
+
+function updateSameMonthCompareHint() {
+    const hint = document.getElementById('reports-compare-same-month-hint');
+    const monthVal = document.getElementById('reports-compare-same-month')?.value;
+    if (!hint || !monthVal) return;
+    const [year, month] = monthVal.split('-').map(Number);
+    const prevMonthVal = `${year - 1}-${String(month).padStart(2, '0')}`;
+    const a = getMonthBoundsFromValue(prevMonthVal);
+    const b = getMonthBoundsFromValue(monthVal);
+    hint.textContent = `Okres A: ${formatTxDate(a.start)} – ${formatTxDate(a.end)}`;
+}
+
+function populateCompareYearSelects() {
+    const years = getTransactionYears();
+    const now = new Date().getFullYear();
+    ['reports-compare-a-year', 'reports-compare-b-year'].forEach((id, index) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const previous = el.value;
+        el.innerHTML = years.map((year) => `<option value="${year}">${year}</option>`).join('');
+        if (previous && years.includes(parseInt(previous, 10))) {
+            el.value = previous;
+        } else {
+            el.value = String(index === 0 ? now - 1 : now);
+        }
+    });
+}
+
+function updateComparePresetUI() {
+    COMPARE_PRESETS.forEach((preset) => {
+        const btnId = preset === 'same-month' ? 'btn-compare-preset-same-month' : `btn-compare-preset-${preset}`;
+        document.getElementById(btnId)?.classList.toggle('active', reportsComparePreset === preset);
+    });
+    document.getElementById('compare-preset-mom-wrap')?.classList.toggle('hidden', reportsComparePreset !== 'mom');
+    document.getElementById('compare-preset-yoy-wrap')?.classList.toggle('hidden', reportsComparePreset !== 'yoy');
+    document.getElementById('compare-preset-same-month-wrap')?.classList.toggle('hidden', reportsComparePreset !== 'same-month');
+    document.getElementById('compare-preset-custom-wrap')?.classList.toggle('hidden', reportsComparePreset !== 'custom');
+    if (reportsComparePreset === 'yoy') populateCompareYearSelects();
+    if (reportsComparePreset === 'same-month') updateSameMonthCompareHint();
+}
+
+function syncCompareDatesFromPreset() {
+    const set = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    };
+
+    if (reportsComparePreset === 'mom') {
+        const aMonth = document.getElementById('reports-compare-a-month')?.value;
+        const bMonth = document.getElementById('reports-compare-b-month')?.value;
+        if (!aMonth || !bMonth) return;
+        const a = getMonthBoundsFromValue(aMonth);
+        const b = getMonthBoundsFromValue(bMonth);
+        set('reports-compare-a-start', a.start);
+        set('reports-compare-a-end', a.end);
+        set('reports-compare-b-start', b.start);
+        set('reports-compare-b-end', b.end);
+        return;
+    }
+
+    if (reportsComparePreset === 'yoy') {
+        const aYear = document.getElementById('reports-compare-a-year')?.value;
+        const bYear = document.getElementById('reports-compare-b-year')?.value;
+        if (!aYear || !bYear) return;
+        set('reports-compare-a-start', `${aYear}-01-01`);
+        set('reports-compare-a-end', `${aYear}-12-31`);
+        set('reports-compare-b-start', `${bYear}-01-01`);
+        set('reports-compare-b-end', `${bYear}-12-31`);
+        return;
+    }
+
+    if (reportsComparePreset === 'same-month') {
+        const bMonth = document.getElementById('reports-compare-same-month')?.value;
+        if (!bMonth) return;
+        const [year, month] = bMonth.split('-').map(Number);
+        const aMonth = `${year - 1}-${String(month).padStart(2, '0')}`;
+        const a = getMonthBoundsFromValue(aMonth);
+        const b = getMonthBoundsFromValue(bMonth);
+        set('reports-compare-a-start', a.start);
+        set('reports-compare-a-end', a.end);
+        set('reports-compare-b-start', b.start);
+        set('reports-compare-b-end', b.end);
+    }
+}
+
+function updateReportsPeriodFields(mode = reportsPeriodMode) {
+    document.getElementById('reports-period-range-wrap')?.classList.toggle('hidden', mode !== 'range');
+    document.getElementById('reports-period-compare-wrap')?.classList.toggle('hidden', mode !== 'compare');
+    document.getElementById('reports-period-special-confirm')?.classList.toggle('hidden', mode !== 'range' && mode !== 'compare');
+    document.getElementById('btn-reports-range-mode')?.classList.toggle('active', mode === 'range');
+    document.getElementById('btn-reports-compare-mode')?.classList.toggle('active', mode === 'compare');
+}
+
+function updateReportsPeriodUI(ctx) {
+    populateReportsYearSelect();
+    renderAnalysisYearChips();
+    renderAnalysisMonthChips();
+    updateReportsPeriodFields();
+
+    if (ctx?.mode === 'compare') updateComparePresetUI();
+
+    const displayEl = document.getElementById('reports-period-display');
+    const summaryEl = document.getElementById('reports-period-summary');
+    if (ctx && displayEl) {
+        displayEl.textContent = ctx.mode === 'compare' ? 'Porównanie okresów' : ctx.label;
+    }
+    if (summaryEl && ctx) {
+        if (ctx.mode === 'compare' && ctx.periodA && ctx.periodB) {
+            summaryEl.textContent = `${formatTxDate(ctx.periodA.start)} – ${formatTxDate(ctx.periodA.end)} vs ${formatTxDate(ctx.periodB.start)} – ${formatTxDate(ctx.periodB.end)}`;
+        } else {
+            summaryEl.textContent = `Wyświetlane dane: ${ctx.label}`;
+        }
+    }
+    updateReportsPeriodResetVisibility();
 }
 
 function getReportsMonthValue() {
@@ -111,6 +433,7 @@ function syncReportsCalendarFromContext(ctx) {
 }
 
 function setAnalysisSection(section) {
+    section = normalizeAnalysisSection(section);
     if (!ANALYSIS_SECTIONS.includes(section)) return;
     analysisSection = section;
     try { localStorage.setItem(ANALYSIS_SECTION_KEY, section); } catch { /* ignore */ }
@@ -120,15 +443,38 @@ function setAnalysisSection(section) {
         document.getElementById(`btn-analysis-${id}`)?.classList.toggle('active', id === section);
     });
 
-    const activeBtn = document.getElementById(`btn-analysis-${section}`);
-    activeBtn?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-
-    if (section === 'charts' || section === 'assets' || section === 'debts' || section === 'calendar') {
-        requestAnimationFrame(() => {
-            [reportsChartInstance, reportsTrendChartInstance, reportsYoyChartInstance, reportsDowChartInstance, reportsDebtChartInstance, reportsDebtTrendChartInstance, reportsDebtSplitChartInstance, reportsDebtsTabChartInstance, reportsDebtsTabSplitInstance, reportsDebtPeakChartInstance, reportsAssetAllocationChartInstance, reportsAssetsTabAllocationInstance, reportsCashTrendChartInstance, reportsAssetsTabCashTrendInstance, reportsNetWorthTrendChartInstance, reportsAllocationTrendChartInstance, reportsDiversificationChartInstance]
-                .forEach((chart) => chart?.resize());
-        });
+    if (reportsLastCtx) {
+        renderAnalysisSectionContent(section, reportsLastCtx, reportsLastSavingsRate);
     }
+    resizeAnalysisSectionCharts(section);
+}
+
+function resizeAnalysisSectionCharts(section) {
+    const chartsBySection = {
+        overview: [reportsChartInstance, reportsStructureChartInstance],
+        expenses: [],
+        assets: [
+            reportsAssetsTabAllocationInstance,
+            reportsAssetsTabCashTrendInstance,
+            reportsNetWorthTrendChartInstance
+        ],
+        debts: [
+            reportsDebtsTabChartInstance,
+            reportsDebtsTabSplitInstance,
+            reportsDebtTrendChartInstance,
+            reportsDebtPeakChartInstance
+        ],
+        advanced: [
+            reportsTrendChartInstance,
+            reportsYoyChartInstance,
+            reportsDowChartInstance,
+            reportsAllocationTrendChartInstance,
+            reportsDiversificationChartInstance
+        ]
+    };
+    requestAnimationFrame(() => {
+        (chartsBySection[section] || []).forEach((chart) => chart?.resize());
+    });
 }
 
 function initAnalysisUI() {
@@ -149,13 +495,14 @@ function ensureAnalysisUIInit() {
 function initAnalysisSection() {
     try {
         const saved = localStorage.getItem(ANALYSIS_SECTION_KEY);
-        if (saved && ANALYSIS_SECTIONS.includes(saved)) analysisSection = saved;
+        if (saved) analysisSection = normalizeAnalysisSection(saved);
     } catch { /* ignore */ }
     setAnalysisSection(analysisSection);
 }
 
-let debtsScenarioLoanId = null;
-let debtsScenarioExtra = 500;
+let debtsOverpayLoanId = null;
+let debtsOverpayKind = 'monthly';
+let debtsOverpayAmount = 0;
 let reportsCalendarView = 'month';
 let calendarDayDate = null;
 let calendarDayFilter = 'all';
@@ -164,6 +511,32 @@ let reportsMonthChartMeta = { period: null, labels: [], ctx: null };
 function getTransactionsInRange(start, end) {
     if (!start || !end) return [];
     return appState.transactions.filter((t) => t.date >= start && t.date <= end);
+}
+
+function applyReportsPeriodDefaults() {
+    const now = new Date();
+    const monthStart = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    const monthEnd = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    const prevStart = localIsoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    const prevEnd = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 0));
+    const monthInput = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const set = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    };
+    set('reports-range-start', monthStart);
+    set('reports-range-end', monthEnd);
+    set('reports-compare-a-start', prevStart);
+    set('reports-compare-a-end', prevEnd);
+    set('reports-compare-b-start', monthStart);
+    set('reports-compare-b-end', monthEnd);
+    const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+    set('reports-compare-a-month', prevMonth);
+    set('reports-compare-b-month', curMonth);
+    set('reports-compare-same-month', curMonth);
+    set('reports-period-month', monthInput);
 }
 
 function initReportsPeriodDefaults() {
@@ -183,6 +556,12 @@ function initReportsPeriodDefaults() {
     setIfEmpty('reports-compare-a-end', prevEnd);
     setIfEmpty('reports-compare-b-start', monthStart);
     setIfEmpty('reports-compare-b-end', monthEnd);
+    const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+    setIfEmpty('reports-compare-a-month', prevMonth);
+    setIfEmpty('reports-compare-b-month', curMonth);
+    setIfEmpty('reports-compare-same-month', curMonth);
     const monthInput = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     setIfEmpty('reports-period-month', monthInput);
 }
@@ -192,26 +571,28 @@ function initAnalysisPeriodMode() {
         const saved = localStorage.getItem(ANALYSIS_PERIOD_KEY);
         if (saved && PERIOD_MODES.includes(saved)) reportsPeriodMode = saved;
     } catch { /* ignore */ }
+    try {
+        const savedPreset = localStorage.getItem(ANALYSIS_COMPARE_PRESET_KEY);
+        if (savedPreset && COMPARE_PRESETS.includes(savedPreset)) reportsComparePreset = savedPreset;
+    } catch { /* ignore */ }
+    if (reportsPeriodMode === 'range' || reportsPeriodMode === 'compare') {
+        expandReportsPeriodSpecial();
+    }
     setReportsPeriodMode(reportsPeriodMode, true);
+    updateComparePresetUI();
 }
 
 function setReportsPeriodMode(mode, skipRender = false) {
     reportsPeriodMode = mode;
     try { localStorage.setItem(ANALYSIS_PERIOD_KEY, mode); } catch { /* ignore */ }
-    document.getElementById('btn-reports-mode-year')?.classList.toggle('active', mode === 'year');
-    document.getElementById('btn-reports-mode-month')?.classList.toggle('active', mode === 'month');
-    document.getElementById('btn-reports-mode-range')?.classList.toggle('active', mode === 'range');
-    document.getElementById('btn-reports-mode-compare')?.classList.toggle('active', mode === 'compare');
-    document.getElementById('reports-period-year-wrap')?.classList.toggle('hidden', mode !== 'year');
-    document.getElementById('reports-period-month-wrap')?.classList.toggle('hidden', mode !== 'month');
-    document.getElementById('reports-period-range-wrap')?.classList.toggle('hidden', mode !== 'range');
-    document.getElementById('reports-period-compare-wrap')?.classList.toggle('hidden', mode !== 'compare');
+    updateReportsPeriodFields(mode);
     if (mode === 'compare') setAnalysisSection('overview');
     if (mode === 'month') {
         const { year, monthIndex } = getMonthBoundsFromValue(getReportsMonthValue());
         reportsCalendarYear = year;
         reportsCalendarMonth = monthIndex;
     }
+    updateReportsPeriodResetVisibility();
     if (!skipRender) renderReports();
 }
 
@@ -233,6 +614,7 @@ function getReportsPeriodContext() {
     }
 
     if (reportsPeriodMode === 'compare') {
+        syncCompareDatesFromPreset();
         const aStart = document.getElementById('reports-compare-a-start')?.value;
         const aEnd = document.getElementById('reports-compare-a-end')?.value;
         const bStart = document.getElementById('reports-compare-b-start')?.value;
@@ -283,20 +665,254 @@ function summarizePeriod(tx) {
     return { income, expense, balance, savings };
 }
 
+function getPeriodInclusiveDays(start, end) {
+    if (!start || !end) return 1;
+    const s = new Date(`${start}T12:00:00`);
+    const e = new Date(`${end}T12:00:00`);
+    return Math.max(1, Math.round((e - s) / 86400000) + 1);
+}
+
+function getCategoryExpenseMap(tx) {
+    const map = {};
+    tx.filter((t) => t.type === 'expense').forEach((t) => {
+        map[t.mainCategory] = (map[t.mainCategory] || 0) + t.amount;
+    });
+    return map;
+}
+
+function buildCompareCategoryMovers(txA, txB, limit = 5) {
+    const mapA = getCategoryExpenseMap(txA);
+    const mapB = getCategoryExpenseMap(txB);
+    const names = new Set([...Object.keys(mapA), ...Object.keys(mapB)]);
+    return [...names]
+        .map((name) => {
+            const a = mapA[name] || 0;
+            const b = mapB[name] || 0;
+            const diff = b - a;
+            const pct = a > 0 ? Math.round((diff / a) * 100) : (b > 0 ? 100 : 0);
+            return { name, a, b, diff, pct, absDiff: Math.abs(diff) };
+        })
+        .filter((row) => row.a || row.b)
+        .sort((left, right) => right.absDiff - left.absDiff)
+        .slice(0, limit);
+}
+
+function formatCompareDelta(curr, prev) {
+    const diff = curr - prev;
+    const pct = prev ? Math.round((diff / prev) * 100) : (curr > 0 ? 100 : 0);
+    const sign = diff >= 0 ? '+' : '−';
+    return `${sign}${formatPlnAmount(Math.abs(diff))} (${pct >= 0 ? '+' : ''}${pct}%)`;
+}
+
+function formatComparePct(curr, prev) {
+    if (!prev) return curr > 0 ? '+100%' : '0%';
+    const pct = Math.round(((curr - prev) / prev) * 100);
+    return `${pct >= 0 ? '+' : ''}${pct}%`;
+}
+
+function buildCompareDailyStatsHtml(ctx, summaryA, summaryB) {
+    const daysA = getPeriodInclusiveDays(ctx.periodA.start, ctx.periodA.end);
+    const daysB = getPeriodInclusiveDays(ctx.periodB.start, ctx.periodB.end);
+    const dailyExpenseA = summaryA.expense / daysA;
+    const dailyExpenseB = summaryB.expense / daysB;
+    const dailyIncomeA = summaryA.income / daysA;
+    const dailyIncomeB = summaryB.income / daysB;
+    return `<div class="compare-daily-grid">
+        <div class="compare-daily-item">
+            <span class="label">Śr. dzienna wydatków</span>
+            <strong class="expense">${formatPlnAmount(dailyExpenseA)}</strong>
+            <span class="compare-daily-vs">→</span>
+            <strong class="expense">${formatPlnAmount(dailyExpenseB)}</strong>
+            <em>${formatCompareDelta(dailyExpenseB, dailyExpenseA)}</em>
+        </div>
+        <div class="compare-daily-item">
+            <span class="label">Śr. dzienna wpływów</span>
+            <strong class="income">${formatPlnAmount(dailyIncomeA)}</strong>
+            <span class="compare-daily-vs">→</span>
+            <strong class="income">${formatPlnAmount(dailyIncomeB)}</strong>
+            <em>${formatCompareDelta(dailyIncomeB, dailyIncomeA)}</em>
+        </div>
+        <p class="reports-hint compare-days-hint">Okres A: ${daysA} dni · Okres B: ${daysB} dni</p>
+    </div>`;
+}
+
+function buildCompareCategoryMoversHtml(movers) {
+    if (!movers.length) {
+        return '<p class="reports-hint">Brak wydatków do porównania kategorii.</p>';
+    }
+    const rows = movers.map((row) => {
+        const dir = row.diff > 0 ? 'up' : row.diff < 0 ? 'down' : 'flat';
+        const sign = row.diff > 0 ? '+' : row.diff < 0 ? '−' : '';
+        const arrow = row.diff > 0 ? '↑' : row.diff < 0 ? '↓' : '→';
+        return `<div class="compare-mover-row compare-mover-row--${dir}">
+            <span class="compare-mover-name">${escapeHtml(row.name)}</span>
+            <span class="compare-mover-delta">${arrow} ${sign}${formatPlnAmount(Math.abs(row.diff))}</span>
+            <span class="compare-mover-pct">${row.pct >= 0 ? '+' : ''}${row.pct}%</span>
+        </div>`;
+    }).join('');
+    return `<div class="compare-movers-section">
+        <h3 class="compare-subtitle">Największe zmiany kategorii</h3>
+        ${rows}
+    </div>`;
+}
+
+function destroyReportsCompareCharts() {
+    if (reportsCompareChartInstance) {
+        reportsCompareChartInstance.destroy();
+        reportsCompareChartInstance = null;
+    }
+    if (reportsCompareWealthChartInstance) {
+        reportsCompareWealthChartInstance.destroy();
+        reportsCompareWealthChartInstance = null;
+    }
+}
+
+function formatCompareSignedDelta(value) {
+    const sign = value >= 0 ? '+' : '−';
+    return `${sign}${formatPlnAmount(Math.abs(value))}`;
+}
+
+function buildCompareWealthHtml(ctx) {
+    if (typeof buildCompareWealthSummary !== 'function') return '';
+    const wealth = buildCompareWealthSummary(ctx.periodA.end, ctx.periodB.end);
+    if (!wealth) {
+        return `<div class="compare-wealth-section">
+            <h3 class="compare-subtitle">Majątek i zobowiązania</h3>
+            <p class="reports-hint">Brak snapshotów majątku dla wybranych okresów. Odwiedź zakładkę Majątek — snapshoty zapisują się automatycznie co miesiąc.</p>
+        </div>`;
+    }
+
+    const debtDeltaLabel = wealth.deltaDebt <= 0 ? 'Spadek zobowiązań' : 'Wzrost zobowiązań';
+    const debtDeltaClass = wealth.deltaDebt <= 0 ? 'income' : 'expense';
+
+    return `<div class="compare-wealth-section">
+        <h3 class="compare-subtitle">Majątek i zobowiązania (koniec okresu)</h3>
+        <div class="compare-wealth-delta-grid">
+            <div class="compare-wealth-delta compare-wealth-delta--assets">
+                <span class="label">Zmiana majątku</span>
+                <strong class="${wealth.deltaAssets >= 0 ? 'income' : 'expense'}">${formatCompareSignedDelta(wealth.deltaAssets)}</strong>
+                <span class="compare-wealth-range">${formatPlnAmount(wealth.a.assets)} → ${formatPlnAmount(wealth.b.assets)}</span>
+            </div>
+            <div class="compare-wealth-delta compare-wealth-delta--debt">
+                <span class="label">${debtDeltaLabel}</span>
+                <strong class="${debtDeltaClass}">${formatCompareSignedDelta(Math.abs(wealth.deltaDebt))}</strong>
+                <span class="compare-wealth-range">${formatPlnAmount(wealth.a.debt)} → ${formatPlnAmount(wealth.b.debt)}</span>
+            </div>
+            <div class="compare-wealth-delta compare-wealth-delta--net">
+                <span class="label">Zmiana net worth</span>
+                <strong class="${wealth.deltaNetWorth >= 0 ? 'income' : 'expense'}">${formatCompareSignedDelta(wealth.deltaNetWorth)}</strong>
+                <span class="compare-wealth-range">${formatPlnAmount(wealth.a.netWorth)} → ${formatPlnAmount(wealth.b.netWorth)}</span>
+            </div>
+        </div>
+        <div class="compare-chart-wrap compare-wealth-chart-wrap">
+            <canvas id="reportsCompareWealthChart" aria-label="Wykres zmian majątku i zobowiązań"></canvas>
+        </div>
+        ${!wealth.hasBoth ? '<p class="reports-hint">Część danych oszacowana z najbliższego snapshotu lub bieżącego stanu.</p>' : ''}
+    </div>`;
+}
+
+function renderReportsCompareWealthChart(ctx) {
+    const canvas = document.getElementById('reportsCompareWealthChart');
+    if (!canvas || typeof Chart === 'undefined' || typeof buildCompareWealthSummary !== 'function') return;
+
+    const wealth = buildCompareWealthSummary(ctx.periodA.end, ctx.periodB.end);
+    if (reportsCompareWealthChartInstance) {
+        reportsCompareWealthChartInstance.destroy();
+        reportsCompareWealthChartInstance = null;
+    }
+    if (!wealth) return;
+
+    const theme = getReportsChartTheme();
+    const deltas = [wealth.deltaAssets, -wealth.deltaDebt, wealth.deltaNetWorth];
+    const colors = [
+        wealth.deltaAssets >= 0 ? theme.incomeColor : theme.expenseColor,
+        wealth.deltaDebt <= 0 ? theme.incomeColor : theme.expenseColor,
+        wealth.deltaNetWorth >= 0 ? theme.incomeColor : theme.expenseColor
+    ];
+
+    const options = getReportsChartOptions(theme);
+    options.aspectRatio = 1.85;
+    options.plugins.legend.display = false;
+    options.scales.x.grid.display = false;
+
+    reportsCompareWealthChartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: ['Majątek', 'Zobowiązania', 'Net worth'],
+            datasets: [{
+                label: 'Zmiana A → B',
+                data: deltas,
+                backgroundColor: colors,
+                borderRadius: 6,
+                maxBarThickness: 44
+            }]
+        },
+        options
+    });
+}
+
+function renderReportsCompareChart(ctx) {
+    const canvas = document.getElementById('reportsCompareChart');
+    if (!canvas || typeof Chart === 'undefined' || typeof getReportsChartTheme !== 'function') return;
+
+    const mapA = getCategoryExpenseMap(ctx.periodA.tx);
+    const mapB = getCategoryExpenseMap(ctx.periodB.tx);
+    const categories = [...new Set([...Object.keys(mapA), ...Object.keys(mapB)])]
+        .map((name) => ({ name, max: Math.max(mapA[name] || 0, mapB[name] || 0) }))
+        .sort((left, right) => right.max - left.max)
+        .slice(0, 8)
+        .map((entry) => entry.name);
+
+    if (reportsCompareChartInstance) {
+        reportsCompareChartInstance.destroy();
+        reportsCompareChartInstance = null;
+    }
+
+    if (!categories.length) return;
+
+    const theme = getReportsChartTheme();
+    const options = getReportsChartOptions(theme);
+    options.aspectRatio = 1.55;
+    options.plugins.legend.position = 'bottom';
+
+    reportsCompareChartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: categories,
+            datasets: [
+                {
+                    label: 'Okres A',
+                    data: categories.map((name) => mapA[name] || 0),
+                    backgroundColor: theme.prevYearColor,
+                    borderRadius: 4,
+                    maxBarThickness: 28
+                },
+                {
+                    label: 'Okres B',
+                    data: categories.map((name) => mapB[name] || 0),
+                    backgroundColor: theme.expenseColor,
+                    borderRadius: 4,
+                    maxBarThickness: 28
+                }
+            ]
+        },
+        options
+    });
+}
+
 function renderReportsCompare(ctx) {
     const card = document.getElementById('reports-compare-card');
     if (!card) return;
     const visible = ctx.mode === 'compare';
     card.classList.toggle('hidden', !visible);
-    if (!visible) return;
+    if (!visible) {
+        destroyReportsCompareCharts();
+        return;
+    }
 
     const a = summarizePeriod(ctx.periodA.tx);
     const b = summarizePeriod(ctx.periodB.tx);
-    const delta = (curr, prev) => {
-        if (!prev) return curr > 0 ? '+100%' : '0%';
-        const pct = Math.round(((curr - prev) / prev) * 100);
-        return `${pct >= 0 ? '+' : ''}${pct}%`;
-    };
+    const movers = buildCompareCategoryMovers(ctx.periodA.tx, ctx.periodB.tx);
 
     card.innerHTML = `<h2>Porównanie okresów</h2>
         <div class="compare-grid">
@@ -311,13 +927,23 @@ function renderReportsCompare(ctx) {
             <div class="compare-col">
                 <div class="compare-col-label">Okres B</div>
                 <div class="compare-dates">${formatTxDate(ctx.periodB.start)} – ${formatTxDate(ctx.periodB.end)}</div>
-                <div class="compare-stat"><span>Wpływy</span><strong class="income">${formatPlnAmount(b.income)}</strong><em>${delta(b.income, a.income)}</em></div>
-                <div class="compare-stat"><span>Wydatki</span><strong class="expense">${formatPlnAmount(b.expense)}</strong><em>${delta(b.expense, a.expense)}</em></div>
-                <div class="compare-stat"><span>Bilans</span><strong>${formatPlnAmount(b.balance)}</strong><em>${delta(b.balance, a.balance)}</em></div>
-                <div class="compare-stat"><span>Oszczędności</span><strong>${b.savings}%</strong><em>${delta(b.savings, a.savings)}</em></div>
+                <div class="compare-stat"><span>Wpływy</span><strong class="income">${formatPlnAmount(b.income)}</strong><em>${formatComparePct(b.income, a.income)}</em></div>
+                <div class="compare-stat"><span>Wydatki</span><strong class="expense">${formatPlnAmount(b.expense)}</strong><em>${formatComparePct(b.expense, a.expense)}</em></div>
+                <div class="compare-stat"><span>Bilans</span><strong>${formatPlnAmount(b.balance)}</strong><em>${formatComparePct(b.balance, a.balance)}</em></div>
+                <div class="compare-stat"><span>Oszczędności</span><strong>${b.savings}%</strong><em>${formatComparePct(b.savings, a.savings)}</em></div>
             </div>
         </div>
+        ${buildCompareDailyStatsHtml(ctx, a, b)}
+        ${buildCompareWealthHtml(ctx)}
+        ${buildCompareCategoryMoversHtml(movers)}
+        <div class="compare-chart-wrap">
+            <h3 class="compare-subtitle">Wydatki wg kategorii</h3>
+            <canvas id="reportsCompareChart" aria-label="Wykres porównania wydatków wg kategorii"></canvas>
+        </div>
         ${buildDebtCompareHtml(ctx)}`;
+
+    renderReportsCompareWealthChart(ctx);
+    renderReportsCompareChart(ctx);
 }
 
 function getDebtPaymentsForBounds(start, end, txList) {
@@ -720,7 +1346,6 @@ function renderReportsForecast(ctx) {
 
     const now = new Date();
     const monthStart = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
-    const monthEnd = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const dayOfMonth = now.getDate();
 
@@ -750,10 +1375,193 @@ function renderReportsForecast(ctx) {
         <p class="reports-hint">Na podstawie średniej dziennej z ${dayOfMonth} dni.</p>`;
 }
 
+function isReportsCurrentMonthPeriod(ctx) {
+    if (!ctx || ctx.mode !== 'month' || !ctx.rangeStart || !ctx.rangeEnd) return false;
+    const now = new Date();
+    const currentStart = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    const currentEnd = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    return ctx.rangeStart === currentStart && ctx.rangeEnd === currentEnd;
+}
+
+function updateReportsForecastVisibility(ctx) {
+    const card = document.getElementById('reports-forecast-card');
+    if (!card) return;
+    const show = isReportsCurrentMonthPeriod(ctx);
+    card.classList.toggle('hidden', !show);
+    if (show) renderReportsForecast(ctx);
+}
+
+function getPreviousPeriodBoundsForMom(ctx) {
+    if (ctx.mode === 'month' && ctx.rangeStart) {
+        const ref = new Date(`${ctx.rangeStart}T12:00:00`);
+        const prev = new Date(ref.getFullYear(), ref.getMonth() - 1, 1);
+        return {
+            start: localIsoDate(prev),
+            end: localIsoDate(new Date(prev.getFullYear(), prev.getMonth() + 1, 0)),
+            label: 'poprzedni miesiąc'
+        };
+    }
+    if (ctx.mode === 'year' && ctx.period && ctx.period !== 'all') {
+        const year = parseInt(ctx.period, 10);
+        return {
+            start: `${year - 1}-01-01`,
+            end: `${year - 1}-12-31`,
+            label: String(year - 1)
+        };
+    }
+    return null;
+}
+
+function renderReportsMomSummary(ctx) {
+    const el = document.getElementById('reports-mom-summary');
+    if (!el) return;
+    if (ctx.mode === 'compare') {
+        el.classList.add('hidden');
+        return;
+    }
+
+    const prevBounds = getPreviousPeriodBoundsForMom(ctx);
+    if (!prevBounds) {
+        el.classList.add('hidden');
+        return;
+    }
+
+    const prevTx = getTransactionsInRange(prevBounds.start, prevBounds.end);
+    const current = summarizePeriod(ctx.periodTx);
+    const prev = summarizePeriod(prevTx);
+    const deltaPct = (curr, prevVal) => {
+        if (!prevVal) return curr > 0 ? '+100%' : '0%';
+        const pct = Math.round(((curr - prevVal) / prevVal) * 100);
+        return `${pct >= 0 ? '+' : ''}${pct}%`;
+    };
+
+    el.innerHTML = `<span class="reports-mom-label">vs ${prevBounds.label}:</span>
+        <span class="reports-mom-item expense">wydatki <strong>${deltaPct(current.expense, prev.expense)}</strong></span>
+        <span class="reports-mom-item income">wpływy <strong>${deltaPct(current.income, prev.income)}</strong></span>
+        <span class="reports-mom-item">oszczędności <strong>${deltaPct(current.savings, prev.savings)}</strong></span>`;
+    el.classList.remove('hidden');
+}
+
+function getChartParamsFromOverviewCtx(ctx) {
+    let chartPeriod = ctx.period;
+    let chartRangeStart = ctx.rangeStart;
+    let chartRangeEnd = ctx.rangeEnd;
+    if (ctx.mode === 'month') {
+        chartPeriod = 'month';
+    } else if (ctx.period === 'compare' && ctx.periodA) {
+        chartPeriod = 'range';
+        chartRangeStart = ctx.periodA.start;
+        chartRangeEnd = ctx.periodA.end;
+    }
+    return { chartPeriod, chartRangeStart, chartRangeEnd };
+}
+
+function renderOverviewSection(ctx, savingsRate) {
+    if (typeof renderReportsStructureChart === 'function') renderReportsStructureChart(ctx);
+    if (typeof renderReportsMonthChart === 'function') renderReportsMonthChart(ctx);
+    const { chartPeriod, chartRangeStart, chartRangeEnd } = getChartParamsFromOverviewCtx(ctx);
+    renderReportsDailyAvg(chartPeriod, ctx.periodTx, chartRangeStart, chartRangeEnd);
+    renderReportsSavingsGoal(savingsRate);
+}
+
+function renderExpensesSection(ctx) {
+    const { chartPeriod, chartRangeStart } = getChartParamsFromOverviewCtx(ctx);
+    if (typeof syncReportsCalendarFromContext === 'function') {
+        syncReportsCalendarFromContext(ctx);
+    } else {
+        syncReportsCalendarToPeriod(chartPeriod === 'range' ? chartRangeStart?.slice(0, 4) : ctx.period);
+    }
+    if (typeof renderReportsCalendarView === 'function') {
+        renderReportsCalendarView();
+    } else if (typeof renderReportsCalendar === 'function') {
+        renderReportsCalendar();
+    }
+    renderReportsTopCategories(ctx.periodTx);
+    renderReportsOutliers(ctx);
+    renderReportsCategoryTrends();
+    renderDetectedRecurringList();
+}
+
+function renderAdvancedSection(ctx) {
+    const { chartPeriod, chartRangeStart, chartRangeEnd } = getChartParamsFromOverviewCtx(ctx);
+    renderReportsTrendChart(chartPeriod, ctx.periodTx, chartRangeStart, chartRangeEnd);
+    renderReportsYoYChart(chartPeriod, ctx.periodTx, ctx);
+    renderReportsDowChart(ctx.periodTx);
+    renderReportsFlow(ctx);
+    renderReportsYearReview(ctx);
+    if (typeof renderReportsAllocationTrendChart === 'function') renderReportsAllocationTrendChart();
+    if (typeof renderReportsDiversificationChart === 'function') renderReportsDiversificationChart(ctx);
+    if (typeof renderReportsIkzeLimit === 'function') renderReportsIkzeLimit();
+    if (typeof renderReportsMortgageVsRetirement === 'function') renderReportsMortgageVsRetirement();
+}
+
+function renderDebtsAnalysisSection(ctx) {
+    renderReportsDebtsSection(ctx);
+    renderReportsDebtTrendChart(ctx);
+    if (typeof renderDebtPeakChart === 'function') renderDebtPeakChart();
+}
+
+function renderAnalysisSectionContent(section, ctx, savingsRate, options = {}) {
+    if (!ctx || !section) return;
+    const force = Boolean(options.force || options.forExport);
+    const sectionKey = `${section}|${getReportsContextCacheKey(ctx)}`;
+    if (!force && reportsRenderedSections[section] === sectionKey) return;
+
+    setAnalysisSectionLoading(section, true);
+    try {
+        switch (section) {
+            case 'overview':
+                renderOverviewSection(ctx, savingsRate);
+                break;
+            case 'expenses':
+                renderExpensesSection(ctx);
+                break;
+            case 'assets':
+                renderReportsAssetsSection(ctx);
+                break;
+            case 'debts':
+                renderDebtsAnalysisSection(ctx);
+                break;
+            case 'advanced':
+                renderAdvancedSection(ctx);
+                break;
+            default:
+                break;
+        }
+        reportsRenderedSections[section] = sectionKey;
+    } finally {
+        setAnalysisSectionLoading(section, false);
+    }
+}
+
+function renderAllAnalysisSectionsForExport(ctx, savingsRate) {
+    ANALYSIS_SECTIONS.forEach((section) => {
+        renderAnalysisSectionContent(section, ctx, savingsRate, { forExport: true });
+    });
+}
+
+function invalidateAnalysisRenderCache(ctx) {
+    const ctxKey = getReportsContextCacheKey(ctx);
+    if (reportsContextCacheKey !== ctxKey) {
+        reportsContextCacheKey = ctxKey;
+        ANALYSIS_SECTIONS.forEach((section) => {
+            delete reportsRenderedSections[section];
+        });
+        if (typeof resetReportsAssetAllocationDrill === 'function') resetReportsAssetAllocationDrill(true);
+        if (typeof resetReportsDebtSplitDrill === 'function') resetReportsDebtSplitDrill(true);
+        if (typeof resetReportsDiversificationDrill === 'function') resetReportsDiversificationDrill(true);
+        if (typeof reportsStructureMainCategory !== 'undefined') {
+            reportsStructureMainCategory = null;
+            reportsStructureSubCategory = null;
+        }
+    }
+}
+
 
 function exportReportsPdf() {
     const ctx = getReportsPeriodContext();
     const savingsRate = summarizePeriod(ctx.periodTx).savings;
+    renderAllAnalysisSectionsForExport(ctx, savingsRate);
     const html = buildReportsPrintHtml(ctx, savingsRate);
     const win = window.open('', '_blank');
     if (!win) {
@@ -767,26 +1575,16 @@ function exportReportsPdf() {
 }
 
 function renderPhase3Reports(ctx, savingsRate) {
+    reportsLastCtx = ctx;
+    reportsLastSavingsRate = savingsRate;
+    invalidateAnalysisRenderCache(ctx);
+
+    updateReportsPeriodUI(ctx);
     renderReportsCompare(ctx);
-    renderReportsFlow(ctx);
-    renderReportsOutliers(ctx);
-    renderReportsCategoryTrends();
-    renderReportsForecast(ctx);
-    renderReportsNetWorth();
-    renderReportsDebtDsr(ctx);
-    renderReportsLoanSummary(ctx);
-    renderReportsCreditCardSummary(ctx);
-    renderReportsDebtForecast();
-    renderReportsDebtOverpayment(ctx);
-    renderReportsDebtPaymentsChart(ctx);
-    renderReportsDebtTrendChart(ctx);
-    renderReportsDebtSplitChart(ctx);
-    renderReportsAssetAllocationChart(ctx);
-    renderReportsCashTrendChart(ctx);
-    renderReportsAssetsSection(ctx);
-    renderReportsDebtsSection(ctx);
-    renderDebtCalendarSection();
-    renderReportsYearReview(ctx);
+    renderReportsMomSummary(ctx);
+    updateReportsForecastVisibility(ctx);
+
+    renderAnalysisSectionContent(analysisSection, ctx, savingsRate, { force: true });
 
     const printEl = document.getElementById('reports-print-meta');
     if (printEl) {

@@ -48,6 +48,50 @@ function buildAssetAllocationSlices() {
         .sort((a, b) => b.amount - a.amount);
 }
 
+function resolveAssetTypeFromLabel(label) {
+    if (typeof ASSET_TYPE_LABELS === 'undefined') return null;
+    const entry = Object.entries(ASSET_TYPE_LABELS).find(([, value]) => value === label);
+    return entry ? entry[0] : null;
+}
+
+let reportsAssetAllocationDrillType = null;
+
+function buildAssetAllocationDrillSlices(drillTypeLabel = null) {
+    if (!drillTypeLabel) return buildAssetAllocationSlices();
+    const typeKey = resolveAssetTypeFromLabel(drillTypeLabel);
+    return getAnalysisSummaryAssets()
+        .filter((asset) => {
+            const type = asset.type || 'investment';
+            const label = typeof ASSET_TYPE_LABELS !== 'undefined'
+                ? (ASSET_TYPE_LABELS[type] || type)
+                : type;
+            return label === drillTypeLabel || (typeKey && type === typeKey);
+        })
+        .map((asset) => ({
+            label: typeof getAssetDisplayName === 'function' ? getAssetDisplayName(asset) : asset.name,
+            amount: getAssetValuePln(asset)
+        }))
+        .filter((slice) => slice.amount > 0)
+        .sort((a, b) => b.amount - a.amount);
+}
+
+function updateAssetAllocationDrillChrome(drillType) {
+    const titleEl = document.getElementById('reports-assets-allocation-title');
+    const backBtn = document.getElementById('btn-reset-reports-assets-allocation');
+    if (titleEl) {
+        titleEl.textContent = drillType ? `Struktura: ${drillType}` : 'Struktura majątku';
+    }
+    backBtn?.classList.toggle('hidden', !drillType);
+}
+
+function resetReportsAssetAllocationDrill(silent = false) {
+    reportsAssetAllocationDrillType = null;
+    updateAssetAllocationDrillChrome(null);
+    if (!silent && reportsLastCtx) {
+        renderReportsAssetAllocationChart(reportsLastCtx, 'reportsAssetsAllocationChart', 'reports-assets-allocation-legend');
+    }
+}
+
 function buildAssetHorizonSlices() {
     if (typeof getAssetHorizon !== 'function' || typeof ASSET_HORIZON_LABELS === 'undefined') {
         return buildAssetAllocationSlices();
@@ -97,8 +141,10 @@ function renderReportsAssetAllocationChart(ctx, canvasId = 'reportsAssetAllocati
     const legendEl = document.getElementById(legendId);
     if (!canvas) return;
 
-    const slices = buildAssetAllocationSlices();
     const isTabChart = canvasId === 'reportsAssetsAllocationChart';
+    const drillType = isTabChart ? reportsAssetAllocationDrillType : null;
+    const slices = isTabChart ? buildAssetAllocationDrillSlices(drillType) : buildAssetAllocationSlices();
+    if (isTabChart) updateAssetAllocationDrillChrome(drillType);
     if (isTabChart) {
         if (reportsAssetsTabAllocationInstance) reportsAssetsTabAllocationInstance.destroy();
     } else if (reportsAssetAllocationChartInstance) {
@@ -106,7 +152,12 @@ function renderReportsAssetAllocationChart(ctx, canvasId = 'reportsAssetAllocati
     }
 
     if (!slices.length) {
-        if (legendEl) legendEl.innerHTML = '<p class="reports-hint">Brak aktywów w sumie.</p>';
+        if (legendEl) {
+            const backRow = drillType
+                ? `<button type="button" class="reports-allocation-legend-back" onclick="resetReportsAssetAllocationDrill()"><span aria-hidden="true">←</span> Wróć do typów aktywów</button>`
+                : '';
+            legendEl.innerHTML = `${backRow}<p class="reports-hint">Brak aktywów w sumie.</p>`;
+        }
         return;
     }
 
@@ -114,6 +165,7 @@ function renderReportsAssetAllocationChart(ctx, canvasId = 'reportsAssetAllocati
     const values = slices.map((s) => s.amount);
     const colors = getChartSliceColors(labels, 'income');
     const borderColor = getChartBorderColor();
+    const canDrill = isTabChart && !drillType;
 
     const chart = new Chart(canvas.getContext('2d'), {
         type: 'doughnut',
@@ -141,7 +193,12 @@ function renderReportsAssetAllocationChart(ctx, canvasId = 'reportsAssetAllocati
                         label: (context) => `${context.label}: ${formatPlnAmount(context.parsed)}`
                     }
                 }
-            }
+            },
+            onClick: canDrill ? (_event, elements, chartRef) => {
+                if (!elements[0]) return;
+                reportsAssetAllocationDrillType = chartRef.data.labels[elements[0].index];
+                renderReportsAssetAllocationChart(ctx, canvasId, legendId);
+            } : undefined
         }
     });
 
@@ -150,15 +207,31 @@ function renderReportsAssetAllocationChart(ctx, canvasId = 'reportsAssetAllocati
 
     if (legendEl) {
         const total = values.reduce((s, v) => s + v, 0);
-        legendEl.innerHTML = slices.map((slice, i) => {
+        const backRow = drillType
+            ? `<button type="button" class="reports-allocation-legend-back" onclick="resetReportsAssetAllocationDrill()"><span aria-hidden="true">←</span> Wróć do typów aktywów</button>`
+            : '';
+        legendEl.innerHTML = backRow + slices.map((slice, i) => {
             const pct = total > 0 ? Math.round((slice.amount / total) * 100) : 0;
-            return `<div class="reports-debt-split-item">
+            const drillClass = canDrill ? ' chart-legend-item--drill' : '';
+            const tag = canDrill ? 'button' : 'div';
+            const attrs = canDrill
+                ? ` type="button" data-label="${String(slice.label).replace(/"/g, '&quot;')}"`
+                : '';
+            return `<${tag} class="reports-debt-split-item chart-legend-item${drillClass}"${attrs}>
                 <span class="reports-debt-split-dot" style="background:${colors[i]}"></span>
                 <span class="reports-debt-split-label">${escapeHtml(slice.label)}</span>
                 <strong>${formatPlnAmount(slice.amount)}</strong>
                 <em>${pct}%</em>
-            </div>`;
+            </${tag}>`;
         }).join('');
+        if (canDrill) {
+            legendEl.querySelectorAll('.chart-legend-item--drill').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    reportsAssetAllocationDrillType = btn.dataset.label;
+                    renderReportsAssetAllocationChart(ctx, canvasId, legendId);
+                });
+            });
+        }
     }
 }
 
@@ -496,10 +569,28 @@ function renderReportsAssetsSnapshotsList() {
 
 function renderReportsNetWorthTrendChart() {
     const canvas = document.getElementById('reportsNetWorthTrendChart');
+    const emptyEl = document.getElementById('reports-networth-trend-empty');
+    const wrapEl = document.getElementById('reports-networth-trend-wrap');
     if (!canvas || typeof buildNetWorthTrendData !== 'function') return;
+    const snapshots = typeof getAssetSnapshots === 'function' ? getAssetSnapshots() : [];
     const { monthLabels, assetsData, debtData, netData } = buildNetWorthTrendData();
     if (reportsNetWorthTrendChartInstance) reportsNetWorthTrendChartInstance.destroy();
-    if (!monthLabels.length) return;
+    if (!monthLabels.length) {
+        wrapEl?.classList.add('hidden');
+        if (emptyEl) {
+            emptyEl.classList.remove('hidden');
+            if (snapshots.length === 0) {
+                emptyEl.textContent = 'Brak snapshotów — zapiszą się automatycznie lub użyj „Zapisz stan teraz” w Historii majątku.';
+            } else if (snapshots.length === 1) {
+                emptyEl.textContent = 'Masz 1 snapshot — trend pojawi się po zebraniu danych z kolejnego miesiąca.';
+            } else {
+                emptyEl.textContent = 'Za mało danych do wykresu trendu.';
+            }
+        }
+        return;
+    }
+    emptyEl?.classList.add('hidden');
+    wrapEl?.classList.remove('hidden');
     const theme = getReportsChartTheme();
     reportsNetWorthTrendChartInstance = new Chart(canvas.getContext('2d'), {
         type: 'line',
@@ -549,73 +640,263 @@ function renderReportsWealthFlows(ctx) {
         </div>`;
 }
 
-function renderReportsAssetsGoals() {
-    const el = document.getElementById('reports-assets-goals');
-    if (!el) return;
-    const operational = typeof getOperationalCashPln === 'function' ? getOperationalCashPln() : 0;
-    const cele = typeof getCeleCashPln === 'function' ? getCeleCashPln() : 0;
-    const goals = typeof getGoalAssets === 'function' ? getGoalAssets() : [];
-    const goalRows = goals.map((asset) => {
-        const value = getAssetValuePln(asset);
-        const target = asset.goalTarget || 0;
-        const pct = target > 0 ? Math.min(100, Math.round((value / target) * 100)) : null;
-        const name = typeof getAssetDisplayName === 'function' ? getAssetDisplayName(asset) : asset.name;
-        return `<div class="assets-analysis-horizon-row">
-            <div class="assets-analysis-horizon-head"><strong>${escapeHtml(name)}</strong><span>${formatPlnAmount(value)}${target ? ` / ${formatPlnAmount(target)}` : ''}</span></div>
-            ${pct !== null ? `<div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%;background:var(--success)"></div></div>` : ''}
-        </div>`;
-    }).join('');
-    el.innerHTML = `
-        <div class="loan-report-grid">
-            <div><span class="label">Gotówka operacyjna</span><strong>${formatPlnAmount(operational)}</strong></div>
-            <div><span class="label">Cele (oszczędnościowe)</span><strong>${formatPlnAmount(cele)}</strong></div>
-        </div>
-        ${goalRows || '<p class="reports-hint">Ustaw cel w edycji aktywa gotówkowego (np. Cele).</p>'}`;
+const REPORTS_DIVERSIFICATION_OTHER = 'Inne pozycje';
+const REPORTS_DIVERSIFICATION_TOP_N = 7;
+let reportsDiversificationDrillLabel = null;
+
+function getAssetDisplayLabel(asset) {
+    return typeof getAssetDisplayName === 'function' ? getAssetDisplayName(asset) : asset.name;
 }
 
-function renderReportsDiversificationChart() {
+function buildDiversificationDisplaySlices(ctx) {
+    const all = buildDiversificationSlices();
+    if (reportsDiversificationDrillLabel === REPORTS_DIVERSIFICATION_OTHER) {
+        const topLabels = new Set(all.slice(0, REPORTS_DIVERSIFICATION_TOP_N).map((s) => s.label));
+        return all.filter((s) => !topLabels.has(s.label));
+    }
+    if (reportsDiversificationDrillLabel) {
+        const asset = getAnalysisSummaryAssets().find((a) => getAssetDisplayLabel(a) === reportsDiversificationDrillLabel);
+        if (!asset) return [];
+        const txs = (ctx?.periodTx || []).filter((t) => t.linkedAssetId === asset.id);
+        if (txs.length) {
+            const { sums } = getDashboardChartTransactionSums(txs);
+            return Object.entries(sums).map(([label, amount]) => ({ label, amount }));
+        }
+        return [{ label: 'Wartość bieżąca', amount: getAssetValuePln(asset) }];
+    }
+    if (all.length <= REPORTS_DIVERSIFICATION_TOP_N + 1) return all;
+    const top = all.slice(0, REPORTS_DIVERSIFICATION_TOP_N);
+    const restAmount = all.slice(REPORTS_DIVERSIFICATION_TOP_N).reduce((sum, slice) => sum + slice.amount, 0);
+    return [...top, { label: REPORTS_DIVERSIFICATION_OTHER, amount: restAmount, isGrouped: true }];
+}
+
+function updateReportsDiversificationDrillChrome(drillLabel) {
+    const titleEl = document.getElementById('reports-diversification-title');
+    const backBtn = document.getElementById('btn-reset-reports-diversification');
+    if (titleEl) {
+        titleEl.textContent = drillLabel ? `Dywersyfikacja: ${drillLabel}` : 'Dywersyfikacja';
+    }
+    backBtn?.classList.toggle('hidden', !drillLabel);
+}
+
+function resetReportsDiversificationDrill(silent = false) {
+    reportsDiversificationDrillLabel = null;
+    updateReportsDiversificationDrillChrome(null);
+    if (!silent && reportsLastCtx) renderReportsDiversificationChart(reportsLastCtx);
+}
+
+function renderReportsDiversificationChart(ctx) {
     const canvas = document.getElementById('reportsDiversificationChart');
     const legendEl = document.getElementById('reports-diversification-legend');
     if (!canvas || typeof buildDiversificationSlices !== 'function') return;
-    const slices = buildDiversificationSlices();
+    const drillLabel = reportsDiversificationDrillLabel;
+    updateReportsDiversificationDrillChrome(drillLabel);
+    const slices = buildDiversificationDisplaySlices(ctx);
     if (reportsDiversificationChartInstance) reportsDiversificationChartInstance.destroy();
     if (!slices.length) {
-        if (legendEl) legendEl.innerHTML = '<p class="reports-hint">Brak danych.</p>';
+        if (legendEl) {
+            const backRow = drillLabel
+                ? `<button type="button" class="reports-allocation-legend-back" onclick="resetReportsDiversificationDrill()"><span aria-hidden="true">←</span> Wróć do dywersyfikacji</button>`
+                : '';
+            legendEl.innerHTML = `${backRow}<p class="reports-hint">Brak danych.</p>`;
+        }
         return;
     }
     const labels = slices.map((s) => s.label);
     const values = slices.map((s) => s.amount);
     const colors = getChartSliceColors(labels, 'income');
+    const borderColor = getChartBorderColor();
+    const canDrill = !drillLabel;
+
     reportsDiversificationChartInstance = new Chart(canvas.getContext('2d'), {
         type: 'doughnut',
-        data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 2 }] },
-        options: { responsive: true, plugins: { legend: { display: false } } }
+        data: {
+            labels,
+            datasets: [{
+                data: values,
+                backgroundColor: colors,
+                borderColor,
+                borderWidth: 3,
+                borderRadius: 5,
+                spacing: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 1.35,
+            cutout: '58%',
+            plugins: { legend: { display: false } },
+            onClick: canDrill ? (_event, elements, chartRef) => {
+                if (!elements[0]) return;
+                reportsDiversificationDrillLabel = chartRef.data.labels[elements[0].index];
+                renderReportsDiversificationChart(ctx);
+            } : undefined
+        }
     });
     if (legendEl) {
         const total = values.reduce((s, v) => s + v, 0);
-        legendEl.innerHTML = slices.slice(0, 10).map((slice, i) => {
+        const backRow = drillLabel
+            ? `<button type="button" class="reports-allocation-legend-back" onclick="resetReportsDiversificationDrill()"><span aria-hidden="true">←</span> Wróć do dywersyfikacji</button>`
+            : '';
+        legendEl.innerHTML = backRow + slices.slice(0, 12).map((slice, i) => {
             const pct = total > 0 ? Math.round((slice.amount / total) * 100) : 0;
-            return `<div class="reports-debt-split-item"><span class="reports-debt-split-dot" style="background:${colors[i]}"></span><span>${escapeHtml(slice.label)}</span><strong>${formatPlnAmount(slice.amount)}</strong><em>${pct}%</em></div>`;
+            const drillClass = canDrill ? ' chart-legend-item--drill' : '';
+            const tag = canDrill ? 'button' : 'div';
+            const attrs = canDrill
+                ? ` type="button" data-label="${String(slice.label).replace(/"/g, '&quot;')}"`
+                : '';
+            return `<${tag} class="reports-debt-split-item chart-legend-item${drillClass}"${attrs}>
+                <span class="reports-debt-split-dot" style="background:${colors[i]}"></span>
+                <span>${escapeHtml(slice.label)}</span>
+                <strong>${formatPlnAmount(slice.amount)}</strong>
+                <em>${pct}%</em>
+            </${tag}>`;
         }).join('');
+        if (canDrill) {
+            legendEl.querySelectorAll('.chart-legend-item--drill').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    reportsDiversificationDrillLabel = btn.dataset.label;
+                    renderReportsDiversificationChart(ctx);
+                });
+            });
+        }
     }
+}
+
+let ikzeLimitMode = 'view';
+
+function getIkzeLimitYear() {
+    return new Date().getFullYear();
+}
+
+function buildIkzeLimitSummaryHtml(year = getIkzeLimitYear()) {
+    const used = getIkzeContributionsInYear(year);
+    const limit = getIkzeAnnualLimitPln();
+    const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+    const left = Math.max(0, limit - used);
+    const sourceHint = isIkzeContributionsManual(year)
+        ? 'Wpłaty wpisane ręcznie'
+        : 'Wpłaty z transakcji powiązanych z IKZE';
+    return `
+        <div class="loan-report-grid ikze-limit-summary">
+            <div><span class="label">Wpłaty ${year}</span><strong>${formatPlnAmount(used)}</strong></div>
+            <div><span class="label">Limit</span><strong>${formatPlnAmount(limit)}</strong></div>
+            <div><span class="label">Pozostało</span><strong class="income">${formatPlnAmount(left)}</strong></div>
+        </div>
+        <div class="progress-bar-bg ikze-limit-bar"><div class="progress-bar-fill" style="width:${pct}%;background:var(--accent)"></div></div>
+        <p class="reports-hint">${sourceHint}</p>`;
+}
+
+function refreshIkzeLimitPanel() {
+    const year = getIkzeLimitYear();
+    const titleEl = document.getElementById('ikze-limit-title');
+    const contentEl = document.getElementById('ikze-limit-content');
+    if (titleEl) titleEl.textContent = `Limit IKZE ${year}`;
+    if (contentEl) contentEl.innerHTML = buildIkzeLimitSummaryHtml(year);
+}
+
+function populateIkzeLimitForm() {
+    const year = getIkzeLimitYear();
+    const limitInput = document.getElementById('reports-ikze-limit-input');
+    const contribInput = document.getElementById('reports-ikze-contributions-input');
+    if (limitInput) limitInput.value = String(getIkzeAnnualLimitPln());
+    if (contribInput) contribInput.value = String(getIkzeContributionsInYear(year));
+}
+
+function setIkzeLimitMode(mode) {
+    ikzeLimitMode = mode === 'edit' ? 'edit' : 'view';
+    const editBtn = document.getElementById('btn-ikze-limit-edit');
+    const viewBtn = document.getElementById('btn-ikze-limit-view');
+    const content = document.getElementById('ikze-limit-content');
+    const editPanel = document.getElementById('ikze-limit-edit');
+
+    if (ikzeLimitMode === 'edit') {
+        populateIkzeLimitForm();
+        editBtn?.classList.add('hidden');
+        viewBtn?.classList.remove('hidden');
+        content?.classList.add('hidden');
+        editPanel?.classList.remove('hidden');
+        return;
+    }
+
+    editBtn?.classList.remove('hidden');
+    viewBtn?.classList.add('hidden');
+    content?.classList.remove('hidden');
+    editPanel?.classList.add('hidden');
+    refreshIkzeLimitPanel();
+}
+
+function openIkzeLimitPanel(mode) {
+    const overlay = document.getElementById('ikze-limit-overlay');
+    if (!overlay) return;
+    refreshIkzeLimitPanel();
+    overlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    setIkzeLimitMode(mode === 'edit' ? 'edit' : 'view');
+}
+
+function closeIkzeLimitPanel() {
+    document.getElementById('ikze-limit-overlay')?.classList.add('hidden');
+    document.body.style.overflow = '';
+    ikzeLimitMode = 'view';
+    setIkzeLimitMode('view');
+}
+
+function cancelIkzeLimitEdit() {
+    setIkzeLimitMode('view');
+}
+
+function saveIkzeLimitSettings() {
+    const year = getIkzeLimitYear();
+    const limitVal = parseFloat(document.getElementById('reports-ikze-limit-input')?.value);
+    const contribVal = parseFloat(document.getElementById('reports-ikze-contributions-input')?.value);
+    if (!appState.reportPrefs) appState.reportPrefs = {};
+    if (!appState.reportPrefs.ikzeContributionsByYear) appState.reportPrefs.ikzeContributionsByYear = {};
+
+    if (Number.isFinite(limitVal) && limitVal > 0) {
+        appState.reportPrefs.ikzeAnnualLimitPln = limitVal;
+    } else {
+        delete appState.reportPrefs.ikzeAnnualLimitPln;
+    }
+
+    if (Number.isFinite(contribVal) && contribVal >= 0) {
+        appState.reportPrefs.ikzeContributionsByYear[String(year)] = contribVal;
+    }
+
+    if (typeof saveState === 'function') saveState();
+    renderReportsIkzeLimit();
+    setIkzeLimitMode('view');
+}
+
+function syncIkzeContributionsFromTransactions() {
+    const year = getIkzeLimitYear();
+    const fromTx = getIkzeContributionsFromTransactions(year);
+    const input = document.getElementById('reports-ikze-contributions-input');
+    if (input) input.value = String(fromTx);
+}
+
+function useIkzeContributionsFromTransactions() {
+    const year = getIkzeLimitYear();
+    if (!appState.reportPrefs) appState.reportPrefs = {};
+    if (appState.reportPrefs.ikzeContributionsByYear) {
+        delete appState.reportPrefs.ikzeContributionsByYear[String(year)];
+    }
+    if (typeof saveState === 'function') saveState();
+    populateIkzeLimitForm();
+    renderReportsIkzeLimit();
+    refreshIkzeLimitPanel();
+}
+
+function resetIkzeAnnualLimit() {
+    const input = document.getElementById('reports-ikze-limit-input');
+    if (input) input.value = String(IKZE_ANNUAL_LIMIT_PLN);
 }
 
 function renderReportsIkzeLimit() {
     const el = document.getElementById('reports-ikze-limit');
     if (!el) return;
-    const year = new Date().getFullYear();
-    const used = typeof getIkzeContributionsInYear === 'function' ? getIkzeContributionsInYear(year) : 0;
-    const limit = typeof IKZE_ANNUAL_LIMIT_PLN !== 'undefined' ? IKZE_ANNUAL_LIMIT_PLN : 8000;
-    const pct = Math.min(100, Math.round((used / limit) * 100));
-    const left = Math.max(0, limit - used);
-    el.innerHTML = `
-        <div class="loan-report-grid">
-            <div><span class="label">Wpłaty ${year}</span><strong>${formatPlnAmount(used)}</strong></div>
-            <div><span class="label">Limit</span><strong>${formatPlnAmount(limit)}</strong></div>
-            <div><span class="label">Pozostało</span><strong class="income">${formatPlnAmount(left)}</strong></div>
-        </div>
-        <div class="progress-bar-bg" style="margin-top:12px"><div class="progress-bar-fill" style="width:${pct}%;background:var(--accent)"></div></div>
-        <p class="reports-hint">Liczone z transakcji powiązanych z IKZE. Limit orientacyjny — ${formatPlnAmount(limit)} / rok.</p>`;
+    el.innerHTML = buildIkzeLimitSummaryHtml(getIkzeLimitYear());
 }
 
 function renderReportsMortgageVsRetirement() {
@@ -680,6 +961,9 @@ function buildAssetsCtx() {
 }
 
 function renderReportsAssetsSection(ctx) {
+    if (typeof autoCaptureAssetSnapshotsIfNeeded === 'function') {
+        autoCaptureAssetSnapshotsIfNeeded();
+    }
     const aCtx = buildAssetsCtx();
     renderReportsAssetsHero(aCtx);
     renderReportsAssetsHorizon();
@@ -692,10 +976,5 @@ function renderReportsAssetsSection(ctx) {
     renderReportsCashTrendChart(ctx, 'reportsAssetsCashTrendChart');
     renderReportsAssetsSnapshotsList();
     renderReportsNetWorthTrendChart();
-    renderReportsAllocationTrendChart();
     renderReportsWealthFlows(ctx);
-    renderReportsAssetsGoals();
-    renderReportsDiversificationChart();
-    renderReportsIkzeLimit();
-    renderReportsMortgageVsRetirement();
 }
