@@ -813,7 +813,7 @@
                 </div>
             </div>
 
-            <nav class="analysis-tab-grid" aria-label="Sekcje analizy">
+            <nav id="analysis-tab-grid" class="analysis-tab-grid" aria-label="Sekcje analizy">
                 <button id="btn-analysis-overview" type="button" class="analysis-tab active" onclick="setAnalysisSection('overview')">Przegląd</button>
                 <button id="btn-analysis-expenses" type="button" class="analysis-tab" onclick="setAnalysisSection('expenses')">Wydatki</button>
                 <button id="btn-analysis-assets" type="button" class="analysis-tab" onclick="setAnalysisSection('assets')">Majątek</button>
@@ -821,10 +821,19 @@
                 <button id="btn-analysis-advanced" type="button" class="analysis-tab analysis-tab--wide" onclick="setAnalysisSection('advanced')">Więcej</button>
             </nav>
 
+            <div id="analysis-compare-report" class="analysis-compare-report hidden">
+                <div class="card analysis-compare-banner">
+                    <div class="analysis-compare-banner-text">
+                        <span class="analysis-compare-banner-label">Raport porównawczy</span>
+                        <span id="analysis-compare-banner-range" class="analysis-compare-banner-range"></span>
+                    </div>
+                    <button type="button" class="toggle-btn loans-chip analysis-compare-exit-btn" onclick="exitCompareMode()">Przywróć widok okresu</button>
+                </div>
+                <div id="analysis-compare-report-body" class="analysis-compare-report-body"></div>
+            </div>
+
             <div id="analysis-sections-body" class="analysis-sections-body">
             <div id="analysis-section-overview" class="analysis-section">
-                <div id="reports-compare-card" class="card hidden"></div>
-
                 <div class="card hero-card reports-overview-hero">
                     <div class="hero-label">Saldo okresu</div>
                     <div id="reports-net-balance" class="hero-balance reports-overview-balance">0,00 zł</div>

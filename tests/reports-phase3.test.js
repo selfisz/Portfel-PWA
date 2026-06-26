@@ -233,6 +233,102 @@ describe('buildCompareCategoryMovers', () => {
   });
 });
 
+describe('getExtremeTransaction', () => {
+  it('zwraca najwyższy wpływ i największy wydatek', () => {
+    const tx = [
+      { type: 'income', amount: 1000, mainCategory: 'Praca', subCategory: 'Pensja', date: '2024-01-01' },
+      { type: 'income', amount: 200, mainCategory: 'Inne', subCategory: '[Bez podkategorii]', date: '2024-01-02' },
+      { type: 'expense', amount: 500, mainCategory: 'Dom', subCategory: 'Czynsz', date: '2024-01-03' },
+      { type: 'expense', amount: 15, mainCategory: 'Jedzenie', subCategory: 'Sklep', date: '2024-01-04' }
+    ];
+    expect(getExtremeTransaction(tx, 'income', 'max').amount).toBe(1000);
+    expect(getExtremeTransaction(tx, 'expense', 'max', true).amount).toBe(500);
+    expect(getExtremeTransaction(tx, 'expense', 'min', true).amount).toBe(15);
+  });
+});
+
+describe('getExpenseAmountMedian', () => {
+  it('liczy medianę parzystej liczby wydatków', () => {
+    const tx = [
+      { type: 'expense', amount: 10 },
+      { type: 'expense', amount: 30 },
+      { type: 'expense', amount: 20 },
+      { type: 'expense', amount: 40 }
+    ];
+    expect(getExpenseAmountMedian(tx)).toBe(25);
+  });
+
+  it('liczy medianę nieparzystej liczby wydatków', () => {
+    const tx = [
+      { type: 'expense', amount: 10 },
+      { type: 'expense', amount: 30 },
+      { type: 'expense', amount: 20 }
+    ];
+    expect(getExpenseAmountMedian(tx)).toBe(20);
+  });
+
+  it('pomija spłaty długów gdy excludeDebt = true', () => {
+    const tx = [
+      { type: 'expense', amount: 1000, mainCategory: 'Długi', subCategory: 'Kredyt', date: '2024-01-01' },
+      { type: 'expense', amount: 20, mainCategory: 'Jedzenie', subCategory: 'Sklep', date: '2024-01-02' },
+      { type: 'expense', amount: 40, mainCategory: 'Jedzenie', subCategory: 'Restauracja', date: '2024-01-03' }
+    ];
+    expect(getExpenseAmountMedian(tx)).toBe(30);
+  });
+
+  it('zwraca null dla pustej listy wydatków', () => {
+    expect(getExpenseAmountMedian([{ type: 'income', amount: 1000 }])).toBeNull();
+  });
+});
+
+describe('countZeroExpenseDays', () => {
+  it('liczy dni bez wydatków w okresie', () => {
+    const tx = [
+      { type: 'expense', amount: 50, date: '2024-01-01', mainCategory: 'Jedzenie', subCategory: 'Sklep' },
+      { type: 'expense', amount: 80, date: '2024-01-03', mainCategory: 'Transport', subCategory: 'Paliwo' }
+    ];
+    const result = countZeroExpenseDays('2024-01-01', '2024-01-03', tx);
+    expect(result.total).toBe(3);
+    expect(result.withExpense).toBe(2);
+    expect(result.zero).toBe(1);
+  });
+
+  it('traktuje wszystkie dni jako bez wydatków gdy brak transakcji', () => {
+    const result = countZeroExpenseDays('2024-01-01', '2024-01-05', []);
+    expect(result.total).toBe(5);
+    expect(result.zero).toBe(5);
+    expect(result.withExpense).toBe(0);
+  });
+});
+
+describe('getCompareExclusiveExpenseGroups', () => {
+  it('zwraca kategorie tylko w A lub tylko w B', () => {
+    const mapA = {
+      dom: { key: 'dom', label: 'Dom', total: 500, count: 2 },
+      jedzenie: { key: 'jedzenie', label: 'Jedzenie', total: 100, count: 1 }
+    };
+    const mapB = {
+      dom: { key: 'dom', label: 'Dom', total: 400, count: 2 },
+      transport: { key: 'transport', label: 'Transport', total: 80, count: 1 }
+    };
+    const { onlyA, onlyB } = getCompareExclusiveExpenseGroups(mapA, mapB);
+    expect(onlyA).toHaveLength(1);
+    expect(onlyA[0].label).toBe('Jedzenie');
+    expect(onlyB).toHaveLength(1);
+    expect(onlyB[0].label).toBe('Transport');
+  });
+
+  it('sortuje malejąco po total', () => {
+    const mapA = {
+      a: { key: 'a', label: 'A', total: 50, count: 1 },
+      b: { key: 'b', label: 'B', total: 200, count: 1 }
+    };
+    const { onlyA } = getCompareExclusiveExpenseGroups(mapA, {});
+    expect(onlyA[0].label).toBe('B');
+    expect(onlyA[1].label).toBe('A');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // getTransactionsInRange
 // ---------------------------------------------------------------------------
