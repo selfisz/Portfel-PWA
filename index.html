@@ -209,7 +209,7 @@
                             <button type="button" id="btn-cash-tx-expense" class="toggle-btn expense" onclick="setCashTxFilter('expense')">Wydatki</button>
                             <button type="button" id="btn-cash-tx-income" class="toggle-btn income" onclick="setCashTxFilter('income')">Wpływy</button>
                         </div>
-                        <p class="asset-cash-tx-hint">Dotknij transakcję, aby edytować</p>
+                        <p class="asset-cash-tx-hint">Dotknij transakcję, aby zobaczyć podgląd</p>
                     </div>
                     <div id="asset-cash-tx-list" class="asset-cash-tx-list"></div>
                 </div>
@@ -420,6 +420,13 @@
                 <button type="button" class="btn-submit btn-submit--form" onclick="confirmCreditCardQuickAction()">Zapisz</button>
                 <button type="button" class="btn-outline loan-details-btn" onclick="closeCreditCardQuickAction()">Anuluj</button>
             </div>
+        </div>
+    </div>
+
+    <div id="transaction-details-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeTransactionDetails()">
+        <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-transaction-details"></div>
+            <div id="transaction-details-content" class="loan-details-content"></div>
         </div>
     </div>
 

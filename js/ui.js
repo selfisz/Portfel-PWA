@@ -165,6 +165,15 @@ function initPanelHeaders() {
         onView: () => setIkzeLimitMode('view'),
         onClose: closeIkzeLimitPanel,
     }));
+    mountPanelHeader('panel-header-transaction-details', createDetailsPanelHeader({
+        titleId: 'transaction-details-title',
+        title: 'Transakcja',
+        editBtnId: 'btn-transaction-details-edit',
+        viewBtnId: 'btn-transaction-details-view',
+        onEdit: () => editTransactionFromDetails(),
+        onView: () => {},
+        onClose: closeTransactionDetails,
+    }));
 }
 
 function initOverlayCloseIcons() {
@@ -316,7 +325,7 @@ function attachSwipeDelete(row, index) {
             swiped = false;
             return;
         }
-        editTransaction(index);
+        openTransactionDetails(index);
     });
 }
 function getBasePath() {

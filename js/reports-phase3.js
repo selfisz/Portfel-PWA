@@ -1184,7 +1184,7 @@ function formatCompareTxHighlight(t, clickable = true) {
     const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
     const idx = clickable ? getTransactionEditIndex(t) : -1;
     const clickAttrs = idx >= 0
-        ? ` class="compare-tx-body compare-tx-clickable" role="button" tabindex="0" onclick="editTransaction(${idx})" onkeydown="if (event.key === 'Enter') editTransaction(${idx})"`
+        ? ` class="compare-tx-body compare-tx-clickable" role="button" tabindex="0" onclick="openTransactionDetails(${idx})" onkeydown="if (event.key === 'Enter') openTransactionDetails(${idx})"`
         : ' class="compare-tx-body"';
     return `<span${clickAttrs}>
         <span class="compare-tx-title">${escapeHtml(title)}</span>
@@ -1255,7 +1255,7 @@ function buildCompareTopTxListHtml(items, emptyLabel) {
         const idx = getTransactionEditIndex(t);
         const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
         const clickAttrs = idx >= 0
-            ? ` class="compare-top-tx-row compare-tx-clickable" role="button" tabindex="0" onclick="editTransaction(${idx})" onkeydown="if (event.key === 'Enter') editTransaction(${idx})"`
+            ? ` class="compare-top-tx-row compare-tx-clickable" role="button" tabindex="0" onclick="openTransactionDetails(${idx})" onkeydown="if (event.key === 'Enter') openTransactionDetails(${idx})"`
             : ' class="compare-top-tx-row"';
         return `<div${clickAttrs}>
             <span class="compare-top-tx-rank">${i + 1}</span>
@@ -1741,8 +1741,12 @@ function renderReportsOutliers(ctx) {
     }
 
     list.innerHTML = outliers.map((t, i) => {
+        const globalIndex = appState.transactions.indexOf(t);
         const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
-        return `<div class="reports-top-item">
+        const clickAttrs = globalIndex >= 0
+            ? ` type="button" onclick="openTransactionDetails(${globalIndex})"`
+            : ' type="button" disabled';
+        return `<button class="reports-top-item"${clickAttrs}>
             <span class="reports-top-rank">${i + 1}</span>
             ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, 'expense')}
             <div class="reports-top-text">
@@ -1752,7 +1756,7 @@ function renderReportsOutliers(ctx) {
             <div class="reports-top-col">
                 <span class="reports-top-amount expense">${formatPlnAmount(t.amount)}</span>
             </div>
-        </div>`;
+        </button>`;
     }).join('');
 }
 

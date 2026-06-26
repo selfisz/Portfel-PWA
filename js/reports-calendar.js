@@ -555,7 +555,7 @@ function renderCalendarDayPanel() {
         const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
         const meta = t.subCategory === '[Bez podkategorii]' ? '' : t.mainCategory;
         const isRec = t.recurringId ? '<span class="tx-badge">&#10227;</span>' : '';
-        return `<div class="calendar-day-tx">
+        return `<div class="calendar-day-tx${globalIndex >= 0 ? ' calendar-day-tx--clickable' : ''}"${globalIndex >= 0 ? ` role="button" tabindex="0" onclick="openTransactionFromCalendarDay(${globalIndex})" onkeydown="if (event.key === 'Enter') openTransactionFromCalendarDay(${globalIndex})"` : ''}>
             ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
             <div class="tx-info">
                 <div class="tx-title">${escapeHtml(title)}${isRec}</div>
@@ -564,15 +564,14 @@ function renderCalendarDayPanel() {
             </div>
             <div class="calendar-day-tx-actions">
                 <div class="tx-amount ${t.type}">${t.type === 'expense' ? '−' : '+'}${t.amount.toFixed(2)} zł</div>
-                ${globalIndex >= 0 ? `<button type="button" class="btn-cal-edit" onclick="editFromCalendarDay(${globalIndex})">Edytuj</button>` : ''}
             </div>
         </div>`;
     }).join('');
 }
 
-function editFromCalendarDay(index) {
+function openTransactionFromCalendarDay(index) {
     closeCalendarDay();
-    editTransaction(index);
+    openTransactionDetails(index);
 }
 
 function storeReportsMonthChartMeta(period, labels, ctx, monthKeys) {

@@ -585,10 +585,12 @@ function renderLoanRecentPayments() {
     }
 
     list.innerHTML = payments.map((t) => {
+        const globalIndex = appState.transactions.indexOf(t);
         const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
         const matchedLoan = loans.find((loan) => transactionMatchesLoan(t, loan));
         const loanLabel = matchedLoan ? getLoanDisplayName(matchedLoan) : '';
-        return `<div class="loan-payment-row">
+        const clickable = globalIndex >= 0;
+        return `<div class="loan-payment-row${clickable ? ' loan-payment-row--clickable' : ''}"${clickable ? ` role="button" tabindex="0" onclick="openTransactionDetails(${globalIndex})" onkeydown="if (event.key === 'Enter') openTransactionDetails(${globalIndex})"` : ''}>
             <div class="loan-payment-text">
                 <span class="loan-payment-title">${escapeHtml(title)}</span>
                 <span class="loan-payment-meta">${formatTxDate(t.date)}${loanLabel ? ` · ${escapeHtml(loanLabel)}` : ''}${t.note ? ` · ${escapeHtml(t.note)}` : ''}</span>

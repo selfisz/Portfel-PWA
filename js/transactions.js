@@ -1,4 +1,5 @@
 let activeViewId = 'dashboard';
+let activeTransactionDetailsIndex = null;
 
 function switchView(viewId, title, element) {
     if (activeViewId === 'dashboard' && viewId !== 'dashboard') {
@@ -341,6 +342,93 @@ function saveTransaction() {
     }
 }
 
+function getTransactionDetailTitle(tx) {
+    if (!tx) return 'Transakcja';
+    return tx.subCategory === '[Bez podkategorii]' ? tx.mainCategory : tx.subCategory;
+}
+
+function getTransactionCashEffectLabel(tx) {
+    if (!tx) return '';
+    if (tx.type === 'income') return 'Tak — wpływ do gotówki';
+    if (tx.creditCardId) return 'Nie — zakup na karcie';
+    if (tx.cashMovementId || tx.affectsCash === true) return 'Tak — obciąża gotówkę';
+    return 'Nie — bez wpływu na gotówkę';
+}
+
+function renderTransactionDetailsHtml(tx) {
+    if (!tx) return '';
+    const row = typeof loanDetailRow === 'function'
+        ? loanDetailRow
+        : (label, value) => (value ? `<div class="loan-detail-row"><span class="loan-detail-label">${escapeHtml(label)}</span><span class="loan-detail-value">${value}</span></div>` : '');
+
+    const typeLabel = tx.type === 'income' ? 'Wpływ' : 'Wydatek';
+    const amountClass = tx.type === 'income' ? 'income' : 'expense';
+    const sign = tx.type === 'expense' ? '−' : '+';
+    const subLabel = tx.subCategory === '[Bez podkategorii]' ? '—' : tx.subCategory;
+
+    let cardLabel = '';
+    if (tx.creditCardId && typeof getCreditCardById === 'function') {
+        const card = getCreditCardById(tx.creditCardId);
+        cardLabel = card?.name || 'Karta kredytowa';
+    }
+
+    let assetLabel = '';
+    if (tx.linkedAssetId && typeof getAssetById === 'function') {
+        const asset = getAssetById(tx.linkedAssetId);
+        assetLabel = asset?.name || 'Powiązane aktywo';
+    }
+
+    const rows = [
+        row('Data', formatTxDate(tx.date)),
+        row('Typ', typeLabel),
+        row('Kategoria', tx.mainCategory),
+        row('Podkategoria', subLabel),
+        row('Notatka', tx.note ? escapeHtml(tx.note) : ''),
+        row('Karta kredytowa', cardLabel ? escapeHtml(cardLabel) : ''),
+        row('Powiązane aktywo', assetLabel ? escapeHtml(assetLabel) : ''),
+        row('Gotówka', getTransactionCashEffectLabel(tx)),
+        row('Powtarzalna', tx.recurringId ? 'Tak' : '')
+    ].join('');
+
+    return `<p class="transaction-details-amount ${amountClass}">${sign}${formatPlnAmount(tx.amount)}</p>
+        <div class="loan-details-grid">${rows}</div>`;
+}
+
+function refreshTransactionDetailsPanel() {
+    const tx = activeTransactionDetailsIndex !== null
+        ? appState.transactions[activeTransactionDetailsIndex]
+        : null;
+    const title = document.getElementById('transaction-details-title');
+    const content = document.getElementById('transaction-details-content');
+    const viewBtn = document.getElementById('btn-transaction-details-view');
+    if (title) title.textContent = getTransactionDetailTitle(tx);
+    if (content) content.innerHTML = tx ? renderTransactionDetailsHtml(tx) : '';
+    if (viewBtn) viewBtn.classList.add('hidden');
+}
+
+function openTransactionDetails(index) {
+    const tx = appState.transactions[index];
+    if (!tx) return;
+    activeTransactionDetailsIndex = index;
+    const overlay = document.getElementById('transaction-details-overlay');
+    if (!overlay) return;
+    refreshTransactionDetailsPanel();
+    overlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeTransactionDetails() {
+    document.getElementById('transaction-details-overlay')?.classList.add('hidden');
+    document.body.style.overflow = '';
+    activeTransactionDetailsIndex = null;
+}
+
+function editTransactionFromDetails() {
+    const index = activeTransactionDetailsIndex;
+    closeTransactionDetails();
+    if (index !== null && index >= 0) editTransaction(index);
+}
+
 function editTransaction(index) {
     const tx = appState.transactions[index];
     editingTxIndex = index;
@@ -388,6 +476,7 @@ function editTransaction(index) {
 
 function deleteTransaction(index) {
     if (confirm('Na pewno usunąć?')) {
+        if (activeTransactionDetailsIndex === index) closeTransactionDetails();
         const tx = appState.transactions[index];
         syncCreditCardOnTransactionDelete(tx);
         syncCashOnTransactionDelete(tx);

@@ -834,8 +834,7 @@ function openCashTxForEdit(index) {
     if (!Number.isInteger(index) || index < 0) return;
     const asset = getActiveAsset();
     postEditReturnAssetId = asset?.id || null;
-    closeAssetDetails();
-    editTransaction(index);
+    openTransactionDetails(index);
 }
 
 function returnToAssetAfterEdit(assetId) {

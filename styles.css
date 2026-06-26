@@ -3137,6 +3137,16 @@ html:not([data-theme="dark"]) .grid-item.selected {
     border: 1px solid var(--border);
 }
 
+.calendar-day-tx--clickable {
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.calendar-day-tx--clickable:active {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+}
+
 .calendar-day-tx .tx-info {
     flex: 1;
     min-width: 0;
@@ -7542,6 +7552,19 @@ button.reports-debt-split-item strong {
     border-bottom: none;
 }
 
+.loan-payment-row--clickable {
+    cursor: pointer;
+    border-radius: var(--radius-xs);
+    margin: 0 -8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    transition: background 0.15s;
+}
+
+.loan-payment-row--clickable:active {
+    background: var(--accent-soft);
+}
+
 .asset-cash-tx-section {
     margin-top: 14px;
     padding-top: 14px;
@@ -7946,12 +7969,12 @@ button.reports-debt-split-item strong {
 }
 
 .loan-details-header-btn {
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    padding: 8px 14px;
-    border-radius: 999px;
-    font-size: var(--text-sm);
+    padding: 4px 10px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    color: var(--accent);
+    font-size: var(--text-2xs);
     font-weight: 700;
     cursor: pointer;
     font-family: inherit;
@@ -8096,6 +8119,17 @@ button.reports-debt-split-item strong {
     font-size: var(--text-sm);
     color: var(--text-muted);
 }
+
+.transaction-details-amount {
+    margin: 0 0 16px;
+    font-size: clamp(1.5rem, 7vw, 2rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+}
+
+.transaction-details-amount.income { color: var(--success); }
+.transaction-details-amount.expense { color: var(--danger); }
 
 .loan-detail-section {
     margin-bottom: 18px;
