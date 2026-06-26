@@ -1,8 +1,9 @@
 # Portfel PWA — wersja 1.1.0
 
 **Data zamknięcia:** 26 czerwca 2026  
-**Tag:** `v1.1.0`  
-**Gałąź backup:** `backup/stable-2026-06-26`  
+**Tag:** [`v1.1.0`](https://github.com/selfisz/Portfel-PWA/releases/tag/v1.1.0)  
+**Commit:** `d0989fd`  
+**Gałąź backup:** [`backup/stable-2026-06-26`](https://github.com/selfisz/Portfel-PWA/tree/backup/stable-2026-06-26)  
 **Service Worker:** v175
 
 ---
