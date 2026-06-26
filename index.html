@@ -215,6 +215,27 @@
                 </div>
             </div>
             <div id="asset-details-actions" class="asset-details-actions-wrap"></div>
+            <div id="asset-sell-section" class="asset-sell-section hidden">
+                <p class="section-label">Sprzedaj pozycję</p>
+                <div class="loan-form-row">
+                    <div class="form-group">
+                        <label class="section-label" for="asset-sell-qty">Ilość (szt.)</label>
+                        <input type="number" id="asset-sell-qty" min="0.0001" step="0.0001" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="section-label" for="asset-sell-price">Cena sprzedaży</label>
+                        <input type="number" id="asset-sell-price" min="0.0001" step="0.0001" placeholder="0.00">
+                    </div>
+                </div>
+                <label class="asset-sell-cash-row">
+                    <input type="checkbox" id="asset-sell-cash" checked>
+                    <span id="asset-sell-cash-label">Zaksięguj wpływ na gotówkę</span>
+                </label>
+                <div class="loan-details-edit-actions">
+                    <button type="button" class="btn-submit" onclick="sellAssetPartial()">Sprzedaj</button>
+                    <button type="button" class="btn-outline" onclick="closeSellAssetForm()">Anuluj</button>
+                </div>
+            </div>
             <div id="asset-details-edit" class="loan-details-edit hidden">
                 <div class="form-group">
                     <label class="section-label" for="asset-type-input">Typ</label>
@@ -242,6 +263,15 @@
                             <label class="section-label" for="asset-quantity-input">Ilość</label>
                             <input type="number" id="asset-quantity-input" min="0" step="0.0001" placeholder="45">
                         </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="section-label" for="asset-broker-input">Konto maklerskie</label>
+                        <select id="asset-broker-input">
+                            <option value="">— brak —</option>
+                            <option value="xtb">XTB</option>
+                            <option value="mbank">mBank eMakler (Zwykły)</option>
+                            <option value="ikze">IKZE mBank eMakler</option>
+                        </select>
                     </div>
                     <div class="loan-form-row">
                         <div class="form-group">

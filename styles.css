@@ -7050,8 +7050,8 @@ button.reports-debt-split-item strong {
 .assets-hero-summary-chips,
 .loans-hero-summary-chips {
     display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
+    flex-direction: column;
+    gap: 0;
 }
 
 .assets-hero-summary-chips .toggle-btn.loans-chip,
@@ -7067,6 +7067,18 @@ button.reports-debt-split-item strong {
     border: 1px solid rgba(255, 255, 255, 0.28);
     color: rgba(255, 255, 255, 0.92);
     box-shadow: none;
+}
+
+/* group-toggle: pełna szerokość wiersza */
+.assets-hero-summary-chips .assets-summary-group-toggle {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* item-chipy: mniejsze i wbudowane flex-wrap */
+.assets-hero-summary-chips .assets-summary-item-chip {
+    flex: 0 1 auto;
+    width: auto;
 }
 
 .assets-hero-summary-chips .toggle-btn.loans-chip.active,
@@ -7199,6 +7211,158 @@ button.reports-debt-split-item strong {
     gap: 8px;
 }
 
+.assets-portfolio-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.assets-portfolio-panel {
+    padding: 12px 13px;
+    margin-bottom: 0;
+}
+
+.assets-portfolio-panel-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.assets-portfolio-panel-title {
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    line-height: 1.25;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.assets-portfolio-panel-totals {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.assets-portfolio-panel-total {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.assets-portfolio-panel-pl {
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.assets-portfolio-panel-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.assets-portfolio-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+}
+
+.assets-portfolio-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.assets-portfolio-row-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.assets-portfolio-row-name {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.assets-portfolio-row-meta {
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+    line-height: 1.2;
+}
+
+.assets-portfolio-row-values {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.assets-portfolio-row-value {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.assets-portfolio-row-pl {
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.assets-other-section {
+    margin-bottom: 10px;
+}
+
+.assets-other-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+    padding-inline: 13px;
+}
+
+.assets-other-title {
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.assets-other-total {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.assets-other-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
 .asset-summary-card {
     margin-bottom: 0;
     padding: 11px 13px;
@@ -7301,6 +7465,116 @@ button.reports-debt-split-item strong {
 .asset-delete-btn {
     color: var(--danger);
     border-color: var(--danger);
+}
+
+.asset-sell-btn {
+    color: var(--success);
+    border-color: var(--success);
+}
+
+.asset-sell-section {
+    margin: 10px 0 0;
+    padding: 14px 0 0;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.asset-sell-cash-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0 12px;
+    font-size: var(--text-sm);
+    cursor: pointer;
+}
+
+.assets-portfolio-panel-footer {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+    display: flex;
+    justify-content: flex-end;
+}
+
+.assets-portfolio-panel-delete-btn {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    font-size: var(--text-2xs);
+    font-family: inherit;
+    padding: 5px 10px;
+    cursor: pointer;
+    border-radius: var(--radius-2xs);
+    line-height: 1.2;
+    opacity: 0.6;
+    transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.assets-portfolio-panel-delete-btn:hover,
+.assets-portfolio-panel-delete-btn:focus-visible {
+    opacity: 1;
+    color: var(--danger);
+    border-color: var(--danger-soft, rgba(220, 38, 38, 0.3));
+}
+
+/* ── Dostosuj sumę — chipy hierarchiczne ── */
+
+.assets-summary-group {
+    width: 100%;
+    margin-bottom: 6px;
+}
+
+.assets-summary-group:last-child {
+    margin-bottom: 0;
+}
+
+.assets-summary-group-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    width: 100%;
+    text-align: left;
+}
+
+.assets-summary-group-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.assets-summary-group-total {
+    flex-shrink: 0;
+    font-size: var(--text-2xs);
+    opacity: 0.72;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+}
+
+.assets-summary-group-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 5px;
+    padding-left: 10px;
+}
+
+.assets-summary-item-chip {
+    font-size: var(--text-2xs) !important;
+    padding: 4px 9px !important;
+    min-height: 26px !important;
+    font-weight: 500 !important;
+}
+
+.assets-summary-group--flat {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    padding-top: 8px;
+    margin-top: 6px;
 }
 
 .asset-picker-panel {

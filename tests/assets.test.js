@@ -2,6 +2,7 @@
  * Testy jednostkowe dla js/assets.js
  */
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import vm from 'vm';
 import { loadScript, runInContext } from './helpers/load.js';
 
 beforeAll(() => {
@@ -28,6 +29,8 @@ beforeAll(() => {
 
   globalThis.stateRef = { set: () => Promise.resolve(), on: () => {}, off: () => {} };
   globalThis.formatPlnAmount = (n) => `${Number(n).toFixed(2)} zł`;
+  globalThis.formatPlnAmountHtml = (n) => `${Number(n).toFixed(2)} zł`;
+  globalThis.setPlnAmountElement = (el, n) => { if (el) el.textContent = `${Number(n).toFixed(2)} zł`; };
   globalThis.formatTxDate = (d) => d;
   globalThis.escapeHtml = (t) => String(t ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   globalThis.saveState = () => {};
@@ -38,6 +41,10 @@ beforeAll(() => {
   globalThis.openAssetDetails = () => {};
   globalThis.setAssetDetailsMode = () => {};
   globalThis.recordAssetValueHistory = () => {};
+  globalThis.localIsoDate = (d) => {
+    const date = d instanceof Date ? d : new Date(d);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
 
   loadScript('js/constants.js');
   loadScript('js/portfolio.js');
@@ -485,6 +492,66 @@ describe('migrateMbankEmeryturaAsset', () => {
 });
 
 // ===========================================================================
+// migratePortfolioPositionsJune2026
+// ===========================================================================
+describe('migratePortfolioPositionsJune2026', () => {
+  it('archiwizuje kubełki i tworzy pozycje z poprawnym P/L', () => {
+    _setAppState({
+      ..._getAppState(),
+      assets: [
+        { id: 'asset-inv-xtb', type: 'investment', name: 'XTB — akcje', quantity: 1, purchasePrice: 1105, currentPrice: 1105, currency: 'PLN' },
+        { id: 'asset-inv-mbank', type: 'investment', name: 'mBank — akcje', quantity: 1, purchasePrice: 4556, currentPrice: 4556, currency: 'PLN' },
+        { id: 'asset-ret-ikze-mbank', type: 'retirement', retirementKind: 'IKZE', name: 'mBank — IKZE', amount: 20703.66 },
+        { id: 'asset-ret-mbank-emerytura', type: 'retirement', retirementKind: 'EMERYTURA', name: 'mBank — Emerytura', amount: 1687.98 }
+      ],
+      reportPrefs: {}
+    });
+
+    const changed = migratePortfolioPositionsJune2026();
+    expect(changed).toBe(true);
+
+    const state = _getAppState();
+    expect(state.reportPrefs.portfolioPositions2026).toBe('v1');
+    expect(state.assets.find((a) => a.id === 'asset-inv-xtb')?.archived).toBe(true);
+    expect(state.assets.find((a) => a.id === 'asset-inv-mbank')?.archived).toBe(true);
+
+    const artGames = state.assets.find((a) => a.id === 'asset-inv-xtb-artgames');
+    expect(artGames.ticker).toBe('ARTGAMES');
+    expect(artGames.quantity).toBe(1700);
+    expect(getAssetValuePln(artGames)).toBeCloseTo(1011.50, 2);
+    expect(getAssetGainPln(artGames)).toBeCloseTo(-2456.50, 2);
+
+    const ikzeVwce = state.assets.find((a) => a.id === 'asset-inv-ikze-vwce');
+    expect(ikzeVwce.ticker).toBe('VWCE');
+    expect(ikzeVwce.brokerAccount).toBe('ikze');
+    expect(getAssetHorizon(ikzeVwce)).toBe('long');
+    expect(getAssetValuePln(ikzeVwce)).toBeCloseTo(9854.73, 2);
+
+    const ikzeShell = state.assets.find((a) => a.id === 'asset-ret-ikze-mbank');
+    expect(ikzeShell.amount).toBe(0);
+    expect(ikzeShell.includeInSummary).toBe(false);
+
+    const ikzePositions = state.assets.filter((a) => a.brokerAccount === 'ikze' && !a.archived);
+    const ikzeTotal = ikzePositions.reduce((s, a) => s + getAssetValuePln(a), 0);
+    expect(ikzeTotal).toBeCloseTo(20483.25, 2);
+
+    const emerytura = state.assets.find((a) => a.id === 'asset-ret-mbank-emerytura');
+    expect(emerytura.name).toBe('Emerytura 2035');
+    expect(emerytura.amount).toBeCloseTo(1679.19, 2);
+
+    const mbankPositions = state.assets.filter((a) => a.brokerAccount === 'mbank' && !a.archived);
+    const mbankTotal = mbankPositions.reduce((s, a) => s + getAssetValuePln(a), 0);
+    expect(mbankTotal).toBeCloseTo(4376.57, 2);
+    expect(mbankPositions.reduce((s, a) => s + getAssetGainPln(a), 0)).toBeCloseTo(-3481.66, 2);
+  });
+
+  it('nie uruchamia się ponownie po flagi v1', () => {
+    _setAppState({ ..._getAppState(), assets: [], reportPrefs: { portfolioPositions2026: 'v1' } });
+    expect(migratePortfolioPositionsJune2026()).toBe(false);
+  });
+});
+
+// ===========================================================================
 // archiveAsset — bug fix: lokalny format daty
 // ===========================================================================
 describe('archiveAsset — timezone fix', () => {
@@ -500,9 +567,163 @@ describe('archiveAsset — timezone fix', () => {
     expect(asset.archived).toBe(true);
     expect(asset.archivedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
-    // Sprawdź że data jest lokalna (nie UTC przesuniętą)
     const now = new Date();
     const expectedDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     expect(asset.archivedAt).toBe(expectedDate);
+  });
+
+  it('usuwa pozycję z aktywnej listy i czyści activeAssetId', () => {
+    _setAppState({ ..._getAppState(), assets: [
+      { id: 'asset-1', type: 'cash', amount: 1000, archived: false },
+      { id: 'asset-2', type: 'cash', amount: 500, archived: false }
+    ]});
+    runInContext('activeAssetId = "asset-1"; draftAsset = null; renderAssets = function() {};');
+
+    archiveAsset();
+
+    expect(getActiveAssets().map((a) => a.id)).toEqual(['asset-2']);
+    expect(getArchivedAssets().map((a) => a.id)).toEqual(['asset-1']);
+    expect(vm.runInThisContext('activeAssetId')).toBeNull();
+  });
+});
+
+// ===========================================================================
+// portfolio UI — grupowanie kont
+// ===========================================================================
+describe('portfolio grouping', () => {
+  it('przypisuje pozycje do właściwych ramek kont', () => {
+    const assets = [
+      { id: 'asset-inv-xtb-artgames', type: 'investment', brokerAccount: 'xtb', quantity: 1, purchasePrice: 1, currentPrice: 1 },
+      { id: 'asset-cash-xtb-free', type: 'cash', amount: 0.08 },
+      { id: 'asset-inv-mbank-vwce', type: 'investment', brokerAccount: 'mbank', quantity: 1, purchasePrice: 1, currentPrice: 1 },
+      { id: 'asset-inv-ikze-vwce', type: 'investment', brokerAccount: 'ikze', quantity: 1, purchasePrice: 1, currentPrice: 1 },
+      { id: 'asset-ret-ikze-mbank', type: 'retirement', amount: 0, includeInSummary: false },
+      { id: 'asset-ret-mbank-emerytura', type: 'retirement', amount: 1679.19 },
+      { id: 'asset-cash-main', type: 'cash', amount: 1000 }
+    ].map(normalizeAsset);
+
+    expect(getAssetPortfolioGroupId(assets[0])).toBe('xtb');
+    expect(getAssetPortfolioGroupId(assets[1])).toBe('xtb');
+    expect(getAssetPortfolioGroupId(assets[2])).toBe('mbank');
+    expect(getAssetPortfolioGroupId(assets[3])).toBe('ikze');
+    expect(getAssetPortfolioGroupId(assets[4])).toBeNull();
+    expect(getAssetPortfolioGroupId(assets[5])).toBe('emerytura');
+    expect(getAssetPortfolioGroupId(assets[6])).toBeNull();
+  });
+
+  it('renderuje 4 panele portfela i sekcję pozostałych', () => {
+    _setAppState({ ..._getAppState(), assets: [
+      { id: 'asset-inv-xtb-artgames', type: 'investment', brokerAccount: 'xtb', ticker: 'ARTGAMES', quantity: 1, purchasePrice: 10, currentPrice: 12 },
+      { id: 'asset-inv-mbank-vwce', type: 'investment', brokerAccount: 'mbank', ticker: 'VWCE', quantity: 2, purchasePrice: 100, currentPrice: 110 },
+      { id: 'asset-inv-ikze-vwce', type: 'investment', brokerAccount: 'ikze', ticker: 'VWCE', quantity: 1, purchasePrice: 100, currentPrice: 105 },
+      { id: 'asset-ret-mbank-emerytura', type: 'retirement', name: 'Emerytura 2035', amount: 1679.19 },
+      { id: 'asset-cash-main', type: 'cash', name: 'Konto', amount: 500 }
+    ]});
+
+    const html = buildAssetsListHtml(getActiveAssets(), true);
+    expect(html).toContain('assets-portfolio-panel');
+    expect(html).toContain('XTB');
+    expect(html).toContain('mBank eMakler (Zwykły)');
+    expect(html).toContain('IKZE mBank eMakler');
+    expect(html).toContain('mBank Emerytura 2035');
+    expect(html).toContain('Pozostałe aktywa');
+    expect(html).toContain('Konto');
+    expect((html.match(/class="card assets-portfolio-panel"/g) || []).length).toBe(4);
+    expect(html.indexOf('Pozostałe aktywa')).toBeLessThan(html.indexOf('XTB'));
+  });
+});
+
+// ===========================================================================
+// deletePortfolioGroup — guard seed + tombstone
+// ===========================================================================
+describe('deletePortfolioGroup', () => {
+  const baseAssets = [
+    { id: 'asset-inv-ikze-vwce', type: 'investment', brokerAccount: 'ikze', ticker: 'VWCE', quantity: 14, purchasePrice: 67, currentPrice: 70 },
+    { id: 'asset-inv-ikze-etfbtbsp', type: 'investment', brokerAccount: 'ikze', ticker: 'ETFBTBSP', quantity: 1, purchasePrice: 100, currentPrice: 110 },
+    { id: 'asset-ret-ikze-mbank', type: 'retirement', amount: 0, includeInSummary: false },
+    { id: 'asset-inv-xtb-artgames', type: 'investment', brokerAccount: 'xtb', ticker: 'ARTGAMES', quantity: 1, purchasePrice: 10, currentPrice: 12 }
+  ];
+
+  beforeEach(() => {
+    _setAppState({ ..._getAppState(), assets: [...baseAssets], deletedAssetIds: [], reportPrefs: {} });
+    runInContext('activeAssetId = null; draftAsset = null;');
+  });
+
+  it('usuwa pozycje grupy i wypełnia deletedAssetIds', () => {
+    deletePortfolioGroup('ikze');
+
+    const active = getActiveAssets().map((a) => a.id);
+    expect(active).not.toContain('asset-inv-ikze-vwce');
+    expect(active).not.toContain('asset-inv-ikze-etfbtbsp');
+    expect(active).toContain('asset-inv-xtb-artgames');
+
+    const deleted = _getAppState().deletedAssetIds;
+    expect(deleted).toContain('asset-inv-ikze-vwce');
+    expect(deleted).toContain('asset-inv-ikze-etfbtbsp');
+  });
+
+  it('seed nie przywraca pozycji oznaczonej jako deletedAssetId', () => {
+    _setAppState({
+      ..._getAppState(),
+      assets: [],
+      deletedAssetIds: ['asset-inv-ikze-vwce'],
+      reportPrefs: { portfolioPositions2026: 'v1' }
+    });
+    ensureUserAssetsSeed();
+    const ids = _getAppState().assets.map((a) => a.id);
+    expect(ids).not.toContain('asset-inv-ikze-vwce');
+  });
+
+  it('excludedPortfolioGroups trafia do reportPrefs po usunięciu grupy', () => {
+    deletePortfolioGroup('ikze');
+    expect(_getAppState().reportPrefs.excludedPortfolioGroups).toContain('ikze');
+  });
+});
+
+// ===========================================================================
+// getEffectiveSummaryAssets — filtrowanie po grupach
+// ===========================================================================
+describe('getEffectiveSummaryAssets', () => {
+  it('wyklucza całą grupę gdy jest w excludedPortfolioGroups', () => {
+    _setAppState({
+      ..._getAppState(),
+      assets: [
+        { id: 'asset-inv-xtb-artgames', type: 'investment', brokerAccount: 'xtb', ticker: 'ARTGAMES', quantity: 1, purchasePrice: 10, currentPrice: 12 },
+        { id: 'asset-inv-ikze-vwce', type: 'investment', brokerAccount: 'ikze', ticker: 'VWCE', quantity: 1, purchasePrice: 100, currentPrice: 105 },
+        { id: 'asset-cash-main', type: 'cash', amount: 500 }
+      ],
+      reportPrefs: { excludedPortfolioGroups: ['ikze'] }
+    });
+
+    const summary = getEffectiveSummaryAssets();
+    expect(summary.map((a) => a.id)).not.toContain('asset-inv-ikze-vwce');
+    expect(summary.map((a) => a.id)).toContain('asset-inv-xtb-artgames');
+    expect(summary.map((a) => a.id)).toContain('asset-cash-main');
+  });
+
+  it('suma majątku nie uwzględnia wykluczonej grupy', () => {
+    const xtbValue = 1 * 12 * 4.32;
+    _setAppState({
+      ..._getAppState(),
+      assets: [
+        { id: 'asset-inv-xtb-artgames', type: 'investment', brokerAccount: 'xtb', ticker: 'ART', quantity: 1, purchasePrice: 10, currentPrice: 12, currency: 'EUR' },
+        { id: 'asset-inv-ikze-vwce', type: 'investment', brokerAccount: 'ikze', ticker: 'VWCE', quantity: 5, purchasePrice: 100, currentPrice: 200, currency: 'EUR' }
+      ],
+      reportPrefs: { excludedPortfolioGroups: ['ikze'] }
+    });
+
+    const summary = getEffectiveSummaryAssets();
+    const total = getActiveAssetsTotalPln(summary);
+    expect(Math.abs(total - xtbValue)).toBeLessThan(0.01);
+  });
+
+  it('togglePortfolioGroupSummary dodaje i usuwa grupę', () => {
+    _setAppState({ ..._getAppState(), assets: [], reportPrefs: {} });
+
+    togglePortfolioGroupSummary('xtb');
+    expect(_getAppState().reportPrefs.excludedPortfolioGroups).toContain('xtb');
+
+    togglePortfolioGroupSummary('xtb');
+    expect(_getAppState().reportPrefs.excludedPortfolioGroups).not.toContain('xtb');
   });
 });

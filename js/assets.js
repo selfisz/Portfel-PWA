@@ -98,6 +98,7 @@ function normalizeAsset(raw) {
         asset.purchasePrice = Math.max(0, parseFloat(asset.purchasePrice) || 0);
         asset.currentPrice = Math.max(0, parseFloat(asset.currentPrice ?? asset.currentPriceManual) || 0);
         if (!asset.name && asset.ticker) asset.name = asset.ticker;
+        asset.brokerAccount = (asset.brokerAccount || '').trim();
     } else {
         asset.amount = Math.max(0, parseFloat(asset.amount) || 0);
         if (asset.type === 'deposit') {
@@ -126,9 +127,39 @@ function getSummaryAssets() {
     return getActiveAssets().filter((asset) => asset.includeInSummary !== false);
 }
 
+function getExcludedPortfolioGroups() {
+    const excl = appState.reportPrefs?.excludedPortfolioGroups;
+    return Array.isArray(excl) ? excl : [];
+}
+
+function getEffectiveSummaryAssets() {
+    const excluded = new Set(getExcludedPortfolioGroups());
+    return getActiveAssets().filter((asset) => {
+        if (asset.includeInSummary === false) return false;
+        const groupId = getAssetPortfolioGroupId(asset);
+        if (groupId && excluded.has(groupId)) return false;
+        return true;
+    });
+}
+
+function togglePortfolioGroupSummary(groupId) {
+    if (!appState.reportPrefs || typeof appState.reportPrefs !== 'object') appState.reportPrefs = {};
+    const excl = Array.isArray(appState.reportPrefs.excludedPortfolioGroups)
+        ? appState.reportPrefs.excludedPortfolioGroups
+        : [];
+    if (excl.includes(groupId)) {
+        appState.reportPrefs.excludedPortfolioGroups = excl.filter((g) => g !== groupId);
+    } else {
+        appState.reportPrefs.excludedPortfolioGroups = [...excl, groupId];
+    }
+    saveState();
+    renderAssets();
+}
+
 function getAssetHorizon(asset) {
     const a = normalizeAsset(asset);
     if (a.type === 'retirement') return 'long';
+    if (a.type === 'investment' && a.brokerAccount === 'ikze') return 'long';
     return 'short';
 }
 
@@ -163,6 +194,11 @@ function getArchivedAssets() {
 function getAssetById(id) {
     if (!id) return null;
     return getAssets().find((asset) => asset.id === id) || null;
+}
+
+function getActiveAssetById(id) {
+    if (!id) return null;
+    return getActiveAssets().find((asset) => asset.id === id) || null;
 }
 
 function updateAssetInState(asset) {
@@ -217,13 +253,240 @@ function migrateInvestmentsToAssets() {
     return changed;
 }
 
+const LEGACY_PORTFOLIO_BUCKET_IDS = ['asset-inv-xtb', 'asset-inv-mbank'];
+
+function isLegacyPortfolioBucket(raw) {
+    return LEGACY_PORTFOLIO_BUCKET_IDS.includes(raw?.id);
+}
+
+function roundAssetPrice(value) {
+    return Math.round(value * 1000000) / 1000000;
+}
+
+function buildInvestmentPositionFromBroker({
+    id,
+    name,
+    ticker,
+    quantity,
+    valuePln,
+    gainPln,
+    currency = 'PLN',
+    brokerAccount = '',
+    includeInSummary = true
+}) {
+    const qty = Math.max(0, parseFloat(quantity) || 0);
+    const value = parseFloat(valuePln) || 0;
+    const gain = parseFloat(gainPln) || 0;
+    const cost = value - gain;
+    const currentPrice = qty > 0 ? roundAssetPrice(value / qty) : 0;
+    const purchasePrice = qty > 0 ? roundAssetPrice(cost / qty) : 0;
+    return normalizeAsset({
+        id,
+        type: 'investment',
+        name,
+        ticker,
+        quantity: qty,
+        currentPrice,
+        purchasePrice,
+        currency,
+        brokerAccount,
+        includeInSummary
+    });
+}
+
+function getPortfolioInvestmentSnapshots() {
+    return [
+        buildInvestmentPositionFromBroker({
+            id: 'asset-inv-xtb-artgames',
+            name: 'XTB · Art Games',
+            ticker: 'ARTGAMES',
+            quantity: 1700,
+            valuePln: 1011.50,
+            gainPln: -2456.50,
+            brokerAccount: 'xtb'
+        }),
+        buildInvestmentPositionFromBroker({
+            id: 'asset-inv-mbank-aigames',
+            name: 'mBank · AIGAMES',
+            ticker: 'AIGAMES',
+            quantity: 65,
+            valuePln: 49.66,
+            gainPln: -949.84,
+            brokerAccount: 'mbank'
+        }),
+        buildInvestmentPositionFromBroker({
+            id: 'asset-inv-mbank-artgames-nc',
+            name: 'mBank · ARTGAMES-NC',
+            ticker: 'ARTGAMES-NC',
+            quantity: 566,
+            valuePln: 339.60,
+            gainPln: -1377.98,
+            brokerAccount: 'mbank'
+        }),
+        buildInvestmentPositionFromBroker({
+            id: 'asset-inv-mbank-cdprojekt',
+            name: 'mBank · CDPROJEKT',
+            ticker: 'CDPROJEKT',
+            quantity: 10,
+            valuePln: 2174.00,
+            gainPln: -1150.41,
+            brokerAccount: 'mbank'
+        }),
+        buildInvestmentPositionFromBroker({
+            id: 'asset-inv-mbank-etfbndxpl',
+            name: 'mBank · ETFBNDXPL',
+            ticker: 'ETFBNDXPL',
+            quantity: 4,
+            valuePln: 1109.40,
+            gainPln: -25.00,
+            brokerAccount: 'mbank'
+        }),
+        buildInvestmentPositionFromBroker({
+            id: 'asset-inv-mbank-vwce',
+            name: 'mBank · VWCE GR ETF',
+            ticker: 'VWCE',
+            quantity: 1,
+            valuePln: 703.91,
+            gainPln: 21.57,
+            brokerAccount: 'mbank'
+        }),
+        buildInvestmentPositionFromBroker({
+            id: 'asset-inv-ikze-etfbndxpl',
+            name: 'IKZE · ETFBNDXPL',
+            ticker: 'ETFBNDXPL',
+            quantity: 9,
+            valuePln: 2496.15,
+            gainPln: 7.65,
+            brokerAccount: 'ikze'
+        }),
+        buildInvestmentPositionFromBroker({
+            id: 'asset-inv-ikze-etfbtbsp',
+            name: 'IKZE · ETFBTBSP',
+            ticker: 'ETFBTBSP',
+            quantity: 15,
+            valuePln: 3460.50,
+            gainPln: 69.00,
+            brokerAccount: 'ikze'
+        }),
+        buildInvestmentPositionFromBroker({
+            id: 'asset-inv-ikze-euna',
+            name: 'IKZE · EUNA GR ETF',
+            ticker: 'EUNA',
+            quantity: 151,
+            valuePln: 3206.64,
+            gainPln: 58.00,
+            brokerAccount: 'ikze'
+        }),
+        buildInvestmentPositionFromBroker({
+            id: 'asset-inv-ikze-l8i3',
+            name: 'IKZE · L8I3 GR ETF',
+            ticker: 'L8I3',
+            quantity: 3,
+            valuePln: 1465.23,
+            gainPln: 17.40,
+            brokerAccount: 'ikze'
+        }),
+        buildInvestmentPositionFromBroker({
+            id: 'asset-inv-ikze-vwce',
+            name: 'IKZE · VWCE GR ETF',
+            ticker: 'VWCE',
+            quantity: 14,
+            valuePln: 9854.73,
+            gainPln: 435.81,
+            brokerAccount: 'ikze'
+        }),
+        normalizeAsset({
+            id: 'asset-cash-xtb-free',
+            type: 'cash',
+            name: 'XTB · wolne środki',
+            amount: 0.08,
+            currency: 'PLN'
+        })
+    ];
+}
+
+function archiveLegacyPortfolioBuckets() {
+    if (!Array.isArray(appState.assets)) return false;
+    let changed = false;
+    const today = typeof localIsoDate === 'function'
+        ? localIsoDate(new Date())
+        : new Date().toISOString().slice(0, 10);
+
+    LEGACY_PORTFOLIO_BUCKET_IDS.forEach((id) => {
+        const idx = appState.assets.findIndex((a) => a.id === id);
+        if (idx < 0) return;
+        const asset = appState.assets[idx];
+        if (asset.archived) return;
+        appState.assets[idx] = normalizeAsset({
+            ...asset,
+            archived: true,
+            archivedAt: today
+        });
+        changed = true;
+    });
+
+    return changed;
+}
+
+function migratePortfolioPositionsJune2026() {
+    if (!Array.isArray(appState.assets)) appState.assets = [];
+    if (!appState.reportPrefs || typeof appState.reportPrefs !== 'object') {
+        appState.reportPrefs = {};
+    }
+    if (appState.reportPrefs.portfolioPositions2026 === 'v1') return false;
+
+    let changed = archiveLegacyPortfolioBuckets();
+
+    getPortfolioInvestmentSnapshots().forEach((snapshot) => {
+        const idx = appState.assets.findIndex((a) => a.id === snapshot.id);
+        if (idx >= 0) {
+            appState.assets[idx] = snapshot;
+        } else {
+            appState.assets.push(snapshot);
+        }
+        changed = true;
+    });
+
+    const ikzeShell = normalizeAsset({
+        id: 'asset-ret-ikze-mbank',
+        type: 'retirement',
+        name: 'mBank — IKZE',
+        retirementKind: 'IKZE',
+        institution: 'mBank',
+        amount: 0,
+        includeInSummary: false
+    });
+    const ikzeIdx = appState.assets.findIndex((a) => a.id === ikzeShell.id);
+    if (ikzeIdx >= 0) {
+        appState.assets[ikzeIdx] = { ...appState.assets[ikzeIdx], ...ikzeShell };
+    } else {
+        appState.assets.push(ikzeShell);
+    }
+    changed = true;
+
+    const emerytura = normalizeAsset({
+        id: 'asset-ret-mbank-emerytura',
+        type: 'retirement',
+        name: 'Emerytura 2035',
+        retirementKind: 'EMERYTURA',
+        institution: 'mBank',
+        amount: 1679.19
+    });
+    const emIdx = appState.assets.findIndex((a) => a.id === emerytura.id);
+    if (emIdx >= 0) {
+        appState.assets[emIdx] = { ...appState.assets[emIdx], ...emerytura };
+    } else {
+        appState.assets.push(emerytura);
+    }
+    changed = true;
+
+    appState.reportPrefs.portfolioPositions2026 = 'v1';
+    return changed;
+}
+
 function consolidateUserAssets() {
     if (!Array.isArray(appState.assets)) appState.assets = [];
     let changed = false;
-
-    const beforeLen = appState.assets.length;
-    appState.assets = appState.assets.filter((asset) => !isLegacyVwceAsset(asset));
-    if (appState.assets.length !== beforeLen) changed = true;
 
     LEGACY_CASH_ASSET_IDS.forEach((id) => {
         const idx = appState.assets.findIndex((a) => a.id === id);
@@ -239,32 +502,14 @@ function consolidateUserAssets() {
 function getUserAssetsSeedSnapshots() {
     return [
         { id: 'asset-cash-total', type: 'cash', name: 'Gotówka', amount: CASH_TOTAL_AMOUNT },
-        {
-            id: 'asset-inv-xtb',
-            type: 'investment',
-            name: 'XTB — akcje',
-            quantity: 1,
-            purchasePrice: 1105.08,
-            currentPrice: 1105.08,
-            currency: 'PLN'
-        },
-        {
-            id: 'asset-inv-mbank',
-            type: 'investment',
-            name: 'mBank — akcje',
-            quantity: 1,
-            purchasePrice: 4556.61,
-            currentPrice: 4556.61,
-            currency: 'PLN'
-        },
-        { id: 'asset-cash-mbank-cele', type: 'cash', name: 'mBank — Cele', amount: 2172.36 },
+        ...getPortfolioInvestmentSnapshots(),
         {
             id: 'asset-ret-mbank-emerytura',
             type: 'retirement',
-            name: 'mBank — Emerytura',
+            name: 'Emerytura 2035',
             retirementKind: 'EMERYTURA',
             institution: 'mBank',
-            amount: 1687.98
+            amount: 1679.19
         },
         {
             id: 'asset-ret-ikze-mbank',
@@ -272,7 +517,8 @@ function getUserAssetsSeedSnapshots() {
             name: 'mBank — IKZE',
             retirementKind: 'IKZE',
             institution: 'mBank',
-            amount: 20703.66
+            amount: 0,
+            includeInSummary: false
         },
         {
             id: 'asset-ret-ppk',
@@ -287,16 +533,28 @@ function getUserAssetsSeedSnapshots() {
             name: 'KZP',
             retirementKind: 'KZP',
             amount: 4200
-        }
+        },
+        { id: 'asset-cash-mbank-cele', type: 'cash', name: 'mBank — Cele', amount: 2172.36 }
     ];
+}
+
+function getDeletedAssetIds() {
+    return Array.isArray(appState.deletedAssetIds) ? appState.deletedAssetIds : [];
+}
+
+function markAssetDeleted(id) {
+    if (!Array.isArray(appState.deletedAssetIds)) appState.deletedAssetIds = [];
+    if (!appState.deletedAssetIds.includes(id)) appState.deletedAssetIds.push(id);
 }
 
 function ensureUserAssetsSeed() {
     if (!Array.isArray(appState.assets)) appState.assets = [];
+    const deleted = new Set(getDeletedAssetIds());
     let changed = false;
 
     getUserAssetsSeedSnapshots().forEach((snapshot) => {
         const normalized = normalizeAsset(snapshot);
+        if (deleted.has(normalized.id)) return;
         const idx = appState.assets.findIndex((a) => a.id === normalized.id);
         if (idx < 0) {
             appState.assets.push(normalized);
@@ -312,7 +570,8 @@ function runAssetMigrations() {
     const consolidated = consolidateUserAssets();
     const emeryturaFix = migrateMbankEmeryturaAsset();
     const seeded = ensureUserAssetsSeed();
-    return migrated || consolidated || emeryturaFix || seeded;
+    const portfolio = migratePortfolioPositionsJune2026();
+    return migrated || consolidated || emeryturaFix || seeded || portfolio;
 }
 
 function getAssetDisplayName(asset) {
@@ -381,8 +640,10 @@ function isDraftAssetActive() {
 function getActiveAsset() {
     if (isDraftAssetActive()) return draftAsset;
     if (activeAssetId) {
-        const found = getAssetById(activeAssetId);
-        if (found) return found;
+        const active = getActiveAssetById(activeAssetId);
+        if (active) return active;
+        const record = getAssetById(activeAssetId);
+        if (record) return record;
     }
     return getActiveAssets()[0] || null;
 }
@@ -435,10 +696,57 @@ function renderAssetsSummaryChips(activeAssets) {
         return;
     }
     block?.classList.remove('hidden');
-    el.innerHTML = activeAssets.map((asset) => {
-        const included = asset.includeInSummary !== false;
-        return `<button type="button" class="toggle-btn loans-chip${included ? ' active' : ''}" onclick="toggleAssetSummaryInclude('${escapeHtml(asset.id)}')" aria-pressed="${included ? 'true' : 'false'}">${escapeHtml(getAssetDisplayName(asset))}</button>`;
-    }).join('');
+
+    const excludedGroups = new Set(getExcludedPortfolioGroups());
+    const groups = buildPortfolioGroups(activeAssets);
+    const nonPortfolio = getNonPortfolioActiveAssets(activeAssets);
+    const rows = [];
+
+    ASSET_PORTFOLIO_GROUPS.forEach((group) => {
+        const items = groups[group.id];
+        if (!items || !items.length) return;
+
+        const groupExcluded = excludedGroups.has(group.id);
+        const groupTotal = items.reduce((s, a) => s + getAssetValueInPln(a), 0);
+        const gId = escapeHtml(group.id);
+
+        let itemChips = '';
+        if (!groupExcluded) {
+            itemChips = items.map((asset) => {
+                const included = asset.includeInSummary !== false;
+                const aId = escapeHtml(asset.id);
+                return `<button type="button"
+                    class="toggle-btn loans-chip assets-summary-item-chip${included ? ' active' : ''}"
+                    onclick="toggleAssetSummaryInclude('${aId}')"
+                    aria-pressed="${included ? 'true' : 'false'}">${escapeHtml(getAssetDisplayName(asset))}</button>`;
+            }).join('');
+        }
+
+        rows.push(`<div class="assets-summary-group">
+            <button type="button"
+                class="toggle-btn loans-chip assets-summary-group-toggle${groupExcluded ? '' : ' active'}"
+                onclick="togglePortfolioGroupSummary('${gId}')"
+                aria-pressed="${groupExcluded ? 'false' : 'true'}">
+                <span class="assets-summary-group-label">${escapeHtml(group.title)}</span>
+                <span class="assets-summary-group-total">${formatPlnAmount(groupTotal)}</span>
+            </button>
+            ${itemChips ? `<div class="assets-summary-group-items">${itemChips}</div>` : ''}
+        </div>`);
+    });
+
+    if (nonPortfolio.length) {
+        const chips = nonPortfolio.map((asset) => {
+            const included = asset.includeInSummary !== false;
+            const aId = escapeHtml(asset.id);
+            return `<button type="button"
+                class="toggle-btn loans-chip${included ? ' active' : ''}"
+                onclick="toggleAssetSummaryInclude('${aId}')"
+                aria-pressed="${included ? 'true' : 'false'}">${escapeHtml(getAssetDisplayName(asset))}</button>`;
+        }).join('');
+        rows.push(`<div class="assets-summary-group assets-summary-group--flat">${chips}</div>`);
+    }
+
+    el.innerHTML = rows.join('');
 }
 
 function toggleAssetsSummary() {
@@ -544,7 +852,214 @@ function filterAssetsByChip(assets) {
     return filterAssetsByHorizon(assets);
 }
 
-function renderAssetsTypeFilter() {
+const ASSET_PORTFOLIO_GROUPS = [
+    { id: 'xtb', title: 'XTB' },
+    { id: 'mbank', title: 'mBank eMakler (Zwykły)' },
+    { id: 'ikze', title: 'IKZE mBank eMakler' },
+    { id: 'emerytura', title: 'mBank Emerytura 2035' }
+];
+
+const ASSET_IKZE_SHELL_ID = 'asset-ret-ikze-mbank';
+const ASSET_EMERYTURA_ID = 'asset-ret-mbank-emerytura';
+
+function getAssetPortfolioGroupId(asset) {
+    if (!asset || asset.archived) return null;
+    if (asset.id === ASSET_EMERYTURA_ID) return 'emerytura';
+    if (asset.id === ASSET_IKZE_SHELL_ID) return null;
+    if (asset.brokerAccount === 'xtb' || asset.id.startsWith('asset-inv-xtb') || asset.id === 'asset-cash-xtb-free') {
+        return 'xtb';
+    }
+    if (asset.brokerAccount === 'mbank') return 'mbank';
+    if (asset.brokerAccount === 'ikze') return 'ikze';
+    return null;
+}
+
+function buildPortfolioGroups(activeAssets) {
+    const groups = { xtb: [], mbank: [], ikze: [], emerytura: [] };
+    activeAssets.forEach((asset) => {
+        const groupId = getAssetPortfolioGroupId(asset);
+        if (groupId) groups[groupId].push(asset);
+    });
+    Object.keys(groups).forEach((key) => {
+        groups[key].sort((a, b) => getAssetDisplayName(a).localeCompare(getAssetDisplayName(b), 'pl'));
+    });
+    return groups;
+}
+
+function getNonPortfolioActiveAssets(activeAssets) {
+    return activeAssets.filter((asset) => !getAssetPortfolioGroupId(asset));
+}
+
+function hasPortfolioGroupedAssets(activeAssets) {
+    return activeAssets.some((asset) => getAssetPortfolioGroupId(asset));
+}
+
+function formatAssetGainLabel(asset) {
+    if (asset.type !== 'investment') return '';
+    const gainPln = getAssetGainPln(asset);
+    const gainPct = getAssetGainPct(asset);
+    const gainClass = gainPln >= 0 ? 'income' : 'expense';
+    const sign = gainPln >= 0 ? '+' : '−';
+    return `<span class="assets-portfolio-row-pl ${gainClass}">${sign}${formatPlnAmount(Math.abs(gainPln))} (${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%)</span>`;
+}
+
+function renderAssetsPortfolioRow(asset) {
+    const assetId = escapeHtml(asset.id);
+    const openFn = `openAssetDetails('${assetId}')`;
+    const name = escapeHtml(getAssetDisplayName(asset));
+
+    if (asset.type === 'investment') {
+        const qtyLabel = `${asset.quantity} szt.`;
+        return `<div class="assets-portfolio-row asset-clickable" role="button" tabindex="0"
+            onclick="${openFn}" onkeydown="if (event.key === 'Enter') ${openFn}">
+            <div class="assets-portfolio-row-main">
+                <strong class="assets-portfolio-row-name">${name}</strong>
+                <span class="assets-portfolio-row-meta">${escapeHtml(qtyLabel)}</span>
+            </div>
+            <div class="assets-portfolio-row-values">
+                <strong class="assets-portfolio-row-value">${formatPlnAmountHtml(getAssetValueInPln(asset))}</strong>
+                ${formatAssetGainLabel(asset)}
+            </div>
+        </div>`;
+    }
+
+    const meta = asset.type === 'cash'
+        ? 'Gotówka'
+        : (RETIREMENT_KIND_LABELS[asset.retirementKind] || ASSET_TYPE_LABELS[asset.type] || 'Aktywo');
+    return `<div class="assets-portfolio-row asset-clickable" role="button" tabindex="0"
+        onclick="${openFn}" onkeydown="if (event.key === 'Enter') ${openFn}">
+        <div class="assets-portfolio-row-main">
+            <strong class="assets-portfolio-row-name">${name}</strong>
+            <span class="assets-portfolio-row-meta">${escapeHtml(meta)}</span>
+        </div>
+        <div class="assets-portfolio-row-values">
+            <strong class="assets-portfolio-row-value">${formatPlnAmountHtml(getAssetValueInPln(asset))}</strong>
+        </div>
+    </div>`;
+}
+
+function deletePortfolioGroup(groupId) {
+    const group = ASSET_PORTFOLIO_GROUPS.find((g) => g.id === groupId);
+    if (!group) return;
+
+    const allActive = getActiveAssets();
+    const groupAssets = allActive.filter((a) => getAssetPortfolioGroupId(a) === groupId);
+
+    const extraIds = groupId === 'ikze' ? [ASSET_IKZE_SHELL_ID] : [];
+    const allIds = [...groupAssets.map((a) => a.id), ...extraIds];
+
+    if (!allIds.length) return;
+
+    const label = allIds.length === 1 ? '1 pozycję' : `${allIds.length} pozycje/pozycji`;
+    if (!confirm(`Usunąć całe konto „${group.title}" (${label})?`)) return;
+
+    allIds.forEach((id) => markAssetDeleted(id));
+    appState.assets = (appState.assets || []).filter((a) => !allIds.includes(a.id));
+
+    if (!Array.isArray(appState.reportPrefs)) {
+        if (!appState.reportPrefs || typeof appState.reportPrefs !== 'object') appState.reportPrefs = {};
+    }
+    const excl = Array.isArray(appState.reportPrefs.excludedPortfolioGroups)
+        ? appState.reportPrefs.excludedPortfolioGroups
+        : [];
+    if (!excl.includes(groupId)) {
+        appState.reportPrefs.excludedPortfolioGroups = [...excl, groupId];
+    }
+
+    saveState();
+    renderAssets();
+    showSettingsToast(`Konto „${group.title}" usunięte`);
+}
+
+function renderAssetsPortfolioPanel(group, items) {
+    if (!items.length) return '';
+
+    const panelTotal = items.reduce((sum, asset) => sum + getAssetValueInPln(asset), 0);
+    const panelGain = items
+        .filter((asset) => asset.type === 'investment')
+        .reduce((sum, asset) => sum + getAssetGainPln(asset), 0);
+    const hasGain = items.some((asset) => asset.type === 'investment');
+    const gainClass = panelGain >= 0 ? 'income' : 'expense';
+    const gainSign = panelGain >= 0 ? '+' : '−';
+    const gainHtml = hasGain
+        ? `<span class="assets-portfolio-panel-pl ${gainClass}">${gainSign}${formatPlnAmount(Math.abs(panelGain))}</span>`
+        : '';
+
+    const groupId = escapeHtml(group.id);
+    const deleteFn = `deletePortfolioGroup('${groupId}')`;
+
+    return `<section class="card assets-portfolio-panel" aria-label="${escapeHtml(group.title)}">
+        <div class="assets-portfolio-panel-head">
+            <h2 class="assets-portfolio-panel-title">${escapeHtml(group.title)}</h2>
+            <div class="assets-portfolio-panel-totals">
+                <span class="assets-portfolio-panel-total">${formatPlnAmountHtml(panelTotal)}</span>
+                ${gainHtml}
+            </div>
+        </div>
+        <div class="assets-portfolio-panel-rows">
+            ${items.map((asset) => renderAssetsPortfolioRow(asset)).join('')}
+        </div>
+        <div class="assets-portfolio-panel-footer">
+            <button type="button" class="assets-portfolio-panel-delete-btn" onclick="${deleteFn}">Usuń konto</button>
+        </div>
+    </section>`;
+}
+
+function renderAssetsPortfolioSections(activeAssets) {
+    const groups = buildPortfolioGroups(activeAssets);
+    return ASSET_PORTFOLIO_GROUPS
+        .map((group) => renderAssetsPortfolioPanel(group, groups[group.id]))
+        .filter(Boolean)
+        .join('');
+}
+
+function renderAssetsOtherSection(assets) {
+    if (!assets.length) return '';
+    const sectionTotal = getActiveAssetsTotalPln(assets.filter((a) => a.includeInSummary !== false));
+    return `<section class="assets-other-section">
+        <div class="assets-other-head">
+            <h2 class="assets-other-title">Pozostałe aktywa</h2>
+            <span class="assets-other-total">${formatPlnAmountHtml(sectionTotal)}</span>
+        </div>
+        <div class="assets-other-list">${assets.map((asset) => renderAssetCardHtml(asset)).join('')}</div>
+    </section>`;
+}
+
+function buildAssetsListHtml(allActive, hasAssets) {
+    if (!hasAssets) {
+        return `<div class="card asset-empty-card">
+            <p class="loan-empty-hint">Dodaj inwestycje, lokaty, gotówkę, PPK/IKZE lub inne aktywa (np. nieruchomość, auto).</p>
+            <button type="button" class="btn-submit" onclick="openNewAssetPicker()">Dodaj aktywo</button>
+        </div>`;
+    }
+
+    if (hasPortfolioGroupedAssets(allActive)) {
+        const portfolioHtml = renderAssetsPortfolioSections(allActive);
+        const otherHtml = renderAssetsOtherSection(getNonPortfolioActiveAssets(allActive));
+        return `<div class="assets-portfolio-grid">${otherHtml}${portfolioHtml}</div>`;
+    }
+
+    const filteredAssets = filterAssetsByHorizon(allActive);
+    if (!filteredAssets.length) {
+        return '<div class="card asset-empty-card"><p class="loan-empty-hint">Brak pozycji w tym filtrze.</p></div>';
+    }
+    if (assetsTypeFilter === 'all') {
+        return [
+            renderAssetsHorizonSection('short', filteredAssets),
+            renderAssetsHorizonSection('long', filteredAssets)
+        ].filter(Boolean).join('');
+    }
+    return filteredAssets.map((asset) => renderAssetCardHtml(asset)).join('');
+}
+
+function renderAssetsTypeFilter(activeAssets) {
+    const nav = document.getElementById('assets-type-filter');
+    if (!nav) return;
+    if (hasPortfolioGroupedAssets(activeAssets)) {
+        nav.innerHTML = '';
+        nav.classList.add('hidden');
+        return;
+    }
     renderAssetsHorizonFilter();
 }
 
@@ -678,12 +1193,11 @@ function renderAssets() {
     if (runAssetMigrations()) saveState();
 
     const allActive = getActiveAssets();
-    const summaryAssets = getSummaryAssets();
-    const filteredAssets = filterAssetsByHorizon(allActive);
+    const summaryAssets = getEffectiveSummaryAssets();
     const archivedAssets = getArchivedAssets();
-    const total = getActiveAssetsTotalPln();
-    const gainPln = getActiveAssetsGainPln();
-    const gainPct = getActiveAssetsGainPct();
+    const total = getActiveAssetsTotalPln(summaryAssets);
+    const gainPln = getActiveAssetsGainPln(summaryAssets);
+    const gainPct = getActiveAssetsGainPct(summaryAssets);
     const hasAssets = allActive.length > 0;
 
     const hero = document.getElementById('assets-total-hero');
@@ -694,39 +1208,43 @@ function renderAssets() {
     const archiveList = document.getElementById('assets-archive-list');
     const archiveCount = document.getElementById('assets-archive-count');
 
-    renderAssetsSummaryChips(allActive);
-
-    if (hero) hero.classList.toggle('hidden', !hasAssets);
-    if (totalEl && hasAssets) setPlnAmountElement(totalEl, total);
-    if (metaEl) {
-        const investments = summaryAssets.filter((a) => a.type === 'investment');
-        if (hasAssets && investments.length) {
-            const sign = gainPln >= 0 ? '+' : '−';
-            metaEl.textContent = `Inwestycje P/L: ${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}% (${sign}${formatPlnAmount(Math.abs(gainPln))})`;
-            metaEl.classList.remove('hidden');
-        } else {
-            metaEl.classList.add('hidden');
+    if (listEl) {
+        try {
+            listEl.innerHTML = buildAssetsListHtml(allActive, hasAssets);
+        } catch (err) {
+            console.error('renderAssets list', err);
         }
     }
 
-    renderAssetsTypeFilter();
+    try {
+        renderAssetsSummaryChips(allActive);
+    } catch (err) {
+        console.error('renderAssets chips', err);
+    }
 
-    if (listEl) {
-        if (!hasAssets) {
-            listEl.innerHTML = `<div class="card asset-empty-card">
-                <p class="loan-empty-hint">Dodaj inwestycje, lokaty, gotówkę, PPK/IKZE lub inne aktywa (np. nieruchomość, auto).</p>
-                <button type="button" class="btn-submit" onclick="openNewAssetPicker()">Dodaj aktywo</button>
-            </div>`;
-        } else if (!filteredAssets.length) {
-            listEl.innerHTML = '<div class="card asset-empty-card"><p class="loan-empty-hint">Brak pozycji w tym filtrze.</p></div>';
-        } else if (assetsTypeFilter === 'all') {
-            listEl.innerHTML = [
-                renderAssetsHorizonSection('short', filteredAssets),
-                renderAssetsHorizonSection('long', filteredAssets)
-            ].filter(Boolean).join('');
-        } else {
-            listEl.innerHTML = filteredAssets.map((asset) => renderAssetCardHtml(asset)).join('');
+    try {
+        if (hero) hero.classList.toggle('hidden', !hasAssets);
+        if (totalEl && hasAssets && typeof setPlnAmountElement === 'function') {
+            setPlnAmountElement(totalEl, total);
         }
+        if (metaEl) {
+            const investments = summaryAssets.filter((a) => a.type === 'investment');
+            if (hasAssets && investments.length && (gainPln !== 0 || gainPct !== 0)) {
+                const sign = gainPln >= 0 ? '+' : '−';
+                metaEl.textContent = `Inwestycje P/L: ${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}% (${sign}${formatPlnAmount(Math.abs(gainPln))})`;
+                metaEl.classList.remove('hidden');
+            } else {
+                metaEl.classList.add('hidden');
+            }
+        }
+    } catch (err) {
+        console.error('renderAssets hero', err);
+    }
+
+    try {
+        renderAssetsTypeFilter(allActive);
+    } catch (err) {
+        console.error('renderAssets filter', err);
     }
 
     if (archiveSection) archiveSection.classList.toggle('hidden', !archivedAssets.length);
@@ -782,10 +1300,8 @@ function closeAssetDetails() {
     if (!overlay) return;
     overlay.classList.add('hidden');
     document.body.style.overflow = '';
-    if (isDraftAssetActive()) {
-        draftAsset = null;
-        activeAssetId = null;
-    }
+    draftAsset = null;
+    activeAssetId = null;
 }
 
 function setAssetDetailsMode(mode) {
@@ -956,13 +1472,19 @@ function renderAssetDetails() {
     if (actionsEl) {
         const archiveLabel = asset.archived ? 'Przywróć' : 'Archiwizuj';
         const archiveFn = asset.archived ? 'unarchiveAsset()' : 'archiveAsset()';
+        const sellBtn = (!isDraftAssetActive() && !asset.archived && asset.type === 'investment')
+            ? `<button type="button" class="btn-outline loan-details-btn asset-sell-btn" onclick="openSellAssetForm()">Sprzedaj</button>`
+            : '';
         actionsEl.innerHTML = isDraftAssetActive()
             ? ''
             : `<div class="asset-details-actions">
+                ${sellBtn}
                 <button type="button" class="btn-outline loan-details-btn" onclick="${archiveFn}">${archiveLabel}</button>
                 <button type="button" class="btn-outline loan-details-btn asset-delete-btn" onclick="deleteAsset()">Usuń</button>
             </div>`;
     }
+
+    closeSellAssetForm();
 
     if (asset.type === 'cash') {
         renderAssetCashTransactions();
@@ -998,6 +1520,8 @@ function populateAssetEditForm() {
     document.getElementById('asset-quantity-input').value = asset.quantity || '';
     document.getElementById('asset-purchase-input').value = asset.purchasePrice || '';
     document.getElementById('asset-price-input').value = asset.currentPrice || '';
+    const brokerSelect = document.getElementById('asset-broker-input');
+    if (brokerSelect) brokerSelect.value = asset.brokerAccount || '';
 
     document.getElementById('asset-amount-input').value = asset.amount || '';
     document.getElementById('asset-rate-input').value = asset.interestRate || '';
@@ -1038,6 +1562,7 @@ function saveAssetDetails() {
         payload.quantity = parseFloat(document.getElementById('asset-quantity-input')?.value) || 0;
         payload.purchasePrice = parseFloat(document.getElementById('asset-purchase-input')?.value) || 0;
         payload.currentPrice = parseFloat(document.getElementById('asset-price-input')?.value) || 0;
+        payload.brokerAccount = document.getElementById('asset-broker-input')?.value || null;
         if (!payload.name && payload.ticker) payload.name = payload.ticker;
     } else {
         payload.amount = parseFloat(document.getElementById('asset-amount-input')?.value) || 0;
@@ -1088,6 +1613,7 @@ function archiveAsset() {
         archivedAt: localIsoDate(new Date())
     });
     saveState();
+    activeAssetId = null;
     closeAssetDetails();
     renderAssets();
     showSettingsToast('Pozycja zarchiwizowana');
@@ -1111,9 +1637,101 @@ function deleteAsset() {
     const asset = getActiveAsset();
     if (!asset || isDraftAssetActive()) return;
     if (!confirm(`Usunąć „${getAssetDisplayName(asset)}”?`)) return;
+    markAssetDeleted(asset.id);
     appState.assets = (appState.assets || []).filter((a) => a.id !== asset.id);
     saveState();
+    activeAssetId = null;
     closeAssetDetails();
     renderAssets();
     showSettingsToast('Pozycja usunięta');
+}
+
+function getCashAssetForBroker(brokerAccount) {
+    if (brokerAccount === 'xtb') return getAssetById('asset-cash-xtb-free');
+    return getAssetById('asset-cash-total');
+}
+
+function openSellAssetForm() {
+    const asset = getActiveAsset();
+    if (!asset || asset.type !== 'investment') return;
+
+    const section = document.getElementById('asset-sell-section');
+    if (!section) return;
+
+    document.getElementById('asset-sell-qty').value = '';
+    document.getElementById('asset-sell-price').value = asset.currentPrice > 0
+        ? asset.currentPrice.toFixed(4)
+        : '';
+
+    const cashAsset = getCashAssetForBroker(asset.brokerAccount);
+    const cashLabel = document.getElementById('asset-sell-cash-label');
+    if (cashLabel) {
+        cashLabel.textContent = cashAsset
+            ? `Zaksiguj wpływ na „${getAssetDisplayName(cashAsset)}”`
+            : 'Zaksiguj wpływ na gotówkę';
+    }
+    section.classList.remove('hidden');
+    document.getElementById('asset-sell-qty')?.focus();
+}
+
+function closeSellAssetForm() {
+    document.getElementById('asset-sell-section')?.classList.add('hidden');
+}
+
+function sellAssetPartial() {
+    const asset = getActiveAsset();
+    if (!asset || asset.type !== 'investment') return;
+
+    const qtySold = parseFloat(document.getElementById('asset-sell-qty')?.value) || 0;
+    const pricePerUnit = parseFloat(document.getElementById('asset-sell-price')?.value) || 0;
+    const cashCheckbox = document.getElementById('asset-sell-cash');
+    const updateCash = !cashCheckbox || cashCheckbox.checked;
+
+    if (qtySold <= 0 || pricePerUnit <= 0) {
+        showSettingsToast('Podaj poprawną ilość i cenę sprzedaży');
+        return;
+    }
+    if (qtySold > asset.quantity) {
+        showSettingsToast(`Masz tylko ${asset.quantity} szt. tej pozycji`);
+        return;
+    }
+
+    const proceedsNative = qtySold * pricePerUnit;
+    const proceedsPln = asset.currency === 'EUR' ? proceedsNative * EUR_PLN_RATE : proceedsNative;
+    const costBasisPln = asset.currency === 'EUR'
+        ? qtySold * asset.purchasePrice * EUR_PLN_RATE
+        : qtySold * asset.purchasePrice;
+    const realizedGain = proceedsPln - costBasisPln;
+
+    const newQty = Math.max(0, asset.quantity - qtySold);
+    const isFull = newQty <= 0;
+
+    const updated = { ...asset, quantity: newQty };
+    if (isFull) {
+        updated.archived = true;
+        updated.archivedAt = localIsoDate(new Date());
+        markAssetDeleted(asset.id);
+    }
+    updateAssetInState(updated);
+
+    if (typeof recordAssetValueHistory === 'function') {
+        recordAssetValueHistory(updated, isFull ? 'sell-full' : 'sell', { qtySold, pricePerUnit, proceedsPln, realizedGain });
+    }
+
+    if (updateCash) {
+        const cashAsset = getCashAssetForBroker(asset.brokerAccount);
+        if (cashAsset) {
+            updateAssetInState({ ...cashAsset, amount: Math.max(0, (cashAsset.amount || 0) + proceedsPln) });
+        }
+    }
+
+    const gainSign = realizedGain >= 0 ? '+' : '−';
+    const gainLabel = `${gainSign}${formatPlnAmount(Math.abs(realizedGain))}`;
+
+    saveState();
+    closeSellAssetForm();
+    activeAssetId = isFull ? null : asset.id;
+    if (isFull) closeAssetDetails();
+    renderAssets();
+    showSettingsToast(`Sprzedano ${qtySold} szt. · P/L: ${gainLabel}`);
 }

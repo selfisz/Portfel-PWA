@@ -11,7 +11,8 @@ let appState = {
     assetSnapshots: [],
     assetValueHistory: [],
     categoryBudgets: {},
-    reportPrefs: {}
+    reportPrefs: {},
+    deletedAssetIds: []
 };
 
 let formState = {
@@ -74,7 +75,8 @@ function getPersistedState(raw = appState) {
             : {},
         reportPrefs: data.reportPrefs && typeof data.reportPrefs === 'object'
             ? data.reportPrefs
-            : {}
+            : {},
+        deletedAssetIds: Array.isArray(data.deletedAssetIds) ? data.deletedAssetIds : []
     };
     return persisted;
 }
@@ -187,6 +189,8 @@ function mergeAssetsById(...assetLists) {
         const asset = typeof normalizeAsset === 'function' ? normalizeAsset(raw) : raw;
         map.set(asset.id, asset);
     });
+    const deletedSet = new Set(Array.isArray(appState.deletedAssetIds) ? appState.deletedAssetIds : []);
+    deletedSet.forEach((id) => map.delete(id));
     return [...map.values()];
 }
 
