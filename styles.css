@@ -3580,6 +3580,18 @@ html:not([data-theme="dark"]) .grid-item.selected {
     margin-top: 0;
 }
 
+.compare-subtitle--nested {
+    margin-top: 14px;
+    margin-bottom: 6px;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.compare-tx-fixed-variable {
+    margin-top: 4px;
+}
+
 .compare-movers-section {
     margin-top: 16px;
     padding-top: 14px;
@@ -4039,6 +4051,19 @@ html:not([data-theme="dark"]) .grid-item.selected {
     margin: -4px 0 10px;
 }
 
+.compare-advanced-card + .compare-advanced-card {
+    margin-top: 12px;
+}
+
+.compare-ikze-intro,
+.compare-diversification-intro {
+    margin-bottom: 10px;
+}
+
+.compare-ikze-hint {
+    margin-top: 10px;
+}
+
 .compare-report-section .compare-daily-grid {
     margin-top: 12px;
     padding-top: 12px;
@@ -4127,6 +4152,50 @@ html:not([data-theme="dark"]) .grid-item.selected {
         font-size: var(--text-xs);
         padding: 10px 6px;
     }
+}
+
+.analysis-subnav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.analysis-subnav-btn {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--card-bg);
+    color: var(--text-muted);
+    padding: 7px 4px;
+    font-size: var(--text-3xs);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: center;
+    line-height: 1.2;
+    min-height: 32px;
+}
+
+.analysis-subnav-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.analysis-subnav-btn:active {
+    transform: scale(0.98);
+}
+
+@media (min-width: 420px) {
+    .analysis-subnav-btn {
+        font-size: var(--text-2xs);
+        padding: 8px 6px;
+        min-height: 34px;
+    }
+}
+
+.debts-portfolio-title {
+    margin: 0 0 8px;
 }
 
 .reports-stat-savings .value {
@@ -4403,9 +4472,22 @@ html:not([data-theme="dark"]) .grid-item.selected {
     pointer-events: none;
 }
 
+#view-reports .analysis-section .chart-wrapper {
+    min-height: 258px;
+}
+
+#view-reports .analysis-section .reports-calendar-grid {
+    min-height: 300px;
+}
+
+#view-reports .analysis-section .analysis-compare-slot:not([hidden]) {
+    min-height: 96px;
+}
+
 .analysis-section--loading > .card:not(.hero-card) {
     opacity: 0.55;
     position: relative;
+    min-height: 72px;
 }
 
 .analysis-section--loading > .card:not(.hero-card)::after {
@@ -4554,10 +4636,39 @@ html:not([data-theme="dark"]) .grid-item.selected {
     margin-top: 4px;
 }
 
+.reports-debts-hero-stats .hero-stat {
+    min-width: 0;
+}
+
 .reports-debts-hero-stats .hero-stat .value {
     font-size: var(--text-sm);
     line-height: 1.25;
-    word-break: break-word;
+}
+
+.reports-debts-hero-stats .hero-stat-kpi-compact .value {
+    font-size: var(--text-xs);
+}
+
+.debts-kpi-next-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    max-width: 100%;
+}
+
+.debts-kpi-next-amount {
+    font-weight: 600;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+.debts-kpi-next-date {
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    line-height: 1.2;
+    opacity: 0.88;
+    white-space: nowrap;
 }
 
 .reports-debts-hero-stats .hero-stat .value.expense {

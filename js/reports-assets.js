@@ -967,6 +967,7 @@ function renderReportsAssetsSection(ctx) {
     const aCtx = buildAssetsCtx();
     renderReportsAssetsHero(aCtx);
     renderReportsAssetsHorizon();
+    renderDepositsCalendarList();
     renderReportsAssetsInvestments(aCtx);
     renderReportsAssetsRetirement(aCtx);
     renderReportsAssetsList(aCtx);

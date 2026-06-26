@@ -5,6 +5,193 @@ let reportsStructureViewType = 'expense';
 let reportsStructureMainCategory = null;
 let reportsStructureSubCategory = null;
 let reportsStructureTxExpanded = false;
+let reportsHiddenMainCategories = {};
+let reportsHiddenSubCategories = {};
+let reportsStructureViewFilterExpanded = false;
+
+function resetReportsStructureViewFilters() {
+    reportsHiddenMainCategories = {};
+    reportsHiddenSubCategories = {};
+    reportsStructureViewFilterExpanded = false;
+}
+
+function isReportsStructureMainCategoryVisible(name) {
+    return !reportsHiddenMainCategories[name];
+}
+
+function isReportsStructureSubCategoryVisible(mainCategory, subLabel) {
+    const hidden = reportsHiddenSubCategories[mainCategory];
+    return !hidden || !hidden[subLabel];
+}
+
+function applyReportsStructureViewFilterToSums(sums) {
+    if (isReportsStructureTransactionLevel()) return sums;
+    const filtered = {};
+    if (!reportsStructureMainCategory) {
+        Object.keys(sums).forEach((label) => {
+            if (isReportsStructureMainCategoryVisible(label)) filtered[label] = sums[label];
+        });
+        return filtered;
+    }
+    if (!reportsStructureSubCategory) {
+        Object.keys(sums).forEach((label) => {
+            if (isReportsStructureSubCategoryVisible(reportsStructureMainCategory, label)) {
+                filtered[label] = sums[label];
+            }
+        });
+        return filtered;
+    }
+    return sums;
+}
+
+function getReportsStructureViewFilterLevel() {
+    if (isReportsStructureTransactionLevel()) return null;
+    if (!reportsStructureMainCategory) return 'main';
+    if (!reportsStructureSubCategory) return 'sub';
+    return null;
+}
+
+function isReportsStructureViewFilterActive(level, labels, mainCategory = null) {
+    if (!labels.length) return false;
+    const visibleCount = labels.filter((label) => (
+        level === 'main'
+            ? isReportsStructureMainCategoryVisible(label)
+            : isReportsStructureSubCategoryVisible(mainCategory, label)
+    )).length;
+    return visibleCount > 0 && visibleCount < labels.length;
+}
+
+function rerenderReportsStructureChartFromState() {
+    if (reportsLastCtx) renderReportsStructureChart(reportsLastCtx);
+}
+
+function toggleReportsStructureMainCategoryVisibility(name) {
+    if (reportsHiddenMainCategories[name]) {
+        delete reportsHiddenMainCategories[name];
+    } else {
+        reportsHiddenMainCategories[name] = true;
+    }
+    rerenderReportsStructureChartFromState();
+}
+
+function toggleReportsStructureSubCategoryVisibility(mainCategory, subLabel) {
+    if (!reportsHiddenSubCategories[mainCategory]) {
+        reportsHiddenSubCategories[mainCategory] = {};
+    }
+    if (reportsHiddenSubCategories[mainCategory][subLabel]) {
+        delete reportsHiddenSubCategories[mainCategory][subLabel];
+        if (!Object.keys(reportsHiddenSubCategories[mainCategory]).length) {
+            delete reportsHiddenSubCategories[mainCategory];
+        }
+    } else {
+        reportsHiddenSubCategories[mainCategory][subLabel] = true;
+    }
+    rerenderReportsStructureChartFromState();
+}
+
+function setAllReportsStructureViewFilterVisible(visible) {
+    const level = getReportsStructureViewFilterLevel();
+    if (!level) return;
+    const chipsEl = document.getElementById('reports-structure-view-filter-chips');
+    if (!chipsEl) return;
+    const labels = [...chipsEl.querySelectorAll('[data-label]')].map((btn) => btn.dataset.label);
+    if (!labels.length) return;
+    if (level === 'main') {
+        if (visible) {
+            labels.forEach((label) => { delete reportsHiddenMainCategories[label]; });
+        } else {
+            labels.forEach((label) => { reportsHiddenMainCategories[label] = true; });
+        }
+    } else {
+        const mainCategory = reportsStructureMainCategory;
+        if (!mainCategory) return;
+        if (visible) {
+            delete reportsHiddenSubCategories[mainCategory];
+        } else {
+            reportsHiddenSubCategories[mainCategory] = {};
+            labels.forEach((label) => { reportsHiddenSubCategories[mainCategory][label] = true; });
+        }
+    }
+    rerenderReportsStructureChartFromState();
+}
+
+function restoreReportsStructureViewFilterDefault() {
+    setAllReportsStructureViewFilterVisible(true);
+}
+
+function toggleReportsStructureViewFilter() {
+    reportsStructureViewFilterExpanded = !reportsStructureViewFilterExpanded;
+    const panel = document.getElementById('reports-structure-view-filter-panel');
+    const toggle = document.querySelector('#reports-structure-view-filter-block .chart-view-filter-toggle');
+    if (panel) panel.classList.toggle('hidden', !reportsStructureViewFilterExpanded);
+    if (toggle) toggle.setAttribute('aria-expanded', reportsStructureViewFilterExpanded ? 'true' : 'false');
+}
+
+function renderReportsStructureViewFilter(rawSums) {
+    const block = document.getElementById('reports-structure-view-filter-block');
+    const chipsEl = document.getElementById('reports-structure-view-filter-chips');
+    const hintEl = document.getElementById('reports-structure-view-filter-hint');
+    const restoreBtn = document.getElementById('reports-structure-view-filter-restore');
+    const panel = document.getElementById('reports-structure-view-filter-panel');
+    const toggle = document.querySelector('#reports-structure-view-filter-block .chart-view-filter-toggle');
+    if (!block || !chipsEl) return;
+
+    const level = getReportsStructureViewFilterLevel();
+    const labels = Object.keys(rawSums).sort((a, b) => (rawSums[b] || 0) - (rawSums[a] || 0));
+
+    if (!level || labels.length < 2) {
+        block.classList.add('hidden');
+        chipsEl.innerHTML = '';
+        if (hintEl) hintEl.classList.add('hidden');
+        return;
+    }
+
+    block.classList.remove('hidden');
+    if (panel) panel.classList.toggle('hidden', !reportsStructureViewFilterExpanded);
+    if (toggle) toggle.setAttribute('aria-expanded', reportsStructureViewFilterExpanded ? 'true' : 'false');
+
+    chipsEl.innerHTML = labels.map((label) => {
+        const visible = level === 'main'
+            ? isReportsStructureMainCategoryVisible(label)
+            : isReportsStructureSubCategoryVisible(reportsStructureMainCategory, label);
+        const safeLabel = escapeHtml(label);
+        const dataLabel = label.replace(/"/g, '&quot;');
+        return `<button type="button" class="toggle-btn loans-chip${visible ? ' active' : ''}" data-label="${dataLabel}" data-filter-level="${level}" aria-pressed="${visible ? 'true' : 'false'}">${safeLabel}</button>`;
+    }).join('');
+
+    if (!chipsEl.dataset.filterBound) {
+        chipsEl.dataset.filterBound = '1';
+        chipsEl.addEventListener('click', (event) => {
+            const btn = event.target.closest('[data-label]');
+            if (!btn) return;
+            const label = btn.dataset.label;
+            if (btn.dataset.filterLevel === 'main') {
+                toggleReportsStructureMainCategoryVisibility(label);
+            } else {
+                toggleReportsStructureSubCategoryVisibility(reportsStructureMainCategory, label);
+            }
+        });
+    }
+
+    if (hintEl) {
+        const visibleCount = labels.filter((label) => (
+            level === 'main'
+                ? isReportsStructureMainCategoryVisible(label)
+                : isReportsStructureSubCategoryVisible(reportsStructureMainCategory, label)
+        )).length;
+        const filterActive = isReportsStructureViewFilterActive(level, labels, reportsStructureMainCategory);
+        if (filterActive) {
+            const unit = level === 'main' ? 'kategorii' : 'podkategorii';
+            hintEl.textContent = `W wykresie: ${visibleCount} z ${labels.length} ${unit}`;
+            hintEl.classList.remove('hidden');
+        } else {
+            hintEl.classList.add('hidden');
+        }
+        if (restoreBtn) restoreBtn.classList.toggle('hidden', !filterActive);
+    } else if (restoreBtn) {
+        restoreBtn.classList.add('hidden');
+    }
+}
 
 function isReportsStructureTransactionLevel() {
     return Boolean(reportsStructureSubCategory);
@@ -123,6 +310,7 @@ function resetReportsStructureChart() {
     reportsStructureMainCategory = null;
     reportsStructureSubCategory = null;
     reportsStructureTxExpanded = false;
+    resetReportsStructureViewFilters();
     document.getElementById('reports-structure-tx-panel')?.classList.add('hidden');
     document.getElementById('reports-structure-tx-toggle')?.setAttribute('aria-expanded', 'false');
     if (reportsLastCtx) renderReportsStructureChart(reportsLastCtx);
@@ -188,6 +376,7 @@ function setReportsStructureViewType(type) {
     reportsStructureMainCategory = null;
     reportsStructureSubCategory = null;
     reportsStructureTxExpanded = false;
+    resetReportsStructureViewFilters();
     if (reportsLastCtx) renderReportsStructureChart(reportsLastCtx);
 }
 
@@ -204,7 +393,9 @@ function renderReportsStructureChart(ctx) {
     document.getElementById('btn-reports-structure-income')?.classList.toggle('active', reportsStructureViewType === 'income');
 
     const chartTx = ctx.periodTx.filter((t) => t.type === reportsStructureViewType);
-    const { sums: catSums, truncated } = computeReportsStructureSums(chartTx);
+    const { sums: rawSums, truncated } = computeReportsStructureSums(chartTx);
+    renderReportsStructureViewFilter(rawSums);
+    const catSums = applyReportsStructureViewFilterToSums(rawSums);
 
     if (reportsStructureChartInstance) reportsStructureChartInstance.destroy();
 

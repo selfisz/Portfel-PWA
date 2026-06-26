@@ -389,6 +389,11 @@ function buildDiversificationSlices() {
 function getIkzeContributionsFromTransactions(year) {
     const start = `${year}-01-01`;
     const end = `${year}-12-31`;
+    return getIkzeContributionsInRange(start, end);
+}
+
+function getIkzeContributionsInRange(start, end) {
+    if (!start || !end || start > end) return 0;
     return appState.transactions
         .filter((tx) => tx.date >= start && tx.date <= end && tx.linkedAssetId)
         .filter((tx) => {
@@ -397,6 +402,82 @@ function getIkzeContributionsFromTransactions(year) {
                 && (tx.type === 'expense' || tx.type === 'income');
         })
         .reduce((sum, tx) => sum + tx.amount, 0);
+}
+
+function getRetirementContributionsInRange(start, end) {
+    if (!start || !end || start > end) return 0;
+    return appState.transactions
+        .filter((tx) => tx.date >= start && tx.date <= end && tx.linkedAssetId)
+        .filter((tx) => {
+            const asset = getAssetById(tx.linkedAssetId);
+            return asset?.type === 'retirement' && (tx.type === 'expense' || tx.type === 'income');
+        })
+        .reduce((sum, tx) => sum + tx.amount, 0);
+}
+
+function getIkzeContributionsThroughDate(endDate) {
+    if (!endDate) return 0;
+    const year = endDate.slice(0, 4);
+    const manual = getIkzeManualContributions(year);
+    if (manual !== null) return manual;
+    return getIkzeContributionsInRange(`${year}-01-01`, endDate);
+}
+
+const COMPARE_DIVERSIFICATION_TYPES = [
+    { key: 'investment', label: 'Inwestycja' },
+    { key: 'cash', label: 'Gotówka' },
+    { key: 'deposit', label: 'Lokata' },
+    { key: 'retirement', label: 'PPK / IKZE' }
+];
+
+function buildCompareDiversificationSummary(periodAEnd, periodBEnd) {
+    const snapA = getWealthAtPeriodEnd(periodAEnd);
+    const snapB = getWealthAtPeriodEnd(periodBEnd);
+    if (!snapA && !snapB) return null;
+
+    const emptyByType = { investment: 0, cash: 0, deposit: 0, retirement: 0 };
+    const byTypeA = snapA?.byType || emptyByType;
+    const byTypeB = snapB?.byType || snapA?.byType || emptyByType;
+    const totalA = snapA?.totalAssets || 0;
+    const totalB = snapB?.totalAssets || snapA?.totalAssets || 0;
+
+    return {
+        rows: COMPARE_DIVERSIFICATION_TYPES.map(({ key, label }) => {
+            const amountA = byTypeA[key] || 0;
+            const amountB = byTypeB[key] || 0;
+            return {
+                key,
+                label,
+                amountA,
+                amountB,
+                pctA: totalA > 0 ? Math.round((amountA / totalA) * 100) : 0,
+                pctB: totalB > 0 ? Math.round((amountB / totalB) * 100) : 0
+            };
+        }),
+        totalA,
+        totalB,
+        hasBoth: Boolean(snapA && snapB)
+    };
+}
+
+function buildCompareIkzeSummary(periodA, periodB) {
+    if (!periodA?.start || !periodA?.end || !periodB?.start || !periodB?.end) return null;
+    const limit = getIkzeAnnualLimitPln();
+    const yearA = periodA.end.slice(0, 4);
+    const yearB = periodB.end.slice(0, 4);
+    return {
+        contribA: getIkzeContributionsInRange(periodA.start, periodA.end),
+        contribB: getIkzeContributionsInRange(periodB.start, periodB.end),
+        retirementA: getRetirementContributionsInRange(periodA.start, periodA.end),
+        retirementB: getRetirementContributionsInRange(periodB.start, periodB.end),
+        ytdA: getIkzeContributionsThroughDate(periodA.end),
+        ytdB: getIkzeContributionsThroughDate(periodB.end),
+        limit,
+        yearA,
+        yearB,
+        manualA: isIkzeContributionsManual(yearA),
+        manualB: isIkzeContributionsManual(yearB)
+    };
 }
 
 function getIkzeManualContributions(year) {

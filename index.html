@@ -898,6 +898,23 @@
                         </div>
                     </div>
                     <button id="btn-reset-reports-structure" type="button" class="btn-outline hidden" onclick="resetReportsStructureChart()">&#8592; Wróć do ogółu</button>
+                    <div id="reports-structure-view-filter-block" class="chart-view-filter hidden">
+                        <button type="button" class="chart-view-filter-toggle" onclick="toggleReportsStructureViewFilter()" aria-expanded="false" aria-controls="reports-structure-view-filter-panel">
+                            <span>Filtr widoku wykresu</span>
+                            <svg class="chart-view-filter-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                        </button>
+                        <div id="reports-structure-view-filter-panel" class="chart-view-filter-panel hidden">
+                            <div class="hero-summary-actions">
+                                <button type="button" class="hero-summary-action" onclick="setAllReportsStructureViewFilterVisible(true)">Pokaż wszystkie</button>
+                                <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                                <button type="button" class="hero-summary-action" onclick="setAllReportsStructureViewFilterVisible(false)">Ukryj wszystkie</button>
+                                <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                                <button type="button" id="reports-structure-view-filter-restore" class="hero-summary-action hidden" onclick="restoreReportsStructureViewFilterDefault()">Przywróć domyślnie</button>
+                            </div>
+                            <p id="reports-structure-view-filter-hint" class="chart-view-filter-hint hidden"></p>
+                            <nav id="reports-structure-view-filter-chips" class="chart-view-filter-chips" aria-label="Segmenty wykresu"></nav>
+                        </div>
+                    </div>
                     <div class="chart-wrapper">
                         <canvas id="reportsStructureChart"></canvas>
                         <div class="chart-center-label" aria-hidden="true">
@@ -1072,6 +1089,12 @@
                     <div id="reports-assets-horizon"></div>
                 </div>
 
+                <div id="reports-deposits-calendar-card" class="card hidden">
+                    <h2 class="dashboard-section-title">Koniec lokat</h2>
+                    <p class="reports-hint">Zbliżające się terminy zakończenia lokat.</p>
+                    <div id="reports-deposits-calendar-list"></div>
+                </div>
+
                 <div class="card reports-months-card">
                     <h2 id="reports-assets-allocation-title" class="dashboard-section-title">Struktura majątku</h2>
                     <p class="reports-hint">Udział typów aktywów w sumie — dotknij segment, aby zobaczyć pozycje.</p>
@@ -1148,9 +1171,9 @@
                             <div class="label">Odsetki / rok</div>
                             <div id="reports-debts-kpi-interest" class="value">—</div>
                         </div>
-                        <div class="hero-stat">
+                        <div class="hero-stat hero-stat-kpi-compact">
                             <div class="label">Następna rata</div>
-                            <div id="reports-debts-kpi-next" class="value">—</div>
+                            <div id="reports-debts-kpi-next" class="value debts-kpi-next">—</div>
                         </div>
                         <div class="hero-stat">
                             <div class="label">Pełna wolność</div>
@@ -1160,23 +1183,23 @@
                     <p id="reports-debts-hero-meta" class="hero-forecast-hint loan-hero-meta"></p>
                 </div>
 
-                <div class="card debts-panel-card">
-                    <h2 class="dashboard-section-title">Kredyty</h2>
-                    <div id="reports-debt-loans-portfolio"></div>
+                <div id="reports-debts-portfolio-card" class="card debts-panel-card">
+                    <h2 class="dashboard-section-title debts-portfolio-title">Portfel długów</h2>
+                    <nav class="analysis-subnav debts-portfolio-tabs" aria-label="Filtr portfela">
+                        <button id="btn-reports-debt-filter-all" type="button" class="analysis-subnav-btn active" onclick="setReportsDebtPortfolioFilter('all')">Wszystkie</button>
+                        <button id="btn-reports-debt-filter-loans" type="button" class="analysis-subnav-btn" onclick="setReportsDebtPortfolioFilter('loans')">Kredyty</button>
+                        <button id="btn-reports-debt-filter-cards" type="button" class="analysis-subnav-btn" onclick="setReportsDebtPortfolioFilter('cards')">Karty</button>
+                    </nav>
+                    <div id="reports-debt-portfolio"></div>
                 </div>
 
-                <div class="card debts-panel-card" id="reports-debts-cards-wrap">
-                    <h2 class="dashboard-section-title">Karty kredytowe</h2>
-                    <div id="reports-debts-cards"></div>
-                </div>
-
-                <div class="card debts-panel-card">
+                <div id="reports-debts-installments-card" class="card debts-panel-card">
                     <h2 class="dashboard-section-title">Raty i terminy</h2>
                     <div id="reports-debt-installment-summary"></div>
                     <div id="reports-debt-installment-list"></div>
                 </div>
 
-                <div class="card debts-panel-card">
+                <div id="reports-debts-overpay-card" class="card debts-panel-card">
                     <h2 class="dashboard-section-title">Kalkulator nadpłaty</h2>
                     <div class="debts-scenario-controls overpay-calc-form">
                         <div class="form-group overpay-calc-loan-field">
@@ -1197,12 +1220,12 @@
                     <div id="reports-debt-overpay-results"></div>
                 </div>
 
-                <div class="card debts-panel-card">
+                <div id="reports-debts-freedom-card" class="card debts-panel-card">
                     <h2 class="dashboard-section-title">Prognoza wolności od długów</h2>
                     <div id="reports-debts-freedom-panel"></div>
                 </div>
 
-                <div class="card reports-debts-charts-card debts-panel-card">
+                <div id="reports-debts-charts-card" class="card reports-debts-charts-card debts-panel-card">
                     <h2 class="dashboard-section-title">Wykresy</h2>
                     <div class="analysis-charts-grid debts-charts-grid">
                         <div class="debts-chart-panel">
@@ -1237,12 +1260,6 @@
                             <div id="reports-debt-peak-summary"></div>
                         </div>
                     </div>
-                </div>
-
-                <div id="reports-deposits-calendar-card" class="card hidden">
-                    <h2>Koniec lokat</h2>
-                    <p class="reports-hint">Zbliżające się terminy zakończenia lokat.</p>
-                    <div id="reports-deposits-calendar-list"></div>
                 </div>
             </div>
             </div>

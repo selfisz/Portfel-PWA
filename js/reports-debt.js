@@ -1153,9 +1153,11 @@ function renderReportsDebtsHero(ctx) {
         interestEl.classList.toggle('expense', annualInterest > 0);
     }
     if (nextEl) {
-        nextEl.textContent = nextPayment
-            ? `${formatPlnAmount(nextPayment.amount)} · ${formatTxDate(nextPayment.date)}`
-            : '—';
+        if (!nextPayment) {
+            nextEl.textContent = '—';
+        } else {
+            nextEl.innerHTML = `<span class="debts-kpi-next-stack"><span class="debts-kpi-next-amount">${formatPlnAmount(nextPayment.amount)}</span><span class="debts-kpi-next-date">${escapeHtml(formatTxDate(nextPayment.date))}</span></span>`;
+        }
     }
     if (freedomEl) freedomEl.textContent = getDebtsFreedomLabel();
     if (metaEl) {
@@ -1168,46 +1170,49 @@ function renderReportsDebtsHero(ctx) {
     }
 }
 
-function renderReportsDebtLoansPortfolio(ctx) {
-    const el = document.getElementById('reports-debt-loans-portfolio');
-    if (!el) return;
+let reportsDebtPortfolioFilter = 'all';
 
-    const loans = getActiveLoans();
-    if (!loans.length) {
-        el.innerHTML = '<p class="reports-hint">Brak aktywnych kredytów.</p>';
-        return;
+function setReportsDebtPortfolioFilter(filter) {
+    if (!['all', 'loans', 'cards'].includes(filter)) filter = 'all';
+    reportsDebtPortfolioFilter = filter;
+    document.getElementById('btn-reports-debt-filter-all')?.classList.toggle('active', filter === 'all');
+    document.getElementById('btn-reports-debt-filter-loans')?.classList.toggle('active', filter === 'loans');
+    document.getElementById('btn-reports-debt-filter-cards')?.classList.toggle('active', filter === 'cards');
+    const ctx = typeof reportsLastCtx !== 'undefined' && reportsLastCtx
+        ? reportsLastCtx
+        : getReportsPeriodContext();
+    renderReportsDebtPortfolio(ctx);
+}
+
+function buildReportsLoanPortfolioRowHtml(loan, ctx) {
+    const capital = loan.currentCapitalLeft || 0;
+    const annual = estimateAnnualInterest(loan);
+    const paidPct = Math.round(getLoanPaidPercent(loan));
+    const debtPayments = ctx.periodTx
+        .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
+        .reduce((s, t) => s + t.amount, 0);
+    const loanId = escapeHtml(loan.id);
+    const isMortgage = typeof isMortgageLoan === 'function' && isMortgageLoan(loan);
+    const propertyValue = loan.details?.propertyValue || 0;
+    let ltvTag = '';
+    if (isMortgage && propertyValue > 0) {
+        const ltv = (capital / propertyValue) * 100;
+        const ltvClass = ltv > 80 ? ' debt-portfolio-tag--warn' : '';
+        ltvTag = `<span class="debt-portfolio-tag${ltvClass}">LTV ${ltv.toFixed(1)}%</span>`;
     }
+    const metaBits = [
+        loan.interestRate ? `${loan.interestRate}%` : null,
+        annual > 0 ? `~${formatPlnAmount(annual)}/rok` : null,
+        loan.nextInstallmentAmount ? `rata ${formatPlnAmount(loan.nextInstallmentAmount)}` : null,
+        debtPayments > 0 ? `w okresie ${formatPlnAmount(debtPayments)}` : null
+    ].filter(Boolean).join(' · ');
+    const ltvHint = isMortgage && propertyValue > 0
+        ? `<span class="debt-portfolio-ltv-hint">Nieruchomość ${formatPlnAmount(propertyValue)} · wolny kapitał ${formatPlnAmount(Math.max(0, propertyValue - capital))}</span>`
+        : '';
 
-    let totalAnnual = 0;
-    const rows = loans.map((loan) => {
-        const capital = loan.currentCapitalLeft || 0;
-        const annual = estimateAnnualInterest(loan);
-        totalAnnual += annual;
-        const paidPct = Math.round(getLoanPaidPercent(loan));
-        const debtPayments = ctx.periodTx
-            .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
-            .reduce((s, t) => s + t.amount, 0);
-        const loanId = escapeHtml(loan.id);
-        const isMortgage = typeof isMortgageLoan === 'function' && isMortgageLoan(loan);
-        const propertyValue = loan.details?.propertyValue || 0;
-        let ltvTag = '';
-        if (isMortgage && propertyValue > 0) {
-            const ltv = (capital / propertyValue) * 100;
-            const ltvClass = ltv > 80 ? ' debt-portfolio-tag--warn' : '';
-            ltvTag = `<span class="debt-portfolio-tag${ltvClass}">LTV ${ltv.toFixed(1)}%</span>`;
-        }
-        const metaBits = [
-            loan.interestRate ? `${loan.interestRate}%` : null,
-            annual > 0 ? `~${formatPlnAmount(annual)}/rok` : null,
-            loan.nextInstallmentAmount ? `rata ${formatPlnAmount(loan.nextInstallmentAmount)}` : null,
-            debtPayments > 0 ? `w okresie ${formatPlnAmount(debtPayments)}` : null
-        ].filter(Boolean).join(' · ');
-
-        const ltvHint = isMortgage && propertyValue > 0
-            ? `<span class="debt-portfolio-ltv-hint">Nieruchomość ${formatPlnAmount(propertyValue)} · wolny kapitał ${formatPlnAmount(Math.max(0, propertyValue - capital))}</span>`
-            : '';
-
-        return `<div class="debt-portfolio-row loan-clickable" role="button" tabindex="0"
+    return {
+        annual,
+        html: `<div class="debt-portfolio-row loan-clickable" role="button" tabindex="0"
             onclick="openLoanDetails('${loanId}')" onkeydown="if (event.key === 'Enter') openLoanDetails('${loanId}')">
             <div class="debt-portfolio-head">
                 <strong>${escapeHtml(getLoanDisplayName(loan))}</strong>
@@ -1219,20 +1224,89 @@ function renderReportsDebtLoansPortfolio(ctx) {
                 <span class="reports-hint">Spłacono ${paidPct}% · kapitał ${formatPlnAmount(capital)}</span>
             </div>
             ${ltvHint}
-        </div>`;
-    }).join('');
-
-    el.innerHTML = `${rows}
-        <div class="debt-portfolio-total">
-            <span>Szacunek odsetek łącznie</span>
-            <strong class="expense">${formatPlnAmount(totalAnnual)}/rok</strong>
-        </div>`;
+        </div>`
+    };
 }
 
-function renderReportsDebtInstallmentList() {
-    const el = document.getElementById('reports-debt-installment-list');
+function buildReportsCardPortfolioRowHtml(card, ctx) {
+    const { start, end } = getPeriodBoundsFromCtx(ctx);
+    const available = getCreditCardAvailable(card);
+    const usedPct = card.limit > 0 ? Math.round((card.currentBalance / card.limit) * 100) : 0;
+    const cardId = escapeHtml(card.id);
+    const repayments = getCreditCardMovementsInRange(start, end)
+        .filter((m) => m.cardId === card.id && m.type === 'repayment')
+        .reduce((s, m) => s + m.amount, 0);
+
+    return `<div class="debt-portfolio-row credit-clickable" role="button" tabindex="0"
+        onclick="openCreditCardDetails('${cardId}')" onkeydown="if (event.key === 'Enter') openCreditCardDetails('${cardId}')">
+        <div class="debt-portfolio-head">
+            <strong>${escapeHtml(card.name)}</strong>
+            <span class="debt-portfolio-tag">Karta · ${usedPct}% limitu</span>
+        </div>
+        <span class="debt-portfolio-meta">${formatPlnAmount(card.currentBalance)} · spłaty ${formatPlnAmount(repayments)} · wolne ${formatPlnAmount(available)}</span>
+        <div class="debt-portfolio-progress">
+            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${Math.min(100, usedPct)}%;background:var(--accent)"></div></div>
+        </div>
+    </div>`;
+}
+
+function renderReportsDebtPortfolio(ctx) {
+    const el = document.getElementById('reports-debt-portfolio');
     if (!el) return;
 
+    const loans = getActiveLoans();
+    const cards = getActiveCreditCards();
+    const filter = reportsDebtPortfolioFilter;
+    const showLoans = filter !== 'cards';
+    const showCards = filter !== 'loans';
+
+    if (!loans.length && !cards.length) {
+        el.innerHTML = '<p class="reports-hint">Brak aktywnych kredytów i kart kredytowych.</p>';
+        return;
+    }
+
+    let totalAnnual = 0;
+    const rows = [];
+
+    if (showLoans && loans.length) {
+        loans.forEach((loan) => {
+            const built = buildReportsLoanPortfolioRowHtml(loan, ctx);
+            totalAnnual += built.annual;
+            rows.push(built.html);
+        });
+    }
+
+    if (showCards && cards.length) {
+        cards.forEach((card) => {
+            rows.push(buildReportsCardPortfolioRowHtml(card, ctx));
+        });
+    }
+
+    if (!rows.length) {
+        const emptyMsg = filter === 'loans'
+            ? 'Brak aktywnych kredytów.'
+            : filter === 'cards'
+                ? 'Brak aktywnych kart kredytowych.'
+                : 'Brak pozycji w portfelu.';
+        el.innerHTML = `<p class="reports-hint">${emptyMsg}</p>`;
+        return;
+    }
+
+    const footer = showLoans && filter !== 'cards' && totalAnnual > 0
+        ? `<div class="debt-portfolio-total">
+            <span>Szacunek odsetek kredytów</span>
+            <strong class="expense">${formatPlnAmount(totalAnnual)}/rok</strong>
+        </div>`
+        : '';
+
+    el.innerHTML = rows.join('') + footer;
+}
+
+function renderReportsDebtLoansPortfolio(ctx) {
+    renderReportsDebtPortfolio(ctx);
+}
+
+function collectDebtInstallmentRows() {
     const rows = [];
     getActiveLoans().forEach((loan) => {
         if (!(loan.nextInstallmentAmount > 0 && loan.currentCapitalLeft > 0)) return;
@@ -1264,6 +1338,35 @@ function renderReportsDebtInstallmentList() {
     });
 
     rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey) || a.name.localeCompare(b.name, 'pl'));
+    return rows;
+}
+
+function setReportsDebtsCardVisible(cardId, visible) {
+    document.getElementById(cardId)?.classList.toggle('hidden', !visible);
+}
+
+function updateReportsDebtsSectionVisibility(ctx) {
+    const loans = getActiveLoans();
+    const cards = getActiveCreditCards();
+    const hasLoanDebt = loans.some((l) => (l.currentCapitalLeft || 0) > 0);
+    const hasCardDebt = cards.some((c) => (c.currentBalance || 0) > 0);
+    const hasAnyDebt = hasLoanDebt || hasCardDebt;
+
+    setReportsDebtsCardVisible('reports-debts-portfolio-card', hasAnyDebt);
+    setReportsDebtsCardVisible('reports-debts-installments-card', collectDebtInstallmentRows().length > 0);
+    setReportsDebtsCardVisible('reports-debts-overpay-card', hasLoanDebt);
+    setReportsDebtsCardVisible('reports-debts-charts-card', hasAnyDebt);
+
+    const freedomItems = typeof buildDebtFreedomTimeline === 'function' ? buildDebtFreedomTimeline() : [];
+    const { total: loanPaymentsInPeriod } = analyzeLoanPaymentsInPeriod(ctx);
+    setReportsDebtsCardVisible('reports-debts-freedom-card', freedomItems.length > 0 || loanPaymentsInPeriod > 0);
+}
+
+function renderReportsDebtInstallmentList() {
+    const el = document.getElementById('reports-debt-installment-list');
+    if (!el) return;
+
+    const rows = collectDebtInstallmentRows();
 
     const summaryEl = document.getElementById('reports-debt-installment-summary');
     const monthlyTotal = rows.reduce((s, r) => s + r.amount, 0);
@@ -1313,7 +1416,7 @@ function renderReportsDebtsFreedomPanel(ctx) {
     const hasTimeline = items.length > 0;
 
     if (!hasPeriod && !hasTimeline) {
-        el.innerHTML = '<p class="reports-hint">Brak długów lub spłat w wybranym okresie.</p>';
+        el.innerHTML = '';
         return;
     }
 
@@ -1453,15 +1556,11 @@ function renderReportsDebtLtv() {
 
 function renderReportsDebtsSection(ctx) {
     renderReportsDebtsHero(ctx);
-    renderReportsDebtLoansPortfolio(ctx);
+    renderReportsDebtPortfolio(ctx);
     renderReportsDebtInstallmentList();
     populateDebtsOverpayLoanSelect();
     renderReportsDebtOverpayCalc();
     renderReportsDebtsFreedomPanel(ctx);
-    const cardsWrap = document.getElementById('reports-debts-cards-wrap');
-    const cards = getActiveCreditCards();
-    if (cardsWrap) cardsWrap.classList.toggle('hidden', !cards.length);
-    renderReportsCreditCardSummary(ctx, 'reports-debts-cards');
     renderReportsDebtPaymentsChart(ctx, 'reportsDebtsChart');
     renderReportsDebtSplitChart(ctx, 'reportsDebtsSplitChart', 'reports-debts-split-legend');
 }

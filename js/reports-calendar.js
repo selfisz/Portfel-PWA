@@ -211,7 +211,6 @@ function renderDebtCalendarSection() {
     if (document.getElementById('reports-debt-freedom-timeline')) {
         renderDebtFreedomTimeline();
     }
-    renderDepositsCalendarList();
 }
 
 function renderDebtCalendarGrid() {

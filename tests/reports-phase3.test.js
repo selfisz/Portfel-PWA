@@ -352,6 +352,42 @@ describe('getCompareExclusiveExpenseGroups', () => {
   });
 });
 
+describe('buildCompareFixedVariableSummary', () => {
+  it('dzieli wydatki na stałe i zmienne wg pozycji wspólnych', () => {
+    const txA = [
+      { type: 'expense', amount: 100, mainCategory: 'Dom', subCategory: 'Czynsz', date: '2024-01-01' },
+      { type: 'expense', amount: 50, mainCategory: 'Jedzenie', subCategory: 'Sklep', date: '2024-01-02' }
+    ];
+    const txB = [
+      { type: 'expense', amount: 110, mainCategory: 'Dom', subCategory: 'Czynsz', date: '2024-02-01' },
+      { type: 'expense', amount: 200, mainCategory: 'Rozrywka', subCategory: 'Kino', date: '2024-02-02' }
+    ];
+    const result = buildCompareFixedVariableSummary(
+      getExpenseGroupTotals(txA),
+      getExpenseGroupTotals(txB)
+    );
+    expect(result.totalA).toBe(150);
+    expect(result.totalB).toBe(310);
+    expect(result.fixedA).toBe(100);
+    expect(result.fixedB).toBe(110);
+    expect(result.variableA).toBe(50);
+    expect(result.variableB).toBe(200);
+    expect(result.fixedPctA).toBe(67);
+    expect(result.variablePctB).toBe(65);
+  });
+
+  it('traktuje wszystkie wydatki jako zmienne gdy brak wspólnych pozycji', () => {
+    const mapA = { a: { key: 'a', label: 'A', total: 100, count: 1 } };
+    const mapB = { b: { key: 'b', label: 'B', total: 80, count: 1 } };
+    const result = buildCompareFixedVariableSummary(mapA, mapB);
+    expect(result.fixedA).toBe(0);
+    expect(result.fixedB).toBe(0);
+    expect(result.variableA).toBe(100);
+    expect(result.variableB).toBe(80);
+    expect(result.variablePctA).toBe(100);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // getTransactionsInRange
 // ---------------------------------------------------------------------------
@@ -643,6 +679,35 @@ describe('getAllRecurringEntries', () => {
     if (entries.length >= 2) {
       expect(entries[0].amount).toBeGreaterThanOrEqual(entries[1].amount);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getReportsDataFingerprint / getReportsRenderCacheKey
+// ---------------------------------------------------------------------------
+describe('getReportsDataFingerprint', () => {
+  it('zmienia się po dodaniu transakcji w okresie', () => {
+    const ctx1 = { periodTx: [{ id: 'a', amount: 100, type: 'expense', category: 'Jedzenie' }] };
+    const ctx2 = {
+      periodTx: [
+        { id: 'a', amount: 100, type: 'expense', category: 'Jedzenie' },
+        { id: 'b', amount: 50, type: 'expense', category: 'Transport' }
+      ]
+    };
+    expect(getReportsDataFingerprint(ctx1)).not.toBe(getReportsDataFingerprint(ctx2));
+  });
+
+  it('łączy okres z fingerprintem danych', () => {
+    const ctx = {
+      mode: 'month',
+      period: 'month',
+      label: 'Czerwiec 2026',
+      rangeStart: '2026-06-01',
+      rangeEnd: '2026-06-30',
+      periodTx: [{ id: 'x', amount: 10, type: 'expense' }]
+    };
+    expect(getReportsRenderCacheKey(ctx)).toContain(getReportsContextCacheKey(ctx));
+    expect(getReportsRenderCacheKey(ctx)).toContain(getReportsDataFingerprint(ctx));
   });
 });
 

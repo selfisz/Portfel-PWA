@@ -576,6 +576,76 @@ describe('buildCompareWealthSummary', () => {
   });
 });
 
+describe('getIkzeContributionsInRange', () => {
+  it('sumuje wpłaty IKZE w zakresie dat', () => {
+    globalThis.getAssetById = (id) => id === 'ikze-1'
+      ? { type: 'retirement', retirementKind: 'IKZE' }
+      : null;
+    _setAppState({
+      ..._getAppState(),
+      assets: [{ id: 'ikze-1', type: 'retirement', retirementKind: 'IKZE', name: 'IKZE' }],
+      transactions: [
+        { type: 'expense', amount: 500, date: '2024-05-10', linkedAssetId: 'ikze-1' },
+        { type: 'expense', amount: 300, date: '2024-06-02', linkedAssetId: 'ikze-1' },
+        { type: 'expense', amount: 100, date: '2024-07-01', linkedAssetId: 'ikze-1' }
+      ]
+    });
+    expect(getIkzeContributionsInRange('2024-05-01', '2024-06-30')).toBe(800);
+    globalThis.getAssetById = () => null;
+  });
+});
+
+describe('buildCompareDiversificationSummary', () => {
+  it('zwraca strukturę aktywów na koniec okresów', () => {
+    _setAppState({
+      ..._getAppState(),
+      assetSnapshots: [
+        {
+          monthKey: '2024-04',
+          totalAssets: 10000,
+          byType: { investment: 6000, cash: 3000, deposit: 1000, retirement: 0 }
+        },
+        {
+          monthKey: '2024-05',
+          totalAssets: 12000,
+          byType: { investment: 5000, cash: 4000, deposit: 1000, retirement: 2000 }
+        }
+      ]
+    });
+    const result = buildCompareDiversificationSummary('2024-04-30', '2024-05-31');
+    expect(result.rows.find((r) => r.key === 'investment').amountA).toBe(6000);
+    expect(result.rows.find((r) => r.key === 'retirement').amountB).toBe(2000);
+    expect(result.rows.find((r) => r.key === 'cash').pctB).toBe(33);
+    expect(result.hasBoth).toBe(true);
+  });
+});
+
+describe('buildCompareIkzeSummary', () => {
+  it('porównuje wpłaty IKZE i limit roczny między okresami', () => {
+    globalThis.getAssetById = (id) => id === 'ikze-1'
+      ? { type: 'retirement', retirementKind: 'IKZE' }
+      : null;
+    _setAppState({
+      ..._getAppState(),
+      assets: [{ id: 'ikze-1', type: 'retirement', retirementKind: 'IKZE', name: 'IKZE' }],
+      transactions: [
+        { type: 'expense', amount: 400, date: '2024-05-15', linkedAssetId: 'ikze-1' },
+        { type: 'expense', amount: 600, date: '2024-06-10', linkedAssetId: 'ikze-1' }
+      ]
+    });
+    const result = buildCompareIkzeSummary(
+      { start: '2024-05-01', end: '2024-05-31' },
+      { start: '2024-06-01', end: '2024-06-30' }
+    );
+    expect(result.contribA).toBe(400);
+    expect(result.contribB).toBe(600);
+    expect(result.ytdA).toBe(400);
+    expect(result.ytdB).toBe(1000);
+    expect(result.limit).toBe(8000);
+    globalThis.getAssetById = () => null;
+  });
+});
+
 // ===========================================================================
 // cash.js + asset-analytics.js — sync przy zapisie transakcji (wpływ → aktywa)
 // ===========================================================================

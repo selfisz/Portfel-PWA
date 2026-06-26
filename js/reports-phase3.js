@@ -40,6 +40,37 @@ function getReportsContextCacheKey(ctx) {
     return parts.join('|');
 }
 
+function getReportsDataFingerprint(ctx) {
+    const tx = ctx?.periodTx || [];
+    let txTag = tx.length;
+    for (const t of tx) {
+        txTag += Math.round((Number(t?.amount) || 0) * 100);
+        txTag += String(t?.id || '').length * 17;
+        txTag += String(t?.category || '').length * 31;
+        txTag += String(t?.subCategory || '').length * 13;
+    }
+
+    const parts = [txTag];
+    if (typeof getLoanSummaryTotal === 'function') {
+        parts.push(Math.round(getLoanSummaryTotal() * 100));
+    }
+    if (typeof getCreditCardDebtTotal === 'function') {
+        parts.push(Math.round(getCreditCardDebtTotal() * 100));
+    }
+    if (typeof getPortfolioValuePln === 'function') {
+        parts.push(Math.round(getPortfolioValuePln() * 100));
+    }
+    if (typeof appState !== 'undefined') {
+        parts.push((appState.assets || []).length);
+        parts.push((appState.assetSnapshots || []).length);
+    }
+    return parts.join(':');
+}
+
+function getReportsRenderCacheKey(ctx) {
+    return `${getReportsContextCacheKey(ctx)}|${getReportsDataFingerprint(ctx)}`;
+}
+
 function setAnalysisSectionLoading(section, loading) {
     document.getElementById(`analysis-section-${section}`)
         ?.classList.toggle('analysis-section--loading', loading);
@@ -1136,11 +1167,104 @@ function buildCompareDebtsTabHtml(ctx) {
         </div>`;
 }
 
-function buildCompareAdvancedHtml() {
-    return `<div class="card dashboard-panel">
-            <h2 class="dashboard-section-title">Więcej</h2>
-            <p class="reports-hint">W trybie porównania dodatkowe wykresy i analizy (trendy, przepływy, dywersyfikacja) nie są dostępne. Przełącz zakładki powyżej, aby zobaczyć porównanie okresów A i B.</p>
+function buildCompareIkzeSectionHtml(ctx) {
+    if (typeof buildCompareIkzeSummary !== 'function') return '';
+    const summary = buildCompareIkzeSummary(ctx.periodA, ctx.periodB);
+    if (!summary) return '';
+
+    const hasIkzeAssets = (appState.assets || []).some(
+        (a) => !a.archived && a.type === 'retirement' && a.retirementKind === 'IKZE'
+    );
+    const hasData = hasIkzeAssets
+        || summary.contribA > 0
+        || summary.contribB > 0
+        || summary.retirementA > 0
+        || summary.retirementB > 0
+        || summary.ytdA > 0
+        || summary.ytdB > 0;
+
+    if (!hasData) {
+        return `<div class="card dashboard-panel compare-advanced-card">
+            <h2 class="dashboard-section-title">IKZE i emerytura</h2>
+            <p class="reports-hint">Brak wpłat IKZE ani aktywów emerytalnych w wybranych okresach. Powiąż transakcję z kontem IKZE w formularzu dodawania.</p>
         </div>`;
+    }
+
+    const { labelA, labelB } = getComparePeriodLabels(ctx);
+    const limitPctA = summary.limit > 0 ? Math.min(100, Math.round((summary.ytdA / summary.limit) * 100)) : 0;
+    const limitPctB = summary.limit > 0 ? Math.min(100, Math.round((summary.ytdB / summary.limit) * 100)) : 0;
+    const limitLabelA = `${formatPlnAmount(summary.ytdA)} / ${formatPlnAmount(summary.limit)} (${limitPctA}%)`;
+    const limitLabelB = `${formatPlnAmount(summary.ytdB)} / ${formatPlnAmount(summary.limit)} (${limitPctB}%)`;
+
+    const colA = `
+        ${buildCompareStatRow('Wpłaty IKZE', summary.contribA)}
+        ${buildCompareStatRow('Wpłaty emerytura', summary.retirementA)}
+        ${buildCompareStatRow(`Limit IKZE ${summary.yearA}`, limitLabelA, { raw: true })}`;
+    const colB = `
+        ${buildCompareStatRow('Wpłaty IKZE', summary.contribB, { pct: buildComparePctEm(summary.contribB, summary.contribA) })}
+        ${buildCompareStatRow('Wpłaty emerytura', summary.retirementB, { pct: buildComparePctEm(summary.retirementB, summary.retirementA) })}
+        ${buildCompareStatRow(`Limit IKZE ${summary.yearB}`, limitLabelB, {
+            raw: true,
+            pct: buildComparePctEm(summary.ytdB, summary.ytdA)
+        })}`;
+
+    const manualHint = (summary.manualA || summary.manualB)
+        ? '<p class="reports-hint compare-ikze-hint">Limit IKZE: wpłaty roczne wpisane ręcznie w ustawieniach (nie suma transakcji).</p>'
+        : '<p class="reports-hint compare-ikze-hint">Limit IKZE liczony od początku roku kalendarzowego do końca każdego okresu.</p>';
+
+    return `<div class="card dashboard-panel compare-advanced-card">
+            <h2 class="dashboard-section-title">IKZE i emerytura</h2>
+            <p class="reports-hint compare-ikze-intro">Wpłaty w wybranym okresie oraz wykorzystanie rocznego limitu IKZE.</p>
+            ${buildComparePeriodStack(labelA, labelB, colA, colB, 'compare-stack--ikze')}
+            ${manualHint}
+        </div>`;
+}
+
+function buildCompareDiversificationSectionHtml(ctx) {
+    if (typeof buildCompareDiversificationSummary !== 'function') return '';
+    const summary = buildCompareDiversificationSummary(ctx.periodA.end, ctx.periodB.end);
+    if (!summary) {
+        return `<div class="card dashboard-panel compare-advanced-card">
+            <h2 class="dashboard-section-title">Dywersyfikacja majątku</h2>
+            <p class="reports-hint">Brak snapshotów majątku dla wybranych okresów. Odwiedź zakładkę Majątek — snapshoty zapisują się automatycznie co miesiąc.</p>
+        </div>`;
+    }
+
+    const { labelA, labelB } = getComparePeriodLabels(ctx);
+    const rowHtml = (side, ref = null) => summary.rows.map((row) => {
+        const amount = side === 'a' ? row.amountA : row.amountB;
+        const pct = side === 'a' ? row.pctA : row.pctB;
+        const refAmount = ref ? ref.amountA : null;
+        return buildCompareStatRow(`${row.label} (${pct}%)`, amount, {
+            pct: refAmount !== null ? buildComparePctEm(amount, refAmount) : ''
+        });
+    }).join('');
+
+    const totalRow = (side, refTotal = null) => {
+        const total = side === 'a' ? summary.totalA : summary.totalB;
+        return buildCompareStatRow('Razem aktywa', total, {
+            pct: refTotal !== null ? buildComparePctEm(total, refTotal) : ''
+        });
+    };
+
+    return `<div class="card dashboard-panel compare-advanced-card">
+            <h2 class="dashboard-section-title">Dywersyfikacja majątku</h2>
+            <p class="reports-hint compare-diversification-intro">Struktura aktywów na koniec każdego okresu (wg typu).</p>
+            ${buildComparePeriodStack(
+                labelA,
+                labelB,
+                totalRow('a') + rowHtml('a'),
+                totalRow('b', summary.totalA) + rowHtml('b', summary),
+                'compare-stack--diversification'
+            )}
+            ${!summary.hasBoth ? '<p class="reports-hint">Część danych oszacowana z najbliższego snapshotu lub bieżącego stanu.</p>' : ''}
+        </div>`;
+}
+
+function buildCompareAdvancedHtml(ctx) {
+    const ikzeHtml = buildCompareIkzeSectionHtml(ctx);
+    const diversificationHtml = buildCompareDiversificationSectionHtml(ctx);
+    return `${ikzeHtml}${diversificationHtml}`;
 }
 
 function renderReportsCompare(ctx) {
@@ -1159,7 +1283,7 @@ function renderReportsCompare(ctx) {
     setCompareSlotHtml('expenses', buildCompareExpensesHtml(ctx, movers));
     setCompareSlotHtml('assets', buildCompareAssetsHtml(ctx));
     setCompareSlotHtml('debts', buildCompareDebtsTabHtml(ctx));
-    setCompareSlotHtml('advanced', buildCompareAdvancedHtml());
+    setCompareSlotHtml('advanced', buildCompareAdvancedHtml(ctx));
 
     renderReportsCompareWealthChart(ctx);
     renderReportsCompareChart(ctx);
@@ -1313,6 +1437,54 @@ function buildCompareRepeatingExpenses(txA, txB, limit = 6) {
         .slice(0, limit);
 }
 
+function buildCompareFixedVariableSummary(mapA, mapB) {
+    const totalA = Object.values(mapA).reduce((sum, group) => sum + group.total, 0);
+    const totalB = Object.values(mapB).reduce((sum, group) => sum + group.total, 0);
+    let fixedA = 0;
+    let fixedB = 0;
+    Object.keys(mapA).forEach((key) => {
+        if (!mapB[key]) return;
+        fixedA += mapA[key].total;
+        fixedB += mapB[key].total;
+    });
+    const variableA = totalA - fixedA;
+    const variableB = totalB - fixedB;
+    const sharePct = (part, total) => (total > 0 ? Math.round((part / total) * 100) : 0);
+    return {
+        totalA,
+        totalB,
+        fixedA,
+        fixedB,
+        variableA,
+        variableB,
+        fixedPctA: sharePct(fixedA, totalA),
+        fixedPctB: sharePct(fixedB, totalB),
+        variablePctA: sharePct(variableA, totalA),
+        variablePctB: sharePct(variableB, totalB)
+    };
+}
+
+function buildCompareFixedVariableColHtml(summary, side) {
+    const isB = side === 'B';
+    const total = isB ? summary.totalB : summary.totalA;
+    const fixed = isB ? summary.fixedB : summary.fixedA;
+    const variable = isB ? summary.variableB : summary.variableA;
+    const fixedPct = isB ? summary.fixedPctB : summary.fixedPctA;
+    const variablePct = isB ? summary.variablePctB : summary.variablePctA;
+    const refFixed = isB ? summary.fixedA : null;
+    const refVariable = isB ? summary.variableA : null;
+    return `
+        ${buildCompareStatRow('Wydatki razem', total, { kind: 'expense' })}
+        ${buildCompareStatRow(`Stałe (${fixedPct}%)`, fixed, {
+            kind: 'expense',
+            pct: refFixed !== null ? buildComparePctEm(fixed, refFixed) : ''
+        })}
+        ${buildCompareStatRow(`Zmienne (${variablePct}%)`, variable, {
+            kind: 'expense',
+            pct: refVariable !== null ? buildComparePctEm(variable, refVariable) : ''
+        })}`;
+}
+
 function buildCompareExtremeBlock(label, tx) {
     return `<div class="compare-extreme-block">
         <span class="compare-extreme-label">${label}</span>
@@ -1367,6 +1539,7 @@ function buildCompareTransactionInsightsHtml(ctx) {
     const maxExpenseA = getExtremeTransaction(txA, 'expense', 'max', true);
     const maxExpenseB = getExtremeTransaction(txB, 'expense', 'max', true);
     const repeating = buildCompareRepeatingExpenses(txA, txB);
+    const fixedVariable = buildCompareFixedVariableSummary(mapA, mapB);
 
     const statsHtml = buildComparePeriodGrid(
         labelA,
@@ -1428,17 +1601,27 @@ function buildCompareTransactionInsightsHtml(ctx) {
             )}
         </div>`;
 
-    const repeatingHtml = repeating.length
-        ? `<div class="compare-tx-repeating">
-            <h3 class="compare-subtitle">Powtarzające się wydatki</h3>
-            <p class="reports-hint">Te same kategorie/pozycje w obu okresach (bez spłat długów).</p>
+    const fixedVariableHtml = (fixedVariable.totalA > 0 || fixedVariable.totalB > 0)
+        ? `<div class="compare-tx-fixed-variable">
+            <h3 class="compare-subtitle">Stałe vs zmienne</h3>
+            <p class="reports-hint">Stałe = pozycje wydatków obecne w obu okresach. Zmienne = reszta (bez spłat długów).</p>
+            ${buildComparePeriodStack(
+                labelA,
+                labelB,
+                buildCompareFixedVariableColHtml(fixedVariable, 'A'),
+                buildCompareFixedVariableColHtml(fixedVariable, 'B'),
+                'compare-stack--fixed-variable'
+            )}
+            ${repeating.length ? `
+            <h4 class="compare-subtitle compare-subtitle--nested">Skład stałych wydatków</h4>
+            <p class="reports-hint">Największe pozycje wspólne dla obu okresów.</p>
             ${buildComparePeriodStack(
                 labelA,
                 labelB,
                 buildCompareRepeatingColHtml(repeating, 'A'),
                 buildCompareRepeatingColHtml(repeating, 'B'),
                 'compare-stack--repeating'
-            )}
+            )}` : ''}
         </div>`
         : '';
 
@@ -1446,7 +1629,7 @@ function buildCompareTransactionInsightsHtml(ctx) {
         ${extremesHtml}
         ${topListsHtml}
         ${exclusiveHtml}
-        ${repeatingHtml}
+        ${fixedVariableHtml}
         <p class="reports-hint compare-tx-footnote">Kliknij transakcję, aby ją otworzyć.</p>`;
 }
 
@@ -1996,39 +2179,52 @@ function renderDebtsAnalysisSection(ctx) {
     renderReportsDebtsSection(ctx);
     renderReportsDebtTrendChart(ctx);
     if (typeof renderDebtPeakChart === 'function') renderDebtPeakChart();
+    if (typeof updateReportsDebtsSectionVisibility === 'function') updateReportsDebtsSectionVisibility(ctx);
 }
 
 function renderAnalysisSectionContent(section, ctx, savingsRate, options = {}) {
     if (!ctx || !section) return;
     const force = Boolean(options.force || options.forExport);
-    const sectionKey = `${section}|${getReportsContextCacheKey(ctx)}`;
+    const sectionKey = `${section}|${getReportsRenderCacheKey(ctx)}`;
     if (!force && reportsRenderedSections[section] === sectionKey) return;
 
     setAnalysisSectionLoading(section, true);
-    try {
-        switch (section) {
-            case 'overview':
-                renderOverviewSection(ctx, savingsRate);
-                break;
-            case 'expenses':
-                renderExpensesSection(ctx);
-                break;
-            case 'assets':
-                renderReportsAssetsSection(ctx);
-                break;
-            case 'debts':
-                renderDebtsAnalysisSection(ctx);
-                break;
-            case 'advanced':
-                renderAdvancedSection(ctx);
-                break;
-            default:
-                break;
+
+    const finishRender = () => {
+        try {
+            switch (section) {
+                case 'overview':
+                    renderOverviewSection(ctx, savingsRate);
+                    break;
+                case 'expenses':
+                    renderExpensesSection(ctx);
+                    break;
+                case 'assets':
+                    renderReportsAssetsSection(ctx);
+                    break;
+                case 'debts':
+                    renderDebtsAnalysisSection(ctx);
+                    break;
+                case 'advanced':
+                    renderAdvancedSection(ctx);
+                    break;
+                default:
+                    break;
+            }
+            reportsRenderedSections[section] = sectionKey;
+        } finally {
+            setAnalysisSectionLoading(section, false);
         }
-        reportsRenderedSections[section] = sectionKey;
-    } finally {
-        setAnalysisSectionLoading(section, false);
+    };
+
+    if (force) {
+        finishRender();
+        return;
     }
+
+    requestAnimationFrame(() => {
+        requestAnimationFrame(finishRender);
+    });
 }
 
 function renderAllAnalysisSectionsForExport(ctx, savingsRate) {
@@ -2037,8 +2233,26 @@ function renderAllAnalysisSectionsForExport(ctx, savingsRate) {
     });
 }
 
+function scheduleAnalysisSectionPrefetch(ctx, savingsRate) {
+    const idx = ANALYSIS_SECTIONS.indexOf(analysisSection);
+    if (idx < 0) return;
+    const cacheKey = getReportsRenderCacheKey(ctx);
+    const run = typeof requestIdleCallback === 'function'
+        ? (fn) => requestIdleCallback(fn, { timeout: 2500 })
+        : (fn) => setTimeout(fn, 120);
+
+    [-1, 1].forEach((delta) => {
+        const neighbor = ANALYSIS_SECTIONS[idx + delta];
+        if (!neighbor) return;
+        run(() => {
+            if (!reportsLastCtx || getReportsRenderCacheKey(reportsLastCtx) !== cacheKey) return;
+            renderAnalysisSectionContent(neighbor, ctx, savingsRate);
+        });
+    });
+}
+
 function invalidateAnalysisRenderCache(ctx) {
-    const ctxKey = getReportsContextCacheKey(ctx);
+    const ctxKey = getReportsRenderCacheKey(ctx);
     if (reportsContextCacheKey !== ctxKey) {
         reportsContextCacheKey = ctxKey;
         ANALYSIS_SECTIONS.forEach((section) => {
@@ -2051,6 +2265,7 @@ function invalidateAnalysisRenderCache(ctx) {
             reportsStructureMainCategory = null;
             reportsStructureSubCategory = null;
         }
+        if (typeof resetReportsStructureViewFilters === 'function') resetReportsStructureViewFilters();
     }
 }
 
@@ -2083,7 +2298,8 @@ function renderPhase3Reports(ctx, savingsRate) {
     updateReportsForecastVisibility(ctx);
 
     if (ctx.mode !== 'compare') {
-        renderAnalysisSectionContent(analysisSection, ctx, savingsRate, { force: true });
+        renderAnalysisSectionContent(analysisSection, ctx, savingsRate);
+        scheduleAnalysisSectionPrefetch(ctx, savingsRate);
     } else {
         resizeCompareSectionCharts(analysisSection);
     }
