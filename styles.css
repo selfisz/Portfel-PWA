@@ -63,54 +63,78 @@
 
 @media (prefers-color-scheme: dark) {
     html:not([data-theme="light"]):not([data-theme="dark"]) {
-        --bg: #0a0a0a;
-        --bg-elevated: #141414;
-        --text: #f5f5f5;
-        --text-muted: #9ca3af;
-        --border: rgba(255, 255, 255, 0.08);
-        --card: #161616;
-        --card-border: rgba(255, 255, 255, 0.10);
-        --primary: #f5f5f5;
-        --accent: #3b82f6;
-        --accent-soft: rgba(59, 130, 246, 0.18);
-        --accent-glow: rgba(59, 130, 246, 0.3);
-        --success: #34d399;
-        --success-soft: rgba(52, 211, 153, 0.15);
-        --danger: #f87171;
-        --danger-soft: rgba(248, 113, 113, 0.15);
-        --shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
-        --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.45);
-        --header-bg: rgba(10, 10, 10, 0.85);
-        --input-bg: #1f1f1f;
-        --hero-gradient: linear-gradient(145deg, #000000 0%, #111827 50%, #1e40af 100%);
-        --hero-income: #6ee7b7;
-        --hero-expense: #fca5a5;
+        /* Baza: głęboki, lekko chłodny grafit zamiast czystej czerni */
+        --bg: #0d0e11;
+        /* Drabina warstw: bg < card < elevated < input */
+        --bg-elevated: #1f222a;
+        /* Złamana biel zamiast „żarówiastego” #f5f5f5 */
+        --text: #e4e6eb;
+        --text-muted: #8b909e;
+        --border: rgba(255, 255, 255, 0.06);
+        /* Karta półprzezroczysta → realny glassmorphism nad mesh-tłem */
+        --card: rgba(24, 26, 31, 0.72);
+        --card-border: rgba(255, 255, 255, 0.07);
+        --primary: #e4e6eb;
+        --accent: #5a93f5;
+        --accent-soft: rgba(90, 147, 245, 0.16);
+        --accent-glow: rgba(90, 147, 245, 0.22);
+        /* Stonowane statusy — koniec wibrowania na ciemnym tle */
+        --success: #4fd1a5;
+        --success-soft: rgba(79, 209, 165, 0.14);
+        --danger: #ec8e8e;
+        --danger-soft: rgba(236, 142, 142, 0.14);
+        --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+        --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
+        /* Subtelny górny highlight zamiast jasnej linii z trybu jasnego */
+        --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        --header-bg: rgba(13, 14, 17, 0.72);
+        --input-bg: #23262e;
+        /* Zgaszony granat → indygo zamiast skoku czerń → jaskrawy #1e40af */
+        --hero-gradient: linear-gradient(145deg, #1b2031 0%, #232a45 55%, #2d3666 100%);
+        --hero-income: #7fd7b4;
+        --hero-expense: #f0a9a9;
+        /* Ledwie widoczny mesh dający głębię tła w dark */
+        --mesh-1: rgba(99, 102, 241, 0.10);
+        --mesh-2: rgba(168, 85, 247, 0.07);
+        --mesh-3: rgba(56, 130, 246, 0.08);
     }
 }
 
 html[data-theme="dark"] {
-    --bg: #0a0a0a;
-    --bg-elevated: #141414;
-    --text: #f5f5f5;
-    --text-muted: #9ca3af;
-    --border: rgba(255, 255, 255, 0.08);
-    --card: #161616;
-    --card-border: rgba(255, 255, 255, 0.10);
-    --primary: #f5f5f5;
-    --accent: #3b82f6;
-    --accent-soft: rgba(59, 130, 246, 0.18);
-    --accent-glow: rgba(59, 130, 246, 0.3);
-    --success: #34d399;
-    --success-soft: rgba(52, 211, 153, 0.15);
-    --danger: #f87171;
-    --danger-soft: rgba(248, 113, 113, 0.15);
-    --shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
-    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.45);
-    --header-bg: rgba(10, 10, 10, 0.85);
-    --input-bg: #1f1f1f;
-    --hero-gradient: linear-gradient(145deg, #000000 0%, #111827 50%, #1e40af 100%);
-    --hero-income: #6ee7b7;
-    --hero-expense: #fca5a5;
+    /* Baza: głęboki, lekko chłodny grafit zamiast czystej czerni */
+    --bg: #0d0e11;
+    /* Drabina warstw: bg < card < elevated < input */
+    --bg-elevated: #1f222a;
+    /* Złamana biel zamiast „żarówiastego” #f5f5f5 */
+    --text: #e4e6eb;
+    --text-muted: #8b909e;
+    --border: rgba(255, 255, 255, 0.06);
+    /* Karta półprzezroczysta → realny glassmorphism nad mesh-tłem */
+    --card: rgba(24, 26, 31, 0.72);
+    --card-border: rgba(255, 255, 255, 0.07);
+    --primary: #e4e6eb;
+    --accent: #5a93f5;
+    --accent-soft: rgba(90, 147, 245, 0.16);
+    --accent-glow: rgba(90, 147, 245, 0.22);
+    /* Stonowane statusy — koniec wibrowania na ciemnym tle */
+    --success: #4fd1a5;
+    --success-soft: rgba(79, 209, 165, 0.14);
+    --danger: #ec8e8e;
+    --danger-soft: rgba(236, 142, 142, 0.14);
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
+    /* Subtelny górny highlight zamiast jasnej linii z trybu jasnego */
+    --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    --header-bg: rgba(13, 14, 17, 0.72);
+    --input-bg: #23262e;
+    /* Zgaszony granat → indygo zamiast skoku czerń → jaskrawy #1e40af */
+    --hero-gradient: linear-gradient(145deg, #1b2031 0%, #232a45 55%, #2d3666 100%);
+    --hero-income: #7fd7b4;
+    --hero-expense: #f0a9a9;
+    /* Ledwie widoczny mesh dający głębię tła w dark */
+    --mesh-1: rgba(99, 102, 241, 0.10);
+    --mesh-2: rgba(168, 85, 247, 0.07);
+    --mesh-3: rgba(56, 130, 246, 0.08);
 }
 
 /* html[data-theme="light"] jest zbędne — wartości identyczne z :root.
@@ -144,14 +168,9 @@ body::before {
     pointer-events: none;
 }
 
-/* Ukryj mesh-gradient w trybie ciemnym — oba warianty: jawny i auto (OS) */
-html[data-theme="dark"] body::before,
-html[data-theme="dark"] body::after { display: none; }
-
-@media (prefers-color-scheme: dark) {
-    html:not([data-theme="light"]) body::before,
-    html:not([data-theme="light"]) body::after { display: none; }
-}
+/* W trybie ciemnym mesh nie jest ukrywany — używa zgaszonych zmiennych --mesh-*
+   (rgba o niskiej alfie), dając subtelną głębię tła zamiast płaskiej czerni.
+   Warstwa ziarna (body::after) również pozostaje aktywna dla luksusowej tekstury. */
 
 body::after {
     content: '';
@@ -732,6 +751,15 @@ html:not([data-theme="dark"]) .onboarding-card {
     -webkit-backdrop-filter: var(--glass-blur);
 }
 
+/* Dark: półprzezroczyste karty + delikatny blur = realna głębia/glass.
+   Łagodniejsza saturacja niż w trybie jasnym, by mesh nie wibrował. */
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .settings-panel,
+html[data-theme="dark"] .onboarding-card {
+    backdrop-filter: blur(18px) saturate(1.15);
+    -webkit-backdrop-filter: blur(18px) saturate(1.15);
+}
+
 
 
 h2 {
@@ -781,6 +809,19 @@ h2 {
     overflow: hidden;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+}
+
+/* Dark: subtelna ramka zamiast jasnej obwódki z trybu jasnego + łagodniejsza biel */
+html[data-theme="dark"] .hero-card {
+    border-color: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.94);
+}
+
+@media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]) .hero-card {
+        border-color: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.94);
+    }
 }
 
 .hero-card::after {

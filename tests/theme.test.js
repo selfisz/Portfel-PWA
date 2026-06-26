@@ -181,7 +181,7 @@ describe('updateThemeColorMeta', () => {
     };
     globalThis.window.matchMedia = makeMatchMedia(false);
     updateThemeColorMeta();
-    expect(metaEl.content).toBe('#0a0a0a');
+    expect(metaEl.content).toBe('#0d0e11');
   });
 
   it('ustawia jasny kolor meta gdy data-theme = "light"', () => {
@@ -203,7 +203,7 @@ describe('updateThemeColorMeta', () => {
     };
     globalThis.window.matchMedia = makeMatchMedia(true); // system dark
     updateThemeColorMeta();
-    expect(metaEl.content).toBe('#0a0a0a');
+    expect(metaEl.content).toBe('#0d0e11');
   });
 
   it('ustawia jasny kolor meta gdy auto + system light', () => {

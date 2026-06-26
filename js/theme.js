@@ -30,7 +30,7 @@ function updateThemeColorMeta() {
     if (!meta) return;
     const forced = document.documentElement.getAttribute('data-theme');
     const isDark = forced === 'dark' || (!forced && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    meta.content = isDark ? '#0a0a0a' : '#e4eaf4';
+    meta.content = isDark ? '#0d0e11' : '#e4eaf4';
 }
 
 function initTheme() {

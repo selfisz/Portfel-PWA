@@ -56,7 +56,7 @@ function setReportsRankLevel(level) {
 
 function getReportsChartTheme() {
     return {
-        legendColor: getThemeCssVar('--text', '#0f172a', '#f5f5f5'),
+        legendColor: getThemeCssVar('--text', '#0f172a', '#e4e6eb'),
         gridColor: isLightTheme() ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.08)',
         expenseColor: isLightTheme() ? 'rgba(220, 38, 38, 0.8)' : 'rgba(248, 113, 113, 0.8)',
         expenseFill: isLightTheme() ? 'rgba(220, 38, 38, 0.12)' : 'rgba(248, 113, 113, 0.18)',
@@ -844,7 +844,7 @@ function renderReportsMonthChart(ctx) {
     const ctx2 = chartEl.getContext('2d');
     if (reportsChartInstance) reportsChartInstance.destroy();
 
-    const legendColor = getThemeCssVar('--text', '#0f172a', '#f5f5f5');
+    const legendColor = getThemeCssVar('--text', '#0f172a', '#e4e6eb');
     const gridColor = isLightTheme() ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.08)';
 
     const monthChartOptions = {
