@@ -813,6 +813,14 @@
                 </div>
             </div>
 
+            <div id="analysis-compare-banner" class="card analysis-compare-banner hidden">
+                <div class="analysis-compare-banner-text">
+                    <span class="analysis-compare-banner-label">Raport porównawczy</span>
+                    <span id="analysis-compare-banner-range" class="analysis-compare-banner-range"></span>
+                </div>
+                <button type="button" class="toggle-btn loans-chip analysis-compare-exit-btn" onclick="exitCompareMode()">Przywróć widok okresu</button>
+            </div>
+
             <nav id="analysis-tab-grid" class="analysis-tab-grid" aria-label="Sekcje analizy">
                 <button id="btn-analysis-overview" type="button" class="analysis-tab active" onclick="setAnalysisSection('overview')">Przegląd</button>
                 <button id="btn-analysis-expenses" type="button" class="analysis-tab" onclick="setAnalysisSection('expenses')">Wydatki</button>
@@ -821,19 +829,9 @@
                 <button id="btn-analysis-advanced" type="button" class="analysis-tab analysis-tab--wide" onclick="setAnalysisSection('advanced')">Więcej</button>
             </nav>
 
-            <div id="analysis-compare-report" class="analysis-compare-report hidden">
-                <div class="card analysis-compare-banner">
-                    <div class="analysis-compare-banner-text">
-                        <span class="analysis-compare-banner-label">Raport porównawczy</span>
-                        <span id="analysis-compare-banner-range" class="analysis-compare-banner-range"></span>
-                    </div>
-                    <button type="button" class="toggle-btn loans-chip analysis-compare-exit-btn" onclick="exitCompareMode()">Przywróć widok okresu</button>
-                </div>
-                <div id="analysis-compare-report-body" class="analysis-compare-report-body"></div>
-            </div>
-
             <div id="analysis-sections-body" class="analysis-sections-body">
             <div id="analysis-section-overview" class="analysis-section">
+                <div id="analysis-compare-overview" class="analysis-compare-slot" hidden aria-hidden="true"></div>
                 <div class="card hero-card reports-overview-hero">
                     <div class="hero-label">Saldo okresu</div>
                     <div id="reports-net-balance" class="hero-balance reports-overview-balance">0,00 zł</div>
@@ -921,6 +919,7 @@
             </div>
 
             <div id="analysis-section-expenses" class="analysis-section hidden">
+                <div id="analysis-compare-expenses" class="analysis-compare-slot" hidden aria-hidden="true"></div>
                 <div class="card reports-calendar-card">
                     <div class="reports-calendar-header">
                         <div id="reports-calendar-nav" class="reports-calendar-nav">
@@ -989,6 +988,7 @@
             </div>
 
             <div id="analysis-section-advanced" class="analysis-section hidden">
+                <div id="analysis-compare-advanced" class="analysis-compare-slot" hidden aria-hidden="true"></div>
                 <div class="card reports-months-card">
                     <h2 class="dashboard-section-title">Trend wydatków</h2>
                     <div class="reports-bar-chart-wrap">
@@ -1052,6 +1052,7 @@
             </div>
 
             <div id="analysis-section-assets" class="analysis-section hidden">
+                <div id="analysis-compare-assets" class="analysis-compare-slot" hidden aria-hidden="true"></div>
                 <div class="card hero-card reports-assets-hero-card">
                     <div class="hero-label">Wartość majątku</div>
                     <div id="reports-assets-hero-total" class="hero-balance">—</div>
@@ -1110,7 +1111,7 @@
 
                 <div class="card">
                     <h2>Historia majątku</h2>
-                    <p class="reports-hint">Snapshoty miesięczne — zapisują się automatycznie przy zmianie miesiąca. Trend net worth wymaga co najmniej 2 miesięcy danych.</p>
+                    <p class="reports-hint">Snapshoty miesięczne — zapisują się automatycznie przy zmianie miesiąca. Trend wartości netto wymaga co najmniej 2 miesięcy danych.</p>
                         <button type="button" class="btn-outline assets-snapshot-btn" onclick="saveAssetSnapshotNow()">Zapisz stan teraz</button>
                     <div id="reports-assets-snapshots-list" class="assets-snapshots-list"></div>
                 </div>
@@ -1131,6 +1132,7 @@
             </div>
 
             <div id="analysis-section-debts" class="analysis-section hidden">
+                <div id="analysis-compare-debts" class="analysis-compare-slot" hidden aria-hidden="true"></div>
                 <div class="card hero-card reports-debts-hero-card">
                     <div class="hero-label">Zadłużenie</div>
                     <div id="reports-debts-hero-total" class="hero-balance">—</div>

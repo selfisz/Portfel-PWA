@@ -82,7 +82,6 @@ function attachHorizontalSwipe(el, { onSwipeLeft, onSwipeRight, threshold = 56, 
 }
 
 function shiftAnalysisSection(delta) {
-    if (reportsPeriodMode === 'compare') return;
     setAnalysisSection(shiftArrayIndex(ANALYSIS_SECTIONS, analysisSection, delta));
 }
 
@@ -102,13 +101,18 @@ function exitCompareMode() {
 
 function updateAnalysisCompareChrome(ctx) {
     const isCompare = ctx?.mode === 'compare';
-    document.getElementById('analysis-tab-grid')?.classList.toggle('hidden', isCompare);
-    document.getElementById('analysis-sections-body')?.classList.toggle('hidden', isCompare);
-    document.getElementById('analysis-compare-report')?.classList.toggle('hidden', !isCompare);
+    document.getElementById('analysis-compare-banner')?.classList.toggle('hidden', !isCompare);
+    document.getElementById('analysis-sections-body')?.classList.toggle('is-compare', isCompare);
+    ANALYSIS_SECTIONS.forEach((section) => {
+        const slot = document.getElementById(`analysis-compare-${section}`);
+        if (!slot) return;
+        slot.hidden = !isCompare;
+        slot.setAttribute('aria-hidden', isCompare ? 'false' : 'true');
+    });
 
     const rangeEl = document.getElementById('analysis-compare-banner-range');
     if (rangeEl && isCompare && ctx.periodA && ctx.periodB) {
-        rangeEl.textContent = `${formatTxDate(ctx.periodA.start)} – ${formatTxDate(ctx.periodA.end)} vs ${formatTxDate(ctx.periodB.start)} – ${formatTxDate(ctx.periodB.end)}`;
+        rangeEl.textContent = ctx.compareBanner || getComparePeriodLabels(ctx).banner;
     } else if (rangeEl) {
         rangeEl.textContent = '';
     }
@@ -306,7 +310,7 @@ function updateSameMonthCompareHint() {
     const prevMonthVal = `${year - 1}-${String(month).padStart(2, '0')}`;
     const a = getMonthBoundsFromValue(prevMonthVal);
     const b = getMonthBoundsFromValue(monthVal);
-    hint.textContent = `Okres A: ${formatTxDate(a.start)} – ${formatTxDate(a.end)}`;
+    hint.textContent = `${formatComparePeriodLabel(a.start, a.end)} vs ${formatComparePeriodLabel(b.start, b.end)}`;
 }
 
 function populateCompareYearSelects() {
@@ -405,7 +409,7 @@ function updateReportsPeriodUI(ctx) {
     }
     if (summaryEl && ctx) {
         if (ctx.mode === 'compare' && ctx.periodA && ctx.periodB) {
-            summaryEl.textContent = `${formatTxDate(ctx.periodA.start)} – ${formatTxDate(ctx.periodA.end)} vs ${formatTxDate(ctx.periodB.start)} – ${formatTxDate(ctx.periodB.end)}`;
+            summaryEl.textContent = ctx.compareBanner || getComparePeriodLabels(ctx).banner;
         } else {
             summaryEl.textContent = `Wyświetlane dane: ${ctx.label}`;
         }
@@ -431,6 +435,69 @@ function formatMonthLabel(monthValue) {
     const [y, m] = monthValue.split('-').map(Number);
     const label = new Date(y, m - 1, 1).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
     return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function isFullMonthRange(start, end) {
+    if (!start || !end || start.slice(0, 7) !== end.slice(0, 7)) return false;
+    const [year, month] = start.split('-').map(Number);
+    const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+    const monthEnd = localIsoDate(new Date(year, month, 0));
+    return start === monthStart && end === monthEnd;
+}
+
+function isFullYearRange(start, end) {
+    if (!start || !end || start.slice(0, 4) !== end.slice(0, 4)) return false;
+    const year = start.slice(0, 4);
+    return start === `${year}-01-01` && end === `${year}-12-31`;
+}
+
+function formatComparePeriodLabel(start, end) {
+    if (!start || !end) return '—';
+    if (isFullYearRange(start, end)) return start.slice(0, 4);
+    if (isFullMonthRange(start, end)) return formatMonthLabel(start.slice(0, 7));
+    if (start === end) {
+        return new Date(`${start}T12:00:00`).toLocaleDateString('pl-PL', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        });
+    }
+
+    const startDate = new Date(`${start}T12:00:00`);
+    const endDate = new Date(`${end}T12:00:00`);
+
+    if (start.slice(0, 7) === end.slice(0, 7)) {
+        const endParts = endDate.toLocaleDateString('pl-PL', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        }).split(' ');
+        return `${startDate.getDate()}–${endParts[0]} ${endParts[1]} ${endParts[2]}`;
+    }
+
+    if (start.slice(0, 4) === end.slice(0, 4)) {
+        const startPart = startDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' });
+        const endPart = endDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
+        return `${startPart} – ${endPart}`;
+    }
+
+    const startPart = startDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' });
+    const endPart = endDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' });
+    return `${startPart} – ${endPart}`;
+}
+
+function getComparePeriodLabels(ctx) {
+    const labelA = ctx?.periodA?.label || formatComparePeriodLabel(ctx?.periodA?.start, ctx?.periodA?.end);
+    const labelB = ctx?.periodB?.label || formatComparePeriodLabel(ctx?.periodB?.start, ctx?.periodB?.end);
+    return { labelA, labelB, banner: `${labelA} vs ${labelB}` };
+}
+
+function attachComparePeriodLabels(ctx) {
+    if (!ctx?.periodA || !ctx?.periodB) return ctx;
+    ctx.periodA.label = formatComparePeriodLabel(ctx.periodA.start, ctx.periodA.end);
+    ctx.periodB.label = formatComparePeriodLabel(ctx.periodB.start, ctx.periodB.end);
+    ctx.compareBanner = `${ctx.periodA.label} vs ${ctx.periodB.label}`;
+    return ctx;
 }
 
 function onReportsMonthChange() {
@@ -461,19 +528,29 @@ function syncReportsCalendarFromContext(ctx) {
 function setAnalysisSection(section) {
     section = normalizeAnalysisSection(section);
     if (!ANALYSIS_SECTIONS.includes(section)) return;
-    if (reportsPeriodMode === 'compare') return;
     analysisSection = section;
-    try { localStorage.setItem(ANALYSIS_SECTION_KEY, section); } catch { /* ignore */ }
+    if (reportsPeriodMode !== 'compare') {
+        try { localStorage.setItem(ANALYSIS_SECTION_KEY, section); } catch { /* ignore */ }
+    }
 
     ANALYSIS_SECTIONS.forEach((id) => {
         document.getElementById(`analysis-section-${id}`)?.classList.toggle('hidden', id !== section);
         document.getElementById(`btn-analysis-${id}`)?.classList.toggle('active', id === section);
     });
 
-    if (reportsLastCtx) {
+    if (reportsPeriodMode === 'compare') {
+        resizeCompareSectionCharts(section);
+    } else if (reportsLastCtx) {
         renderAnalysisSectionContent(section, reportsLastCtx, reportsLastSavingsRate);
     }
     resizeAnalysisSectionCharts(section);
+}
+
+function resizeCompareSectionCharts(section) {
+    requestAnimationFrame(() => {
+        if (section === 'expenses') reportsCompareChartInstance?.resize();
+        if (section === 'assets') reportsCompareWealthChartInstance?.resize();
+    });
 }
 
 function resizeAnalysisSectionCharts(section) {
@@ -657,14 +734,14 @@ function getReportsPeriodContext() {
         const bEnd = document.getElementById('reports-compare-b-end')?.value;
         const periodA = getTransactionsInRange(aStart, aEnd);
         const periodB = getTransactionsInRange(bStart, bEnd);
-        return {
+        return attachComparePeriodLabels({
             mode: 'compare',
             period: 'compare',
             label: 'Porównanie okresów',
             periodTx: periodA,
             periodA: { start: aStart, end: aEnd, tx: periodA },
             periodB: { start: bStart, end: bEnd, tx: periodB }
-        };
+        });
     }
 
     if (reportsPeriodMode === 'month') {
@@ -746,30 +823,38 @@ function formatComparePct(curr, prev) {
     return `${pct >= 0 ? '+' : ''}${pct}%`;
 }
 
-function buildCompareDailyStatsHtml(ctx, summaryA, summaryB) {
-    const daysA = getPeriodInclusiveDays(ctx.periodA.start, ctx.periodA.end);
-    const daysB = getPeriodInclusiveDays(ctx.periodB.start, ctx.periodB.end);
-    const dailyExpenseA = summaryA.expense / daysA;
-    const dailyExpenseB = summaryB.expense / daysB;
-    const dailyIncomeA = summaryA.income / daysA;
-    const dailyIncomeB = summaryB.income / daysB;
-    return `<div class="compare-daily-grid">
-        <div class="compare-daily-item">
-            <span class="label">Śr. dzienna wydatków</span>
-            <strong class="expense">${formatPlnAmount(dailyExpenseA)}</strong>
-            <span class="compare-daily-vs">→</span>
-            <strong class="expense">${formatPlnAmount(dailyExpenseB)}</strong>
-            <em>${formatCompareDelta(dailyExpenseB, dailyExpenseA)}</em>
-        </div>
-        <div class="compare-daily-item">
-            <span class="label">Śr. dzienna wpływów</span>
-            <strong class="income">${formatPlnAmount(dailyIncomeA)}</strong>
-            <span class="compare-daily-vs">→</span>
-            <strong class="income">${formatPlnAmount(dailyIncomeB)}</strong>
-            <em>${formatCompareDelta(dailyIncomeB, dailyIncomeA)}</em>
-        </div>
-        <p class="reports-hint compare-days-hint">Okres A: ${daysA} dni · Okres B: ${daysB} dni</p>
+function buildComparePctEm(curr, prev) {
+    return `<em class="compare-stat-pct">${formatComparePct(curr, prev)}</em>`;
+}
+
+function buildCompareStatRow(label, amount, options = {}) {
+    const { kind = '', pct = '', raw = false } = options;
+    const kindClass = kind ? ` ${kind}` : '';
+    const display = raw ? amount : formatPlnAmount(amount);
+    const pctCell = pct || '<em class="compare-stat-pct"></em>';
+    return `<div class="compare-stat">
+        <span class="compare-stat-label">${label}</span>
+        <strong class="compare-stat-amt${kindClass}">${display}</strong>
+        ${pctCell}
     </div>`;
+}
+
+function buildComparePeriodStack(labelA, labelB, firstHtml, secondHtml, extraClass = '') {
+    return `<div class="compare-stack${extraClass ? ` ${extraClass}` : ''}">
+        <div class="compare-col">
+            <div class="compare-col-label">${escapeHtml(labelA)}</div>
+            ${firstHtml}
+        </div>
+        <div class="compare-col">
+            <div class="compare-col-label">${escapeHtml(labelB)}</div>
+            ${secondHtml}
+        </div>
+    </div>`;
+}
+
+/** @deprecated alias — używaj buildComparePeriodStack */
+function buildComparePeriodGrid(labelA, labelB, firstHtml, secondHtml, extraClass = '') {
+    return buildComparePeriodStack(labelA, labelB, firstHtml, secondHtml, extraClass);
 }
 
 function buildCompareCategoryMoversHtml(movers) {
@@ -787,7 +872,6 @@ function buildCompareCategoryMoversHtml(movers) {
         </div>`;
     }).join('');
     return `<div class="compare-movers-section">
-        <h2 class="compare-report-heading">Wydatki</h2>
         <h3 class="compare-subtitle">Największe zmiany kategorii</h3>
         ${rows}
     </div>`;
@@ -813,32 +897,42 @@ function buildCompareWealthHtml(ctx) {
     if (typeof buildCompareWealthSummary !== 'function') return '';
     const wealth = buildCompareWealthSummary(ctx.periodA.end, ctx.periodB.end);
     if (!wealth) {
-        return `<h3 class="compare-subtitle">Majątek i zobowiązania</h3>
-            <p class="reports-hint">Brak snapshotów majątku dla wybranych okresów. Odwiedź zakładkę Majątek — snapshoty zapisują się automatycznie co miesiąc.</p>`;
+        return `<p class="reports-hint">Brak snapshotów majątku dla wybranych okresów. Odwiedź zakładkę Majątek — snapshoty zapisują się automatycznie co miesiąc.</p>`;
     }
 
+    const { labelA, labelB } = getComparePeriodLabels(ctx);
     const debtDeltaLabel = wealth.deltaDebt <= 0 ? 'Spadek zobowiązań' : 'Wzrost zobowiązań';
     const debtDeltaClass = wealth.deltaDebt <= 0 ? 'income' : 'expense';
+    const netDeltaClass = wealth.deltaNetWorth >= 0 ? 'income' : 'expense';
 
-    return `<h2 class="compare-report-heading">Majątek i zobowiązania</h2>
-        <p class="reports-hint compare-wealth-intro">Stan na koniec każdego okresu porównania.</p>
-        <div class="compare-wealth-delta-grid">
-            <div class="compare-wealth-delta compare-wealth-delta--assets">
+    const periodStats = (side, ref = null) => {
+        const w = side === 'a' ? wealth.a : wealth.b;
+        const pct = (curr, prev) => (ref ? buildComparePctEm(curr, prev) : '');
+        const r = ref ? wealth.a : null;
+        return `
+            ${buildCompareStatRow('Majątek', w.assets, { pct: r ? pct(w.assets, r.assets) : '' })}
+            ${buildCompareStatRow('Zobowiązania', w.debt, { kind: 'expense', pct: r ? pct(w.debt, r.debt) : '' })}
+            ${buildCompareStatRow('Kredyty', w.loanDebt, { kind: 'expense', pct: r ? pct(w.loanDebt, r.loanDebt) : '' })}
+            ${buildCompareStatRow('Karty', w.cardDebt, { kind: 'expense', pct: r ? pct(w.cardDebt, r.cardDebt) : '' })}
+            ${buildCompareStatRow(NET_WORTH_LABEL, w.netWorth, { pct: r ? pct(w.netWorth, r.netWorth) : '' })}`;
+    };
+
+    return `<p class="reports-hint compare-wealth-intro">Stan na koniec każdego okresu porównania.</p>
+        <div class="compare-wealth-summary">
+            <div class="compare-wealth-summary-item">
                 <span class="label">Zmiana majątku</span>
                 <strong class="${wealth.deltaAssets >= 0 ? 'income' : 'expense'}">${formatCompareSignedDelta(wealth.deltaAssets)}</strong>
-                <span class="compare-wealth-range">${formatPlnAmount(wealth.a.assets)} → ${formatPlnAmount(wealth.b.assets)}</span>
             </div>
-            <div class="compare-wealth-delta compare-wealth-delta--debt">
+            <div class="compare-wealth-summary-item">
                 <span class="label">${debtDeltaLabel}</span>
                 <strong class="${debtDeltaClass}">${formatCompareSignedDelta(Math.abs(wealth.deltaDebt))}</strong>
-                <span class="compare-wealth-range">${formatPlnAmount(wealth.a.debt)} → ${formatPlnAmount(wealth.b.debt)}</span>
             </div>
-            <div class="compare-wealth-delta compare-wealth-delta--net">
-                <span class="label">Zmiana net worth</span>
-                <strong class="${wealth.deltaNetWorth >= 0 ? 'income' : 'expense'}">${formatCompareSignedDelta(wealth.deltaNetWorth)}</strong>
-                <span class="compare-wealth-range">${formatPlnAmount(wealth.a.netWorth)} → ${formatPlnAmount(wealth.b.netWorth)}</span>
+            <div class="compare-wealth-summary-item">
+                <span class="label">Zmiana ${NET_WORTH_LABEL.toLowerCase()}</span>
+                <strong class="${netDeltaClass}">${formatCompareSignedDelta(wealth.deltaNetWorth)}</strong>
             </div>
         </div>
+        ${buildComparePeriodStack(labelA, labelB, periodStats('a'), periodStats('b', true), 'compare-stack--wealth')}
         <div class="compare-chart-wrap compare-wealth-chart-wrap">
             <canvas id="reportsCompareWealthChart" aria-label="Wykres zmian majątku i zobowiązań"></canvas>
         </div>
@@ -872,7 +966,7 @@ function renderReportsCompareWealthChart(ctx) {
     reportsCompareWealthChartInstance = new Chart(canvas.getContext('2d'), {
         type: 'bar',
         data: {
-            labels: ['Majątek', 'Zobowiązania', 'Net worth'],
+            labels: ['Majątek', 'Zobowiązania', NET_WORTH_LABEL],
             datasets: [{
                 label: 'Zmiana A → B',
                 data: deltas,
@@ -909,20 +1003,22 @@ function renderReportsCompareChart(ctx) {
     options.aspectRatio = 1.55;
     options.plugins.legend.position = 'bottom';
 
+    const { labelA, labelB } = getComparePeriodLabels(ctx);
+
     reportsCompareChartInstance = new Chart(canvas.getContext('2d'), {
         type: 'bar',
         data: {
             labels: categories,
             datasets: [
                 {
-                    label: 'Okres A',
+                    label: labelA,
                     data: categories.map((name) => mapA[name] || 0),
                     backgroundColor: theme.prevYearColor,
                     borderRadius: 4,
                     maxBarThickness: 28
                 },
                 {
-                    label: 'Okres B',
+                    label: labelB,
                     data: categories.map((name) => mapB[name] || 0),
                     backgroundColor: theme.expenseColor,
                     borderRadius: 4,
@@ -934,63 +1030,140 @@ function renderReportsCompareChart(ctx) {
     });
 }
 
+function setCompareSlotHtml(section, html) {
+    const slot = document.getElementById(`analysis-compare-${section}`);
+    if (slot) slot.innerHTML = html;
+}
+
+function clearCompareSlots() {
+    ANALYSIS_SECTIONS.forEach((section) => setCompareSlotHtml(section, ''));
+}
+
+function buildCompareDetailRow(label, valA, valB, kind = 'amount') {
+    const isPct = kind === 'pct';
+    const fmt = (v) => (isPct ? `${v}%` : formatPlnAmount(v));
+    const pct = formatComparePct(valB, valA);
+    const valueClass = kind === 'income' ? 'income' : kind === 'expense' ? 'expense' : '';
+    return `<div class="compare-detail-row">
+        <span class="compare-detail-metric">${label}</span>
+        <span class="compare-detail-val">${fmt(valA)}</span>
+        <span class="compare-detail-val compare-detail-val--b ${valueClass}">${fmt(valB)}<em>${pct}</em></span>
+    </div>`;
+}
+
+function buildCompareOverviewHtml(ctx, summaryA, summaryB) {
+    const a = summaryA;
+    const b = summaryB;
+    const { labelA, labelB } = getComparePeriodLabels(ctx);
+    const daysA = getPeriodInclusiveDays(ctx.periodA.start, ctx.periodA.end);
+    const daysB = getPeriodInclusiveDays(ctx.periodB.start, ctx.periodB.end);
+    const dailyExpenseA = a.expense / daysA;
+    const dailyExpenseB = b.expense / daysB;
+    const dailyIncomeA = a.income / daysA;
+    const dailyIncomeB = b.income / daysB;
+
+    const balanceDiff = b.balance - a.balance;
+    const balanceDiffSign = balanceDiff >= 0 ? '+' : '−';
+    const balanceDiffClass = balanceDiff >= 0 ? 'income' : 'expense';
+
+    const stat = (label, val, kind = '', raw = false) => buildCompareStatRow(label, val, { kind, raw });
+    const statPct = (label, val, ref, kind = '', asPercent = false) => {
+        const display = asPercent ? `${val}%` : val;
+        return buildCompareStatRow(label, display, {
+            kind,
+            raw: asPercent,
+            pct: buildComparePctEm(val, ref)
+        });
+    };
+
+    return `<div class="card compare-overview-card">
+            <div class="compare-overview-header">
+                <h2 class="compare-overview-delta ${balanceDiffClass}">${balanceDiffSign}${formatPlnAmount(Math.abs(balanceDiff))}</h2>
+                <p class="compare-overview-delta-label">zmiana bilansu · ${escapeHtml(labelA)} vs ${escapeHtml(labelB)}</p>
+            </div>
+            <div class="compare-stack compare-stack--overview">
+                <div class="compare-col">
+                    <div class="compare-col-label">${escapeHtml(labelA)}</div>
+                    ${stat('Bilans', a.balance)}
+                    ${stat('Wpływy', a.income, 'income')}
+                    ${stat('Wydatki', a.expense, 'expense')}
+                    ${stat('Oszcz.', `${a.savings}%`, '', true)}
+                    ${stat('Wyd./dzień', dailyExpenseA, 'expense')}
+                    ${stat('Wpł./dzień', dailyIncomeA, 'income')}
+                </div>
+                <div class="compare-col">
+                    <div class="compare-col-label">${escapeHtml(labelB)}</div>
+                    ${statPct('Bilans', b.balance, a.balance)}
+                    ${statPct('Wpływy', b.income, a.income, 'income')}
+                    ${statPct('Wydatki', b.expense, a.expense, 'expense')}
+                    ${statPct('Oszcz.', b.savings, a.savings, '', true)}
+                    ${statPct('Wyd./dzień', dailyExpenseB, dailyExpenseA, 'expense')}
+                    ${statPct('Wpł./dzień', dailyIncomeB, dailyIncomeA, 'income')}
+                </div>
+            </div>
+            <p class="reports-hint compare-days-hint">${escapeHtml(labelA)}: ${daysA} dni · ${escapeHtml(labelB)}: ${daysB} dni</p>
+        </div>`;
+}
+
+function buildCompareExpensesHtml(ctx, movers) {
+    return `<div class="card dashboard-panel">
+            ${buildCompareCategoryMoversHtml(movers)}
+        </div>
+        <div class="card chart-card dashboard-panel">
+            <h2 class="dashboard-section-title">Wydatki wg kategorii</h2>
+            <div class="compare-chart-wrap">
+                <canvas id="reportsCompareChart" aria-label="Wykres porównania wydatków wg kategorii"></canvas>
+            </div>
+        </div>
+        <div class="card dashboard-panel">
+            <h2 class="dashboard-section-title">Transakcje</h2>
+            ${buildCompareTransactionInsightsHtml(ctx)}
+        </div>`;
+}
+
+function buildCompareAssetsHtml(ctx) {
+    const wealthInner = buildCompareWealthHtml(ctx);
+    if (!wealthInner.trim()) return '';
+    return `<div class="card dashboard-panel">
+            <h2 class="dashboard-section-title">Majątek i zobowiązania</h2>
+            ${wealthInner}
+        </div>`;
+}
+
+function buildCompareDebtsTabHtml(ctx) {
+    return `<div class="card dashboard-panel debts-panel-card">
+            ${buildDebtCompareHtml(ctx)}
+        </div>`;
+}
+
+function buildCompareAdvancedHtml() {
+    return `<div class="card dashboard-panel">
+            <h2 class="dashboard-section-title">Więcej</h2>
+            <p class="reports-hint">W trybie porównania dodatkowe wykresy i analizy (trendy, przepływy, dywersyfikacja) nie są dostępne. Przełącz zakładki powyżej, aby zobaczyć porównanie okresów A i B.</p>
+        </div>`;
+}
+
 function renderReportsCompare(ctx) {
-    const body = document.getElementById('analysis-compare-report-body');
-    if (!body) return;
-    const visible = ctx.mode === 'compare';
-    if (!visible) {
-        body.innerHTML = '';
+    const isCompare = ctx.mode === 'compare';
+    if (!isCompare) {
+        clearCompareSlots();
         destroyReportsCompareCharts();
         return;
     }
 
-    const a = summarizePeriod(ctx.periodA.tx);
-    const b = summarizePeriod(ctx.periodB.tx);
+    const summaryA = summarizePeriod(ctx.periodA.tx);
+    const summaryB = summarizePeriod(ctx.periodB.tx);
     const movers = buildCompareCategoryMovers(ctx.periodA.tx, ctx.periodB.tx);
 
-    body.innerHTML = `
-        ${buildCompareTocHtml()}
-        <div class="card compare-report-section" id="compare-section-summary">
-            <h2 class="compare-report-heading">Podsumowanie</h2>
-            <div class="compare-grid">
-                <div class="compare-col">
-                    <div class="compare-col-label">Okres A</div>
-                    <div class="compare-dates">${formatTxDate(ctx.periodA.start)} – ${formatTxDate(ctx.periodA.end)}</div>
-                    <div class="compare-stat"><span>Wpływy</span><strong class="income">${formatPlnAmount(a.income)}</strong></div>
-                    <div class="compare-stat"><span>Wydatki</span><strong class="expense">${formatPlnAmount(a.expense)}</strong></div>
-                    <div class="compare-stat"><span>Bilans</span><strong>${formatPlnAmount(a.balance)}</strong></div>
-                    <div class="compare-stat"><span>Oszczędności</span><strong>${a.savings}%</strong></div>
-                </div>
-                <div class="compare-col">
-                    <div class="compare-col-label">Okres B</div>
-                    <div class="compare-dates">${formatTxDate(ctx.periodB.start)} – ${formatTxDate(ctx.periodB.end)}</div>
-                    <div class="compare-stat"><span>Wpływy</span><strong class="income">${formatPlnAmount(b.income)}</strong><em>${formatComparePct(b.income, a.income)}</em></div>
-                    <div class="compare-stat"><span>Wydatki</span><strong class="expense">${formatPlnAmount(b.expense)}</strong><em>${formatComparePct(b.expense, a.expense)}</em></div>
-                    <div class="compare-stat"><span>Bilans</span><strong>${formatPlnAmount(b.balance)}</strong><em>${formatComparePct(b.balance, a.balance)}</em></div>
-                    <div class="compare-stat"><span>Oszczędności</span><strong>${b.savings}%</strong><em>${formatComparePct(b.savings, a.savings)}</em></div>
-                </div>
-            </div>
-            ${buildCompareDailyStatsHtml(ctx, a, b)}
-        </div>
-        <div class="card compare-report-section" id="compare-section-wealth">
-            ${buildCompareWealthHtml(ctx)}
-        </div>
-        <div class="card compare-report-section" id="compare-section-categories">
-            ${buildCompareCategoryMoversHtml(movers)}
-            <div class="compare-chart-wrap">
-                <h3 class="compare-subtitle">Wydatki wg kategorii</h3>
-                <canvas id="reportsCompareChart" aria-label="Wykres porównania wydatków wg kategorii"></canvas>
-            </div>
-        </div>
-        <div class="card compare-report-section" id="compare-section-transactions">
-            ${buildCompareTransactionInsightsHtml(ctx)}
-        </div>
-        <div class="card compare-report-section" id="compare-section-debts">
-            ${buildDebtCompareHtml(ctx)}
-        </div>`;
+    setCompareSlotHtml('overview', buildCompareOverviewHtml(ctx, summaryA, summaryB));
+    setCompareSlotHtml('expenses', buildCompareExpensesHtml(ctx, movers));
+    setCompareSlotHtml('assets', buildCompareAssetsHtml(ctx));
+    setCompareSlotHtml('debts', buildCompareDebtsTabHtml(ctx));
+    setCompareSlotHtml('advanced', buildCompareAdvancedHtml());
 
     renderReportsCompareWealthChart(ctx);
     renderReportsCompareChart(ctx);
+    resizeCompareSectionCharts(analysisSection);
 }
 
 function getDebtPaymentsForBounds(start, end, txList) {
@@ -1015,8 +1188,10 @@ function formatCompareTxHighlight(t, clickable = true) {
         : ' class="compare-tx-body"';
     return `<span${clickAttrs}>
         <span class="compare-tx-title">${escapeHtml(title)}</span>
-        <span class="compare-tx-meta">${formatTxDate(t.date)} · ${escapeHtml(t.mainCategory)}</span>
-        <strong class="compare-tx-amount ${t.type === 'income' ? 'income' : 'expense'}">${formatPlnAmount(t.amount)}</strong>
+        <span class="compare-tx-line">
+            <span class="compare-tx-meta">${formatTxDate(t.date)}</span>
+            <strong class="compare-tx-amount ${t.type === 'income' ? 'income' : 'expense'}">${formatPlnAmount(t.amount)}</strong>
+        </span>
     </span>`;
 }
 
@@ -1093,19 +1268,6 @@ function buildCompareTopTxListHtml(items, emptyLabel) {
     }).join('');
 }
 
-function buildCompareTocHtml() {
-    const items = [
-        { id: 'compare-section-summary', label: 'Podsumowanie' },
-        { id: 'compare-section-wealth', label: 'Majątek' },
-        { id: 'compare-section-categories', label: 'Kategorie' },
-        { id: 'compare-section-transactions', label: 'Transakcje' },
-        { id: 'compare-section-debts', label: 'Długi' }
-    ];
-    return `<nav class="compare-report-toc" aria-label="Spis treści raportu">
-        ${items.map((item) => `<a class="compare-report-toc-link" href="#${item.id}">${item.label}</a>`).join('')}
-    </nav>`;
-}
-
 function getExtremeTransaction(txList, type, mode = 'max', excludeDebt = false) {
     let filtered = txList.filter((t) => t.type === type);
     if (excludeDebt && type === 'expense') {
@@ -1151,7 +1313,42 @@ function buildCompareRepeatingExpenses(txA, txB, limit = 6) {
         .slice(0, limit);
 }
 
+function buildCompareExtremeBlock(label, tx) {
+    return `<div class="compare-extreme-block">
+        <span class="compare-extreme-label">${label}</span>
+        ${formatCompareTxHighlight(tx)}
+    </div>`;
+}
+
+function buildCompareExclusiveListHtml(items, emptyLabel) {
+    if (!items.length) {
+        return `<p class="reports-hint compare-exclusive-empty">${emptyLabel}</p>`;
+    }
+    return items.slice(0, 6).map((row) => `<div class="compare-mini-row">
+        <span class="compare-mini-row-name">${escapeHtml(row.label)}</span>
+        <strong class="compare-mini-row-amt expense">${formatPlnAmount(row.total)}</strong>
+        <em class="compare-mini-row-extra">${row.count}×</em>
+    </div>`).join('');
+}
+
+function buildCompareRepeatingColHtml(rows, side) {
+    if (!rows.length) {
+        return '<p class="reports-hint compare-exclusive-empty">Brak powtarzających się pozycji.</p>';
+    }
+    return rows.map((row) => {
+        const total = side === 'A' ? row.totalA : row.totalB;
+        const count = side === 'A' ? row.countA : row.countB;
+        const pct = side === 'B' ? buildComparePctEm(row.totalB, row.totalA) : '';
+        return `<div class="compare-mini-row">
+            <span class="compare-mini-row-name">${escapeHtml(row.label)}</span>
+            <strong class="compare-mini-row-amt expense">${formatPlnAmount(total)}</strong>
+            <span class="compare-mini-row-tail">${pct}<em class="compare-mini-row-extra">${count}×</em></span>
+        </div>`;
+    }).join('');
+}
+
 function buildCompareTransactionInsightsHtml(ctx) {
+    const { labelA, labelB } = getComparePeriodLabels(ctx);
     const txA = ctx.periodA.tx;
     const txB = ctx.periodB.tx;
     const mapA = getExpenseGroupTotals(txA);
@@ -1169,118 +1366,83 @@ function buildCompareTransactionInsightsHtml(ctx) {
     const topIncomeBExt = getExtremeTransaction(txB, 'income', 'max');
     const maxExpenseA = getExtremeTransaction(txA, 'expense', 'max', true);
     const maxExpenseB = getExtremeTransaction(txB, 'expense', 'max', true);
-    const minExpenseA = getExtremeTransaction(txA, 'expense', 'min', true);
-    const minExpenseB = getExtremeTransaction(txB, 'expense', 'min', true);
     const repeating = buildCompareRepeatingExpenses(txA, txB);
 
-    const statsHtml = `
-        <div class="compare-tx-stats-grid">
-            <div class="compare-tx-stat">
-                <span class="label">Mediana wydatku</span>
-                <div class="compare-tx-stat-values">
-                    <span>A: <strong>${medianA !== null ? formatPlnAmount(medianA) : '—'}</strong></span>
-                    <span>B: <strong>${medianB !== null ? formatPlnAmount(medianB) : '—'}</strong></span>
-                </div>
-            </div>
-            <div class="compare-tx-stat">
-                <span class="label">Dni bez wydatków</span>
-                <div class="compare-tx-stat-values">
-                    <span>A: <strong>${zeroDaysA.zero}</strong> / ${zeroDaysA.total}</span>
-                    <span>B: <strong>${zeroDaysB.zero}</strong> / ${zeroDaysB.total}</span>
-                </div>
-            </div>
-        </div>
-        <p class="reports-hint compare-tx-stats-hint">Mediana liczona z pojedynczych wydatków (bez spłat długów).</p>`;
+    const statsHtml = buildComparePeriodGrid(
+        labelA,
+        labelB,
+        `<div class="compare-tx-stat-stack">
+            ${buildCompareStatRow('Mediana', medianA !== null ? medianA : '—', { raw: medianA === null })}
+            ${buildCompareStatRow('Bez wydatków', `${zeroDaysA.zero}/${zeroDaysA.total}`, { raw: true })}
+        </div>`,
+        `<div class="compare-tx-stat-stack">
+            ${buildCompareStatRow('Mediana', medianB !== null ? medianB : '—', {
+                raw: medianB === null,
+                pct: medianA !== null && medianB !== null ? buildComparePctEm(medianB, medianA) : ''
+            })}
+            ${buildCompareStatRow('Bez wydatków', `${zeroDaysB.zero}/${zeroDaysB.total}`, {
+                raw: true,
+                pct: buildComparePctEm(zeroDaysB.zero, zeroDaysA.zero)
+            })}
+        </div>`,
+        'compare-stack--stats'
+    ) + `<p class="reports-hint compare-tx-stats-hint">Mediana liczona z pojedynczych wydatków (bez spłat długów).</p>`;
 
-    const extremesHtml = `
-        <h3 class="compare-subtitle">Ekstremy</h3>
-        <div class="compare-tx-grid">
-            <div class="compare-tx-item">
-                <span class="compare-tx-label">Najwyższy wpływ</span>
-                <div class="compare-tx-period"><span>A</span>${formatCompareTxHighlight(topIncomeAExt)}</div>
-                <div class="compare-tx-period"><span>B</span>${formatCompareTxHighlight(topIncomeBExt)}</div>
-            </div>
-            <div class="compare-tx-item">
-                <span class="compare-tx-label">Największy wydatek</span>
-                <div class="compare-tx-period"><span>A</span>${formatCompareTxHighlight(maxExpenseA)}</div>
-                <div class="compare-tx-period"><span>B</span>${formatCompareTxHighlight(maxExpenseB)}</div>
-            </div>
-            <div class="compare-tx-item">
-                <span class="compare-tx-label">Najmniejszy wydatek</span>
-                <div class="compare-tx-period"><span>A</span>${formatCompareTxHighlight(minExpenseA)}</div>
-                <div class="compare-tx-period"><span>B</span>${formatCompareTxHighlight(minExpenseB)}</div>
-            </div>
-        </div>`;
+    const extremesLeft = `
+        ${buildCompareExtremeBlock('Najwyższy wpływ', topIncomeAExt)}
+        ${buildCompareExtremeBlock('Największy wydatek', maxExpenseA)}`;
+    const extremesRight = `
+        ${buildCompareExtremeBlock('Najwyższy wpływ', topIncomeBExt)}
+        ${buildCompareExtremeBlock('Największy wydatek', maxExpenseB)}`;
+
+    const extremesHtml = `<h3 class="compare-subtitle">Ekstremy</h3>
+        ${buildComparePeriodStack(labelA, labelB, extremesLeft, extremesRight, 'compare-stack--extremes')}`;
 
     const topListsHtml = `
-        <div class="compare-top-tx-grid">
-            <div class="compare-top-tx-col">
-                <h3 class="compare-subtitle">Top 5 wpływów</h3>
-                <div class="compare-top-tx-block">
-                    <span class="compare-top-tx-block-label">Okres A</span>
-                    ${buildCompareTopTxListHtml(topIncomeA, 'Brak wpływów w okresie A.')}
-                </div>
-                <div class="compare-top-tx-block">
-                    <span class="compare-top-tx-block-label">Okres B</span>
-                    ${buildCompareTopTxListHtml(topIncomeB, 'Brak wpływów w okresie B.')}
-                </div>
-            </div>
-            <div class="compare-top-tx-col">
-                <h3 class="compare-subtitle">Top 5 wydatków</h3>
-                <div class="compare-top-tx-block">
-                    <span class="compare-top-tx-block-label">Okres A</span>
-                    ${buildCompareTopTxListHtml(topExpenseA, 'Brak wydatków w okresie A.')}
-                </div>
-                <div class="compare-top-tx-block">
-                    <span class="compare-top-tx-block-label">Okres B</span>
-                    ${buildCompareTopTxListHtml(topExpenseB, 'Brak wydatków w okresie B.')}
-                </div>
-            </div>
-        </div>`;
+        <h3 class="compare-subtitle">Top 5 wpływów</h3>
+        ${buildComparePeriodStack(
+            labelA,
+            labelB,
+            buildCompareTopTxListHtml(topIncomeA, `Brak wpływów (${labelA}).`),
+            buildCompareTopTxListHtml(topIncomeB, `Brak wpływów (${labelB}).`),
+            'compare-stack--top-tx'
+        )}
+        <h3 class="compare-subtitle">Top 5 wydatków</h3>
+        ${buildComparePeriodStack(
+            labelA,
+            labelB,
+            buildCompareTopTxListHtml(topExpenseA, `Brak wydatków (${labelA}).`),
+            buildCompareTopTxListHtml(topExpenseB, `Brak wydatków (${labelB}).`),
+            'compare-stack--top-tx'
+        )}`;
 
-    const exclusiveHtml = (onlyB.length || onlyA.length)
-        ? `<div class="compare-tx-exclusive">
+    const exclusiveHtml = `<div class="compare-tx-exclusive">
             <h3 class="compare-subtitle">Nowe i znikające pozycje</h3>
             <p class="reports-hint">Kategorie/pozycje wydatków obecne tylko w jednym okresie.</p>
-            ${onlyB.length ? `<div class="compare-tx-exclusive-block">
-                <span class="compare-tx-exclusive-label">Tylko w okresie B</span>
-                ${onlyB.slice(0, 6).map((row) => `<div class="compare-tx-exclusive-row">
-                    <span>${escapeHtml(row.label)}</span>
-                    <strong class="expense">${formatPlnAmount(row.total)}</strong>
-                    <em>${row.count}×</em>
-                </div>`).join('')}
-            </div>` : ''}
-            ${onlyA.length ? `<div class="compare-tx-exclusive-block">
-                <span class="compare-tx-exclusive-label">Tylko w okresie A</span>
-                ${onlyA.slice(0, 6).map((row) => `<div class="compare-tx-exclusive-row">
-                    <span>${escapeHtml(row.label)}</span>
-                    <strong class="expense">${formatPlnAmount(row.total)}</strong>
-                    <em>${row.count}×</em>
-                </div>`).join('')}
-            </div>` : ''}
-        </div>`
-        : '';
+            ${buildComparePeriodStack(
+                labelA,
+                labelB,
+                `<span class="compare-tx-exclusive-label">Tylko w tym okresie</span>${buildCompareExclusiveListHtml(onlyA, `Brak unikalnych pozycji (${labelA}).`)}`,
+                `<span class="compare-tx-exclusive-label">Tylko w tym okresie</span>${buildCompareExclusiveListHtml(onlyB, `Brak unikalnych pozycji (${labelB}).`)}`,
+                'compare-stack--exclusive'
+            )}
+        </div>`;
 
     const repeatingHtml = repeating.length
         ? `<div class="compare-tx-repeating">
             <h3 class="compare-subtitle">Powtarzające się wydatki</h3>
             <p class="reports-hint">Te same kategorie/pozycje w obu okresach (bez spłat długów).</p>
-            ${repeating.map((row) => {
-                const sign = row.diff >= 0 ? '+' : '−';
-                return `<div class="compare-tx-repeat-row">
-                    <div class="compare-tx-repeat-name">${escapeHtml(row.label)}</div>
-                    <div class="compare-tx-repeat-stats">
-                        <span>A: <strong>${formatPlnAmount(row.totalA)}</strong> (${row.countA}×)</span>
-                        <span>B: <strong>${formatPlnAmount(row.totalB)}</strong> (${row.countB}×)</span>
-                        <em>${sign}${formatPlnAmount(Math.abs(row.diff))}</em>
-                    </div>
-                </div>`;
-            }).join('')}
+            ${buildComparePeriodStack(
+                labelA,
+                labelB,
+                buildCompareRepeatingColHtml(repeating, 'A'),
+                buildCompareRepeatingColHtml(repeating, 'B'),
+                'compare-stack--repeating'
+            )}
         </div>`
         : '';
 
-    return `<h2 class="compare-report-heading">Transakcje</h2>
-        ${statsHtml}
+    return `${statsHtml}
         ${extremesHtml}
         ${topListsHtml}
         ${exclusiveHtml}
@@ -1288,25 +1450,24 @@ function buildCompareTransactionInsightsHtml(ctx) {
         <p class="reports-hint compare-tx-footnote">Kliknij transakcję, aby ją otworzyć.</p>`;
 }
 
-function buildDebtCompareDetailRow(name, amountA, amountB, deltaFn) {
+function buildDebtCompareDetailRow(name, amountA, amountB, labelA, labelB) {
     return `<div class="debt-compare-card">
         <div class="debt-compare-card-name">${name}</div>
-        <div class="debt-compare-card-stats">
-            <div><span class="label">Okres A</span><strong>${formatPlnAmount(amountA)}</strong></div>
-            <div><span class="label">Okres B</span><strong>${formatPlnAmount(amountB)}</strong></div>
-            <div><span class="label">Zmiana</span><em>${deltaFn(amountB, amountA)}</em></div>
-        </div>
+        ${buildComparePeriodStack(
+            labelA,
+            labelB,
+            buildCompareStatRow('Spłaty', amountA, { kind: 'expense' }),
+            buildCompareStatRow('Spłaty', amountB, { kind: 'expense', pct: buildComparePctEm(amountB, amountA) }),
+            'compare-stack--debt-detail'
+        )}
     </div>`;
 }
 
 function buildDebtCompareHtml(ctx) {
+    const { labelA, labelB } = getComparePeriodLabels(ctx);
     const debtA = getDebtPaymentsForBounds(ctx.periodA.start, ctx.periodA.end, ctx.periodA.tx);
     const debtB = getDebtPaymentsForBounds(ctx.periodB.start, ctx.periodB.end, ctx.periodB.tx);
-    const delta = (curr, prev) => {
-        if (!prev) return curr > 0 ? '+100%' : '0%';
-        const pct = Math.round(((curr - prev) / prev) * 100);
-        return `${pct >= 0 ? '+' : ''}${pct}%`;
-    };
+    const deltaPct = (curr, prev) => buildComparePctEm(curr, prev);
 
     const loanRows = getActiveLoans().map((loan) => {
         const name = escapeHtml(getLoanDisplayName(loan));
@@ -1317,7 +1478,7 @@ function buildDebtCompareHtml(ctx) {
             .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
             .reduce((s, t) => s + t.amount, 0);
         if (!a && !b) return '';
-        return buildDebtCompareDetailRow(name, a, b, delta);
+        return buildDebtCompareDetailRow(name, a, b, labelA, labelB);
     }).filter(Boolean).join('');
 
     const cardRows = getActiveCreditCards().map((card) => {
@@ -1329,7 +1490,7 @@ function buildDebtCompareHtml(ctx) {
             .filter((m) => m.cardId === card.id && m.type === 'repayment')
             .reduce((s, m) => s + m.amount, 0);
         if (!a && !b) return '';
-        return buildDebtCompareDetailRow(`${name} (karta)`, a, b, delta);
+        return buildDebtCompareDetailRow(`${name} (karta)`, a, b, labelA, labelB);
     }).filter(Boolean).join('');
 
     const detailRows = loanRows + cardRows;
@@ -1338,18 +1499,19 @@ function buildDebtCompareHtml(ctx) {
         : '';
 
     return `<div class="debt-compare-section">
-        <h2 class="compare-report-heading">Długi</h2>
         <h3 class="analysis-subsection-label">Spłaty długów</h3>
-        <div class="compare-grid compare-grid--debt">
+        <div class="compare-stack compare-stack--debt">
             <div class="compare-col">
-                <div class="compare-stat"><span>Razem spłaty</span><strong class="expense">${formatPlnAmount(debtA.total)}</strong></div>
-                <div class="compare-stat"><span>Raty kredytów</span><strong>${formatPlnAmount(debtA.loanPayments)}</strong></div>
-                <div class="compare-stat"><span>Spłaty kart</span><strong>${formatPlnAmount(debtA.cardRepayments)}</strong></div>
+                <div class="compare-col-label">${escapeHtml(labelA)}</div>
+                ${buildCompareStatRow('Razem spłaty', debtA.total, { kind: 'expense' })}
+                ${buildCompareStatRow('Raty kredytów', debtA.loanPayments)}
+                ${buildCompareStatRow('Spłaty kart', debtA.cardRepayments)}
             </div>
             <div class="compare-col">
-                <div class="compare-stat"><span>Razem spłaty</span><strong class="expense">${formatPlnAmount(debtB.total)}</strong><em>${delta(debtB.total, debtA.total)}</em></div>
-                <div class="compare-stat"><span>Raty kredytów</span><strong>${formatPlnAmount(debtB.loanPayments)}</strong><em>${delta(debtB.loanPayments, debtA.loanPayments)}</em></div>
-                <div class="compare-stat"><span>Spłaty kart</span><strong>${formatPlnAmount(debtB.cardRepayments)}</strong><em>${delta(debtB.cardRepayments, debtA.cardRepayments)}</em></div>
+                <div class="compare-col-label">${escapeHtml(labelB)}</div>
+                ${buildCompareStatRow('Razem spłaty', debtB.total, { kind: 'expense', pct: deltaPct(debtB.total, debtA.total) })}
+                ${buildCompareStatRow('Raty kredytów', debtB.loanPayments, { pct: deltaPct(debtB.loanPayments, debtA.loanPayments) })}
+                ${buildCompareStatRow('Spłaty kart', debtB.cardRepayments, { pct: deltaPct(debtB.cardRepayments, debtA.cardRepayments) })}
             </div>
         </div>
         ${detailBlock}
@@ -1918,6 +2080,8 @@ function renderPhase3Reports(ctx, savingsRate) {
 
     if (ctx.mode !== 'compare') {
         renderAnalysisSectionContent(analysisSection, ctx, savingsRate, { force: true });
+    } else {
+        resizeCompareSectionCharts(analysisSection);
     }
 
     const printEl = document.getElementById('reports-print-meta');

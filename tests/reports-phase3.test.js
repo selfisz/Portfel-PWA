@@ -233,6 +233,29 @@ describe('buildCompareCategoryMovers', () => {
   });
 });
 
+describe('formatComparePeriodLabel', () => {
+  it('zwraca nazwę miesiąca dla pełnego miesiąca', () => {
+    expect(formatComparePeriodLabel('2026-06-01', '2026-06-30')).toBe('Czerwiec 2026');
+    expect(formatComparePeriodLabel('2026-05-01', '2026-05-31')).toBe('Maj 2026');
+  });
+
+  it('zwraca rok dla pełnego roku', () => {
+    expect(formatComparePeriodLabel('2025-01-01', '2025-12-31')).toBe('2025');
+  });
+
+  it('zwraca zakres dni w tym samym miesiącu', () => {
+    expect(formatComparePeriodLabel('2026-06-10', '2026-06-20')).toBe('10–20 czerwca 2026');
+    expect(formatComparePeriodLabel('2026-05-15', '2026-05-30')).toBe('15–30 maja 2026');
+  });
+
+  it('zwraca zakres między miesiącami', () => {
+    const label = formatComparePeriodLabel('2026-05-28', '2026-06-05');
+    expect(label).toContain('28');
+    expect(label).toContain('5');
+    expect(label).toContain('2026');
+  });
+});
+
 describe('getExtremeTransaction', () => {
   it('zwraca najwyższy wpływ i największy wydatek', () => {
     const tx = [

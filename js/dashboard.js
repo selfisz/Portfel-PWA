@@ -894,11 +894,11 @@ function renderDashboardWealth() {
     el.innerHTML = `
         <div class="dashboard-wealth-grid">
             <div><span class="label">Majątek</span><strong class="income">${formatPlnAmount(assets)}</strong></div>
-            <div><span class="label">Net worth</span><strong style="color:${net >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatPlnAmount(net)}</strong></div>
+            <div><span class="label">${NET_WORTH_LABEL}</span><strong style="color:${net >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatPlnAmount(net)}</strong></div>
             <div><span class="label">Gotówka oper.</span><strong>${formatPlnAmount(operational)}</strong></div>
             <div><span class="label">Zobowiązania</span><strong class="expense">${formatPlnAmount(debt)}</strong></div>
         </div>
-        ${monthChange ? `<p class="dashboard-wealth-hint reports-hint">${monthChange.netWorth >= 0 ? '+' : ''}${formatPlnAmount(monthChange.netWorth)} net worth vs poprz. miesiąc</p>` : ''}`;
+        ${monthChange ? `<p class="dashboard-wealth-hint reports-hint">${monthChange.netWorth >= 0 ? '+' : ''}${formatPlnAmount(monthChange.netWorth)} ${NET_WORTH_LABEL.toLowerCase()} vs poprz. miesiąc</p>` : ''}`;
 }
 
 function renderDashboard() {

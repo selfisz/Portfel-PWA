@@ -306,14 +306,14 @@ function renderReportsNetWorth() {
             <div><span class="label">Gotówka (płynna)</span><strong>${formatPlnAmount(liquidCash)}</strong></div>
             <div><span class="label">Pokrycie kart gotówką</span><strong class="${cardCoverage !== null && cardCoverage < 100 ? 'expense' : 'income'}">${cardCoverage !== null ? `${cardCoverage}%` : '—'}</strong></div>
             <div><span class="label">Rezerwa (mies.)</span><strong>${runwayMonths !== null ? runwayMonths.toFixed(1) : '—'}</strong></div>
-            <div class="networth-total"><span class="label">Wartość netto</span><strong style="color:${net >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatPlnAmount(net)}</strong></div>
+            <div class="networth-total"><span class="label">${NET_WORTH_LABEL}</span><strong style="color:${net >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatPlnAmount(net)}</strong></div>
         </div>
         <p class="reports-hint reports-networth-hint">Rezerwa = gotówka operacyjna ÷ średnie miesięczne wydatki w wybranym okresie.</p>`;
 
     if (changeEl) {
         if (monthChange) {
             const sign = monthChange.netWorth >= 0 ? '+' : '';
-            changeEl.textContent = `Zmiana net worth vs poprzedni miesiąc: ${sign}${formatPlnAmount(monthChange.netWorth)}`;
+            changeEl.textContent = `Zmiana ${NET_WORTH_LABEL.toLowerCase()} vs poprzedni miesiąc: ${sign}${formatPlnAmount(monthChange.netWorth)}`;
             changeEl.classList.remove('hidden');
         } else {
             changeEl.classList.add('hidden');
@@ -502,7 +502,7 @@ function renderReportsAssetsDebtLink(aCtx) {
 
     el.innerHTML = `
         <div class="loan-report-grid">
-            <div><span class="label">Wartość netto</span><strong style="color:${net >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatPlnAmount(net)}</strong></div>
+            <div><span class="label">${NET_WORTH_LABEL}</span><strong style="color:${net >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatPlnAmount(net)}</strong></div>
             <div><span class="label">Zadłużenie / majątek</span><strong class="${dta !== null && dta > 50 ? 'expense' : ''}">${dta !== null ? `${dta}%` : '—'}</strong></div>
             <div><span class="label">Gotówka vs karty</span><strong class="${cardCoverage !== null && cardCoverage < 100 ? 'expense' : 'income'}">${cardCoverage !== null ? `${cardCoverage}%` : '—'}</strong></div>
             <div><span class="label">Długoterminowe</span><strong>${formatPlnAmount(longTotal)}</strong></div>
@@ -559,7 +559,7 @@ function renderReportsAssetsSnapshotsList() {
             <span class="reports-hint">${snap.source === 'manual' ? 'ręcznie' : 'auto'}</span>
             <div class="loan-report-grid">
                 <div><span class="label">Majątek</span><strong>${formatPlnAmount(snap.totalAssets)}</strong></div>
-                <div><span class="label">Net worth</span><strong>${formatPlnAmount(snap.netWorth)}</strong></div>
+                <div><span class="label">${NET_WORTH_LABEL}</span><strong>${formatPlnAmount(snap.netWorth)}</strong></div>
                 <div><span class="label">Krótko</span><strong>${formatPlnAmount(snap.shortAssets)}</strong></div>
                 <div><span class="label">Długo</span><strong>${formatPlnAmount(snap.longAssets)}</strong></div>
             </div>
@@ -597,7 +597,7 @@ function renderReportsNetWorthTrendChart() {
         data: {
             labels: monthLabels,
             datasets: [
-                { label: 'Net worth', data: netData, borderColor: 'var(--success)', tension: 0.3, pointRadius: 3 },
+                { label: NET_WORTH_LABEL, data: netData, borderColor: 'var(--success)', tension: 0.3, pointRadius: 3 },
                 { label: 'Aktywa', data: assetsData, borderColor: 'var(--accent)', tension: 0.3, pointRadius: 2, borderDash: [4, 4] },
                 { label: 'Długi', data: debtData, borderColor: 'var(--danger)', tension: 0.3, pointRadius: 2, borderDash: [4, 4] }
             ]
@@ -919,7 +919,7 @@ function renderReportsMortgageVsRetirement() {
         <div class="loan-report-grid">
             <div><span class="label">Kapitał hipoteki</span><strong class="expense">${formatPlnAmount(mortgageCapital)}</strong></div>
             <div><span class="label">Majątek emerytalny</span><strong class="income">${formatPlnAmount(retirementTotal)}</strong></div>
-            <div><span class="label">Net worth zero</span><strong>${payoff?.label || '—'}</strong></div>
+            <div><span class="label">Pełna równowaga</span><strong>${payoff?.label || '—'}</strong></div>
         </div>
         <p class="reports-hint">${message}</p>`;
 }

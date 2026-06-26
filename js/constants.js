@@ -28,6 +28,7 @@ const DEFAULT_CATEGORY_TREE = {
 const RECENT_CATEGORIES_KEY = 'recent_categories';
 const MAX_RECENT_CATEGORIES = 5;
 const SAVINGS_GOAL_KEY = 'reports_savings_goal_pct';
+const NET_WORTH_LABEL = 'Wartość netto';
 const ONBOARDING_SLIDES = [
     { title: 'Witaj w Finanse', text: 'Twój osobisty portfel — prosty, elegancki i zawsze pod ręką.' },
     { title: 'Synchronizacja live', text: 'Dane trafiają do chmury i są dostępne na telefonie oraz komputerze.' },
