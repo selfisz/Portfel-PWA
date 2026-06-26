@@ -5,7 +5,8 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:market-live": "vitest run --config vitest.live.config.js && node scripts/test-market-prices-live.mjs"
   },
   "devDependencies": {
     "vitest": "^2.1.8",

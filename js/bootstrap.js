@@ -5,5 +5,6 @@ initOnboarding();
 initPanelHeaders();
 initOverlayCloseIcons();
 initData();
+scheduleMarketPriceRefresh();
 registerServiceWorker();
 checkModuleSplitThreshold();

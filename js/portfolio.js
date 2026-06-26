@@ -1,4 +1,4 @@
-const EUR_PLN_RATE = 4.32;
+let EUR_PLN_RATE = 4.32;
 
 function getDefaultLoan() {
     return {
