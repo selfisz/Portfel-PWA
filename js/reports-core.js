@@ -1,8 +1,20 @@
+function getReportsTransactionSource() {
+    return typeof getMergedTransactions === 'function'
+        ? getMergedTransactions()
+        : (appState?.transactions || []);
+}
+
+function getTransactionsForIsoDate(isoDate) {
+    const target = String(isoDate || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(target)) return [];
+    return getReportsTransactionSource().filter(
+        (t) => String(t?.date || '').slice(0, 10) === target
+    );
+}
+
 function getTransactionYears() {
     const years = new Set([new Date().getFullYear()]);
-    const source = typeof getMergedTransactions === 'function'
-        ? getMergedTransactions()
-        : appState.transactions;
+    const source = getReportsTransactionSource();
     source.forEach((t) => {
         if (t.date) years.add(parseInt(t.date.substring(0, 4), 10));
     });
@@ -12,16 +24,11 @@ function getTransactionYears() {
 function getTransactionsForYear(year) {
     const start = `${year}-01-01`;
     const end = `${year}-12-31`;
-    const source = typeof getMergedTransactions === 'function'
-        ? getMergedTransactions()
-        : appState.transactions;
-    return source.filter(t => t.date >= start && t.date <= end);
+    return getReportsTransactionSource().filter((t) => t.date >= start && t.date <= end);
 }
 
 function getTransactionsForReportsPeriod(period) {
-    const source = typeof getMergedTransactions === 'function'
-        ? getMergedTransactions()
-        : appState.transactions;
+    const source = getReportsTransactionSource();
     if (period === 'all') return source;
     return getTransactionsForYear(parseInt(period, 10));
 }
