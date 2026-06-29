@@ -216,6 +216,13 @@ function getDashboardForecastFixedItems(startDate, endDate) {
         }
     }
 
+    (appState.transactions || []).forEach((t) => {
+        if (t.date < startDate || t.date > endDate) return;
+        if (typeof isPlannedTransaction === 'function' && isPlannedTransaction(t)) {
+            items.push(transactionToPlannedForecastItem(t));
+        }
+    });
+
     return items.sort((a, b) => {
         const byDate = a.date.localeCompare(b.date);
         if (byDate !== 0) return byDate;
@@ -284,12 +291,30 @@ function formatForecastPlanSourceBadge(source) {
     const labels = {
         'recurring-manual': 'cykliczna',
         'recurring-detected': 'wykryte',
+        'planned': 'zaplanowane',
         'debt-loan': 'rata',
         'debt-card': 'karta',
         'variable-income': 'szacunek',
         'variable-expense': 'szacunek'
     };
     return labels[source] || 'plan';
+}
+
+function transactionToPlannedForecastItem(t) {
+    const title = t.subCategory && t.subCategory !== '[Bez podkategorii]' ? t.subCategory : t.mainCategory;
+    return {
+        date: t.date,
+        type: t.type,
+        amount: t.amount,
+        title,
+        meta: typeof formatTransactionCategoryLabel === 'function'
+            ? formatTransactionCategoryLabel(t)
+            : t.mainCategory,
+        mainCategory: t.mainCategory,
+        subCategory: t.subCategory,
+        source: 'planned',
+        estimated: false
+    };
 }
 
 function renderDashboardForecastPlan(listEl, startDate, endDate, categoryFilter = null, typeFilter = null, subCategoryFilter = null) {
@@ -351,7 +376,7 @@ function renderDashboardForecastPlan(listEl, startDate, endDate, categoryFilter 
             ? `<div class="tx-group-label">${escapeHtml(group)}</div>`
             : '';
         lastGroup = group;
-        const badge = `<span class="forecast-plan-badge">${formatForecastPlanSourceBadge(item.source)}</span>`;
+        const badge = `<span class="forecast-plan-badge${item.source === 'planned' ? ' forecast-plan-badge--planned' : ''}">${formatForecastPlanSourceBadge(item.source)}</span>`;
         const sign = item.type === 'expense' ? '−' : '+';
         return `${groupHtml}<div class="forecast-plan-item">
             <div class="forecast-plan-info">
@@ -364,7 +389,7 @@ function renderDashboardForecastPlan(listEl, startDate, endDate, categoryFilter 
 
     const variableHtml = variableItems.length
         ? `<div class="forecast-plan-variable-block">${variableItems.map((item) => {
-            const badge = `<span class="forecast-plan-badge">${formatForecastPlanSourceBadge(item.source)}</span>`;
+            const badge = `<span class="forecast-plan-badge${item.source === 'planned' ? ' forecast-plan-badge--planned' : ''}">${formatForecastPlanSourceBadge(item.source)}</span>`;
             const sign = item.type === 'expense' ? '−' : '+';
             return `<div class="forecast-plan-item forecast-plan-item--variable">
                 <div class="forecast-plan-info">
@@ -1117,13 +1142,17 @@ function renderDashboard() {
         const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
         const isRec = t.recurringId ? '<span class="tx-badge">&#10227;</span>' : '';
         const isCard = t.creditCardId ? '<span class="tx-badge tx-badge--card" title="Karta kredytowa">&#128179;</span>' : '';
+        const isPlanned = typeof isPlannedTransaction === 'function' && isPlannedTransaction(t);
+        const plannedBadge = isPlanned && typeof formatPlannedTransactionBadge === 'function'
+            ? formatPlannedTransactionBadge()
+            : '';
         const metaText = searchQuery ? `${formatTxDate(t.date)} · ${t.mainCategory}` : t.mainCategory;
         const row = document.createElement('div');
         row.className = 'tx-row';
         row.innerHTML = `
             ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
             <div class="tx-info">
-                <div class="tx-title">${title}${isRec}${isCard}</div>
+                <div class="tx-title">${title}${isRec}${isCard}${plannedBadge}</div>
                 <div class="tx-meta">${metaText}</div>
                 ${t.note ? `<div class="tx-note">${t.note}</div>` : ''}
             </div>

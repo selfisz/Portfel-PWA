@@ -1140,6 +1140,23 @@ html[data-theme="dark"] .hero-card {
     color: var(--accent);
 }
 
+.forecast-plan-badge--planned {
+    background: rgba(217, 119, 6, 0.16);
+    color: #b45309;
+}
+
+html[data-theme="dark"] .forecast-plan-badge--planned {
+    background: rgba(251, 191, 36, 0.16);
+    color: #fbbf24;
+}
+
+@media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]):not([data-theme="dark"]) .forecast-plan-badge--planned {
+        background: rgba(251, 191, 36, 0.16);
+        color: #fbbf24;
+    }
+}
+
 .forecast-plan-variable-block {
     margin-top: 4px;
     padding-top: 8px;

@@ -226,6 +226,15 @@ function formatTransactionCategoryLabel(tx) {
     return sub ? `${tx.mainCategory} · ${sub}` : tx.mainCategory;
 }
 
+function isPlannedTransaction(tx, referenceDate = new Date()) {
+    if (!tx?.date) return false;
+    return tx.date > localIsoDate(referenceDate);
+}
+
+function formatPlannedTransactionBadge() {
+    return '<span class="forecast-plan-badge forecast-plan-badge--planned">zaplanowane</span>';
+}
+
 function formatTransactionSavedToast(tx, isEdit = false) {
     const sign = tx.type === 'expense' ? '−' : '+';
     const categoryLabel = formatTransactionCategoryLabel(tx);

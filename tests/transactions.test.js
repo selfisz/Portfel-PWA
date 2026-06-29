@@ -546,3 +546,14 @@ describe('cancelEdit', () => {
     expect(_getEditingTxIndex()).toBeNull();
   });
 });
+
+describe('isPlannedTransaction', () => {
+  it('zwraca true dla daty po dniu referencyjnym', () => {
+    expect(isPlannedTransaction({ date: '2026-07-01' }, new Date('2026-06-29T12:00:00'))).toBe(true);
+  });
+
+  it('zwraca false dla dzisiejszej daty i przeszłości', () => {
+    expect(isPlannedTransaction({ date: '2026-06-29' }, new Date('2026-06-29T12:00:00'))).toBe(false);
+    expect(isPlannedTransaction({ date: '2026-06-01' }, new Date('2026-06-29T12:00:00'))).toBe(false);
+  });
+});
