@@ -58,13 +58,19 @@ let reportsLastPeriod = null;
 let cloudSyncUnlocked = false;
 function getPersistedState(raw = appState) {
     const data = raw ?? appState ?? {};
+    const transactions = typeof normalizeTransactionsArray === 'function'
+        ? normalizeTransactionsArray(data.transactions)
+        : (Array.isArray(data.transactions) ? data.transactions : []);
+    const cashMovements = typeof pruneCashMovementsList === 'function'
+        ? pruneCashMovementsList(data.cashMovements)
+        : (Array.isArray(data.cashMovements) ? data.cashMovements : []);
     const persisted = {
-        transactions: Array.isArray(data.transactions) ? data.transactions : [],
+        transactions,
         loans: normalizeLoansArray(data.loans, data.loan),
         creditCards: Array.isArray(data.creditCards) ? data.creditCards : [],
         creditCardMovements: Array.isArray(data.creditCardMovements) ? data.creditCardMovements : [],
         assets: Array.isArray(data.assets) ? data.assets : [],
-        cashMovements: Array.isArray(data.cashMovements) ? data.cashMovements : [],
+        cashMovements,
         assetSnapshots: Array.isArray(data.assetSnapshots) ? data.assetSnapshots : [],
         assetValueHistory: Array.isArray(data.assetValueHistory) ? data.assetValueHistory : [],
         categoryTree: data.categoryTree && typeof data.categoryTree === 'object'
@@ -243,9 +249,11 @@ function setSyncStatus(mode, txCount) {
     const titles = {
         '': 'Synchronizacja z chmurą…',
         online: `Zsynchronizowano z chmurą${countHint}`,
-        offline: 'Tryb offline — dane zapisane lokalnie'
+        offline: 'Tryb offline — dane zapisane lokalnie. Dotknij kropki, aby ponowić synchronizację.',
+        pending: `Oczekuje na synchronizację${countHint} — dane zapisane lokalnie. Dotknij, aby ponowić.`
     };
     statusEl.title = titles[mode] || titles[''];
+    statusEl.setAttribute('aria-label', statusEl.title);
 }
 
 function readLocalRawBeforeSync() {
@@ -365,6 +373,9 @@ function applyRemoteAppState(raw, extraLoanSources = [], extraCreditCardSources 
     if (typeof reconcileAllCashAssets === 'function') {
         reconcileAllCashAssets();
     }
+    if (typeof enforceAppStateLimits === 'function') {
+        enforceAppStateLimits({ silent: true });
+    }
     return hadUiFields;
 }
 
@@ -444,12 +455,31 @@ function initData() {
 }
 
 function saveState(options = {}) {
+    if (typeof enforceAppStateLimits === 'function') {
+        enforceAppStateLimits({ silent: options.silentLimits === true });
+    }
     const payload = getPersistedState(appState);
+    const payloadBytes = typeof estimateJsonBytes === 'function' ? estimateJsonBytes(payload) : 0;
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch (err) {
         console.error('localStorage.setItem', err);
         setSyncStatus('offline', payload.transactions.length);
+        if (typeof showAppToast === 'function') {
+            showAppToast('Brak miejsca w pamięci przeglądarki — wyeksportuj kopię JSON.', 'error');
+        }
+        return;
+    }
+    if (typeof refreshStorageUsageUI === 'function') refreshStorageUsageUI();
+    if (payloadBytes > MAX_FIRESTORE_PAYLOAD_BYTES) {
+        setSyncStatus('offline', payload.transactions.length);
+        if (typeof showAppToast === 'function') {
+            showAppToast('Zapis do chmury wstrzymany — baza jest zbyt duża. Wyeksportuj kopię JSON.', 'error');
+        }
+        return;
+    }
+    if (typeof queueCloudSync === 'function') {
+        queueCloudSync({ payload, forceCloud: options.forceCloud === true });
         return;
     }
     if (!cloudSyncUnlocked && !options.forceCloud && payload.transactions.length < 50) return;

@@ -302,6 +302,9 @@ function adjustAssetValuePln(asset, deltaPln, options = {}) {
 
 function applyAssetTransferFromTransaction(tx, deltaSign) {
     if (!tx?.linkedAssetId) return true;
+    if (tx.linkedAssetId === PRIMARY_CASH_ASSET_ID && typeof ensurePrimaryCashAsset === 'function') {
+        ensurePrimaryCashAsset();
+    }
     const asset = typeof getAssetById === 'function' ? getAssetById(tx.linkedAssetId) : null;
     if (!asset) return true;
     const amount = Number(tx.amount);

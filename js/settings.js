@@ -1,17 +1,24 @@
 function getExportPayload() {
     const data = getPersistedState(appState);
+    const archivedTransactions = typeof getArchivedTransactions === 'function'
+        ? getArchivedTransactions()
+        : [];
     return {
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
-        transactionCount: data.transactions.length,
+        transactionCount: data.transactions.length + archivedTransactions.length,
+        archivedTransactions,
         data
     };
 }
 
 function applyBackupPayload(payload) {
-    const data = payload.data || payload;
-    if (!data || !Array.isArray(data.transactions)) {
-        throw new Error('Nieprawidłowy plik kopii zapasowej.');
+    const { data, archivedTransactions, report } = validateBackupPayload(payload);
+    if (typeof setArchivedTransactions === 'function') {
+        setArchivedTransactions(archivedTransactions);
+    } else if (Array.isArray(archivedTransactions) && archivedTransactions.length
+        && typeof restoreArchivedTransactionsFromBackup === 'function') {
+        restoreArchivedTransactionsFromBackup(archivedTransactions);
     }
     normalizeAppState(data);
     cloudSyncUnlocked = true;
@@ -27,6 +34,13 @@ function applyBackupPayload(payload) {
     } catch (err) {
         console.error('refreshCurrentView after restore', err);
     }
+    const importNote = typeof formatBackupImportReport === 'function'
+        ? formatBackupImportReport(report)
+        : '';
+    if (importNote) {
+        console.info('Import kopii:', importNote);
+    }
+    return { report, importNote };
 }
 
 function showSettingsToast(message, variant = 'success') {
@@ -112,6 +126,7 @@ function openSettings() {
         btn.classList.toggle('active', btn.dataset.theme === saved);
     });
     refreshBackupInfo();
+    if (typeof refreshStorageUsageUI === 'function') refreshStorageUsageUI();
 }
 
 function openCategoryEditor() {
@@ -519,12 +534,14 @@ function renderBudgetEditor() {
         const budget = budgets[cat] || '';
         const safeCat = cat.replace(/"/g, '&quot;');
         return `<div class="budget-editor-row">
-            <div class="budget-row-head">
+            <div class="category-edit-row budget-editor-cat-row">
                 ${renderCategoryIcon(cat, 'list', null, 'expense')}
-                <span class="budget-cat-name">${escapeHtml(cat)}</span>
+                <div class="budget-editor-cat-label" title="${safeCat}">${escapeHtml(cat)}</div>
+            </div>
+            <div class="budget-editor-row-controls">
                 <button type="button" class="btn-budget-suggest" data-cat="${safeCat}" onclick="applyBudgetSuggestion(this)">6m</button>
                 <input type="number" class="budget-input budget-editor-input" min="0" step="50" data-cat="${safeCat}"
-                    value="${budget || ''}" placeholder="${suggested > 0 ? suggested : '—'}">
+                    value="${budget || ''}" placeholder="${suggested > 0 ? suggested : '—'}" aria-label="Limit dla ${safeCat}">
             </div>
             ${suggested > 0 ? `<p class="budget-suggest-hint">Średnia z ostatnich 6 mies.: ${formatPlnAmount(suggested)}</p>` : '<p class="budget-suggest-hint">Brak wydatków w ostatnich 6 mies.</p>'}
         </div>`;
@@ -532,10 +549,21 @@ function renderBudgetEditor() {
 }
 
 function applyBudgetSuggestion(btn) {
+    const row = btn.closest('.budget-editor-row');
+    const input = row?.querySelector('.budget-editor-input');
     const cat = btn.dataset.cat;
-    const input = btn.parentElement.querySelector('.budget-editor-input');
+    if (!input || !cat) return;
     const value = suggestCategoryBudget(cat);
     if (value > 0) input.value = value;
+}
+
+function applyAllBudgetSuggestions() {
+    document.querySelectorAll('#budget-editor-list .budget-editor-input').forEach((input) => {
+        const cat = input.dataset.cat;
+        if (!cat) return;
+        const value = suggestCategoryBudget(cat);
+        if (value > 0) input.value = value;
+    });
 }
 
 function saveBudgetEditor() {
@@ -670,8 +698,10 @@ async function restoreCloudBackupById(id) {
     }
     setSettingsButtonBusy(btn, true, 'Przywracanie…');
     try {
-        applyBackupPayload(payload);
-        showSettingsToast(`Przywrócono ${count} transakcji z chmury`);
+        const { importNote } = applyBackupPayload(payload);
+        showSettingsToast(importNote
+            ? `Przywrócono ${count} transakcji z chmury (${importNote})`
+            : `Przywrócono ${count} transakcji z chmury`);
         closeCloudRestorePicker();
         refreshBackupInfo();
         hapticFeedback();
@@ -708,13 +738,13 @@ function handleBackupFileSelect(event) {
                 return;
             }
             setSettingsButtonBusy(btn, true, 'Przywracanie…');
-            applyBackupPayload(payload);
+            const { importNote } = applyBackupPayload(payload);
             localStorage.setItem(LOCAL_BACKUP_KEY, reader.result);
-            showSettingsToast('Przywrócono kopię z pliku');
+            showSettingsToast(importNote ? `Przywrócono kopię z pliku (${importNote})` : 'Przywrócono kopię z pliku');
             refreshBackupInfo();
             hapticFeedback();
         } catch (err) {
-            showSettingsToast('Nieprawidłowy plik kopii', 'error');
+            showSettingsToast(err.message || 'Nieprawidłowy plik kopii', 'error');
             console.error(err);
         } finally {
             setSettingsButtonBusy(btn, false);

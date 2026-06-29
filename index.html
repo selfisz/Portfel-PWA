@@ -148,6 +148,7 @@
 
             <div class="settings-section settings-section--backup">
                 <div class="section-label">Kopia zapasowa</div>
+                <p id="storage-usage-info" class="settings-hint storage-usage-info">—</p>
                 <div class="backup-status-grid">
                     <div class="backup-status-card">
                         <span class="backup-status-label">Chmura</span>
@@ -205,8 +206,9 @@
     <div id="budget-editor-overlay" class="settings-overlay category-editor-overlay hidden" onclick="if (event.target === this) closeBudgetEditor()">
         <div class="settings-panel category-editor-panel">
             <div id="panel-header-budget-editor"></div>
-            <p class="settings-hint">Puste pole = brak limitu. Przycisk „6m” wstawia średnią z ostatnich 6 miesięcy.</p>
-            <div id="budget-editor-list" class="category-editor-list"></div>
+            <p class="settings-hint">Puste pole = brak limitu. „6m” przy kategorii lub poniżej wstawia średnią z ostatnich 6 miesięcy.</p>
+            <button type="button" class="btn-outline budget-editor-fill-all" onclick="applyAllBudgetSuggestions()">Uzupełnij ze średniej 6m</button>
+            <div id="budget-editor-list" class="category-editor-list budget-editor-list"></div>
             <button type="button" class="btn-submit category-editor-save" onclick="saveBudgetEditor()">Zapisz limity</button>
         </div>
     </div>
@@ -1566,6 +1568,9 @@
     <script src="js/loan-details.js"></script>
     <script src="js/credit-cards.js"></script>
     <script src="js/portfolio.js"></script>
+    <script src="js/state-limits.js"></script>
+    <script src="js/backup-import.js"></script>
+    <script src="js/sync-queue.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/transactions.js"></script>
     <script src="js/dashboard.js"></script>

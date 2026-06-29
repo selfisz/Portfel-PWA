@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanse-pwa-v190';
+const CACHE_NAME = 'finanse-pwa-v194';
 
 const ASSETS = [
   './',
@@ -14,6 +14,9 @@ const ASSETS = [
   'js/loan-details.js',
   'js/credit-cards.js',
   'js/portfolio.js',
+  'js/state-limits.js',
+  'js/backup-import.js',
+  'js/sync-queue.js',
   'js/ui.js',
   'js/transactions.js',
   'js/dashboard.js',

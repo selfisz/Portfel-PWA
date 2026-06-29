@@ -50,13 +50,16 @@ function updateDashboardPeriodResetVisibility() {
 }
 
 function getTransactionDateBounds() {
-    if (!appState.transactions.length) {
+    const source = typeof getMergedTransactions === 'function'
+        ? getMergedTransactions()
+        : appState.transactions;
+    if (!source.length) {
         const today = localIsoDate(new Date());
         return { startDate: today, endDate: today };
     }
-    let min = appState.transactions[0].date;
-    let max = appState.transactions[0].date;
-    appState.transactions.forEach((t) => {
+    let min = source[0].date;
+    let max = source[0].date;
+    source.forEach((t) => {
         if (t.date < min) min = t.date;
         if (t.date > max) max = t.date;
     });

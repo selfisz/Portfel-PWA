@@ -128,10 +128,21 @@ function ensurePrimaryCashAsset() {
     return !!getPrimaryCashAsset();
 }
 
+function ensureCashBaseline(assetId) {
+    if (typeof getAssetById !== 'function' || typeof updateAssetInState !== 'function') return;
+    const asset = getAssetById(assetId);
+    if (!asset || asset.type !== 'cash') return;
+    if (Number.isFinite(Number(asset.cashBaseline))) return;
+    const movementsTotal = getCashMovementsTotal(assetId);
+    const baseline = roundCashAmount((Number(asset.amount) || 0) - movementsTotal);
+    updateAssetInState({ ...asset, cashBaseline: baseline });
+}
+
 function registerCashMovement({ assetId = PRIMARY_CASH_ASSET_ID, delta, date, note, source, sourceRef }) {
     const deltaNum = Number(delta);
     if (!Number.isFinite(deltaNum) || deltaNum === 0) return null;
     if (assetId === PRIMARY_CASH_ASSET_ID && !ensurePrimaryCashAsset()) return null;
+    ensureCashBaseline(assetId);
 
     const movement = normalizeCashMovement({
         assetId,

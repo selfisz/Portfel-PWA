@@ -162,6 +162,8 @@ beforeAll(() => {
     loadScript('js/constants.js');
     loadScript('js/portfolio.js');
     loadScript('js/state.js');
+    loadScript('js/state-limits.js');
+    loadScript('js/backup-import.js');
     loadScript('js/assets.js');
     loadScript('js/cash.js');
     loadScript('js/loan-details.js');
@@ -390,10 +392,11 @@ describe('suggestCategoryBudget', () => {
 // settings.js — getExportPayload
 // ===========================================================================
 describe('getExportPayload', () => {
-    it('zwraca payload z wersją 1 i exportedAt', () => {
+    it('zwraca payload z wersją 2 i exportedAt', () => {
         _setAppState({ ..._getAppState(), transactions: [{ date: '2024-01-01', amount: 100, type: 'expense', mainCategory: 'Dom', subCategory: '' }] });
         const payload = getExportPayload();
-        expect(payload.version).toBe(1);
+        expect(payload.version).toBe(2);
+        expect(Array.isArray(payload.archivedTransactions)).toBe(true);
         expect(payload.exportedAt).toBeTruthy();
         expect(payload.transactionCount).toBe(1);
         expect(payload.data).toBeTruthy();

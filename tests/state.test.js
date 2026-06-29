@@ -74,6 +74,7 @@ beforeAll(() => {
 
   loadScript('js/loan-details.js');
   loadScript('js/portfolio.js');
+  loadScript('js/state-limits.js');
   loadScript('js/state.js');
 
   // Bridge: helper functions dostępne dla testów przez V8 script scope
@@ -131,9 +132,15 @@ describe('getPersistedState', () => {
   });
 
   it('zachowuje poprawne tablice', () => {
-    const txs = [{ amount: 100, type: 'expense', date: '2024-01-01' }];
+    const txs = [{
+      amount: 100,
+      type: 'expense',
+      date: '2024-01-01',
+      mainCategory: 'Dom',
+      subCategory: 'Czynsz'
+    }];
     const result = getPersistedState({ transactions: txs });
-    expect(result.transactions).toEqual(txs);
+    expect(result.transactions[0]).toMatchObject(txs[0]);
   });
 
   it('używa DEFAULT_CATEGORY_TREE gdy brak categoryTree', () => {
@@ -404,7 +411,12 @@ describe('getTransactionCount', () => {
   });
 
   it('liczy transakcje w raw', () => {
-    expect(getTransactionCount({ transactions: [{}, {}] })).toBe(2);
+    expect(getTransactionCount({
+      transactions: [
+        { amount: 1, type: 'expense', date: '2024-01-01', mainCategory: 'Dom', subCategory: 'A' },
+        { amount: 2, type: 'expense', date: '2024-01-02', mainCategory: 'Dom', subCategory: 'B' }
+      ]
+    })).toBe(2);
   });
 });
 
@@ -425,7 +437,14 @@ describe('applyRemoteAppState', () => {
   it('ustawia appState na podstawie raw', () => {
     const txs = [{ amount: 200, type: 'income', date: '2024-06-01', mainCategory: 'Wynagrodzenie' }];
     applyRemoteAppState({ transactions: txs, loans: [] });
-    expect(_getAppState().transactions).toEqual(txs);
+    expect(_getAppState().transactions).toEqual([{
+      amount: 200,
+      type: 'income',
+      date: '2024-06-01',
+      mainCategory: 'Wynagrodzenie',
+      subCategory: '[Bez podkategorii]',
+      note: ''
+    }]);
   });
 
   it('scala kredyty lokalne z zdalnymi przez mergeLoansById', () => {

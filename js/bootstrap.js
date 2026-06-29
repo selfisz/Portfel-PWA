@@ -5,6 +5,7 @@ initOnboarding();
 initPanelHeaders();
 initOverlayCloseIcons();
 initData();
+initCloudSyncListeners();
 scheduleMarketPriceRefresh();
 registerServiceWorker();
 initNotifications();

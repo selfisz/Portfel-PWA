@@ -35,6 +35,15 @@ const NOTIFICATION_PREFS_KEY = 'finanse_notification_prefs';
 const NOTIFICATION_ALERT_STATE_KEY = 'finanse_budget_alert_state';
 const NOTIFICATION_INSIGHT_STATE_KEY = 'finanse_insight_alert_state';
 const CARD_REPAYMENT_REMINDER_DAYS = 50;
+const MAX_ACTIVE_TRANSACTIONS = 3500;
+const MAX_CASH_MOVEMENTS = 1500;
+const MAX_FIRESTORE_PAYLOAD_BYTES = 900000;
+const TX_ARCHIVE_WARN_RATIO = 0.85;
+const ARCHIVED_TRANSACTIONS_KEY = 'finanse_archived_transactions';
+const PENDING_CLOUD_SYNC_KEY = 'finanse_pending_cloud_sync';
+const CLOUD_SYNC_BASE_RETRY_MS = 5000;
+const CLOUD_SYNC_MAX_RETRY_MS = 120000;
+const CLOUD_SYNC_MAX_ATTEMPTS = 8;
 const ONBOARDING_SLIDES = [
     { title: 'Witaj w Finanse', text: 'Twój osobisty portfel — prosty, elegancki i zawsze pod ręką.' },
     { title: 'Synchronizacja live', text: 'Dane trafiają do chmury i są dostępne na telefonie oraz komputerze.' },

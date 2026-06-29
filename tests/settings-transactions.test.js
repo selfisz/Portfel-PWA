@@ -105,6 +105,8 @@ beforeAll(() => {
     loadScript('js/loan-details.js');
     loadScript('js/portfolio.js');
     loadScript('js/state.js');
+    loadScript('js/state-limits.js');
+    loadScript('js/backup-import.js');
     loadScript('js/format.js');
     loadScript('js/ui.js');
     loadScript('js/assets.js');
@@ -185,9 +187,10 @@ describe('formatCloudBackupCount', () => {
 // settings.js — getExportPayload
 // ===========================================================================
 describe('getExportPayload', () => {
-    it('zwraca obiekt z version = 1', () => {
+    it('zwraca obiekt z version = 2 i archiwum', () => {
         const payload = getExportPayload();
-        expect(payload.version).toBe(1);
+        expect(payload.version).toBe(2);
+        expect(Array.isArray(payload.archivedTransactions)).toBe(true);
     });
 
     it('zawiera exportedAt jako ISO string', () => {
@@ -243,6 +246,19 @@ describe('applyBackupPayload', () => {
         const tx = { date: '2024-06-01', type: 'expense', mainCategory: 'Jedzenie', subCategory: 'Biedronka', amount: 55, affectsCash: true };
         applyBackupPayload({ data: { transactions: [tx], loans: [] } });
         expect(_getAppState().transactions.length).toBeGreaterThan(0);
+    });
+
+    it('odrzuca śmieciowe transakcje przy imporcie', () => {
+        applyBackupPayload({
+            data: {
+                transactions: [
+                    { date: '2024-06-01', type: 'expense', mainCategory: 'Jedzenie', subCategory: 'A', amount: 10 },
+                    { date: 'bad', type: 'expense', mainCategory: 'Jedzenie', subCategory: 'A', amount: 10 }
+                ],
+                loans: []
+            }
+        });
+        expect(_getAppState().transactions).toHaveLength(1);
     });
 });
 
@@ -443,6 +459,23 @@ describe('saveCategoryEditor', () => {
 });
 
 // ===========================================================================
+// settings.js — renderBudgetEditor
+// ===========================================================================
+describe('renderBudgetEditor', () => {
+    it('renderuje nazwy kategorii obok ikon', () => {
+        _setCategoryTree({
+            expense: { Jedzenie: ['Sklep'], Transport: [] },
+            income: DEFAULT_CATEGORY_TREE.income
+        });
+        renderBudgetEditor();
+        const html = document.getElementById('budget-editor-list').innerHTML;
+        expect(html).toContain('budget-editor-cat-label');
+        expect(html).toContain('Jedzenie');
+        expect(html).toContain('Transport');
+    });
+});
+
+// ===========================================================================
 // settings.js — saveBudgetEditor
 // ===========================================================================
 describe('saveBudgetEditor', () => {
@@ -483,6 +516,26 @@ describe('saveBudgetEditor', () => {
         setInputs([{ dataset: { cat: 'Jedzenie' }, value: '' }]);
         saveBudgetEditor();
         expect(_getAppState().categoryBudgets['Jedzenie']).toBeUndefined();
+    });
+
+    it('applyAllBudgetSuggestions uzupełnia tylko kategorie ze średnią > 0', () => {
+        const now = new Date();
+        const m0 = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-10`;
+        const prev = new Date(now.getFullYear(), now.getMonth() - 1, 10);
+        const m1 = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-10`;
+        const jedzenieInput = { dataset: { cat: 'Jedzenie' }, value: '' };
+        const transportInput = { dataset: { cat: 'Transport' }, value: '' };
+        querySelectorAllOverride = (sel) => {
+            if (sel === '#budget-editor-list .budget-editor-input') return [jedzenieInput, transportInput];
+            return { forEach: () => {} };
+        };
+        _setAppState({ ..._getAppState(), transactions: [
+            { date: m0, type: 'expense', mainCategory: 'Jedzenie', subCategory: 'A', amount: 600 },
+            { date: m1, type: 'expense', mainCategory: 'Jedzenie', subCategory: 'A', amount: 600 }
+        ]});
+        applyAllBudgetSuggestions();
+        expect(Number(jedzenieInput.value)).toBe(600);
+        expect(transportInput.value).toBe('');
     });
 
     it('nie nadpisuje budżetów innych kategorii', () => {
