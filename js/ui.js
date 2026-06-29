@@ -113,7 +113,8 @@ function mountPanelHeader(mountId, header) {
 
 function initPanelHeaders() {
     mountPanelHeader('panel-header-settings', createPanelHeader('Ustawienia', { onClose: closeSettings }));
-    mountPanelHeader('panel-header-category-editor', createPanelHeader('Nazwy kategorii', { onClose: closeCategoryEditor }));
+    mountPanelHeader('panel-header-notifications', createPanelHeader('Powiadomienia', { onClose: closeNotificationsPanel }));
+    mountPanelHeader('panel-header-category-editor', createPanelHeader('Kategorie', { onClose: closeCategoryEditor }));
     mountPanelHeader('panel-header-budget-editor', createPanelHeader('Limity kategorii', { onClose: closeBudgetEditor }));
     mountPanelHeader('panel-header-asset-picker', createPanelHeader('Dodaj aktywo', { onClose: closeAssetPicker }));
     mountPanelHeader('panel-header-credit-card-quick', createPanelHeader('Spłata karty', {

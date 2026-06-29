@@ -338,6 +338,7 @@ function saveTransaction() {
     saveState();
     hapticFeedback();
     showAppToast(formatTransactionSavedToast(txData, wasEdit), 'success');
+    if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
     if (wasEdit) {
         const returnAssetId = postEditReturnAssetId;
         postEditReturnAssetId = null;
@@ -493,6 +494,7 @@ function deleteTransaction(index) {
         appState.transactions.splice(index, 1);
         saveState();
         renderDashboard();
+        if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
     }
 }
 

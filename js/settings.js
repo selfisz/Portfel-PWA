@@ -92,6 +92,7 @@ async function refreshBackupInfo() {
 function openSettings() {
     document.getElementById('settings-overlay').classList.remove('hidden');
     document.body.classList.add('settings-open');
+    if (typeof syncNotificationSettingsUI === 'function') syncNotificationSettingsUI();
     const saved = localStorage.getItem(THEME_KEY) || 'auto';
     document.querySelectorAll('.theme-option').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.theme === saved);
@@ -119,45 +120,230 @@ function setCategoryEditorType(type) {
     renderCategoryEditor();
 }
 
+function getCategoryEditorMainLabel(group) {
+    const mainInput = group?.querySelector('.category-edit-input--main');
+    return mainInput?.value.trim() || 'Inne';
+}
+
+function getCategoryEditorTxCount(type, main, sub = null) {
+    if (!main) return 0;
+    return appState.transactions.filter((tx) => {
+        if (tx.type !== type) return false;
+        if (tx.mainCategory !== main) return false;
+        if (sub === null || sub === '') return true;
+        return tx.subCategory === sub;
+    }).length;
+}
+
+function confirmCategoryEditorRemoval({ kind, mainOriginal, subOriginal, label }) {
+    const isNew = kind === 'main' ? !mainOriginal : !subOriginal;
+    if (isNew) return true;
+    const txCount = getCategoryEditorTxCount(
+        categoryEditorType,
+        mainOriginal,
+        kind === 'sub' ? subOriginal : null
+    );
+    const displayLabel = label || (kind === 'main' ? 'kategorię' : 'podkategorię');
+    const message = txCount > 0
+        ? `Usunąć „${displayLabel}”? ${txCount} transakcji zachowa tę kategorię w historii.`
+        : `Usunąć „${displayLabel}”?`;
+    return confirm(message);
+}
+
+function createCategoryEditDeleteButton(ariaLabel) {
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'category-edit-delete-btn';
+    delBtn.setAttribute('aria-label', ariaLabel);
+    delBtn.textContent = '×';
+    return delBtn;
+}
+
+function deleteCategoryEditorSubRow(subRow, group) {
+    const subInput = subRow.querySelector('.category-edit-input--sub');
+    const mainInput = group.querySelector('.category-edit-input--main');
+    const mainOriginal = mainInput?.dataset.original || '';
+    const subOriginal = subInput?.dataset.original || '';
+    const label = subInput?.value.trim() || 'podkategorię';
+    if (!confirmCategoryEditorRemoval({ kind: 'sub', mainOriginal, subOriginal, label })) return;
+    subRow.remove();
+}
+
+function deleteCategoryEditorMainGroup(group) {
+    const mainInput = group.querySelector('.category-edit-input--main');
+    const mainOriginal = mainInput?.dataset.original || '';
+    const label = mainInput?.value.trim() || 'nową kategorię';
+    if (!confirmCategoryEditorRemoval({ kind: 'main', mainOriginal, subOriginal: '', label })) return;
+    group.remove();
+}
+
+function createCategoryEditSubRow(sub, mainLabel, txType, options = {}) {
+    const subRow = document.createElement('div');
+    subRow.className = 'category-edit-row category-edit-row--sub';
+    subRow.innerHTML = renderCategoryIcon(mainLabel, 'chip', sub || null, txType);
+    const subInput = document.createElement('input');
+    subInput.type = 'text';
+    subInput.className = 'category-edit-input category-edit-input--sub';
+    subInput.value = sub || '';
+    subInput.dataset.original = sub || '';
+    subInput.maxLength = 40;
+    if (options.placeholder) subInput.placeholder = options.placeholder;
+    subRow.appendChild(subInput);
+    if (options.group) {
+        const delBtn = createCategoryEditDeleteButton('Usuń podkategorię');
+        delBtn.onclick = () => deleteCategoryEditorSubRow(subRow, options.group);
+        subRow.appendChild(delBtn);
+    }
+    return subRow;
+}
+
+function createCategoryEditGroup(main, subs, txType) {
+    const group = document.createElement('div');
+    group.className = 'category-edit-group';
+
+    const mainRow = document.createElement('div');
+    mainRow.className = 'category-edit-row category-edit-row--main';
+    mainRow.innerHTML = renderCategoryIcon(main || 'Inne', 'chip', null, txType);
+    const mainInput = document.createElement('input');
+    mainInput.type = 'text';
+    mainInput.className = 'category-edit-input category-edit-input--main';
+    mainInput.value = main || '';
+    mainInput.dataset.original = main || '';
+    mainInput.maxLength = 40;
+    if (!main) mainInput.placeholder = 'Nowa kategoria główna';
+    mainRow.appendChild(mainInput);
+    const mainDelBtn = createCategoryEditDeleteButton('Usuń kategorię');
+    mainDelBtn.onclick = () => deleteCategoryEditorMainGroup(group);
+    mainRow.appendChild(mainDelBtn);
+    group.appendChild(mainRow);
+
+    const subsWrap = document.createElement('div');
+    subsWrap.className = 'category-edit-subs';
+    (subs || []).forEach((sub) => {
+        subsWrap.appendChild(createCategoryEditSubRow(sub, main || 'Inne', txType, { group }));
+    });
+
+    const addSubBtn = document.createElement('button');
+    addSubBtn.type = 'button';
+    addSubBtn.className = 'category-edit-add-btn';
+    addSubBtn.textContent = '+ Dodaj podkategorię';
+    addSubBtn.onclick = () => addCategoryEditorSubcategory(group);
+    subsWrap.appendChild(addSubBtn);
+    group.appendChild(subsWrap);
+
+    return group;
+}
+
+function addCategoryEditorSubcategory(group) {
+    const subsWrap = group.querySelector('.category-edit-subs');
+    const addBtn = subsWrap.querySelector('.category-edit-add-btn');
+    const row = createCategoryEditSubRow('', getCategoryEditorMainLabel(group), categoryEditorType, {
+        placeholder: 'Nowa podkategoria',
+        group
+    });
+    subsWrap.insertBefore(row, addBtn);
+    row.querySelector('input')?.focus();
+}
+
+function addCategoryEditorMainCategory() {
+    const list = document.getElementById('category-editor-list');
+    const addMainWrap = list.querySelector('.category-editor-add-main');
+    const group = createCategoryEditGroup('', [], categoryEditorType);
+    if (addMainWrap) {
+        list.insertBefore(group, addMainWrap);
+    } else {
+        list.appendChild(group);
+    }
+    group.querySelector('.category-edit-input--main')?.focus();
+}
+
 function renderCategoryEditor() {
     const list = document.getElementById('category-editor-list');
     list.innerHTML = '';
     const txType = categoryEditorType;
+    if (!categoryTree[txType] || typeof categoryTree[txType] !== 'object') {
+        categoryTree[txType] = {};
+    }
 
     Object.keys(categoryTree[txType]).forEach((main) => {
-        const group = document.createElement('div');
-        group.className = 'category-edit-group';
-
-        const mainRow = document.createElement('div');
-        mainRow.className = 'category-edit-row category-edit-row--main';
-        mainRow.innerHTML = renderCategoryIcon(main, 'chip', null, txType);
-        const mainInput = document.createElement('input');
-        mainInput.type = 'text';
-        mainInput.className = 'category-edit-input category-edit-input--main';
-        mainInput.value = main;
-        mainInput.dataset.original = main;
-        mainInput.maxLength = 40;
-        mainRow.appendChild(mainInput);
-        group.appendChild(mainRow);
-
-        const subsWrap = document.createElement('div');
-        subsWrap.className = 'category-edit-subs';
-        categoryTree[txType][main].forEach((sub) => {
-            const subRow = document.createElement('div');
-            subRow.className = 'category-edit-row category-edit-row--sub';
-            subRow.innerHTML = renderCategoryIcon(main, 'chip', sub, txType);
-            const subInput = document.createElement('input');
-            subInput.type = 'text';
-            subInput.className = 'category-edit-input category-edit-input--sub';
-            subInput.value = sub;
-            subInput.dataset.original = sub;
-            subInput.maxLength = 40;
-            subRow.appendChild(subInput);
-            subsWrap.appendChild(subRow);
-        });
-        if (categoryTree[txType][main].length) group.appendChild(subsWrap);
-        list.appendChild(group);
+        list.appendChild(createCategoryEditGroup(main, categoryTree[txType][main], txType));
     });
+
+    const addMainWrap = document.createElement('div');
+    addMainWrap.className = 'category-editor-add-main';
+    const addMainBtn = document.createElement('button');
+    addMainBtn.type = 'button';
+    addMainBtn.className = 'category-edit-add-btn category-edit-add-btn--main';
+    addMainBtn.textContent = '+ Dodaj kategorię główną';
+    addMainBtn.onclick = addCategoryEditorMainCategory;
+    addMainWrap.appendChild(addMainBtn);
+    list.appendChild(addMainWrap);
+}
+
+function collectCategoryEditorDeletions(type, groups) {
+    const deletedMains = [];
+    const deletedSubs = [];
+    const oldTree = categoryTree[type] || {};
+    const survivingMains = new Set();
+
+    groups.forEach((group) => {
+        const mainInput = group.querySelector('.category-edit-input--main');
+        const oldMain = mainInput?.dataset?.original || '';
+        if (oldMain) survivingMains.add(oldMain);
+
+        const survivingSubs = new Set();
+        group.querySelectorAll('.category-edit-input--sub').forEach((subInput) => {
+            const oldSub = subInput.dataset.original || '';
+            if (oldSub) survivingSubs.add(oldSub);
+        });
+
+        if (oldMain && Array.isArray(oldTree[oldMain])) {
+            oldTree[oldMain].forEach((oldSub) => {
+                if (!survivingSubs.has(oldSub)) {
+                    deletedSubs.push({ oldMain, oldSub });
+                }
+            });
+        }
+    });
+
+    Object.keys(oldTree).forEach((oldMain) => {
+        if (!survivingMains.has(oldMain)) {
+            deletedMains.push(oldMain);
+        }
+    });
+
+    return { deletedMains, deletedSubs };
+}
+
+function applyCategoryEditorDeletions(type, deletedMains, deletedSubs) {
+    if (!appState.categoryBudgets) appState.categoryBudgets = {};
+
+    deletedMains.forEach((main) => {
+        delete appState.categoryBudgets[main];
+        delete chartHiddenMainCategories[main];
+        delete chartHiddenSubCategories[main];
+        if (activeChartCategory === main) {
+            activeChartCategory = null;
+            activeChartSubCategory = null;
+        }
+        if (formState.selectedMainCategory === main) {
+            formState.selectedMainCategory = '';
+            formState.selectedSubCategory = '';
+        }
+    });
+
+    deletedSubs.forEach(({ oldMain, oldSub }) => {
+        const hidden = chartHiddenSubCategories[oldMain];
+        if (hidden) delete hidden[oldSub];
+        if (activeChartCategory === oldMain && activeChartSubCategory === oldSub) {
+            activeChartSubCategory = null;
+        }
+        if (formState.selectedMainCategory === oldMain && formState.selectedSubCategory === oldSub) {
+            formState.selectedSubCategory = '';
+        }
+    });
+
+    purgeRecentCategoriesForDeleted(deletedMains, deletedSubs, type);
 }
 
 function saveCategoryEditor() {
@@ -165,8 +351,8 @@ function saveCategoryEditor() {
     const mainRenames = [];
     const subRenames = [];
     const newTypeTree = {};
-
     const collectedMainNames = [];
+
     const groups = document.querySelectorAll('#category-editor-list .category-edit-group');
     for (const group of groups) {
         const mainInput = group.querySelector('.category-edit-input--main');
@@ -188,6 +374,11 @@ function saveCategoryEditor() {
                 subInput.focus();
                 return;
             }
+            if (newSub === '[Bez podkategorii]') {
+                alert('Ta nazwa podkategorii jest zarezerowana.');
+                subInput.focus();
+                return;
+            }
             subs.push(newSub);
             if (oldSub !== newSub) subRenames.push({ oldMain, oldSub, newSub });
         }
@@ -195,6 +386,11 @@ function saveCategoryEditor() {
         collectedMainNames.push(newMain);
         if (oldMain !== newMain) mainRenames.push({ oldMain, newMain });
         newTypeTree[newMain] = subs;
+    }
+
+    if (!collectedMainNames.length) {
+        alert('Musi zostać co najmniej jedna kategoria główna.');
+        return;
     }
 
     if (collectedMainNames.length !== new Set(collectedMainNames).size) {
@@ -214,8 +410,12 @@ function saveCategoryEditor() {
     const mainMap = {};
     mainRenames.forEach((r) => { mainMap[r.oldMain] = r.newMain; });
 
+    const { deletedMains, deletedSubs } = collectCategoryEditorDeletions(type, groups);
+
     categoryTree[type] = newTypeTree;
     appState.categoryTree = categoryTree;
+
+    applyCategoryEditorDeletions(type, deletedMains, deletedSubs);
 
     appState.transactions.forEach((tx) => {
         if (tx.type !== type) return;
@@ -265,7 +465,7 @@ function saveCategoryEditor() {
     saveState();
     hapticFeedback();
     closeCategoryEditor();
-    showSettingsToast('Nazwy kategorii zapisane');
+    showSettingsToast('Kategorie zapisane');
     refreshCurrentView();
 }
 
@@ -337,6 +537,7 @@ function saveBudgetEditor() {
     hapticFeedback();
     closeBudgetEditor();
     showSettingsToast('Limity zapisane');
+    if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
 }
 
 function closeSettings() {

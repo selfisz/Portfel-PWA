@@ -493,4 +493,5 @@ function checkAndProcessRecurringTransactions() {
         }
     });
     if (changesMade) saveState();
+    if (changesMade && typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
 }

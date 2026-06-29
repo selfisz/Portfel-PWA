@@ -211,6 +211,7 @@ function registerCreditCardMovement(cardId, type, amount, date, note) {
     appState.creditCardMovements.unshift(movement);
 
     saveState();
+    if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
     return getCreditCardById(cardId);
 }
 

@@ -269,6 +269,23 @@ function migrateRecentCategories(mainMap, subRenames, type) {
     } catch { /* ignore */ }
 }
 
+function purgeRecentCategoriesForDeleted(deletedMains, deletedSubs, type) {
+    try {
+        const deletedMainSet = new Set(deletedMains);
+        const deletedSubKeys = new Set(deletedSubs.map((d) => `${d.oldMain}\0${d.oldSub}`));
+        const recents = readRecentFormEntries();
+        const filtered = recents.filter((entry) => {
+            if ((entry.scope || entry.type) !== type) return true;
+            if (deletedMainSet.has(entry.mainCategory)) return false;
+            if (deletedSubKeys.has(`${entry.mainCategory}\0${entry.subCategory}`)) return false;
+            return true;
+        });
+        if (filtered.length !== recents.length) {
+            localStorage.setItem(RECENT_CATEGORIES_KEY, JSON.stringify(filtered));
+        }
+    } catch { /* ignore */ }
+}
+
 function getRecentCategories(type) {
     return getRecentEntriesForScope(type).filter((entry) => entry.mainCategory);
 }

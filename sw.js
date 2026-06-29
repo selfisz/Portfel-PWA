@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanse-pwa-v188';
+const CACHE_NAME = 'finanse-pwa-v189';
 
 const ASSETS = [
   './',
@@ -24,6 +24,9 @@ const ASSETS = [
   'js/investments.js',
   'js/loans.js',
   'js/settings.js',
+  'js/notifications.js',
+  'js/budget-alerts.js',
+  'js/debt-reminders.js',
   'js/bootstrap.js',
   'js/reports-calendar.js',
   'js/reports-debt.js',
@@ -77,5 +80,55 @@ self.addEventListener('fetch', (e) => {
         return response;
       })
       .catch(() => caches.match(e.request))
+  );
+});
+
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data || data.type !== 'SHOW_NOTIFICATION' || !data.notification) return;
+  const n = data.notification;
+  event.waitUntil(
+    self.registration.showNotification(n.title || 'Finanse', {
+      body: n.body || '',
+      icon: 'icons/icon-192.png',
+      badge: 'icons/icon-192.png',
+      tag: n.id,
+      data: { id: n.id },
+      actions: [
+        { action: 'snooze', title: 'Przypomnij jutro' },
+        { action: 'dismiss', title: 'Odrzuć' }
+      ]
+    })
+  );
+});
+
+function focusOrOpenClient(clientList, message) {
+  for (let i = 0; i < clientList.length; i++) {
+    const client = clientList[i];
+    if ('focus' in client) {
+      client.postMessage(message);
+      return client.focus();
+    }
+  }
+  if (self.clients.openWindow) {
+    return self.clients.openWindow('./index.html').then((client) => {
+      if (client) client.postMessage(message);
+      return client;
+    });
+  }
+  return Promise.resolve();
+}
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const id = event.notification.data?.id;
+  if (!id) return;
+  const action = event.action;
+  let messageType = 'NOTIFICATION_OPENED';
+  if (action === 'dismiss') messageType = 'NOTIFICATION_DISMISS';
+  if (action === 'snooze') messageType = 'NOTIFICATION_SNOOZE';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clients) => focusOrOpenClient(clients, { type: messageType, id }))
   );
 });

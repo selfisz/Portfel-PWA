@@ -86,6 +86,7 @@ beforeAll(() => {
     globalThis.renderCategoryEditor = () => {};
     globalThis.showSettingsToast = () => {};
     globalThis.migrateRecentCategories = () => {};
+    globalThis.purgeRecentCategoriesForDeleted = () => {};
 
     globalThis.escapeHtml = (t) => String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     globalThis.formatPlnAmount = (n) => `${Number(n).toFixed(2)} zł`;
@@ -333,6 +334,94 @@ describe('saveCategoryEditor', () => {
         saveCategoryEditor();
         expect(_getAppState().transactions[0].mainCategory).toBe('Jedzenie');
         expect(_getAppState().transactions[0].subCategory).toBe('Biedronka');
+    });
+
+    it('zapisuje nową kategorię główną', () => {
+        setGroups([
+            { mainOrig: '', mainNew: 'Hobby', subs: [] }
+        ]);
+        saveCategoryEditor();
+        expect(_getCategoryTree().expense['Hobby']).toEqual([]);
+    });
+
+    it('zapisuje nową podkategorię w istniejącej kategorii', () => {
+        setGroups([
+            { mainOrig: 'Jedzenie', mainNew: 'Jedzenie', subs: [['Biedronka', 'Biedronka'], ['', 'Apteka']] }
+        ]);
+        saveCategoryEditor();
+        expect(_getCategoryTree().expense['Jedzenie']).toContain('Apteka');
+    });
+
+    it('alert gdy podkategoria ma zarezerwowaną nazwę', () => {
+        let alertMsg = '';
+        globalThis.alert = (msg) => { alertMsg = msg; };
+        setGroups([
+            { mainOrig: 'Jedzenie', mainNew: 'Jedzenie', subs: [['Biedronka', '[Bez podkategorii]']] }
+        ]);
+        saveCategoryEditor();
+        expect(alertMsg).toContain('zarezerowana');
+    });
+
+    it('usuwa kategorię główną usuniętą z edytora', () => {
+        _setCategoryTree({
+            expense: { Jedzenie: ['Biedronka'], Transport: [] },
+            income: DEFAULT_CATEGORY_TREE.income
+        });
+        setGroups([
+            { mainOrig: 'Jedzenie', mainNew: 'Jedzenie', subs: [['Biedronka', 'Biedronka']] }
+        ]);
+        saveCategoryEditor();
+        expect(_getCategoryTree().expense['Transport']).toBeUndefined();
+        expect(_getCategoryTree().expense['Jedzenie']).toBeDefined();
+    });
+
+    it('usuwa podkategorię usuniętą z edytora', () => {
+        _setCategoryTree({
+            expense: { Jedzenie: ['Biedronka', 'Lidl'] },
+            income: DEFAULT_CATEGORY_TREE.income
+        });
+        setGroups([
+            { mainOrig: 'Jedzenie', mainNew: 'Jedzenie', subs: [['Biedronka', 'Biedronka']] }
+        ]);
+        saveCategoryEditor();
+        expect(_getCategoryTree().expense['Jedzenie']).toEqual(['Biedronka']);
+    });
+
+    it('czyści budżet usuniętej kategorii', () => {
+        _setCategoryTree({
+            expense: { Jedzenie: ['Biedronka'], Transport: [] },
+            income: DEFAULT_CATEGORY_TREE.income
+        });
+        _setAppState({ ..._getAppState(), categoryBudgets: { Transport: 300, Jedzenie: 800 } });
+        setGroups([
+            { mainOrig: 'Jedzenie', mainNew: 'Jedzenie', subs: [['Biedronka', 'Biedronka']] }
+        ]);
+        saveCategoryEditor();
+        expect(_getAppState().categoryBudgets['Transport']).toBeUndefined();
+        expect(_getAppState().categoryBudgets['Jedzenie']).toBe(800);
+    });
+
+    it('nie zmienia transakcji po usunięciu kategorii z drzewa', () => {
+        _setCategoryTree({
+            expense: { Jedzenie: ['Biedronka'], Transport: [] },
+            income: DEFAULT_CATEGORY_TREE.income
+        });
+        _setAppState({ ..._getAppState(), transactions: [
+            { date: '2024-01-01', type: 'expense', mainCategory: 'Transport', subCategory: '[Bez podkategorii]', amount: 20 }
+        ]});
+        setGroups([
+            { mainOrig: 'Jedzenie', mainNew: 'Jedzenie', subs: [['Biedronka', 'Biedronka']] }
+        ]);
+        saveCategoryEditor();
+        expect(_getAppState().transactions[0].mainCategory).toBe('Transport');
+    });
+
+    it('alert gdy brak kategorii głównych', () => {
+        let alertMsg = '';
+        globalThis.alert = (msg) => { alertMsg = msg; };
+        setGroups([]);
+        saveCategoryEditor();
+        expect(alertMsg).toContain('co najmniej jedna');
     });
 });
 
