@@ -307,6 +307,7 @@ function syncFromRemoteData(remoteData) {
     } catch (err) {
         console.error('refreshCurrentView', err);
     }
+    if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
     return finalCount;
 }
 

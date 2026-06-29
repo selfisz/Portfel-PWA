@@ -65,26 +65,24 @@ function evaluateBudgetAlerts() {
 
         if (pct >= 100 && !alertState[stateKey].warned100) {
             alertState[stateKey].warned100 = true;
-            const item = upsertNotification({
+            const result = upsertNotification({
                 id: `budget-over|${stateKey}`,
                 type: 'budget_over',
                 title: `Limit przekroczony: ${category}`,
                 body: `${formatPlnAmount(spent)} z ${formatPlnAmount(limit)} (${Math.round(pct)}%)`,
-                refreshRead: true,
                 payload: { category, monthKey, threshold: 100 }
             });
-            if (item) created.push(item);
+            if (result?.isNew) created.push(result.item);
         } else if (pct >= 80 && pct < 100 && !alertState[stateKey].warned80) {
             alertState[stateKey].warned80 = true;
-            const item = upsertNotification({
+            const result = upsertNotification({
                 id: `budget-warn|${stateKey}`,
                 type: 'budget_warn',
                 title: `Limit 80%: ${category}`,
                 body: `${formatPlnAmount(spent)} z ${formatPlnAmount(limit)} (${Math.round(pct)}%)`,
-                refreshRead: true,
                 payload: { category, monthKey, threshold: 80 }
             });
-            if (item) created.push(item);
+            if (result?.isNew) created.push(result.item);
         }
     });
 

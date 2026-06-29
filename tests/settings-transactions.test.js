@@ -70,6 +70,10 @@ beforeAll(() => {
     // Firebase mocks
     globalThis.stateRef = { set: () => Promise.resolve(), on: () => {}, off: () => {} };
     globalThis.cloudBackupRef = { get: () => Promise.resolve({ exists: false, data: () => ({}) }) };
+    globalThis.listCloudBackupSnapshots = () => Promise.resolve([]);
+    globalThis.saveCloudBackupSnapshot = () => Promise.resolve();
+    globalThis.getCloudBackupSnapshotById = () => Promise.resolve(null);
+    globalThis.getCloudBackupPayload = () => Promise.resolve(null);
 
     // Minimal function stubs
     globalThis.saveState = () => {};
@@ -163,6 +167,19 @@ function setGroups(groups) {
         return { forEach: () => {} };
     };
 }
+
+// ===========================================================================
+// settings.js — formatCloudBackupCount
+// ===========================================================================
+describe('formatCloudBackupCount', () => {
+    it('odmienia liczbę kopii po polsku', () => {
+        expect(formatCloudBackupCount(1)).toBe('1 kopia');
+        expect(formatCloudBackupCount(2)).toBe('2 kopie');
+        expect(formatCloudBackupCount(4)).toBe('4 kopie');
+        expect(formatCloudBackupCount(5)).toBe('5 kopii');
+        expect(formatCloudBackupCount(22)).toBe('22 kopie');
+    });
+});
 
 // ===========================================================================
 // settings.js — getExportPayload

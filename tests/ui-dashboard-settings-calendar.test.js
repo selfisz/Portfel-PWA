@@ -63,6 +63,10 @@ beforeAll(() => {
 
     globalThis.stateRef = { set: () => Promise.resolve(), on: () => {}, off: () => {} };
     globalThis.cloudBackupRef = { set: () => Promise.resolve(), get: () => Promise.resolve({ exists: false }) };
+    globalThis.listCloudBackupSnapshots = () => Promise.resolve([]);
+    globalThis.saveCloudBackupSnapshot = () => Promise.resolve();
+    globalThis.getCloudBackupSnapshotById = () => Promise.resolve(null);
+    globalThis.getCloudBackupPayload = () => Promise.resolve(null);
     globalThis.formatPlnAmount = (n) => `${Number(n).toFixed(2)} zł`;
     globalThis.formatCompactPln = (n) => `${n} zł`;
     globalThis.formatTxDate = (d) => d;

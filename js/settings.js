@@ -54,19 +54,33 @@ function setSettingsButtonBusy(btn, busy, busyLabel) {
     }
 }
 
+function formatCloudBackupDate(value) {
+    if (!value) return '—';
+    const date = new Date(typeof value === 'string' ? value : value.toDate?.() || value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleString('pl-PL');
+}
+
+function formatCloudBackupCount(count) {
+    if (count === 1) return '1 kopia';
+    const mod10 = count % 10;
+    const mod100 = count % 100;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} kopie`;
+    return `${count} kopii`;
+}
+
 async function refreshBackupInfo() {
     const cloudEl = document.getElementById('backup-cloud-info');
     const localEl = document.getElementById('backup-local-info');
     if (cloudEl) cloudEl.textContent = 'Sprawdzanie…';
     try {
-        const payload = await getCloudBackupPayload();
-        if (payload?.exportedAt || payload?.data?.transactions?.length) {
-            const exportedAt = payload.exportedAt;
-            const date = exportedAt
-                ? new Date(typeof exportedAt === 'string' ? exportedAt : exportedAt.toDate?.() || exportedAt).toLocaleString('pl-PL')
-                : '—';
-            const count = payload.transactionCount || payload.data?.transactions?.length || '?';
-            if (cloudEl) cloudEl.textContent = `${date} · ${count} trans.`;
+        const snapshots = await listCloudBackupSnapshots();
+        if (snapshots.length) {
+            const latest = snapshots[0];
+            const date = formatCloudBackupDate(latest.exportedAt);
+            if (cloudEl) {
+                cloudEl.textContent = `${formatCloudBackupCount(snapshots.length)} · ostatnia ${date} · ${latest.transactionCount} trans.`;
+            }
         } else if (cloudEl) {
             cloudEl.textContent = 'Brak kopii w chmurze';
         }
@@ -547,13 +561,13 @@ function closeSettings() {
 
 async function backupToCloud() {
     const count = getTransactionCount(appState);
-    if (!confirm(`Na pewno wysłać kopię do chmury (${count} trans.)?\nPoprzednia kopia w chmurze zostanie zastąpiona.`)) return;
+    if (!confirm(`Na pewno wysłać kopię do chmury (${count} trans.)?\nZostanie dodana jako nowa wersja (przechowujemy do ${MAX_CLOUD_BACKUP_SNAPSHOTS} kopii).`)) return;
 
     const btn = document.getElementById('btn-backup-cloud');
     setSettingsButtonBusy(btn, true, 'Wysyłanie…');
     try {
         const payload = getExportPayload();
-        await cloudBackupRef.set(payload);
+        await saveCloudBackupSnapshot(payload);
         showSettingsToast('Kopia wysłana do chmury');
         refreshBackupInfo();
         hapticFeedback();
@@ -589,42 +603,88 @@ function backupToPhone() {
     }
 }
 
-async function restoreFromCloud() {
-    if (!confirm('Na pewno przywrócić kopię z chmury?\nObecne dane w aplikacji zostaną zastąpione.')) return;
+function closeCloudRestorePicker() {
+    document.getElementById('cloud-restore-overlay')?.classList.add('hidden');
+}
+
+async function openCloudRestorePicker() {
+    const overlay = document.getElementById('cloud-restore-overlay');
+    const list = document.getElementById('cloud-restore-list');
+    if (!overlay || !list) return;
+    overlay.classList.remove('hidden');
+    list.innerHTML = '<p class="cloud-restore-status">Ładowanie kopii…</p>';
+
+    try {
+        const snapshots = await listCloudBackupSnapshots();
+        if (!snapshots.length) {
+            list.innerHTML = '<p class="cloud-restore-status">Brak kopii w chmurze</p>';
+            return;
+        }
+        list.innerHTML = snapshots.map((snapshot, index) => {
+            const date = formatCloudBackupDate(snapshot.exportedAt);
+            const latestBadge = index === 0 ? '<span class="cloud-restore-badge">najnowsza</span>' : '';
+            return `<button type="button" class="cloud-restore-row" data-backup-id="${escapeHtml(snapshot.id)}">
+                <span class="cloud-restore-row-main">
+                    <span class="cloud-restore-date">${escapeHtml(date)}</span>
+                    ${latestBadge}
+                </span>
+                <span class="cloud-restore-meta">${snapshot.transactionCount} trans.</span>
+            </button>`;
+        }).join('');
+        list.onclick = (event) => {
+            const row = event.target.closest('[data-backup-id]');
+            if (row?.dataset.backupId) restoreCloudBackupById(row.dataset.backupId);
+        };
+    } catch (err) {
+        console.error('openCloudRestorePicker', err);
+        list.innerHTML = '<p class="cloud-restore-status cloud-restore-status--error">Nie udało się pobrać listy kopii</p>';
+    }
+}
+
+async function restoreCloudBackupById(id) {
+    const snapshots = await listCloudBackupSnapshots();
+    const meta = snapshots.find((item) => item.id === id);
+    const dateLabel = meta ? formatCloudBackupDate(meta.exportedAt) : 'wybraną';
+    if (!confirm(`Na pewno przywrócić kopię z ${dateLabel}?\nObecne dane w aplikacji zostaną zastąpione.`)) return;
 
     const btn = document.getElementById('btn-restore-cloud');
     setSettingsButtonBusy(btn, true, 'Pobieranie…');
     let payload;
     try {
-        payload = await getCloudBackupPayload();
+        payload = await getCloudBackupSnapshotById(id);
     } catch (err) {
-        console.error('restoreFromCloud get', err);
+        console.error('restoreCloudBackupById get', err);
         showSettingsToast('Nie udało się pobrać kopii z chmury', 'error');
         setSettingsButtonBusy(btn, false);
         return;
     }
     setSettingsButtonBusy(btn, false);
     if (!payload) {
-        showSettingsToast('Brak kopii w chmurze', 'error');
+        showSettingsToast('Nie znaleziono wybranej kopii', 'error');
         return;
     }
     const count = payload.transactionCount || payload.data?.transactions?.length || 0;
     if (!count) {
-        showSettingsToast('Kopia w chmurze jest pusta', 'error');
+        showSettingsToast('Wybrana kopia jest pusta', 'error');
         return;
     }
     setSettingsButtonBusy(btn, true, 'Przywracanie…');
     try {
         applyBackupPayload(payload);
         showSettingsToast(`Przywrócono ${count} transakcji z chmury`);
+        closeCloudRestorePicker();
         refreshBackupInfo();
         hapticFeedback();
     } catch (err) {
-        console.error('restoreFromCloud apply', err);
+        console.error('restoreCloudBackupById apply', err);
         showSettingsToast(err.message || 'Nie udało się przywrócić kopii', 'error');
     } finally {
         setSettingsButtonBusy(btn, false);
     }
+}
+
+function restoreFromCloud() {
+    openCloudRestorePicker();
 }
 
 function restoreFromPhoneFile() {

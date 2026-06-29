@@ -7,4 +7,5 @@ initOverlayCloseIcons();
 initData();
 scheduleMarketPriceRefresh();
 registerServiceWorker();
+initNotifications();
 checkModuleSplitThreshold();

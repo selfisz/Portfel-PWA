@@ -400,6 +400,7 @@ function registerLoanPayment(loanId, amount, date, note, options = {}) {
 
     appState.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
     saveState();
+    if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
     return updated;
 }
 
@@ -536,6 +537,7 @@ function saveLoanDetails() {
     draftLoan = null;
     saveState();
     hapticFeedback();
+    if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
     if (updated.archived) {
         showSettingsToast(wasNew ? 'Kredyt dodany' : 'Kredyt spłacony — przeniesiony do archiwum');
     } else {

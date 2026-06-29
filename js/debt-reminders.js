@@ -69,15 +69,14 @@ function evaluateLoanReminders() {
             .forEach((payment) => {
                 const loan = getLoanById(payment.id);
                 if (!loan || !(loan.currentCapitalLeft > 0)) return;
-                const item = upsertNotification({
+                const result = upsertNotification({
                     id: `loan-due|${payment.id}|${dateStr}|${type}`,
                     type,
                     title: `${titlePrefix}: ${payment.name}`,
                     body: `${formatPlnAmount(payment.amount)} · ${formatTxDate(dateStr)}`,
-                    refreshRead: true,
                     payload: { loanId: payment.id, dueDate: dateStr }
                 });
-                if (item) created.push(item);
+                if (result?.isNew) created.push(result.item);
             });
     };
 
@@ -94,12 +93,11 @@ function evaluateCardReminders() {
         if (event.dueDate !== today) return;
         if (isCardRepaymentEventSettled(event)) return;
         const sourceLabel = event.sourceType === 'transfer' ? 'przelew z karty' : 'zakup kartą';
-        const item = upsertNotification({
+        const result = upsertNotification({
             id: event.id,
             type: 'card_repay_50d',
             title: `Spłata karty: ${event.cardName}`,
             body: `${formatPlnAmount(event.amount)} (${sourceLabel} z ${formatTxDate(event.sourceDate)})`,
-            refreshRead: true,
             payload: {
                 cardId: event.cardId,
                 amount: event.amount,
@@ -107,7 +105,7 @@ function evaluateCardReminders() {
                 sourceType: event.sourceType
             }
         });
-        if (item) created.push(item);
+        if (result?.isNew) created.push(result.item);
     });
 
     const day = new Date(`${today}T12:00:00`).getDate();
@@ -117,18 +115,17 @@ function evaluateCardReminders() {
             const monthKey = today.slice(0, 7);
             const names = cards.map((c) => c.name).join(', ');
             const total = cards.reduce((sum, c) => sum + c.currentBalance, 0);
-            const item = upsertNotification({
+            const result = upsertNotification({
                 id: `card-monthly|${monthKey}`,
                 type: 'card_monthly_check',
                 title: 'Sprawdź karty do spłaty',
                 body: `${cards.length} ${cards.length === 1 ? 'karta' : 'kart'} · łącznie ${formatPlnAmount(total)} (${names})`,
-                refreshRead: true,
                 payload: {
                     cardIds: cards.map((c) => c.id),
                     cardId: cards[0].id
                 }
             });
-            if (item) created.push(item);
+            if (result?.isNew) created.push(result.item);
         }
     }
 

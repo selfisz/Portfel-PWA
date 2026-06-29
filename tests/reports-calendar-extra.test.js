@@ -72,6 +72,10 @@ beforeAll(() => {
     // Firebase / external mocks
     globalThis.stateRef = { set: () => Promise.resolve(), on: () => {}, off: () => {} };
     globalThis.cloudBackupRef = { get: () => Promise.resolve({ exists: false, data: () => ({}) }) };
+    globalThis.listCloudBackupSnapshots = () => Promise.resolve([]);
+    globalThis.saveCloudBackupSnapshot = () => Promise.resolve();
+    globalThis.getCloudBackupSnapshotById = () => Promise.resolve(null);
+    globalThis.getCloudBackupPayload = () => Promise.resolve(null);
 
     globalThis.saveState = () => {};
     globalThis.hapticFeedback = () => {};

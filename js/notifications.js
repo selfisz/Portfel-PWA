@@ -89,15 +89,16 @@ function upsertNotification(proposal) {
         inbox[idx] = {
             ...existing,
             ...proposal,
-            read: existing.read && proposal.refreshRead !== true ? existing.read : false,
+            read: existing.read,
             dismissed,
             dismissedYm,
             dismissedPermanently,
             snoozedUntil: existing.snoozedUntil,
             updatedAt: now
         };
+        delete inbox[idx].refreshRead;
         saveNotificationInbox(inbox);
-        return inbox[idx];
+        return { item: inbox[idx], isNew: false };
     }
 
     const created = {
@@ -110,9 +111,10 @@ function upsertNotification(proposal) {
         updatedAt: now,
         ...proposal
     };
+    delete created.refreshRead;
     inbox.unshift(created);
     saveNotificationInbox(inbox.slice(0, 200));
-    return created;
+    return { item: created, isNew: true };
 }
 
 function getNotificationById(id) {
@@ -282,7 +284,7 @@ function maybeShowSystemNotifications(newItems) {
 
     const reg = navigator.serviceWorker?.controller;
     if (!reg) return;
-    newItems.forEach((item) => {
+    newItems.filter((item) => !item.read).forEach((item) => {
         reg.postMessage({
             type: 'SHOW_NOTIFICATION',
             notification: {
@@ -313,7 +315,7 @@ function evaluateAllNotifications() {
     updateNotificationsBadge();
     const panel = document.getElementById('notifications-overlay');
     if (panel && !panel.classList.contains('hidden')) renderNotificationsPanel();
-    maybeShowSystemNotifications(created.filter((item) => !item.read));
+    maybeShowSystemNotifications(created);
     return created;
 }
 

@@ -151,7 +151,7 @@
                     <div class="settings-action-grid">
                         <button type="button" class="settings-action-btn" id="btn-backup-cloud" onclick="backupToCloud()">
                             <span class="settings-action-btn-title">Chmura</span>
-                            <span class="settings-action-btn-desc">Wyślij do Firebase</span>
+                            <span class="settings-action-btn-desc">Dodaj kopię (do 20 wersji)</span>
                         </button>
                         <button type="button" class="settings-action-btn" id="btn-backup-phone" onclick="backupToPhone()">
                             <span class="settings-action-btn-title">Plik</span>
@@ -164,7 +164,7 @@
                     <div class="settings-action-grid">
                         <button type="button" class="settings-action-btn settings-action-btn--restore" id="btn-restore-cloud" onclick="restoreFromCloud()">
                             <span class="settings-action-btn-title">Z chmury</span>
-                            <span class="settings-action-btn-desc">Zastąp dane</span>
+                            <span class="settings-action-btn-desc">Wybierz datę kopii</span>
                         </button>
                         <button type="button" class="settings-action-btn settings-action-btn--restore" id="btn-restore-file" onclick="restoreFromPhoneFile()">
                             <span class="settings-action-btn-title">Z pliku</span>
@@ -196,6 +196,14 @@
             <p class="settings-hint">Puste pole = brak limitu. Przycisk „6m” wstawia średnią z ostatnich 6 miesięcy.</p>
             <div id="budget-editor-list" class="category-editor-list"></div>
             <button type="button" class="btn-submit category-editor-save" onclick="saveBudgetEditor()">Zapisz limity</button>
+        </div>
+    </div>
+
+    <div id="cloud-restore-overlay" class="settings-overlay category-editor-overlay hidden" onclick="if (event.target === this) closeCloudRestorePicker()">
+        <div class="settings-panel category-editor-panel cloud-restore-panel">
+            <div id="panel-header-cloud-restore"></div>
+            <p class="cloud-restore-hint">Wybierz kopię z chmury. Przywrócenie zastąpi obecne dane w aplikacji.</p>
+            <div id="cloud-restore-list" class="cloud-restore-list"></div>
         </div>
     </div>
 
