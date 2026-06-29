@@ -27,11 +27,26 @@ beforeAll(() => {
 
     globalThis.getActiveLoans = () => [{
         id: 'loan-1',
-        name: 'Hipoteka',
+        name: 'Kredyt hipoteczny',
+        subCategory: 'Kredyt hipoteczny',
         interestRate: 6.5,
         currentCapitalLeft: 300000,
-        archived: false
+        nextInstallmentAmount: 2500,
+        archived: false,
+        details: { remainingInstallments: 240 }
     }];
+    globalThis.isMortgageLoan = () => true;
+    globalThis.formatTxDate = (d) => d || '';
+    globalThis.formatMonthsDuration = (m) => `${m} mies.`;
+    globalThis.calculateOverpaymentScenarios = (loan, { lumpSum = 0 } = {}) => ({
+        params: { balance: loan.currentCapitalLeft, payment: 2500, annualRate: 6.5, termMonths: 240 },
+        baseline: { months: 220, totalInterest: 120000, payoffDate: '2046-01-01' },
+        shorten: { months: 200, totalInterest: 100000, payoffDate: '2044-06-01' },
+        lower: { months: 220, totalInterest: 110000, monthlyPayment: 2300, savedPerMonth: 200, payoffDate: '2046-01-01' },
+        savedMonthsShorten: 20,
+        savedInterestShorten: 20000,
+        savedInterestLower: 10000
+    });
     globalThis.getPrimaryCashAsset = () => ({ amount: 10000, type: 'cash' });
     globalThis.getActiveAssets = () => [{ amount: 10000, type: 'cash' }];
 
@@ -58,8 +73,19 @@ describe('surplus-allocator', () => {
         expect(ikze.amount).toBe(1000);
         expect(ikze.taxRefund).toBe(320);
         expect(ikze.detail).toContain('32%');
-        expect(scenarios.some((s) => s.id === 'loan')).toBe(true);
+        const loan = scenarios.find((s) => s.id === 'loan');
+        expect(loan).toBeTruthy();
+        expect(loan.title).toContain('hipoteczn');
+        expect(loan.overpayHtml).toContain('Skróć okres');
+        expect(loan.overpayHtml).toContain('Obniż ratę');
         expect(scenarios.some((s) => s.id === 'cushion')).toBe(true);
+    });
+
+    it('ukrywa nadpłatę hipoteczną bez kredytu hipotecznego', () => {
+        globalThis.isMortgageLoan = () => false;
+        const scenarios = buildSurplusScenarios(1000, { periodTx: [], mode: 'month', period: '2026-06' });
+        expect(scenarios.some((s) => s.id === 'loan')).toBe(false);
+        globalThis.isMortgageLoan = () => true;
     });
 
     it('IKZE przy zerowej kwocie nie pokazuje wykorzystanego limitu', () => {

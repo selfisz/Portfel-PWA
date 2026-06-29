@@ -3838,6 +3838,109 @@ html:not([data-theme="dark"]) .grid-item.selected {
     color: var(--text-muted);
 }
 
+.subscription-center-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin: 0 0 8px;
+}
+
+.subscription-picker-panel {
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--surface-elevated);
+}
+
+.subscription-picker-label {
+    margin: 0 0 8px;
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+}
+
+.subscription-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.subscription-picker-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+        "title amount"
+        "meta amount";
+    gap: 2px 12px;
+    width: 100%;
+    padding: 10px 0;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+    color: var(--text);
+}
+
+.subscription-picker-row:last-child {
+    border-bottom: none;
+}
+
+.subscription-picker-row:hover {
+    background: var(--surface);
+}
+
+.subscription-picker-row-title {
+    grid-area: title;
+    font-size: var(--text-sm);
+    font-weight: 600;
+}
+
+.subscription-picker-row-meta {
+    grid-area: meta;
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+}
+
+.subscription-picker-row-amount {
+    grid-area: amount;
+    align-self: center;
+    font-size: var(--text-sm);
+    color: var(--danger);
+}
+
+.subscription-recurring-side .subscription-skip-btn + .subscription-skip-btn {
+    margin-top: 0;
+}
+
+.surplus-overpay-grid {
+    margin-top: 10px;
+}
+
+.surplus-overpay-line {
+    margin: 4px 0;
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+}
+
+.surplus-overpay-line strong {
+    color: var(--text);
+}
+
+.surplus-overpay-meta {
+    margin-top: 8px;
+    margin-bottom: 0;
+}
+
+.surplus-scenario--loan .overpay-scenario {
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+}
+
 .subscription-recurring-annual {
     font-size: var(--text-2xs);
     color: var(--text-muted);

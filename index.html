@@ -1115,11 +1115,15 @@
                     <div id="reports-year-heatmap" class="reports-year-heatmap hidden"></div>
                 </div>
 
-                <div class="card dashboard-panel">
+                <div id="reports-subscription-card" class="card dashboard-panel">
                     <div class="chart-card-header">
                         <h2 class="dashboard-section-title">Centrum subskrypcji</h2>
                     </div>
-                    <p class="reports-hint">Stałe opłaty wykryte z historii transakcji. <strong>Pomiń</strong> usuwa pozycję tylko z tej listy — nie kasuje transakcji w portfelu.</p>
+                    <p class="reports-hint">Stałe opłaty wykryte z historii transakcji. <strong>Pomiń</strong> usuwa pozycję tylko z tej listy — nie kasuje transakcji w portfelu. <strong>Zmień nazwę</strong> to tylko etykieta na liście.</p>
+                    <div class="subscription-center-toolbar">
+                        <button type="button" class="btn-text-link" data-subscription-action="toggle-picker">+ Dodaj własną</button>
+                    </div>
+                    <div id="reports-subscription-picker" class="subscription-picker-panel hidden" aria-live="polite"></div>
                     <p id="reports-subscription-summary" class="reports-hint subscription-summary-line"></p>
                     <div id="reports-subscription-center" class="reports-recurring-list"></div>
                 </div>

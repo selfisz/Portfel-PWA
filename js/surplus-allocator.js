@@ -55,12 +55,11 @@ function getOperationalCashBalance() {
     return 0;
 }
 
-function pickTargetLoan() {
-    if (typeof getActiveLoans !== 'function') return null;
-    const loans = getActiveLoans()
-        .filter((l) => (l.currentCapitalLeft || 0) > 0 && !l.archived)
-        .sort((a, b) => (b.interestRate || 0) - (a.interestRate || 0));
-    return loans[0] || null;
+function pickMortgageLoan() {
+    if (typeof getActiveLoans !== 'function' || typeof isMortgageLoan !== 'function') return null;
+    return getActiveLoans()
+        .filter((l) => !l.archived && (l.currentCapitalLeft || 0) > 0 && isMortgageLoan(l))
+        .sort((a, b) => (b.currentCapitalLeft || 0) - (a.currentCapitalLeft || 0))[0] || null;
 }
 
 function estimateIkzeTaxRefundPln(amount, rate = IKZE_SECOND_BRACKET_RATE) {
@@ -89,6 +88,54 @@ function buildIkzeScenarioDetail(used, limit, room, alloc, year) {
     return lines.join(' ');
 }
 
+function buildMortgageOverpaymentScenario(amount) {
+    const loan = pickMortgageLoan();
+    if (!loan || typeof calculateOverpaymentScenarios !== 'function') return null;
+
+    const safeAmount = Math.max(0, Number(amount) || 0);
+    const alloc = Math.min(safeAmount, loan.currentCapitalLeft || 0);
+    const sim = calculateOverpaymentScenarios(loan, { lumpSum: alloc });
+    if (!sim) return null;
+
+    const loanName = loan.name || loan.subCategory || 'Kredyt hipoteczny';
+    const payoffLabel = (dateStr) => (dateStr ? formatTxDate(dateStr) : '—');
+    const shortenDelta = sim.savedMonthsShorten > 0 && typeof formatMonthsDuration === 'function'
+        ? ` (−${formatMonthsDuration(sim.savedMonthsShorten)})`
+        : '';
+    const shortenInterestDelta = sim.savedInterestShorten > 0
+        ? ` (−${formatPlnAmount(sim.savedInterestShorten)})`
+        : '';
+    const lowerPaymentDelta = sim.lower.savedPerMonth > 0
+        ? ` (−${formatPlnAmount(sim.lower.savedPerMonth)})`
+        : '';
+    const lowerInterestDelta = sim.savedInterestLower > 0
+        ? ` (−${formatPlnAmount(sim.savedInterestLower)})`
+        : '';
+
+    return {
+        id: 'loan',
+        title: `Nadpłata hipoteczna: ${loanName}`,
+        amount: alloc,
+        headline: alloc > 0 ? formatPlnAmount(alloc) : '—',
+        detail: alloc > 0
+            ? `Jednorazowa nadpłata na kapitał ${formatPlnAmount(alloc)}.`
+            : 'Ustaw kwotę powyżej, aby zobaczyć symulację nadpłaty.',
+        overpayHtml: alloc > 0 ? `<div class="surplus-overpay-grid overpay-scenarios">
+            <div class="overpay-scenario">
+                <div class="overpay-scenario-title">Skróć okres</div>
+                <p class="surplus-overpay-line">Koniec spłaty: <strong>${payoffLabel(sim.shorten.payoffDate)}</strong>${shortenDelta}</p>
+                <p class="surplus-overpay-line">Odsetki łącznie: <strong>${formatPlnAmount(sim.shorten.totalInterest)}</strong>${shortenInterestDelta}</p>
+            </div>
+            <div class="overpay-scenario">
+                <div class="overpay-scenario-title">Obniż ratę</div>
+                <p class="surplus-overpay-line">Rata: <strong>${formatPlnAmount(sim.lower.monthlyPayment)}/mies.</strong>${lowerPaymentDelta}</p>
+                <p class="surplus-overpay-line">Odsetki łącznie: <strong>${formatPlnAmount(sim.lower.totalInterest)}</strong>${lowerInterestDelta}</p>
+            </div>
+        </div>
+        <p class="reports-hint surplus-overpay-meta">Kapitał ${formatPlnAmount(sim.params.balance)} · rata ${formatPlnAmount(sim.params.payment)} · stopa ${sim.params.annualRate ? `${sim.params.annualRate}%` : '—'}</p>` : ''
+    };
+}
+
 function buildSurplusScenarios(amount, ctx) {
     const scenarios = [];
     const safeAmount = Math.max(0, Number(amount) || 0);
@@ -110,21 +157,8 @@ function buildSurplusScenarios(amount, ctx) {
         });
     }
 
-    const loan = pickTargetLoan();
-    if (loan) {
-        const alloc = Math.min(safeAmount, loan.currentCapitalLeft || 0);
-        const rate = Number(loan.interestRate) || 0;
-        const savedYear = Math.round(alloc * (rate / 100));
-        scenarios.push({
-            id: 'loan',
-            title: `Nadpłata: ${loan.name || loan.subCategory || 'kredyt'}`,
-            amount: alloc,
-            headline: alloc > 0 ? formatPlnAmount(alloc) : '—',
-            detail: rate > 0
-                ? `Szac. oszczędność odsetek ~${formatPlnAmount(savedYear)}/rok przy ${rate.toFixed(2)}%.`
-                : 'Skrócenie harmonogramu bez szacunku odsetek (brak oprocentowania w danych).'
-        });
-    }
+    const mortgage = buildMortgageOverpaymentScenario(safeAmount);
+    if (mortgage) scenarios.push(mortgage);
 
     const avgExpense = getAverageMonthlyExpenses();
     const cash = getOperationalCashBalance();
@@ -180,12 +214,14 @@ function renderSurplusAllocator(ctx) {
                 <div><span class="label">Przy pełnym limicie</span><strong>${s.taxRefundMax > 0 ? formatPlnAmount(s.taxRefundMax) : '—'}</strong></div>
             </div>`
             : '';
+        const overpayBlock = s.overpayHtml || '';
         return `<div class="surplus-scenario surplus-scenario--${s.id}">
             <div class="surplus-scenario-head">
                 <span class="surplus-scenario-title">${escapeHtml(s.title)}</span>
                 <strong class="surplus-scenario-amount">${escapeHtml(s.headline)}</strong>
             </div>
             <p class="surplus-scenario-detail">${escapeHtml(s.detail)}</p>
+            ${overpayBlock}
             ${taxBlock}
         </div>`;
     }).join('');

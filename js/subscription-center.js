@@ -4,15 +4,17 @@ const SUBSCRIPTION_SIGNAL = /subskrypc|netflix|spotify|disney|hbo|youtube|apple|
 
 let subscriptionExpandedId = null;
 let subscriptionDismissedExpanded = false;
+let subscriptionAddPickerOpen = false;
 
 function readSubscriptionPrefs() {
     try {
         const raw = JSON.parse(localStorage.getItem(SUBSCRIPTION_PREFS_KEY) || '{}');
         return {
-            dismissed: raw.dismissed && typeof raw.dismissed === 'object' ? raw.dismissed : {}
+            dismissed: raw.dismissed && typeof raw.dismissed === 'object' ? raw.dismissed : {},
+            customLabels: raw.customLabels && typeof raw.customLabels === 'object' ? raw.customLabels : {}
         };
     } catch {
-        return { dismissed: {} };
+        return { dismissed: {}, customLabels: {} };
     }
 }
 
@@ -87,7 +89,9 @@ function detectSubscriptionPriceHike(txs) {
 
 function buildSubscriptionEntry(raw) {
     const txs = getSubscriptionTransactions(raw);
-    const label = pickSubscriptionLabel(raw, txs);
+    const entryId = getSubscriptionId(raw);
+    const prefs = readSubscriptionPrefs();
+    const label = prefs.customLabels[entryId] || pickSubscriptionLabel(raw, txs);
     const priceHike = detectSubscriptionPriceHike(txs);
     const daysSince = raw.lastDate
         ? Math.floor((Date.now() - new Date(raw.lastDate).getTime()) / 86400000)
@@ -176,6 +180,109 @@ function restoreSubscription(id) {
     renderSubscriptionCenter();
 }
 
+function renameSubscription(id) {
+    const entry = buildAllSubscriptionEntries().find((e) => e.id === id);
+    const prefs = readSubscriptionPrefs();
+    const current = prefs.customLabels[id] || entry?.label || '';
+    const next = prompt('Nazwa na liście subskrypcji (tylko wyświetlanie):', current);
+    if (next === null) return;
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === (entry?.label || '')) {
+        delete prefs.customLabels[id];
+    } else {
+        prefs.customLabels[id] = trimmed.slice(0, 60);
+    }
+    writeSubscriptionPrefs(prefs);
+    renderSubscriptionCenter();
+}
+
+function transactionMatchesSubscriptionSeed(tx, seed) {
+    if (!tx || !seed || tx.type !== 'expense' || seed.type !== 'expense') return false;
+    if (typeof getExpenseGroupKey === 'function') {
+        return getExpenseGroupKey(tx, 'sub') === getExpenseGroupKey(seed, 'sub');
+    }
+    return tx.mainCategory === seed.mainCategory && tx.subCategory === seed.subCategory;
+}
+
+function addSubscriptionFromTransaction(txIndex) {
+    const tx = appState.transactions?.[txIndex];
+    if (!tx || tx.type !== 'expense') return;
+
+    const recurringId = tx.recurringId || `rec_${Date.now()}`;
+    let changed = false;
+    (appState.transactions || []).forEach((t, index) => {
+        if (!transactionMatchesSubscriptionSeed(t, tx)) return;
+        if (t.recurringId !== recurringId) {
+            appState.transactions[index] = { ...t, recurringId };
+            changed = true;
+        }
+    });
+
+    if (changed && typeof saveState === 'function') {
+        saveState();
+        if (typeof showSettingsToast === 'function') {
+            showSettingsToast('Dodano własną subskrypcję — kolejne podobne wydatki będą śledzone');
+        }
+    }
+
+    subscriptionAddPickerOpen = false;
+    renderSubscriptionCenter();
+}
+
+function getSubscriptionPickerCandidates(limit = 30) {
+    const seen = new Set();
+    return (appState.transactions || [])
+        .filter((t) => t.type === 'expense')
+        .sort((a, b) => b.date.localeCompare(a.date) || (Number(b.amount) - Number(a.amount)))
+        .filter((t) => {
+            const key = typeof getExpenseGroupKey === 'function'
+                ? getExpenseGroupKey(t, 'sub')
+                : `${t.mainCategory}|${t.subCategory}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        })
+        .slice(0, limit)
+        .map((t) => ({ tx: t, index: appState.transactions.indexOf(t) }))
+        .filter((row) => row.index >= 0);
+}
+
+function toggleSubscriptionPicker() {
+    subscriptionAddPickerOpen = !subscriptionAddPickerOpen;
+    renderSubscriptionPicker();
+}
+
+function renderSubscriptionPicker() {
+    const panel = document.getElementById('reports-subscription-picker');
+    if (!panel) return;
+
+    if (!subscriptionAddPickerOpen) {
+        panel.classList.add('hidden');
+        panel.innerHTML = '';
+        return;
+    }
+
+    const rows = getSubscriptionPickerCandidates();
+    if (!rows.length) {
+        panel.classList.remove('hidden');
+        panel.innerHTML = '<p class="reports-hint">Brak wydatków do dodania — najpierw zaksięguj transakcję na pulpicie.</p>';
+        return;
+    }
+
+    panel.classList.remove('hidden');
+    panel.innerHTML = `<p class="subscription-picker-label">Wybierz wydatek z historii — oznaczymy go jako powtarzalny i pogrupujemy podobne transakcje.</p>
+        <div class="subscription-picker-list">
+            ${rows.map(({ tx, index }) => {
+                const title = tx.subCategory === '[Bez podkategorii]' ? tx.mainCategory : tx.subCategory;
+                return `<button type="button" class="subscription-picker-row" data-subscription-pick="${index}">
+                    <span class="subscription-picker-row-title">${escapeHtml(title)}</span>
+                    <span class="subscription-picker-row-meta">${formatTxDate(tx.date)} · ${escapeHtml(tx.mainCategory)}</span>
+                    <strong class="subscription-picker-row-amount">${formatPlnAmount(tx.amount)}</strong>
+                </button>`;
+            }).join('')}
+        </div>`;
+}
+
 function toggleSubscriptionTransactions(id) {
     subscriptionExpandedId = subscriptionExpandedId === id ? null : id;
     renderSubscriptionCenter();
@@ -187,12 +294,32 @@ function toggleSubscriptionDismissed() {
 }
 
 function bindSubscriptionCenterEvents() {
-    const root = document.getElementById('reports-subscription-center');
+    const root = document.getElementById('reports-subscription-card');
     if (!root) return;
     if (!root.dataset) root.dataset = {};
     if (root.dataset.bound === '1') return;
     root.dataset.bound = '1';
     root.addEventListener('click', (event) => {
+        const pickBtn = event.target.closest('[data-subscription-pick]');
+        if (pickBtn) {
+            event.preventDefault();
+            const index = parseInt(pickBtn.getAttribute('data-subscription-pick'), 10);
+            if (Number.isFinite(index)) addSubscriptionFromTransaction(index);
+            return;
+        }
+        const pickerToggle = event.target.closest('[data-subscription-action="toggle-picker"]');
+        if (pickerToggle) {
+            event.preventDefault();
+            toggleSubscriptionPicker();
+            return;
+        }
+        const renameBtn = event.target.closest('[data-subscription-rename]');
+        if (renameBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            renameSubscription(renameBtn.getAttribute('data-subscription-rename'));
+            return;
+        }
         const dismissBtn = event.target.closest('[data-subscription-dismiss]');
         if (dismissBtn) {
             event.preventDefault();
@@ -272,9 +399,10 @@ function renderSubscriptionEntryRow(entry, { dismissed = false } = {}) {
     const txHint = entry.txs?.length
         ? (expanded ? 'Ukryj transakcje' : `Pokaż ${entry.txs.length} transakcji`)
         : 'Brak transakcji';
-    const actionBtn = dismissed
+    const actionBtns = dismissed
         ? `<button type="button" class="btn-text-link subscription-skip-btn" data-subscription-restore="${escapeHtml(entry.id)}">Przywróć</button>`
-        : `<button type="button" class="btn-text-link subscription-skip-btn" title="Usuwa pozycję tylko z tej listy — transakcje zostają w portfelu" data-subscription-dismiss="${escapeHtml(entry.id)}">Pomiń</button>`;
+        : `<button type="button" class="btn-text-link subscription-skip-btn" data-subscription-rename="${escapeHtml(entry.id)}">Zmień nazwę</button>
+                <button type="button" class="btn-text-link subscription-skip-btn" title="Usuwa pozycję tylko z tej listy — transakcje zostają w portfelu" data-subscription-dismiss="${escapeHtml(entry.id)}">Pomiń</button>`;
     const rowClass = [
         'reports-recurring-item',
         'subscription-recurring-item',
@@ -294,7 +422,7 @@ function renderSubscriptionEntryRow(entry, { dismissed = false } = {}) {
             <div class="subscription-recurring-side">
                 <span class="reports-recurring-amount">${formatPlnAmount(entry.monthly)}/mies.</span>
                 <span class="subscription-recurring-annual">${formatPlnAmount(entry.annual)}/rok</span>
-                ${actionBtn}
+                ${actionBtns}
             </div>
             <svg class="subscription-expand-chevron${expanded ? ' subscription-expand-chevron--open' : ''}" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
         </div>
@@ -327,10 +455,12 @@ function renderSubscriptionCenter() {
     const allCount = entries.length + dismissed.length;
 
     if (!allCount) {
-        root.innerHTML = '<div class="empty-state"><p>Brak wykrytych subskrypcji — dodaj wydatki w kategorii Subskrypcje lub oznacz transakcję jako powtarzalną.</p></div>';
+        root.innerHTML = '<div class="empty-state"><p>Brak wykrytych subskrypcji — użyj „Dodaj własną” lub dodaj wydatki w kategorii Subskrypcje.</p></div>';
         if (summaryEl) summaryEl.textContent = '';
         subscriptionExpandedId = null;
         subscriptionDismissedExpanded = false;
+        renderSubscriptionPicker();
+        bindSubscriptionCenterEvents();
         return;
     }
 
@@ -355,5 +485,6 @@ function renderSubscriptionCenter() {
     root.innerHTML = activeHtml
         + renderSubscriptionDismissedSection(dismissed)
         + totalHtml;
+    renderSubscriptionPicker();
     bindSubscriptionCenterEvents();
 }

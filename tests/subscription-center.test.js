@@ -87,18 +87,21 @@ describe('subscription-center', () => {
 
     it('render pokazuje transakcje po rozwinięciu', () => {
         let html = '';
+        const card = { dataset: {}, addEventListener: () => {} };
         globalThis.document = {
             getElementById: (id) => {
+                if (id === 'reports-subscription-card') return card;
                 if (id === 'reports-subscription-center') {
                     return {
-                        dataset: {},
                         get innerHTML() { return html; },
-                        set innerHTML(v) { html = v; },
-                        addEventListener: () => {}
+                        set innerHTML(v) { html = v; }
                     };
                 }
                 if (id === 'reports-subscription-summary') {
                     return { textContent: '' };
+                }
+                if (id === 'reports-subscription-picker') {
+                    return { classList: { add: () => {}, remove: () => {} }, innerHTML: '' };
                 }
                 return null;
             },
@@ -118,5 +121,36 @@ describe('subscription-center', () => {
         expect(html).toContain('subscription-tx-panel');
         expect(html).toContain('<tx>2026-06-01</tx>');
         expect(html).toContain('Ukryj transakcje');
+    });
+
+    it('customLabels zmienia wyświetlaną nazwę', () => {
+        runInContext(`
+            appState.transactions = [
+                { type: 'expense', amount: 49, mainCategory: 'Subskrypcje', subCategory: 'Netflix', date: '2026-04-01' },
+                { type: 'expense', amount: 49, mainCategory: 'Subskrypcje', subCategory: 'Netflix', date: '2026-05-01' },
+                { type: 'expense', amount: 49, mainCategory: 'Subskrypcje', subCategory: 'Netflix', date: '2026-06-01' }
+            ];
+        `);
+        const id = buildSubscriptionCatalog()[0].id;
+        const prefs = readSubscriptionPrefs();
+        prefs.customLabels[id] = 'Netflix rodzinny';
+        writeSubscriptionPrefs(prefs);
+        expect(buildSubscriptionCatalog()[0].label).toBe('Netflix rodzinny');
+    });
+
+    it('addSubscriptionFromTransaction oznacza powtarzalne i grupuje po podkategorii', () => {
+        globalThis.saveState = () => {};
+        runInContext(`
+            appState.transactions = [
+                { type: 'expense', amount: 25, mainCategory: 'Rozrywka', subCategory: 'HBO', date: '2026-04-01' },
+                { type: 'expense', amount: 25, mainCategory: 'Rozrywka', subCategory: 'HBO', date: '2026-05-01' },
+                { type: 'expense', amount: 99, mainCategory: 'Rozrywka', subCategory: 'Kino', date: '2026-06-01' }
+            ];
+        `);
+        addSubscriptionFromTransaction(0);
+        const hboTxs = appState.transactions.filter((t) => t.subCategory === 'HBO');
+        expect(hboTxs.every((t) => t.recurringId)).toBe(true);
+        expect(hboTxs[0].recurringId).toBe(hboTxs[1].recurringId);
+        expect(appState.transactions.find((t) => t.subCategory === 'Kino')?.recurringId).toBeFalsy();
     });
 });
