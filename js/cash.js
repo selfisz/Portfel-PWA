@@ -311,9 +311,30 @@ function applyManualCashAmount(assetId, newAmount) {
 
 function repairMissingCashMovementsFromTransactions() {
     if (!Array.isArray(appState.transactions)) return false;
+
+    const missing = appState.transactions.filter((tx) => {
+        if (getCashMovementForTransaction(tx)) return false;
+        if (tx.linkedAssetId && typeof getAssetById === 'function') {
+            const linked = getAssetById(tx.linkedAssetId);
+            if (linked?.type === 'cash') return true;
+        }
+        return shouldTransactionAffectCash(tx);
+    });
+    if (!missing.length) return false;
+
+    const primary = typeof getPrimaryCashAsset === 'function' ? getPrimaryCashAsset() : null;
+    const movementCount = (appState.cashMovements || []).length;
+    const hasCashBalance = primary && Number.isFinite(Number(primary.amount)) && Math.abs(Number(primary.amount)) > 0.01;
+    const hasCashBaseline = primary && Number.isFinite(Number(primary.cashBaseline));
+
+    // Nie odtwarzaj całej historii transakcji na gotówce — zachowaj ręcznie ustawione saldo.
+    if (primary && movementCount === 0 && (hasCashBalance || hasCashBaseline)) {
+        ensureCashBaseline(primary.id);
+        return false;
+    }
+
     let changed = false;
-    appState.transactions.forEach((tx) => {
-        if (getCashMovementForTransaction(tx)) return;
+    missing.forEach((tx) => {
         if (tx.linkedAssetId && typeof getAssetById === 'function') {
             const linked = getAssetById(tx.linkedAssetId);
             if (linked?.type === 'cash' && typeof syncAssetOnTransactionSave === 'function') {

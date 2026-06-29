@@ -91,8 +91,10 @@ describe('subscription-center', () => {
             getElementById: (id) => {
                 if (id === 'reports-subscription-center') {
                     return {
+                        dataset: {},
                         get innerHTML() { return html; },
-                        set innerHTML(v) { html = v; }
+                        set innerHTML(v) { html = v; },
+                        addEventListener: () => {}
                     };
                 }
                 if (id === 'reports-subscription-summary') {

@@ -549,6 +549,27 @@ describe('migratePortfolioPositionsJune2026', () => {
     _setAppState({ ..._getAppState(), assets: [], reportPrefs: { portfolioPositions2026: 'v1' } });
     expect(migratePortfolioPositionsJune2026()).toBe(false);
   });
+
+  it('nie nadpisuje portfela ani nie przywraca usuniętego IKZE gdy pozycje już istnieją', () => {
+    _setAppState({
+      ..._getAppState(),
+      assets: [
+        { id: 'asset-inv-ikze-vwce', type: 'investment', brokerAccount: 'ikze', ticker: 'VWCE', quantity: 5, purchasePrice: 100, currentPrice: 200, currency: 'PLN' },
+        { id: 'asset-cash-total', type: 'cash', amount: 22770.58, cashBaseline: 22770.58 }
+      ],
+      deletedAssetIds: ['asset-ret-ikze-mbank'],
+      reportPrefs: { excludedPortfolioGroups: ['ikze'] }
+    });
+
+    const changed = migratePortfolioPositionsJune2026();
+    expect(changed).toBe(true);
+
+    const state = _getAppState();
+    expect(state.reportPrefs.portfolioPositions2026).toBe('v1');
+    expect(state.assets.find((a) => a.id === 'asset-ret-ikze-mbank')).toBeUndefined();
+    expect(state.assets.find((a) => a.id === 'asset-inv-ikze-vwce').quantity).toBe(5);
+    expect(state.assets.find((a) => a.id === 'asset-cash-total').amount).toBeCloseTo(22770.58, 2);
+  });
 });
 
 // ===========================================================================

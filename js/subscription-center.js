@@ -186,6 +186,48 @@ function toggleSubscriptionDismissed() {
     renderSubscriptionCenter();
 }
 
+function bindSubscriptionCenterEvents() {
+    const root = document.getElementById('reports-subscription-center');
+    if (!root) return;
+    if (!root.dataset) root.dataset = {};
+    if (root.dataset.bound === '1') return;
+    root.dataset.bound = '1';
+    root.addEventListener('click', (event) => {
+        const dismissBtn = event.target.closest('[data-subscription-dismiss]');
+        if (dismissBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            dismissSubscription(dismissBtn.getAttribute('data-subscription-dismiss'));
+            return;
+        }
+        const restoreBtn = event.target.closest('[data-subscription-restore]');
+        if (restoreBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            restoreSubscription(restoreBtn.getAttribute('data-subscription-restore'));
+            return;
+        }
+        const dismissedToggle = event.target.closest('[data-subscription-action="toggle-dismissed"]');
+        if (dismissedToggle) {
+            event.preventDefault();
+            toggleSubscriptionDismissed();
+            return;
+        }
+        const row = event.target.closest('[data-subscription-id]');
+        if (row) {
+            toggleSubscriptionTransactions(row.getAttribute('data-subscription-id'));
+        }
+    });
+    root.addEventListener('keydown', (event) => {
+        const row = event.target.closest('[data-subscription-id]');
+        if (!row) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggleSubscriptionTransactions(row.getAttribute('data-subscription-id'));
+        }
+    });
+}
+
 function renderSubscriptionBadges(entry) {
     const badges = [];
     if (entry.source === 'manual') {
@@ -231,8 +273,8 @@ function renderSubscriptionEntryRow(entry, { dismissed = false } = {}) {
         ? (expanded ? 'Ukryj transakcje' : `Pokaż ${entry.txs.length} transakcji`)
         : 'Brak transakcji';
     const actionBtn = dismissed
-        ? `<button type="button" class="btn-text-link subscription-skip-btn" onclick="event.stopPropagation(); restoreSubscription(${JSON.stringify(entry.id)})">Przywróć</button>`
-        : `<button type="button" class="btn-text-link subscription-skip-btn" title="Usuwa pozycję tylko z tej listy — transakcje zostają w portfelu" onclick="event.stopPropagation(); dismissSubscription(${JSON.stringify(entry.id)})">Pomiń</button>`;
+        ? `<button type="button" class="btn-text-link subscription-skip-btn" data-subscription-restore="${escapeHtml(entry.id)}">Przywróć</button>`
+        : `<button type="button" class="btn-text-link subscription-skip-btn" title="Usuwa pozycję tylko z tej listy — transakcje zostają w portfelu" data-subscription-dismiss="${escapeHtml(entry.id)}">Pomiń</button>`;
     const rowClass = [
         'reports-recurring-item',
         'subscription-recurring-item',
@@ -241,9 +283,7 @@ function renderSubscriptionEntryRow(entry, { dismissed = false } = {}) {
     ].filter(Boolean).join(' ');
 
     return `<div class="subscription-entry${dismissed ? ' subscription-entry--dismissed' : ''}">
-        <div class="${rowClass}" role="button" tabindex="0"
-            onclick="toggleSubscriptionTransactions(${JSON.stringify(entry.id)})"
-            onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleSubscriptionTransactions(${JSON.stringify(entry.id)}); }"
+        <div class="${rowClass}" data-subscription-id="${escapeHtml(entry.id)}" role="button" tabindex="0"
             aria-expanded="${expanded ? 'true' : 'false'}">
             ${renderCategoryIcon(entry.mainCategory, 'list', entry.subCategory !== '[Bez podkategorii]' ? entry.subCategory : null, 'expense')}
             <div class="reports-top-text">
@@ -266,7 +306,7 @@ function renderSubscriptionDismissedSection(dismissed) {
     if (!dismissed.length) return '';
     const countLabel = dismissed.length === 1 ? '1 pominięta' : `${dismissed.length} pominięte`;
     return `<div class="reports-hero-expand subscription-dismissed-expand">
-        <button type="button" class="reports-hero-expand-toggle" onclick="toggleSubscriptionDismissed()"
+        <button type="button" class="reports-hero-expand-toggle" data-subscription-action="toggle-dismissed"
             aria-expanded="${subscriptionDismissedExpanded ? 'true' : 'false'}" aria-controls="subscription-dismissed-panel">
             <span>${subscriptionDismissedExpanded ? 'Ukryj pominięte' : `Pokaż pominięte (${countLabel})`}</span>
             <svg class="reports-hero-expand-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
@@ -315,4 +355,5 @@ function renderSubscriptionCenter() {
     root.innerHTML = activeHtml
         + renderSubscriptionDismissedSection(dismissed)
         + totalHtml;
+    bindSubscriptionCenterEvents();
 }

@@ -432,6 +432,41 @@ function archiveLegacyPortfolioBuckets() {
     return changed;
 }
 
+function getAssetSeedBlockGroupId(snapshot) {
+    if (!snapshot?.id) return null;
+    if (snapshot.id === 'asset-ret-ikze-mbank') return 'ikze';
+    if (snapshot.id === 'asset-ret-mbank-emerytura') return 'emerytura';
+    if (snapshot.brokerAccount) return snapshot.brokerAccount;
+    return null;
+}
+
+function isAssetSeedBlocked(snapshot) {
+    const normalized = typeof snapshot === 'object' ? snapshot : { id: snapshot };
+    const id = normalized.id;
+    if (!id) return true;
+    if (getDeletedAssetIds().includes(id)) return true;
+    const groupId = getAssetSeedBlockGroupId(normalized);
+    if (groupId && getExcludedPortfolioGroups().includes(groupId)) return true;
+    return false;
+}
+
+function hasLegacyPortfolioBucketsInState() {
+    return LEGACY_PORTFOLIO_BUCKET_IDS.some((id) =>
+        (appState.assets || []).some((a) => a.id === id && !a.archived)
+    );
+}
+
+function hasPortfolioSnapshotPositions() {
+    return getPortfolioInvestmentSnapshots().some((snapshot) =>
+        (appState.assets || []).some((a) => a.id === snapshot.id && !a.archived)
+    );
+}
+
+function shouldRunFullPortfolioMigration() {
+    if (hasLegacyPortfolioBucketsInState()) return true;
+    return !hasPortfolioSnapshotPositions();
+}
+
 function migratePortfolioPositionsJune2026() {
     if (!Array.isArray(appState.assets)) appState.assets = [];
     if (!appState.reportPrefs || typeof appState.reportPrefs !== 'object') {
@@ -439,16 +474,27 @@ function migratePortfolioPositionsJune2026() {
     }
     if (appState.reportPrefs.portfolioPositions2026 === 'v1') return false;
 
+    if (!shouldRunFullPortfolioMigration()) {
+        appState.reportPrefs.portfolioPositions2026 = 'v1';
+        return true;
+    }
+
+    const hadLegacyBuckets = hasLegacyPortfolioBucketsInState();
     let changed = archiveLegacyPortfolioBuckets();
+    const fromLegacyBuckets = hadLegacyBuckets || changed;
 
     getPortfolioInvestmentSnapshots().forEach((snapshot) => {
+        if (isAssetSeedBlocked(snapshot)) return;
         const idx = appState.assets.findIndex((a) => a.id === snapshot.id);
         if (idx >= 0) {
-            appState.assets[idx] = snapshot;
+            if (fromLegacyBuckets) {
+                appState.assets[idx] = snapshot;
+                changed = true;
+            }
         } else {
             appState.assets.push(snapshot);
+            changed = true;
         }
-        changed = true;
     });
 
     const ikzeShell = normalizeAsset({
@@ -460,13 +506,18 @@ function migratePortfolioPositionsJune2026() {
         amount: 0,
         includeInSummary: false
     });
-    const ikzeIdx = appState.assets.findIndex((a) => a.id === ikzeShell.id);
-    if (ikzeIdx >= 0) {
-        appState.assets[ikzeIdx] = { ...appState.assets[ikzeIdx], ...ikzeShell };
-    } else {
-        appState.assets.push(ikzeShell);
+    if (!isAssetSeedBlocked(ikzeShell)) {
+        const ikzeIdx = appState.assets.findIndex((a) => a.id === ikzeShell.id);
+        if (ikzeIdx >= 0) {
+            if (fromLegacyBuckets) {
+                appState.assets[ikzeIdx] = { ...appState.assets[ikzeIdx], ...ikzeShell };
+                changed = true;
+            }
+        } else {
+            appState.assets.push(ikzeShell);
+            changed = true;
+        }
     }
-    changed = true;
 
     const emerytura = normalizeAsset({
         id: 'asset-ret-mbank-emerytura',
@@ -476,13 +527,18 @@ function migratePortfolioPositionsJune2026() {
         institution: 'mBank',
         amount: 1679.19
     });
-    const emIdx = appState.assets.findIndex((a) => a.id === emerytura.id);
-    if (emIdx >= 0) {
-        appState.assets[emIdx] = { ...appState.assets[emIdx], ...emerytura };
-    } else {
-        appState.assets.push(emerytura);
+    if (!isAssetSeedBlocked(emerytura)) {
+        const emIdx = appState.assets.findIndex((a) => a.id === emerytura.id);
+        if (emIdx >= 0) {
+            if (fromLegacyBuckets) {
+                appState.assets[emIdx] = { ...appState.assets[emIdx], ...emerytura };
+                changed = true;
+            }
+        } else {
+            appState.assets.push(emerytura);
+            changed = true;
+        }
     }
-    changed = true;
 
     appState.reportPrefs.portfolioPositions2026 = 'v1';
     return changed;
@@ -553,12 +609,11 @@ function markAssetDeleted(id) {
 
 function ensureUserAssetsSeed() {
     if (!Array.isArray(appState.assets)) appState.assets = [];
-    const deleted = new Set(getDeletedAssetIds());
     let changed = false;
 
     getUserAssetsSeedSnapshots().forEach((snapshot) => {
         const normalized = normalizeAsset(snapshot);
-        if (deleted.has(normalized.id)) return;
+        if (isAssetSeedBlocked(normalized)) return;
         const idx = appState.assets.findIndex((a) => a.id === normalized.id);
         if (idx < 0) {
             appState.assets.push(normalized);
