@@ -730,6 +730,46 @@ describe('getDashboardForecastPlanItems', () => {
     });
 });
 
+describe('getReportsMonthForecastTotals', () => {
+    it('używa samej średniej dziennej gdy brak stałych opłat', () => {
+        const ref = new Date(2026, 5, 10);
+        _setAppState({
+            ..._getAppState(),
+            transactions: [
+                { date: '2026-06-01', type: 'expense', amount: 300, mainCategory: 'Jedzenie', subCategory: 'Sklep' },
+                { date: '2026-06-05', type: 'expense', amount: 200, mainCategory: 'Transport', subCategory: 'Paliwo' }
+            ]
+        });
+
+        const totals = getReportsMonthForecastTotals(ref);
+        expect(totals.usesFixedRecurring).toBe(false);
+        expect(totals.monthExpenses).toBe(500);
+        expect(totals.forecast).toBe(1500);
+        expect(totals.remaining).toBe(1000);
+    });
+
+    it('dolicza niezapłacone stałe opłaty i extrapoluje tylko zmienne wydatki', () => {
+        const ref = new Date(2026, 5, 29);
+        _setAppState({
+            ..._getAppState(),
+            transactions: [
+                { date: '2026-06-01', type: 'expense', amount: 800, mainCategory: 'Dom', subCategory: 'Czynsz', recurringId: 'rec-czynsz' },
+                { date: '2026-06-15', type: 'expense', amount: 500, mainCategory: 'Jedzenie', subCategory: 'Sklep' },
+                { date: '2026-05-25', type: 'expense', amount: 50, mainCategory: 'Subskrypcje', subCategory: 'Netflix', recurringId: 'rec-netflix' }
+            ]
+        });
+
+        const totals = getReportsMonthForecastTotals(ref);
+        expect(totals.usesFixedRecurring).toBe(true);
+        expect(totals.monthExpenses).toBe(1300);
+        expect(totals.fixedExpenseTotal).toBe(850);
+        expect(totals.fixedExpenseRemaining).toBe(50);
+        expect(totals.variableSpent).toBe(500);
+        expect(totals.forecast).toBeCloseTo(1367.24, 1);
+        expect(totals.forecast).toBeGreaterThan(totals.monthExpenses);
+    });
+});
+
 describe('transactionMatchesChartDrill', () => {
     it('filtruje po podkategorii w ramach kategorii głównej', () => {
         const tx = {

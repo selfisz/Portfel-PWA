@@ -156,7 +156,8 @@ function transactionToForecastPlanItem(t, rangeStart) {
         meta: t.mainCategory,
         mainCategory: t.mainCategory,
         source: 'recurring-manual',
-        estimated: false
+        estimated: false,
+        recurringId: t.recurringId || null
     };
 }
 
@@ -251,6 +252,86 @@ function summarizeDashboardForecastPlan(fixedItems, forecastTotals) {
         totalIncome: forecastTotals.income,
         totalExpense: forecastTotals.expense,
         plannedBalance: forecastTotals.income - forecastTotals.expense
+    };
+}
+
+function isReportsForecastFixedItemPaid(item, monthStart, endDate) {
+    return (appState.transactions || []).some((t) => {
+        if (t.type !== 'expense' || t.date < monthStart || t.date > endDate) return false;
+        if (item.recurringId && t.recurringId === item.recurringId) return true;
+        if (item.source === 'debt-loan' || item.source === 'debt-card') {
+            return t.mainCategory === 'Długi' && Math.abs(t.amount - item.amount) < 0.005;
+        }
+        const title = item.title;
+        const catMatch = t.mainCategory === item.mainCategory;
+        const labelMatch = (t.subCategory && t.subCategory !== '[Bez podkategorii]' && t.subCategory === title)
+            || (t.subCategory === '[Bez podkategorii]' && t.mainCategory === title)
+            || t.subCategory === title;
+        return catMatch && labelMatch
+            && Math.abs(t.amount - item.amount) <= Math.max(item.amount * 0.2, 10);
+    });
+}
+
+function getReportsMonthForecastTotals(referenceDate = new Date()) {
+    const year = referenceDate.getFullYear();
+    const monthIndex = referenceDate.getMonth();
+    const monthStart = localIsoDate(new Date(year, monthIndex, 1));
+    const monthEnd = localIsoDate(new Date(year, monthIndex + 1, 0));
+    const today = localIsoDate(referenceDate);
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    const dayOfMonth = referenceDate.getDate();
+    const daysRemaining = Math.max(0, daysInMonth - dayOfMonth);
+
+    const monthExpenses = (appState.transactions || [])
+        .filter((t) => t.type === 'expense' && t.date >= monthStart && t.date <= today)
+        .reduce((sum, t) => sum + t.amount, 0);
+
+    const naiveForecast = dayOfMonth > 0 ? (monthExpenses / dayOfMonth) * daysInMonth : monthExpenses;
+    const baseResult = {
+        monthExpenses,
+        forecast: naiveForecast,
+        remaining: naiveForecast - monthExpenses,
+        fixedExpenseTotal: 0,
+        fixedExpenseRemaining: 0,
+        dayOfMonth,
+        daysInMonth,
+        usesFixedRecurring: false
+    };
+
+    const fixedExpenseItems = getDashboardForecastFixedItems(monthStart, monthEnd)
+        .filter((item) => item.type === 'expense');
+    const fixedExpenseTotal = fixedExpenseItems.reduce((sum, item) => sum + item.amount, 0);
+    if (!fixedExpenseTotal) return baseResult;
+
+    let fixedPaidThisMonth = 0;
+    let fixedExpenseRemaining = 0;
+    fixedExpenseItems.forEach((item) => {
+        if (isReportsForecastFixedItemPaid(item, monthStart, today)) {
+            fixedPaidThisMonth += item.amount;
+        } else {
+            fixedExpenseRemaining += item.amount;
+        }
+    });
+
+    const variableSpent = Math.max(0, monthExpenses - fixedPaidThisMonth);
+    const variableDailyAvg = dayOfMonth > 0 ? variableSpent / dayOfMonth : 0;
+    const variableRemaining = variableDailyAvg * daysRemaining;
+    const forecast = monthExpenses + fixedExpenseRemaining + variableRemaining;
+
+    return {
+        monthExpenses,
+        forecast,
+        remaining: forecast - monthExpenses,
+        fixedExpenseTotal,
+        fixedExpenseRemaining,
+        fixedPaidThisMonth,
+        variableSpent,
+        variableDailyAvg,
+        dayOfMonth,
+        daysInMonth,
+        daysRemaining,
+        naiveForecast,
+        usesFixedRecurring: true
     };
 }
 

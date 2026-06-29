@@ -2024,35 +2024,36 @@ function renderReportsForecast(ctx) {
     const el = document.getElementById('reports-forecast');
     if (!el) return;
 
-    const now = new Date();
-    const monthStart = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const dayOfMonth = now.getDate();
+    const totals = typeof getReportsMonthForecastTotals === 'function'
+        ? getReportsMonthForecastTotals(new Date())
+        : null;
 
-    const monthExpenses = appState.transactions
-        .filter((t) => t.type === 'expense' && t.date >= monthStart && t.date <= localIsoDate(now))
-        .reduce((s, t) => s + t.amount, 0);
+    if (!totals) return;
 
-    const dailyAvg = dayOfMonth > 0 ? monthExpenses / dayOfMonth : 0;
-    const forecast = dailyAvg * daysInMonth;
-    const remaining = forecast - monthExpenses;
+    const hint = totals.usesFixedRecurring
+        ? `Średnia zmiennych wydatków z ${totals.dayOfMonth} dni · stałe opłaty ok. ${formatPlnAmount(totals.fixedExpenseTotal)}/mies.${
+            totals.fixedExpenseRemaining > 0
+                ? ` (jeszcze do zapłaty: ${formatPlnAmount(totals.fixedExpenseRemaining)})`
+                : ''
+        }`
+        : `Na podstawie średniej dziennej z ${totals.dayOfMonth} dni.`;
 
     el.innerHTML = `
         <div class="forecast-stats">
             <div class="forecast-stat">
                 <span class="forecast-label">Wydano do dziś</span>
-                <strong class="forecast-value expense">${formatPlnAmount(monthExpenses)}</strong>
+                <strong class="forecast-value expense">${formatPlnAmount(totals.monthExpenses)}</strong>
             </div>
             <div class="forecast-stat">
                 <span class="forecast-label">Prognoza na miesiąc</span>
-                <strong class="forecast-value">${formatPlnAmount(forecast)}</strong>
+                <strong class="forecast-value">${formatPlnAmount(totals.forecast)}</strong>
             </div>
             <div class="forecast-stat">
                 <span class="forecast-label">Szac. do końca mies.</span>
-                <strong class="forecast-value">${formatPlnAmount(remaining)}</strong>
+                <strong class="forecast-value">${formatPlnAmount(totals.remaining)}</strong>
             </div>
         </div>
-        <p class="reports-hint">Na podstawie średniej dziennej z ${dayOfMonth} dni.</p>`;
+        <p class="reports-hint">${hint}</p>`;
 }
 
 function isReportsCurrentMonthPeriod(ctx) {
