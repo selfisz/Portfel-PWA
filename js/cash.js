@@ -16,6 +16,94 @@ function normalizeCashMovement(raw) {
     };
 }
 
+function getCashMovementsForAsset(assetId = PRIMARY_CASH_ASSET_ID) {
+    const id = assetId || PRIMARY_CASH_ASSET_ID;
+    return (appState.cashMovements || [])
+        .map(normalizeCashMovement)
+        .filter(Boolean)
+        .filter((m) => (m.assetId || PRIMARY_CASH_ASSET_ID) === id);
+}
+
+function getCashMovementsTotal(assetId = PRIMARY_CASH_ASSET_ID) {
+    return getCashMovementsForAsset(assetId).reduce((sum, m) => sum + m.delta, 0);
+}
+
+function getCashBaseline(asset) {
+    if (!asset || asset.type !== 'cash') return 0;
+    const stored = Number(asset.cashBaseline);
+    if (Number.isFinite(stored)) return stored;
+    const movementsTotal = getCashMovementsTotal(asset.id);
+    return (Number(asset.amount) || 0) - movementsTotal;
+}
+
+function roundCashAmount(value) {
+    return Math.round(value * 100) / 100;
+}
+
+function setCashBaseline(assetId, baseline, options = {}) {
+    if (typeof getAssetById !== 'function' || typeof updateAssetInState !== 'function') return null;
+    const asset = getAssetById(assetId);
+    if (!asset || asset.type !== 'cash') return null;
+    const base = Number(baseline);
+    if (!Number.isFinite(base)) return null;
+    const movementsTotal = getCashMovementsTotal(assetId);
+    const next = roundCashAmount(base + movementsTotal);
+    if (next < 0 && !options.skipConfirm) {
+        const ok = confirm(`Saldo gotówki spadnie do ${formatPlnAmount(next)}. Kontynuować?`);
+        if (!ok) return null;
+    }
+    return updateAssetInState({ ...asset, cashBaseline: base, amount: next });
+}
+
+function recomputeCashAmount(assetId, options = {}) {
+    if (typeof getAssetById !== 'function' || typeof updateAssetInState !== 'function') return null;
+    const asset = getAssetById(assetId);
+    if (!asset || asset.type !== 'cash') return null;
+    const baseline = getCashBaseline(asset);
+    const movementsTotal = getCashMovementsTotal(assetId);
+    const next = roundCashAmount(baseline + movementsTotal);
+    if (next < 0 && !options.skipConfirm) {
+        const ok = confirm(`Saldo gotówki spadnie do ${formatPlnAmount(next)}. Kontynuować?`);
+        if (!ok) return null;
+    }
+    const payload = { ...asset, amount: next };
+    if (!Number.isFinite(Number(asset.cashBaseline))) {
+        payload.cashBaseline = baseline;
+    }
+    return updateAssetInState(payload);
+}
+
+function reconcileCashAsset(assetId = PRIMARY_CASH_ASSET_ID) {
+    if (typeof getAssetById !== 'function' || typeof updateAssetInState !== 'function') return false;
+    const asset = getAssetById(assetId);
+    if (!asset || asset.type !== 'cash') return false;
+
+    const baseline = getCashBaseline(asset);
+    const expected = roundCashAmount(baseline + getCashMovementsTotal(assetId));
+    const current = roundCashAmount(Number(asset.amount) || 0);
+    const hasStoredBaseline = Number.isFinite(Number(asset.cashBaseline));
+
+    if (hasStoredBaseline && Math.abs(expected - current) < 0.01) return false;
+
+    updateAssetInState({
+        ...asset,
+        cashBaseline: baseline,
+        amount: expected
+    });
+    return true;
+}
+
+function reconcileAllCashAssets() {
+    let changed = false;
+    (appState.assets || []).forEach((raw) => {
+        const asset = typeof normalizeAsset === 'function' ? normalizeAsset(raw) : raw;
+        if (asset.type === 'cash' && !asset.archived) {
+            if (reconcileCashAsset(asset.id)) changed = true;
+        }
+    });
+    return changed;
+}
+
 function getPrimaryCashAsset() {
     if (typeof getAssetById !== 'function') return null;
     return getAssetById(PRIMARY_CASH_ASSET_ID);
@@ -28,7 +116,8 @@ function ensurePrimaryCashAsset() {
         id: PRIMARY_CASH_ASSET_ID,
         type: 'cash',
         name: 'Gotówka',
-        amount: 0
+        amount: 0,
+        cashBaseline: 0
     };
     const normalized = typeof normalizeAsset === 'function' ? normalizeAsset(draft) : draft;
     if (typeof updateAssetInState === 'function') {
@@ -39,28 +128,10 @@ function ensurePrimaryCashAsset() {
     return !!getPrimaryCashAsset();
 }
 
-function adjustCashAssetAmount(assetId, delta, options = {}) {
-    const deltaNum = Number(delta);
-    if (!Number.isFinite(deltaNum) || deltaNum === 0 || typeof getAssetById !== 'function') return null;
-    const asset = getAssetById(assetId);
-    if (!asset || asset.type !== 'cash') return null;
-
-    const current = Number(asset.amount) || 0;
-    const next = current + deltaNum;
-    if (next < 0 && !options.skipConfirm) {
-        const ok = confirm(`Saldo gotówki spadnie do ${formatPlnAmount(next)}. Kontynuować?`);
-        if (!ok) return null;
-    }
-
-    return updateAssetInState({ ...asset, amount: next });
-}
-
 function registerCashMovement({ assetId = PRIMARY_CASH_ASSET_ID, delta, date, note, source, sourceRef }) {
     const deltaNum = Number(delta);
     if (!Number.isFinite(deltaNum) || deltaNum === 0) return null;
     if (assetId === PRIMARY_CASH_ASSET_ID && !ensurePrimaryCashAsset()) return null;
-    const updated = adjustCashAssetAmount(assetId, deltaNum);
-    if (!updated) return null;
 
     const movement = normalizeCashMovement({
         assetId,
@@ -74,6 +145,12 @@ function registerCashMovement({ assetId = PRIMARY_CASH_ASSET_ID, delta, date, no
 
     if (!Array.isArray(appState.cashMovements)) appState.cashMovements = [];
     appState.cashMovements.unshift(movement);
+
+    const updated = recomputeCashAmount(assetId);
+    if (!updated) {
+        appState.cashMovements.shift();
+        return null;
+    }
     return movement;
 }
 
@@ -83,8 +160,8 @@ function removeCashMovement(movementId) {
     if (idx < 0) return false;
 
     const movement = appState.cashMovements[idx];
-    adjustCashAssetAmount(movement.assetId, -movement.delta, { skipConfirm: true });
     appState.cashMovements.splice(idx, 1);
+    recomputeCashAmount(movement.assetId || PRIMARY_CASH_ASSET_ID, { skipConfirm: true });
     return true;
 }
 
@@ -170,15 +247,14 @@ function syncCashOnTransactionDelete(tx) {
 }
 
 function getCashMovementsInRange(start, end, assetId = null) {
-    return (appState.cashMovements || [])
-        .map(normalizeCashMovement)
-        .filter(Boolean)
-        .filter((m) => {
-            if (assetId && m.assetId !== assetId) return false;
-            if (start && m.date < start) return false;
-            if (end && m.date > end) return false;
-            return true;
-        });
+    const list = assetId
+        ? getCashMovementsForAsset(assetId)
+        : (appState.cashMovements || []).map(normalizeCashMovement).filter(Boolean);
+    return list.filter((m) => {
+        if (start && m.date < start) return false;
+        if (end && m.date > end) return false;
+        return true;
+    });
 }
 
 function getCashMovementForTransaction(tx) {
@@ -187,12 +263,16 @@ function getCashMovementForTransaction(tx) {
 }
 
 function transactionAffectsCashAsset(tx, assetId) {
-    if (!shouldTransactionAffectCash(tx)) return false;
     const movement = getCashMovementForTransaction(tx);
     if (movement) {
         const movementAssetId = movement.assetId || PRIMARY_CASH_ASSET_ID;
         return movementAssetId === assetId;
     }
+    if (tx?.linkedAssetId === assetId && typeof getAssetById === 'function') {
+        const linked = getAssetById(tx.linkedAssetId);
+        if (linked?.type === 'cash') return true;
+    }
+    if (!shouldTransactionAffectCash(tx)) return false;
     return assetId === PRIMARY_CASH_ASSET_ID;
 }
 
@@ -208,12 +288,47 @@ function getCashAffectingTransactions(assetId = PRIMARY_CASH_ASSET_ID, filterTyp
         .sort((a, b) => b.date.localeCompare(a.date) || (Number(b.amount) - Number(a.amount)));
 }
 
+function applyManualCashAmount(assetId, newAmount) {
+    const amount = Number(newAmount);
+    if (!Number.isFinite(amount) || amount < 0) return null;
+    if (!getAssetById(assetId) && assetId === PRIMARY_CASH_ASSET_ID) {
+        ensurePrimaryCashAsset();
+    }
+    const movementsTotal = getCashMovementsTotal(assetId);
+    return setCashBaseline(assetId, roundCashAmount(amount - movementsTotal), { skipConfirm: true });
+}
+
+function repairMissingCashMovementsFromTransactions() {
+    if (!Array.isArray(appState.transactions)) return false;
+    let changed = false;
+    appState.transactions.forEach((tx) => {
+        if (getCashMovementForTransaction(tx)) return;
+        if (tx.linkedAssetId && typeof getAssetById === 'function') {
+            const linked = getAssetById(tx.linkedAssetId);
+            if (linked?.type === 'cash' && typeof syncAssetOnTransactionSave === 'function') {
+                delete tx.cashMovementId;
+                if (syncAssetOnTransactionSave(tx, null)) changed = true;
+                return;
+            }
+        }
+        if (!shouldTransactionAffectCash(tx)) return;
+        delete tx.cashMovementId;
+        if (syncCashOnTransactionSave(tx, null)) changed = true;
+    });
+    if (changed) reconcileAllCashAssets();
+    return changed;
+}
+
 function runCashMigrations() {
+    let changed = false;
     if (!Array.isArray(appState.cashMovements)) {
         appState.cashMovements = [];
-        return true;
+        changed = true;
     }
     const before = appState.cashMovements.length;
     appState.cashMovements = appState.cashMovements.map(normalizeCashMovement).filter(Boolean);
-    return appState.cashMovements.length !== before;
+    if (appState.cashMovements.length !== before) changed = true;
+    if (reconcileAllCashAssets()) changed = true;
+    if (repairMissingCashMovementsFromTransactions()) changed = true;
+    return changed;
 }

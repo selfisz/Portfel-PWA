@@ -302,10 +302,41 @@ function adjustAssetValuePln(asset, deltaPln, options = {}) {
 
 function applyAssetTransferFromTransaction(tx, deltaSign) {
     if (!tx?.linkedAssetId) return true;
-    const asset = getAssetById(tx.linkedAssetId);
+    const asset = typeof getAssetById === 'function' ? getAssetById(tx.linkedAssetId) : null;
     if (!asset) return true;
-    const amount = parseFloat(tx.amount) || 0;
-    if (!amount) return true;
+    const amount = Number(tx.amount);
+    if (!Number.isFinite(amount) || amount === 0) return true;
+
+    if (asset.type === 'cash' && typeof registerCashMovement === 'function') {
+        if (deltaSign < 0) {
+            if (tx.cashMovementId) {
+                removeCashMovement(tx.cashMovementId);
+                delete tx.cashMovementId;
+                return true;
+            }
+            const movement = registerCashMovement({
+                assetId: asset.id,
+                delta: -amount,
+                date: tx.date,
+                note: tx.note || 'Cofnięcie wpływu',
+                source: 'transaction_linked',
+                sourceRef: `revert|${tx.date}|${tx.linkedAssetId}|${tx.amount}`
+            });
+            return !!movement;
+        }
+        const movement = registerCashMovement({
+            assetId: asset.id,
+            delta: amount,
+            date: tx.date,
+            note: tx.note || (tx.type === 'income' ? 'Wpływ' : 'Wydatek'),
+            source: 'transaction_linked',
+            sourceRef: `${tx.date}|${tx.type}|${tx.linkedAssetId}|${tx.amount}`
+        });
+        if (!movement) return false;
+        tx.cashMovementId = movement.id;
+        return true;
+    }
+
     const updated = adjustAssetValuePln(asset, amount * deltaSign);
     return !!updated;
 }

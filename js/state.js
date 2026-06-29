@@ -273,16 +273,24 @@ function syncFromRemoteData(remoteData) {
     const localPersisted = localRawBeforeSync
         ? getPersistedState(localRawBeforeSync)
         : getPersistedState(appState);
+    const memoryPersisted = getPersistedState(appState);
     const mergedTransactions = mergeRemoteTransactions(localRawBeforeSync, remoteData);
     const remotePersisted = getPersistedState({ ...remoteData, transactions: mergedTransactions });
     const mergedRemote = {
         ...remoteData,
         transactions: mergedTransactions,
-        assets: mergeAssetsById(remotePersisted.assets, localPersisted.assets),
-        cashMovements: mergeCashMovementsById(remotePersisted.cashMovements, localPersisted.cashMovements)
+        assets: mergeAssetsById(remotePersisted.assets, localPersisted.assets, memoryPersisted.assets),
+        cashMovements: mergeCashMovementsById(
+            remotePersisted.cashMovements,
+            localPersisted.cashMovements,
+            memoryPersisted.cashMovements
+        )
     };
 
     applyRemoteAppState(mergedRemote, localLoans, localCreditCards);
+    if (typeof repairMissingCashMovementsFromTransactions === 'function') {
+        repairMissingCashMovementsFromTransactions();
+    }
     checkAndProcessRecurringTransactions();
 
     try {
@@ -353,6 +361,9 @@ function applyRemoteAppState(raw, extraLoanSources = [], extraCreditCardSources 
     }
     migrateLoansArray();
     categoryTree = appState.categoryTree;
+    if (typeof reconcileAllCashAssets === 'function') {
+        reconcileAllCashAssets();
+    }
     return hadUiFields;
 }
 

@@ -699,6 +699,26 @@ describe('syncCashOnTransactionSave / syncAssetOnTransactionSave — wpływ', ()
     expect(tx.cashMovementId).toBeTruthy();
   });
 
+  it('wpływ powiązany z główną gotówką zwiększa saldo i przetrwa reconcile', () => {
+    const tx = {
+      type: 'income',
+      amount: 2,
+      date: '2024-06-03',
+      note: 'Test',
+      mainCategory: 'Praca',
+      subCategory: 'Premia',
+      linkedAssetId: PRIMARY_CASH_ASSET_ID,
+      affectsCash: false
+    };
+    expect(syncAssetOnTransactionSave(tx)).toBe(true);
+    expect(tx.cashMovementId).toBeTruthy();
+    let cash = _getAppState().assets.find((a) => a.id === PRIMARY_CASH_ASSET_ID);
+    expect(cash.amount).toBe(2);
+    reconcileCashAsset(PRIMARY_CASH_ASSET_ID);
+    cash = _getAppState().assets.find((a) => a.id === PRIMARY_CASH_ASSET_ID);
+    expect(cash.amount).toBe(2);
+  });
+
   it('wpływ na powiązane aktywo nie zmienia salda gotówki', () => {
     _setAppState({
       ..._getAppState(),
@@ -733,5 +753,76 @@ describe('syncCashOnTransactionSave / syncAssetOnTransactionSave — wpływ', ()
     expect(syncCashOnTransactionSave(tx)).toBe(true);
     const cash = _getAppState().assets.find((a) => a.id === PRIMARY_CASH_ASSET_ID);
     expect(cash.amount).toBeCloseTo(47.3, 2);
+  });
+});
+
+describe('cashBaseline — ręczna edycja, transakcje i reconcile', () => {
+  function wireAssetHelpers() {
+    globalThis.normalizeAsset = (raw) => {
+      const a = raw && typeof raw === 'object' ? { ...raw } : {};
+      a.amount = Math.max(0, parseFloat(a.amount) || 0);
+      a.type = a.type || 'cash';
+      if (a.cashBaseline !== undefined && a.cashBaseline !== null) {
+        const baseline = parseFloat(a.cashBaseline);
+        a.cashBaseline = Number.isFinite(baseline) ? baseline : undefined;
+      }
+      return a;
+    };
+    globalThis.getAssetValuePln = (asset) => asset?.amount || 0;
+    globalThis.getAssetById = (id) => _getAppState().assets.find((a) => a.id === id) || null;
+    globalThis.updateAssetInState = (asset) => {
+      const state = _getAppState();
+      const idx = state.assets.findIndex((a) => a.id === asset.id);
+      if (idx >= 0) state.assets[idx] = { ...asset };
+      else state.assets.push({ ...asset });
+      return asset;
+    };
+  }
+
+  beforeEach(() => {
+    wireAssetHelpers();
+    _setAppState({
+      transactions: [],
+      loans: [],
+      creditCards: [],
+      assets: [{ id: PRIMARY_CASH_ASSET_ID, type: 'cash', name: 'Gotówka', amount: 1000, cashBaseline: 1000 }],
+      cashMovements: [],
+      assetSnapshots: [],
+      assetValueHistory: [],
+      categoryBudgets: {},
+      creditCardMovements: []
+    });
+  });
+
+  it('ręczna zmiana salda zachowuje wpływ z transakcji', () => {
+    applyManualCashAmount(PRIMARY_CASH_ASSET_ID, 8000);
+    const tx = { type: 'income', amount: 500, date: '2024-06-02', mainCategory: 'Praca', subCategory: 'Premia' };
+    expect(syncCashOnTransactionSave(tx)).toBe(true);
+    const cash = _getAppState().assets.find((a) => a.id === PRIMARY_CASH_ASSET_ID);
+    expect(cash.cashBaseline).toBe(8000);
+    expect(cash.amount).toBe(8500);
+  });
+
+  it('reconcile naprawia wyzerowane amount przy zachowanym baseline i ruchach', () => {
+    _setAppState({
+      ..._getAppState(),
+      assets: [{ id: PRIMARY_CASH_ASSET_ID, type: 'cash', name: 'Gotówka', amount: 0, cashBaseline: 8000 }],
+      cashMovements: [{ id: 'm1', assetId: PRIMARY_CASH_ASSET_ID, delta: 500, date: '2024-06-01' }]
+    });
+    expect(reconcileCashAsset(PRIMARY_CASH_ASSET_ID)).toBe(true);
+    const cash = _getAppState().assets.find((a) => a.id === PRIMARY_CASH_ASSET_ID);
+    expect(cash.amount).toBe(8500);
+  });
+
+  it('reconcile po przywróceniu kopii bez cashBaseline wylicza baseline z amount i ruchów', () => {
+    _setAppState({
+      ..._getAppState(),
+      assets: [{ id: PRIMARY_CASH_ASSET_ID, type: 'cash', name: 'Gotówka', amount: 8500 }],
+      cashMovements: [{ id: 'm1', assetId: PRIMARY_CASH_ASSET_ID, delta: 500, date: '2024-06-01' }]
+    });
+    reconcileCashAsset(PRIMARY_CASH_ASSET_ID);
+    const cash = _getAppState().assets.find((a) => a.id === PRIMARY_CASH_ASSET_ID);
+    expect(cash.cashBaseline).toBe(8000);
+    expect(cash.amount).toBe(8500);
   });
 });

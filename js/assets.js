@@ -101,6 +101,10 @@ function normalizeAsset(raw) {
         asset.brokerAccount = (asset.brokerAccount || '').trim();
     } else {
         asset.amount = Math.max(0, parseFloat(asset.amount) || 0);
+        if (asset.type === 'cash' && asset.cashBaseline !== undefined && asset.cashBaseline !== null) {
+            const baseline = parseFloat(asset.cashBaseline);
+            asset.cashBaseline = Number.isFinite(baseline) ? baseline : undefined;
+        }
         if (asset.type === 'deposit') {
             asset.interestRate = Math.max(0, parseFloat(asset.interestRate) || 0);
             asset.endDate = asset.endDate || '';
@@ -501,7 +505,7 @@ function consolidateUserAssets() {
 
 function getUserAssetsSeedSnapshots() {
     return [
-        { id: 'asset-cash-total', type: 'cash', name: 'Gotówka', amount: CASH_TOTAL_AMOUNT },
+        { id: 'asset-cash-total', type: 'cash', name: 'Gotówka', amount: CASH_TOTAL_AMOUNT, cashBaseline: CASH_TOTAL_AMOUNT },
         ...getPortfolioInvestmentSnapshots(),
         {
             id: 'asset-ret-mbank-emerytura',
@@ -534,7 +538,7 @@ function getUserAssetsSeedSnapshots() {
             retirementKind: 'KZP',
             amount: 4200
         },
-        { id: 'asset-cash-mbank-cele', type: 'cash', name: 'mBank — Cele', amount: 2172.36 }
+        { id: 'asset-cash-mbank-cele', type: 'cash', name: 'mBank — Cele', amount: 2172.36, cashBaseline: 2172.36 }
     ];
 }
 
@@ -1565,7 +1569,16 @@ function saveAssetDetails() {
         payload.brokerAccount = document.getElementById('asset-broker-input')?.value || null;
         if (!payload.name && payload.ticker) payload.name = payload.ticker;
     } else {
-        payload.amount = parseFloat(document.getElementById('asset-amount-input')?.value) || 0;
+        const manualAmount = parseFloat(document.getElementById('asset-amount-input')?.value) || 0;
+        if (type === 'cash' && typeof applyManualCashAmount === 'function') {
+            payload.amount = manualAmount;
+            const movementsTotal = typeof getCashMovementsTotal === 'function'
+                ? getCashMovementsTotal(current.id)
+                : 0;
+            payload.cashBaseline = Math.round((manualAmount - movementsTotal) * 100) / 100;
+        } else {
+            payload.amount = manualAmount;
+        }
         const goalVal = parseFloat(document.getElementById('asset-goal-input')?.value);
         if (!Number.isNaN(goalVal)) payload.goalTarget = Math.max(0, goalVal);
         if (type === 'deposit') {
@@ -1720,7 +1733,16 @@ function sellAssetPartial() {
 
     if (updateCash) {
         const cashAsset = getCashAssetForBroker(asset.brokerAccount);
-        if (cashAsset) {
+        if (cashAsset && typeof registerCashMovement === 'function') {
+            registerCashMovement({
+                assetId: cashAsset.id,
+                delta: proceedsPln,
+                date: localIsoDate(new Date()),
+                note: `Sprzedaż: ${getAssetDisplayName(asset)}`,
+                source: 'investment_sale',
+                sourceRef: asset.id
+            });
+        } else if (cashAsset) {
             updateAssetInState({ ...cashAsset, amount: Math.max(0, (cashAsset.amount || 0) + proceedsPln) });
         }
     }
