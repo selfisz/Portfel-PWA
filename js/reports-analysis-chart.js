@@ -387,7 +387,7 @@ function renderReportsStructureChart(ctx) {
     const titleEl = document.getElementById('reports-structure-title');
     const resetBtn = document.getElementById('btn-reset-reports-structure');
     if (titleEl) titleEl.textContent = getReportsStructureChartTitle();
-    if (resetBtn) resetBtn.classList.toggle('hidden', !reportsStructureMainCategory);
+    if (resetBtn) resetBtn.style.display = reportsStructureMainCategory ? 'block' : 'none';
 
     document.getElementById('btn-reports-structure-expense')?.classList.toggle('active', reportsStructureViewType === 'expense');
     document.getElementById('btn-reports-structure-income')?.classList.toggle('active', reportsStructureViewType === 'income');
