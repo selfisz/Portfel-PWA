@@ -59,6 +59,9 @@
     --mesh-1: #c4b5fd;
     --mesh-2: #fbcfe8;
     --mesh-3: #bae6fd;
+    --cash-tx-filter-all-bg: #475569;
+    --cash-tx-filter-all-fg: #ffffff;
+    --cash-tx-filter-all-shadow: rgba(71, 85, 105, 0.32);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -97,6 +100,9 @@
         --mesh-1: rgba(99, 102, 241, 0.10);
         --mesh-2: rgba(168, 85, 247, 0.07);
         --mesh-3: rgba(56, 130, 246, 0.08);
+        --cash-tx-filter-all-bg: #5c6478;
+        --cash-tx-filter-all-fg: #f1f3f7;
+        --cash-tx-filter-all-shadow: rgba(0, 0, 0, 0.38);
     }
 }
 
@@ -135,6 +141,9 @@ html[data-theme="dark"] {
     --mesh-1: rgba(99, 102, 241, 0.10);
     --mesh-2: rgba(168, 85, 247, 0.07);
     --mesh-3: rgba(56, 130, 246, 0.08);
+    --cash-tx-filter-all-bg: #5c6478;
+    --cash-tx-filter-all-fg: #f1f3f7;
+    --cash-tx-filter-all-shadow: rgba(0, 0, 0, 0.38);
 }
 
 /* html[data-theme="light"] jest zbędne — wartości identyczne z :root.
@@ -8019,6 +8028,18 @@ button.reports-debt-split-item strong {
 
 .asset-cash-tx-head .flex-toggle {
     margin-bottom: 0;
+}
+
+.asset-cash-tx-period .toggle-btn.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 4px 14px var(--accent-soft);
+}
+
+#btn-cash-tx-all.toggle-btn.active {
+    background: var(--cash-tx-filter-all-bg);
+    color: var(--cash-tx-filter-all-fg);
+    box-shadow: 0 4px 14px var(--cash-tx-filter-all-shadow);
 }
 
 .asset-cash-tx-hint {
