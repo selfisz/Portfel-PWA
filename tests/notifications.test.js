@@ -29,6 +29,13 @@ beforeAll(() => {
     globalThis.getScheduledDebtPaymentsOnDate = () => [];
     globalThis.normalizeCreditCardMovement = (raw) => raw;
     globalThis.transactionFingerprint = (tx) => `${tx.date}|${tx.amount}|${tx.mainCategory}`;
+    globalThis.suggestCategoryBudget = (cat) => (cat === 'Transport' ? 500 : 0);
+    globalThis.getAllRecurringEntries = () => [];
+    globalThis.getIkzeContributionsInYear = () => 1000;
+    globalThis.getIkzeAnnualLimitPln = () => 8000;
+    globalThis.loadSavingsGoal = () => 20;
+
+    loadScript('js/spending-insights.js');
 });
 
 beforeEach(() => {
@@ -120,5 +127,58 @@ describe('markAllNotificationsRead', () => {
         upsertNotification({ id: 'b', type: 'budget_warn', title: 'B', body: 'b', payload: {} });
         markAllNotificationsRead();
         expect(getUnreadNotificationCount()).toBe(0);
+    });
+});
+
+describe('evaluateSpendingPaceAlerts', () => {
+    it('prognozuje przekroczenie limitu przed 80%', () => {
+        const monthKey = getCurrentMonthKey();
+        const day = new Date().getDate();
+        if (day < 4) return;
+
+        appState.categoryBudgets = { Jedzenie: 1000 };
+        appState.transactions = [{
+            type: 'expense',
+            mainCategory: 'Jedzenie',
+            subCategory: 'X',
+            amount: Math.round((1000 / day) * day * 0.55),
+            date: `${monthKey}-${String(day).padStart(2, '0')}`
+        }];
+        const spent = getCategorySpentInMonth('Jedzenie', monthKey);
+        if (spent >= 800) return;
+
+        const created = evaluateSpendingPaceAlerts();
+        if (spent / day * new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() > 1000) {
+            expect(created.some((n) => n.type === 'budget_pace')).toBe(true);
+        }
+    });
+});
+
+describe('evaluateMissingRecurringAlerts', () => {
+    it('zgłasza brak ręcznej transakcji cyklicznej', () => {
+        const monthKey = getCurrentMonthKey();
+        const day = new Date().getDate();
+        if (day < 8) return;
+
+        appState.transactions = [
+            { type: 'expense', recurringId: 'rec_1', mainCategory: 'Subskrypcje', subCategory: 'Netflix', amount: 49, date: '2025-12-05' },
+            { type: 'expense', recurringId: 'rec_1', mainCategory: 'Subskrypcje', subCategory: 'Netflix', amount: 49, date: '2025-11-05' }
+        ];
+        const created = evaluateMissingRecurringAlerts();
+        expect(created.some((n) => n.type === 'recurring_missing')).toBe(true);
+    });
+});
+
+describe('evaluateSpendingAnomalyAlerts', () => {
+    it('wykrywa anomalię wydatków', () => {
+        const monthKey = getCurrentMonthKey();
+        const day = new Date().getDate();
+        if (day < 8) return;
+
+        appState.transactions = [
+            { type: 'expense', mainCategory: 'Transport', subCategory: 'Paliwo', amount: 1000, date: `${monthKey}-10` }
+        ];
+        const created = evaluateSpendingAnomalyAlerts();
+        expect(created.some((n) => n.type === 'spending_anomaly')).toBe(true);
     });
 });

@@ -33,6 +33,7 @@ const NET_WORTH_LABEL = 'Wartość netto';
 const NOTIFICATION_INBOX_KEY = 'finanse_notification_inbox';
 const NOTIFICATION_PREFS_KEY = 'finanse_notification_prefs';
 const NOTIFICATION_ALERT_STATE_KEY = 'finanse_budget_alert_state';
+const NOTIFICATION_INSIGHT_STATE_KEY = 'finanse_insight_alert_state';
 const CARD_REPAYMENT_REMINDER_DAYS = 50;
 const ONBOARDING_SLIDES = [
     { title: 'Witaj w Finanse', text: 'Twój osobisty portfel — prosty, elegancki i zawsze pod ręką.' },

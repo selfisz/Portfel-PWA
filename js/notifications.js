@@ -3,7 +3,10 @@ function getDefaultNotificationPrefs() {
         enabled: false,
         budgetAlerts: true,
         loanReminders: true,
-        cardReminders: true
+        cardReminders: true,
+        spendingPaceAlerts: true,
+        recurringMissingAlerts: true,
+        insightAlerts: true
     };
 }
 
@@ -265,8 +268,27 @@ function navigateFromNotification(item) {
         openCreditCardDetails(payload.cardId);
         return;
     }
-    if (item.type === 'budget_warn' || item.type === 'budget_over') {
+    if (item.type === 'budget_warn' || item.type === 'budget_over' || item.type === 'budget_pace') {
         if (typeof openBudgetEditor === 'function') openBudgetEditor();
+        return;
+    }
+    if (item.type === 'recurring_missing') {
+        const reportsNav = document.querySelector('.nav-item[onclick*="\'reports\'"]');
+        if (typeof switchView === 'function') switchView('reports', 'Raporty', reportsNav);
+        return;
+    }
+    if (item.type === 'spending_anomaly') {
+        const reportsNav = document.querySelector('.nav-item[onclick*="\'reports\'"]');
+        if (typeof switchView === 'function') switchView('reports', 'Raporty', reportsNav);
+        return;
+    }
+    if (item.type === 'ikze_limit') {
+        if (typeof openIkzeLimitPanel === 'function') openIkzeLimitPanel();
+        return;
+    }
+    if (item.type === 'savings_goal') {
+        const reportsNav = document.querySelector('.nav-item[onclick*="\'reports\'"]');
+        if (typeof switchView === 'function') switchView('reports', 'Raporty', reportsNav);
         return;
     }
     if (item.type === 'card_monthly_check') {
@@ -312,6 +334,15 @@ function evaluateAllNotifications() {
     if (prefs.cardReminders && typeof evaluateCardReminders === 'function') {
         created.push(...evaluateCardReminders());
     }
+    if (prefs.spendingPaceAlerts && typeof evaluateSpendingPaceAlerts === 'function') {
+        created.push(...evaluateSpendingPaceAlerts());
+    }
+    if (prefs.recurringMissingAlerts && typeof evaluateMissingRecurringAlerts === 'function') {
+        created.push(...evaluateMissingRecurringAlerts());
+    }
+    if (prefs.insightAlerts && typeof evaluateSpendingInsightAlerts === 'function') {
+        created.push(...evaluateSpendingInsightAlerts());
+    }
     updateNotificationsBadge();
     const panel = document.getElementById('notifications-overlay');
     if (panel && !panel.classList.contains('hidden')) renderNotificationsPanel();
@@ -356,11 +387,17 @@ function syncNotificationSettingsUI() {
     const budget = document.getElementById('notif-pref-budget');
     const loan = document.getElementById('notif-pref-loan');
     const card = document.getElementById('notif-pref-card');
+    const pace = document.getElementById('notif-pref-pace');
+    const recurring = document.getElementById('notif-pref-recurring');
+    const insight = document.getElementById('notif-pref-insight');
     const status = document.getElementById('notif-permission-status');
     if (master) master.checked = prefs.enabled;
     if (budget) budget.checked = prefs.budgetAlerts;
     if (loan) loan.checked = prefs.loanReminders;
     if (card) card.checked = prefs.cardReminders;
+    if (pace) pace.checked = prefs.spendingPaceAlerts;
+    if (recurring) recurring.checked = prefs.recurringMissingAlerts;
+    if (insight) insight.checked = prefs.insightAlerts;
     const sub = document.getElementById('notif-pref-subtoggles');
     if (sub) sub.classList.toggle('hidden', !prefs.enabled);
     if (status) {
@@ -392,6 +429,9 @@ function initNotifications() {
     bindNotificationPrefToggle('notif-pref-budget', 'budgetAlerts');
     bindNotificationPrefToggle('notif-pref-loan', 'loanReminders');
     bindNotificationPrefToggle('notif-pref-card', 'cardReminders');
+    bindNotificationPrefToggle('notif-pref-pace', 'spendingPaceAlerts');
+    bindNotificationPrefToggle('notif-pref-recurring', 'recurringMissingAlerts');
+    bindNotificationPrefToggle('notif-pref-insight', 'insightAlerts');
     syncNotificationSettingsUI();
     updateNotificationsBadge();
     evaluateAllNotifications();

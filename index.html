@@ -113,7 +113,7 @@
                 <label class="settings-toggle-row">
                     <span class="settings-toggle-row-body">
                         <span class="settings-nav-row-title">Włącz powiadomienia</span>
-                        <span class="settings-nav-row-desc">Limity budżetu, raty i karty kredytowe</span>
+                        <span class="settings-nav-row-desc">Limity, raty, karty, tempo wydatków i insights</span>
                     </span>
                     <input type="checkbox" id="notif-pref-enabled" onchange="onNotificationMasterToggle()">
                 </label>
@@ -130,6 +130,18 @@
                     <label class="settings-toggle-row settings-toggle-row--sub">
                         <span class="settings-nav-row-title">Karty (50 dni od transakcji + 1. dzień miesiąca)</span>
                         <input type="checkbox" id="notif-pref-card">
+                    </label>
+                    <label class="settings-toggle-row settings-toggle-row--sub">
+                        <span class="settings-nav-row-title">Tempo wydatków (prognoza limitu)</span>
+                        <input type="checkbox" id="notif-pref-pace">
+                    </label>
+                    <label class="settings-toggle-row settings-toggle-row--sub">
+                        <span class="settings-nav-row-title">Brakujące stałe opłaty</span>
+                        <input type="checkbox" id="notif-pref-recurring">
+                    </label>
+                    <label class="settings-toggle-row settings-toggle-row--sub">
+                        <span class="settings-nav-row-title">Insights (anomalie, IKZE, cel oszczędności)</span>
+                        <input type="checkbox" id="notif-pref-insight">
                     </label>
                 </div>
             </div>
@@ -1574,6 +1586,7 @@
     <script src="js/reports-analysis-chart.js"></script>
     <script src="js/reports-day-month-summary.js"></script>
     <script src="js/reports-phase3.js"></script>
+    <script src="js/spending-insights.js"></script>
     <script src="js/bootstrap.js"></script>
 </body>
 </html>
