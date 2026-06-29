@@ -963,6 +963,36 @@
                     </div>
                 </div>
 
+                <div id="reports-day-summary-card" class="card dashboard-panel reports-day-month-card hidden">
+                    <div class="reports-day-month-head">
+                        <h2 class="dashboard-section-title">Podsumowanie dnia</h2>
+                        <p id="reports-day-scope-hint" class="reports-hint hidden">Liczone według dzisiejszej daty — niezależnie od wybranego okresu analizy.</p>
+                    </div>
+
+                    <div class="reports-day-month-block reports-day-month-block--solo">
+                        <div class="reports-day-month-block-head">
+                            <span class="reports-day-month-label">Dziś</span>
+                            <div class="flex-toggle reports-day-month-compare-toggle chart-type-toggle">
+                                <button id="btn-day-compare-yesterday" type="button" class="toggle-btn active" onclick="setReportsDayCompareMode('yesterday')">Wczoraj</button>
+                                <button id="btn-day-compare-som" type="button" class="toggle-btn" onclick="setReportsDayCompareMode('same-month')">Ten sam dzień m. temu</button>
+                            </div>
+                        </div>
+                        <div id="reports-day-summary-stats" class="reports-day-month-stats"></div>
+                        <p id="reports-day-summary-delta" class="reports-day-month-delta"></p>
+                    </div>
+
+                    <div class="reports-hero-expand reports-day-month-expand">
+                        <button type="button" id="reports-day-summary-toggle" class="reports-hero-expand-toggle" onclick="toggleReportsDaySummaryDetails()" aria-expanded="false" aria-controls="reports-day-summary-panel">
+                            <span>Szczegóły i transakcje</span>
+                            <svg class="reports-hero-expand-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                        </button>
+                        <div id="reports-day-summary-panel" class="reports-hero-expand-panel hidden">
+                            <p id="reports-day-analysis" class="reports-day-month-analysis"></p>
+                            <div id="reports-day-tx-list" class="reports-tx-list"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="reports-forecast-card" class="card dashboard-panel hidden">
                     <h2 class="dashboard-section-title">Prognoza miesiąca</h2>
                     <div id="reports-forecast"></div>
@@ -1023,6 +1053,33 @@
 
             <div id="analysis-section-expenses" class="analysis-section hidden">
                 <div id="analysis-compare-expenses" class="analysis-compare-slot" hidden aria-hidden="true"></div>
+
+                <div id="reports-month-summary-card" class="card dashboard-panel reports-day-month-card hidden">
+                    <div class="reports-day-month-head">
+                        <h2 class="dashboard-section-title">Podsumowanie miesiąca</h2>
+                        <p id="reports-month-scope-hint" class="reports-hint hidden">Od 1. dnia miesiąca do dziś — niezależnie od wybranego okresu analizy.</p>
+                    </div>
+
+                    <div class="reports-day-month-block reports-day-month-block--solo">
+                        <div class="reports-day-month-block-head">
+                            <span class="reports-day-month-label">Ten miesiąc (1.–dziś)</span>
+                        </div>
+                        <div id="reports-month-summary-stats" class="reports-day-month-stats"></div>
+                        <p id="reports-month-summary-delta" class="reports-day-month-delta"></p>
+                    </div>
+
+                    <div class="reports-hero-expand reports-day-month-expand">
+                        <button type="button" id="reports-month-summary-toggle" class="reports-hero-expand-toggle" onclick="toggleReportsMonthSummaryDetails()" aria-expanded="false" aria-controls="reports-month-summary-panel">
+                            <span>Szczegóły i transakcje</span>
+                            <svg class="reports-hero-expand-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                        </button>
+                        <div id="reports-month-summary-panel" class="reports-hero-expand-panel hidden">
+                            <p id="reports-month-analysis" class="reports-day-month-analysis"></p>
+                            <div id="reports-month-tx-list" class="reports-tx-list"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card reports-calendar-card">
                     <div class="reports-calendar-header">
                         <div id="reports-calendar-nav" class="reports-calendar-nav">
@@ -1515,6 +1572,7 @@
     <script src="js/reports-debt.js"></script>
     <script src="js/reports-assets.js"></script>
     <script src="js/reports-analysis-chart.js"></script>
+    <script src="js/reports-day-month-summary.js"></script>
     <script src="js/reports-phase3.js"></script>
     <script src="js/bootstrap.js"></script>
 </body>

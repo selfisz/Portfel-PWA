@@ -2137,6 +2137,7 @@ function getChartParamsFromOverviewCtx(ctx) {
 }
 
 function renderOverviewSection(ctx, savingsRate) {
+    if (typeof renderReportsDaySummary === 'function') renderReportsDaySummary(ctx);
     if (typeof renderReportsStructureChart === 'function') renderReportsStructureChart(ctx);
     if (typeof renderReportsMonthChart === 'function') renderReportsMonthChart(ctx);
     const { chartPeriod, chartRangeStart, chartRangeEnd } = getChartParamsFromOverviewCtx(ctx);
@@ -2145,6 +2146,7 @@ function renderOverviewSection(ctx, savingsRate) {
 }
 
 function renderExpensesSection(ctx) {
+    if (typeof renderReportsMonthSummary === 'function') renderReportsMonthSummary(ctx);
     const { chartPeriod, chartRangeStart } = getChartParamsFromOverviewCtx(ctx);
     if (typeof syncReportsCalendarFromContext === 'function') {
         syncReportsCalendarFromContext(ctx);
@@ -2295,6 +2297,8 @@ function renderPhase3Reports(ctx, savingsRate) {
     updateAnalysisCompareChrome(ctx);
     renderReportsCompare(ctx);
     renderReportsMomSummary(ctx);
+    updateReportsDaySummaryVisibility(ctx);
+    updateReportsMonthSummaryVisibility(ctx);
     updateReportsForecastVisibility(ctx);
 
     if (ctx.mode !== 'compare') {

@@ -5019,6 +5019,144 @@ html:not([data-theme="dark"]) .grid-item.selected {
     color: var(--hero-expense, #fca5a5);
 }
 
+.reports-day-month-card {
+    margin-bottom: 0;
+}
+
+.reports-day-month-head {
+    margin-bottom: 4px;
+}
+
+.reports-day-month-head .dashboard-section-title {
+    margin-bottom: 4px;
+}
+
+.reports-day-month-block {
+    padding: 14px 0 0;
+    margin-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.reports-day-month-block:first-of-type {
+    margin-top: 8px;
+}
+
+.reports-day-month-block--solo {
+    margin-top: 8px;
+    padding-top: 0;
+    border-top: none;
+}
+
+.reports-day-month-block-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.reports-day-month-label {
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.reports-day-month-compare-toggle {
+    flex-shrink: 0;
+}
+
+.reports-day-month-compare-toggle .toggle-btn {
+    font-size: var(--text-2xs);
+    padding: 6px 10px;
+}
+
+.reports-day-month-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.reports-day-month-stat .label {
+    display: block;
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.reports-day-month-stat .value {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.reports-day-month-stat.income .value {
+    color: var(--success);
+}
+
+.reports-day-month-stat.expense .value {
+    color: var(--danger);
+}
+
+.reports-day-month-delta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    margin: 10px 0 0;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+
+.reports-day-month-delta-label {
+    font-weight: 600;
+}
+
+.reports-day-month-delta-item strong {
+    color: var(--text);
+    font-weight: 700;
+}
+
+.reports-day-month-delta-item.income strong {
+    color: var(--success);
+}
+
+.reports-day-month-delta-item.expense strong {
+    color: var(--danger);
+}
+
+.reports-day-month-delta-item.balance strong {
+    color: var(--accent);
+}
+
+.reports-day-month-expand {
+    margin-top: 4px;
+}
+
+.reports-day-month-detail-title {
+    margin: 14px 0 6px;
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.reports-day-month-detail-title:first-child {
+    margin-top: 0;
+}
+
+.reports-day-month-analysis {
+    margin: 0 0 10px;
+    font-size: var(--text-sm);
+    line-height: 1.45;
+    color: var(--text-muted);
+}
+
 .reports-mom-label {
     font-weight: 600;
     color: var(--text);
