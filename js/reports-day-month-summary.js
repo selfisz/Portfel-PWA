@@ -178,34 +178,46 @@ function toggleReportsMonthSummaryDetails() {
 }
 
 function updateReportsDaySummaryVisibility(ctx) {
-    const card = document.getElementById('reports-day-summary-card');
-    if (!card) return;
-    const show = ctx?.mode !== 'compare';
-    card.classList.toggle('hidden', !show);
-    if (show) renderReportsDaySummary(ctx);
+    renderReportsDaySummary(ctx);
 }
 
 function updateReportsMonthSummaryVisibility(ctx) {
-    const card = document.getElementById('reports-month-summary-card');
-    if (!card) return;
-    const show = ctx?.mode !== 'compare';
-    card.classList.toggle('hidden', !show);
-    if (show) renderReportsMonthSummary(ctx);
+    renderReportsMonthSummary(ctx);
+}
+
+function buildDaySummaryData(referenceDate = new Date()) {
+    const today = localIsoDate(referenceDate);
+    const compareDate = getDayCompareDate(today);
+    const getForDate = typeof getTransactionsForIsoDate === 'function'
+        ? getTransactionsForIsoDate
+        : (date) => (appState?.transactions || []).filter((t) => String(t?.date || '').slice(0, 10) === date);
+    const dayTx = getForDate(today);
+    const compareDayTx = getForDate(compareDate);
+    return {
+        today,
+        compareDate,
+        compareLabel: getDayCompareLabel(compareDate),
+        dayTx,
+        compareDayTx,
+        daySummary: summarizePeriod(dayTx),
+        compareDaySummary: summarizePeriod(compareDayTx)
+    };
 }
 
 function renderReportsDaySummary(ctx) {
     const card = document.getElementById('reports-day-summary-card');
-    if (!card || card.classList.contains('hidden')) return;
+    if (!card) return;
 
-    const now = new Date();
-    const today = localIsoDate(now);
-    const compareDate = getDayCompareDate(today);
-    const compareLabel = getDayCompareLabel(compareDate);
+    const show = ctx?.mode !== 'compare';
+    card.classList.toggle('hidden', !show);
+    if (!show || typeof summarizePeriod !== 'function') return;
 
-    const dayTx = appState.transactions.filter((t) => t.date === today);
-    const compareDayTx = appState.transactions.filter((t) => t.date === compareDate);
-    const daySummary = summarizePeriod(dayTx);
-    const compareDaySummary = summarizePeriod(compareDayTx);
+    const {
+        compareLabel,
+        dayTx,
+        daySummary,
+        compareDaySummary
+    } = buildDaySummaryData(new Date());
 
     document.getElementById('reports-day-summary-stats').innerHTML = renderSummaryStatsHtml(daySummary);
     document.getElementById('reports-day-summary-delta').innerHTML = formatSummaryDeltaItems(
@@ -242,7 +254,11 @@ function renderReportsDaySummary(ctx) {
 
 function renderReportsMonthSummary(ctx) {
     const card = document.getElementById('reports-month-summary-card');
-    if (!card || card.classList.contains('hidden')) return;
+    if (!card) return;
+
+    const show = ctx?.mode !== 'compare';
+    card.classList.toggle('hidden', !show);
+    if (!show || typeof summarizePeriod !== 'function') return;
 
     const now = new Date();
     const mtd = getMtdBounds(now);

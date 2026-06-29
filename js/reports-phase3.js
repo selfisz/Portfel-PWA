@@ -572,6 +572,12 @@ function setAnalysisSection(section) {
     if (reportsPeriodMode === 'compare') {
         resizeCompareSectionCharts(section);
     } else if (reportsLastCtx) {
+        if (section === 'overview' && typeof updateReportsDaySummaryVisibility === 'function') {
+            updateReportsDaySummaryVisibility(reportsLastCtx);
+        }
+        if (section === 'expenses' && typeof updateReportsMonthSummaryVisibility === 'function') {
+            updateReportsMonthSummaryVisibility(reportsLastCtx);
+        }
         renderAnalysisSectionContent(section, reportsLastCtx, reportsLastSavingsRate);
     }
     resizeAnalysisSectionCharts(section);
@@ -645,7 +651,10 @@ let reportsMonthChartMeta = { period: null, labels: [], ctx: null };
 
 function getTransactionsInRange(start, end) {
     if (!start || !end) return [];
-    return appState.transactions.filter((t) => t.date >= start && t.date <= end);
+    const source = typeof getReportsTransactionSource === 'function'
+        ? getReportsTransactionSource()
+        : (appState?.transactions || []);
+    return source.filter((t) => t.date >= start && t.date <= end);
 }
 
 function applyReportsPeriodDefaults() {
@@ -2138,7 +2147,11 @@ function getChartParamsFromOverviewCtx(ctx) {
 }
 
 function renderOverviewSection(ctx, savingsRate) {
-    if (typeof renderReportsDaySummary === 'function') renderReportsDaySummary(ctx);
+    if (typeof updateReportsDaySummaryVisibility === 'function') {
+        updateReportsDaySummaryVisibility(ctx);
+    } else if (typeof renderReportsDaySummary === 'function') {
+        renderReportsDaySummary(ctx);
+    }
     if (typeof renderReportsStructureChart === 'function') renderReportsStructureChart(ctx);
     if (typeof renderReportsMonthChart === 'function') renderReportsMonthChart(ctx);
     const { chartPeriod, chartRangeStart, chartRangeEnd } = getChartParamsFromOverviewCtx(ctx);
@@ -2147,7 +2160,11 @@ function renderOverviewSection(ctx, savingsRate) {
 }
 
 function renderExpensesSection(ctx) {
-    if (typeof renderReportsMonthSummary === 'function') renderReportsMonthSummary(ctx);
+    if (typeof updateReportsMonthSummaryVisibility === 'function') {
+        updateReportsMonthSummaryVisibility(ctx);
+    } else if (typeof renderReportsMonthSummary === 'function') {
+        renderReportsMonthSummary(ctx);
+    }
     const { chartPeriod, chartRangeStart } = getChartParamsFromOverviewCtx(ctx);
     if (typeof syncReportsCalendarFromContext === 'function') {
         syncReportsCalendarFromContext(ctx);

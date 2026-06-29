@@ -5390,7 +5390,7 @@ html:not([data-theme="dark"]) .grid-item.selected {
 .reports-day-month-block-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: 10px;
     flex-wrap: wrap;
     margin-bottom: 10px;
@@ -5406,11 +5406,17 @@ html:not([data-theme="dark"]) .grid-item.selected {
 
 .reports-day-month-compare-toggle {
     flex-shrink: 0;
+    width: 100%;
 }
 
 .reports-day-month-compare-toggle .toggle-btn {
     font-size: var(--text-2xs);
     padding: 6px 10px;
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: normal;
+    line-height: 1.25;
+    text-align: center;
 }
 
 .reports-day-month-stats {
