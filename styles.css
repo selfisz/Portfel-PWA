@@ -3736,6 +3736,227 @@ html:not([data-theme="dark"]) .grid-item.selected {
     color: var(--success);
 }
 
+.subscription-summary-line {
+    margin-top: 0;
+    margin-bottom: 8px;
+}
+
+.subscription-recurring-item {
+    flex-wrap: wrap;
+    position: relative;
+}
+
+.subscription-recurring-item--clickable {
+    cursor: pointer;
+}
+
+.subscription-recurring-item--clickable:hover {
+    background: var(--surface-elevated);
+}
+
+.subscription-recurring-item--expanded {
+    border-bottom: none;
+}
+
+.subscription-entry .reports-recurring-item {
+    border-bottom: none;
+}
+
+.subscription-entry {
+    border-bottom: 1px solid var(--border);
+}
+
+.subscription-entry:last-of-type {
+    border-bottom: none;
+}
+
+.subscription-entry--dismissed .subscription-recurring-item {
+    opacity: 0.82;
+}
+
+.subscription-tx-hint {
+    display: block;
+    margin-top: 2px;
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+}
+
+.subscription-expand-chevron {
+    position: absolute;
+    right: 0;
+    bottom: 14px;
+    width: 18px;
+    height: 18px;
+    fill: var(--text-muted);
+    transition: transform 0.18s ease;
+    pointer-events: none;
+}
+
+.subscription-recurring-item--expanded .subscription-expand-chevron,
+.subscription-expand-chevron--open {
+    transform: rotate(180deg);
+}
+
+.subscription-recurring-side {
+    margin-left: auto;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    padding-right: 22px;
+}
+
+.subscription-tx-panel {
+    padding: 0 0 10px 38px;
+}
+
+.subscription-tx-panel-label {
+    margin: 0 0 6px;
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.subscription-tx-list .reports-tx-row {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.subscription-dismissed-expand {
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+.subscription-empty-active {
+    padding: 8px 0 4px;
+}
+
+.subscription-empty-active p {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+}
+
+.subscription-recurring-annual {
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+}
+
+.subscription-skip-btn {
+    margin-top: 4px;
+    font-size: var(--text-2xs);
+}
+
+.recurring-badge.subscription-badge--hike {
+    background: rgba(245, 158, 11, 0.18);
+    color: #b45309;
+}
+
+.recurring-badge.subscription-badge--zombie {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.recurring-badge.subscription-badge--dupe {
+    background: rgba(99, 102, 241, 0.15);
+    color: #4f46e5;
+}
+
+.surplus-tax-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+
+.surplus-tax-grid .label {
+    display: block;
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
+.surplus-tax-grid strong {
+    font-size: var(--text-sm);
+    color: var(--accent);
+}
+
+.hidden { display: none !important; }
+
+.surplus-input-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 12px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+}
+
+.surplus-input-row input {
+    width: 140px;
+    max-width: 45%;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 700;
+}
+
+.surplus-scenario-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.surplus-scenario {
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--surface-elevated);
+}
+
+.surplus-scenario-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.surplus-scenario-title {
+    font-size: var(--text-sm);
+    font-weight: 700;
+}
+
+.surplus-scenario-amount {
+    font-size: var(--text-sm);
+    color: var(--accent);
+    white-space: nowrap;
+}
+
+.surplus-scenario-detail {
+    margin: 6px 0 0;
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+
+.surplus-scenario--ikze {
+    border-color: rgba(13, 148, 136, 0.25);
+}
+
+.surplus-scenario--loan {
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.surplus-scenario--cushion {
+    border-color: rgba(59, 130, 246, 0.2);
+}
+
 .hidden { display: none !important; }
 
 .analysis-section-nav.flex-toggle {
@@ -7616,6 +7837,23 @@ button.reports-debt-split-item strong {
 .assets-hero-card .hero-forecast-hint {
     margin-top: -6px;
     margin-bottom: 0;
+}
+
+.assets-market-refresh-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin-top: 8px;
+}
+
+.assets-market-refresh-hint {
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+}
+
+.assets-market-refresh-row .hero-summary-action:disabled {
+    opacity: 0.6;
 }
 
 .assets-hero-summary,

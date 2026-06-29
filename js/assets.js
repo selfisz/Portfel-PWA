@@ -1241,6 +1241,14 @@ function renderAssets() {
                 metaEl.classList.add('hidden');
             }
         }
+        const refreshRow = document.getElementById('assets-market-refresh-row');
+        if (refreshRow) {
+            const hasTickers = allActive.some((a) => a.type === 'investment' && a.ticker && !a.archived);
+            refreshRow.classList.toggle('hidden', !hasTickers);
+        }
+        if (typeof updateMarketPricesRefreshHint === 'function') {
+            updateMarketPricesRefreshHint();
+        }
     } catch (err) {
         console.error('renderAssets hero', err);
     }

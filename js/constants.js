@@ -44,6 +44,7 @@ const PENDING_CLOUD_SYNC_KEY = 'finanse_pending_cloud_sync';
 const CLOUD_SYNC_BASE_RETRY_MS = 5000;
 const CLOUD_SYNC_MAX_RETRY_MS = 120000;
 const CLOUD_SYNC_MAX_ATTEMPTS = 8;
+const IKZE_SECOND_BRACKET_RATE = 0.32;
 const ONBOARDING_SLIDES = [
     { title: 'Witaj w Finanse', text: 'Twój osobisty portfel — prosty, elegancki i zawsze pod ręką.' },
     { title: 'Synchronizacja live', text: 'Dane trafiają do chmury i są dostępne na telefonie oraz komputerze.' },

@@ -1117,6 +1117,15 @@
 
                 <div class="card dashboard-panel">
                     <div class="chart-card-header">
+                        <h2 class="dashboard-section-title">Centrum subskrypcji</h2>
+                    </div>
+                    <p class="reports-hint">Stałe opłaty wykryte z historii transakcji. <strong>Pomiń</strong> usuwa pozycję tylko z tej listy — nie kasuje transakcji w portfelu.</p>
+                    <p id="reports-subscription-summary" class="reports-hint subscription-summary-line"></p>
+                    <div id="reports-subscription-center" class="reports-recurring-list"></div>
+                </div>
+
+                <div class="card dashboard-panel">
+                    <div class="chart-card-header">
                         <h2 id="reports-top-title" class="dashboard-section-title">Top kategorie</h2>
                         <div class="chart-type-toggle flex-toggle">
                             <button id="btn-reports-expense" type="button" class="toggle-btn active expense" onclick="setReportsViewType('expense')">Wydatki</button>
@@ -1201,6 +1210,16 @@
                     <div class="reports-bar-chart-wrap">
                         <canvas id="reportsAllocationTrendChart"></canvas>
                     </div>
+                </div>
+
+                <div class="card dashboard-panel">
+                    <h2 class="dashboard-section-title">Alokator nadwyżki</h2>
+                    <p id="reports-surplus-hint" class="reports-hint">Porównanie scenariuszy dla wolnych środków z wybranego okresu.</p>
+                    <label class="surplus-input-row" for="reports-surplus-input">
+                        <span>Kwota do rozłożenia</span>
+                        <input id="reports-surplus-input" type="number" min="0" step="50" inputmode="decimal" oninput="onSurplusAllocatorInput()">
+                    </label>
+                    <div id="reports-surplus-allocator" class="surplus-scenario-list"></div>
                 </div>
 
                 <div class="card reports-months-card">
@@ -1420,6 +1439,10 @@
                 <div class="hero-label">Majątek łącznie</div>
                 <div id="assets-total-value" class="hero-balance assets-capital-hero">—</div>
                 <p id="assets-total-meta" class="hero-forecast-hint hidden"></p>
+                <p id="assets-market-refresh-row" class="assets-market-refresh-row hidden">
+                    <button type="button" id="btn-refresh-market-prices" class="hero-summary-action" onclick="refreshInvestmentPricesManual()">Pobierz kursy</button>
+                    <span id="assets-market-refresh-hint" class="assets-market-refresh-hint">Pobierz kursy z Yahoo · ARTGAMES-NC tylko ręcznie</span>
+                </p>
                 <div id="assets-summary-block" class="assets-hero-summary hidden">
                     <button type="button" class="assets-hero-summary-toggle" onclick="toggleAssetsSummary()" aria-expanded="false" aria-controls="assets-summary-panel">
                         <span>Dostosuj sumę</span>
@@ -1592,6 +1615,8 @@
     <script src="js/reports-day-month-summary.js"></script>
     <script src="js/reports-phase3.js"></script>
     <script src="js/spending-insights.js"></script>
+    <script src="js/subscription-center.js"></script>
+    <script src="js/surplus-allocator.js"></script>
     <script src="js/bootstrap.js"></script>
 </body>
 </html>

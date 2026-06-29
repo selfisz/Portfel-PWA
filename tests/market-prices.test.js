@@ -88,14 +88,27 @@ describe('applyInvestmentPriceUpdates', () => {
   });
 });
 
-describe('shouldRefreshMarketPrices', () => {
-  it('pomija odświeżanie przed upływem godziny', () => {
-    localStorage.setItem('marketPricesLastRefresh', String(Date.now()));
-    expect(shouldRefreshMarketPrices(false)).toBe(false);
+describe('parseMarketQuoteResponse', () => {
+  it('parsuje odpowiedź proxy JSON', () => {
+    expect(parseMarketQuoteResponse({ price: 221.1, currency: 'PLN' })).toEqual({
+      price: 221.1,
+      currency: 'PLN'
+    });
   });
 
-  it('wymusza odświeżanie po force=true', () => {
-    localStorage.setItem('marketPricesLastRefresh', String(Date.now()));
-    expect(shouldRefreshMarketPrices(true)).toBe(true);
+  it('parsuje surową odpowiedź Yahoo chart', () => {
+    const quote = parseMarketQuoteResponse({
+      chart: { result: [{ meta: { regularMarketPrice: 163.44, currency: 'EUR' } }] }
+    });
+    expect(quote).toEqual({ price: 163.44, currency: 'EUR' });
+  });
+});
+
+describe('wrapUrlWithCorsProxies', () => {
+  it('opakowuje URL Yahoo w publiczne proxy CORS', () => {
+    const urls = wrapUrlWithCorsProxies('https://query1.finance.yahoo.com/v8/finance/chart/CDR.WA?interval=1d&range=1d');
+    expect(urls[0]).toContain('corsproxy.io');
+    expect(urls[0]).toContain(encodeURIComponent('CDR.WA'));
+    expect(urls[1]).toContain('allorigins.win');
   });
 });

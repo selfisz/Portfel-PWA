@@ -2162,6 +2162,7 @@ function renderExpensesSection(ctx) {
     renderReportsOutliers(ctx);
     renderReportsCategoryTrends();
     renderDetectedRecurringList();
+    if (typeof renderSubscriptionCenter === 'function') renderSubscriptionCenter();
 }
 
 function renderAdvancedSection(ctx) {
@@ -2172,6 +2173,7 @@ function renderAdvancedSection(ctx) {
     renderReportsFlow(ctx);
     renderReportsYearReview(ctx);
     if (typeof renderReportsAllocationTrendChart === 'function') renderReportsAllocationTrendChart();
+    if (typeof renderSurplusAllocator === 'function') renderSurplusAllocator(ctx);
     if (typeof renderReportsDiversificationChart === 'function') renderReportsDiversificationChart(ctx);
     if (typeof renderReportsIkzeLimit === 'function') renderReportsIkzeLimit();
     if (typeof renderReportsMortgageVsRetirement === 'function') renderReportsMortgageVsRetirement();

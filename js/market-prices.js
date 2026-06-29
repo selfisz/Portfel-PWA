@@ -1,5 +1,6 @@
-const MARKET_PRICE_REFRESH_MS = 60 * 60 * 1000;
 const MARKET_PRICE_STORAGE_KEY = 'marketPricesLastRefresh';
+
+const YAHOO_CHART_BASE = 'https://query1.finance.yahoo.com/v8/finance/chart/';
 
 const YAHOO_SYMBOL_BY_TICKER = {
     ARTGAMES: 'ARG.WA',
@@ -13,7 +14,7 @@ const YAHOO_SYMBOL_BY_TICKER = {
     L8I3: 'L8I3.DE'
 };
 
-let marketPriceRefreshTimer = null;
+let marketPriceRefreshInFlight = false;
 
 function resolveYahooSymbol(ticker) {
     const upper = (ticker || '').trim().toUpperCase();
@@ -39,6 +40,37 @@ function convertQuoteToAssetCurrency(quote, assetCurrency, eurPln) {
     return null;
 }
 
+function parseMarketQuoteResponse(data) {
+    if (!data || typeof data !== 'object') return null;
+    if (typeof data.price === 'number' && data.price > 0) {
+        return { price: data.price, currency: data.currency || 'PLN' };
+    }
+    const meta = data?.chart?.result?.[0]?.meta;
+    if (!meta || typeof meta.regularMarketPrice !== 'number' || meta.regularMarketPrice <= 0) {
+        return null;
+    }
+    return {
+        price: meta.regularMarketPrice,
+        currency: meta.currency || 'PLN'
+    };
+}
+
+function buildYahooChartUrl(symbol) {
+    return `${YAHOO_CHART_BASE}${encodeURIComponent(symbol)}?interval=1d&range=1d`;
+}
+
+function wrapUrlWithCorsProxies(targetUrl) {
+    const encoded = encodeURIComponent(targetUrl);
+    return [
+        `https://corsproxy.io/?${encoded}`,
+        `https://api.allorigins.win/raw?url=${encoded}`
+    ];
+}
+
+function shouldFetchQuotesViaBrowserProxy() {
+    return typeof window !== 'undefined';
+}
+
 async function fetchNbpEurPln() {
     const res = await fetch('https://api.nbp.pl/api/exchangerates/rates/a/eur/?format=json');
     if (!res.ok) return null;
@@ -47,27 +79,34 @@ async function fetchNbpEurPln() {
     return typeof mid === 'number' && mid > 0 ? mid : null;
 }
 
-async function fetchYahooQuote(symbol) {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+async function fetchYahooQuoteDirect(symbol) {
+    const res = await fetch(buildYahooChartUrl(symbol), { headers: { Accept: 'application/json' } });
     if (!res.ok) return null;
-
     const data = await res.json();
-    const meta = data?.chart?.result?.[0]?.meta;
-    if (!meta || typeof meta.regularMarketPrice !== 'number' || meta.regularMarketPrice <= 0) {
-        return null;
-    }
-
-    return {
-        price: meta.regularMarketPrice,
-        currency: meta.currency || 'PLN'
-    };
+    return parseMarketQuoteResponse(data);
 }
 
-function shouldRefreshMarketPrices(force) {
-    if (force) return true;
-    const lastRefresh = parseInt(localStorage.getItem(MARKET_PRICE_STORAGE_KEY) || '0', 10);
-    return !lastRefresh || (Date.now() - lastRefresh) >= MARKET_PRICE_REFRESH_MS;
+async function fetchYahooQuoteViaCorsProxy(symbol) {
+    const targetUrl = buildYahooChartUrl(symbol);
+    for (const proxyUrl of wrapUrlWithCorsProxies(targetUrl)) {
+        try {
+            const res = await fetch(proxyUrl, { headers: { Accept: 'application/json' } });
+            if (!res.ok) continue;
+            const data = await res.json();
+            const quote = parseMarketQuoteResponse(data);
+            if (quote) return quote;
+        } catch (err) {
+            console.warn('cors proxy quote', proxyUrl, err);
+        }
+    }
+    return null;
+}
+
+async function fetchYahooQuote(symbol) {
+    if (shouldFetchQuotesViaBrowserProxy()) {
+        return fetchYahooQuoteViaCorsProxy(symbol);
+    }
+    return fetchYahooQuoteDirect(symbol);
 }
 
 function markMarketPricesRefreshed() {
@@ -107,24 +146,19 @@ function applyInvestmentPriceUpdates(priceByTicker, eurPln) {
 }
 
 async function refreshInvestmentPrices(options = {}) {
-    const force = options.force === true;
-    if (!shouldRefreshMarketPrices(force)) {
-        return { skipped: true, updated: 0 };
-    }
-
     if (typeof getActiveAssets !== 'function') {
-        return { skipped: true, updated: 0 };
+        return { skipped: true, updated: 0, quoted: 0 };
     }
 
     const investments = getActiveAssets()
         .filter((asset) => asset.type === 'investment' && asset.ticker && !asset.archived);
 
     if (!investments.length) {
-        markMarketPricesRefreshed();
-        return { skipped: false, updated: 0 };
+        return { skipped: false, updated: 0, quoted: 0 };
     }
 
     const uniqueTickers = [...new Set(investments.map((asset) => asset.ticker.toUpperCase()))];
+    const mappableTickers = uniqueTickers.filter((ticker) => resolveYahooSymbol(ticker));
     let eurPln = typeof EUR_PLN_RATE === 'number' && EUR_PLN_RATE > 0 ? EUR_PLN_RATE : 4.32;
 
     try {
@@ -138,19 +172,23 @@ async function refreshInvestmentPrices(options = {}) {
     }
 
     const priceByTicker = {};
-    await Promise.all(uniqueTickers.map(async (ticker) => {
+    await Promise.all(mappableTickers.map(async (ticker) => {
         const symbol = resolveYahooSymbol(ticker);
         if (!symbol) return;
         try {
             const quote = await fetchYahooQuote(symbol);
             if (quote) priceByTicker[ticker] = quote;
         } catch (err) {
-            console.warn(`Yahoo quote ${ticker}`, err);
+            console.warn(`quote ${ticker}`, err);
         }
     }));
 
+    const quoted = Object.keys(priceByTicker).length;
+    if (quoted > 0) {
+        markMarketPricesRefreshed();
+    }
+
     const updated = applyInvestmentPriceUpdates(priceByTicker, eurPln);
-    markMarketPricesRefreshed();
 
     if (updated > 0) {
         if (typeof saveState === 'function') saveState();
@@ -159,23 +197,81 @@ async function refreshInvestmentPrices(options = {}) {
             && document.getElementById('view-reports')?.classList.contains('active')) {
             renderReports();
         }
+    } else if (quoted > 0 && typeof renderAssets === 'function') {
+        renderAssets();
     }
 
     return {
         skipped: false,
         updated,
-        quoted: Object.keys(priceByTicker).length
+        quoted,
+        failed: mappableTickers.length > 0 && quoted === 0
     };
 }
 
-function scheduleMarketPriceRefresh() {
-    refreshInvestmentPrices().catch((err) => console.warn('market prices init', err));
+async function refreshInvestmentPricesManual() {
+    if (marketPriceRefreshInFlight) return;
+    marketPriceRefreshInFlight = true;
 
-    if (marketPriceRefreshTimer) {
-        clearInterval(marketPriceRefreshTimer);
+    const btn = document.getElementById('btn-refresh-market-prices');
+    const prevLabel = btn?.textContent;
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Pobieranie…';
     }
 
-    marketPriceRefreshTimer = setInterval(() => {
-        refreshInvestmentPrices().catch((err) => console.warn('market prices interval', err));
-    }, MARKET_PRICE_REFRESH_MS);
+    try {
+        const result = await refreshInvestmentPrices();
+        if (typeof showSettingsToast !== 'function') return;
+
+        if (result.failed) {
+            showSettingsToast('Nie udało się pobrać kursów — spróbuj za chwilę', 'error');
+        } else if (result.updated > 0) {
+            showSettingsToast(`Zaktualizowano kursy (${result.updated} poz.)`);
+        } else if (result.quoted > 0) {
+            showSettingsToast('Kursy bez zmian');
+        } else {
+            showSettingsToast('Brak notowań do pobrania');
+        }
+    } catch (err) {
+        console.warn('refreshInvestmentPricesManual', err);
+        if (typeof showSettingsToast === 'function') {
+            showSettingsToast('Błąd pobierania kursów', 'error');
+        }
+    } finally {
+        marketPriceRefreshInFlight = false;
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = prevLabel || 'Pobierz kursy';
+        }
+        updateMarketPricesRefreshHint();
+    }
+}
+
+function formatMarketPricesLastRefresh() {
+    const ts = parseInt(localStorage.getItem(MARKET_PRICE_STORAGE_KEY) || '0', 10);
+    if (!ts) return '';
+    try {
+        return new Date(ts).toLocaleString('pl-PL', {
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch {
+        return '';
+    }
+}
+
+function updateMarketPricesRefreshHint() {
+    const hint = document.getElementById('assets-market-refresh-hint');
+    if (!hint) return;
+    const last = formatMarketPricesLastRefresh();
+    hint.textContent = last
+        ? `Ostatnio: ${last} · Yahoo (opóźnione)`
+        : 'Pobierz kursy z Yahoo · ARTGAMES-NC tylko ręcznie';
+}
+
+function scheduleMarketPriceRefresh() {
+    updateMarketPricesRefreshHint();
 }
