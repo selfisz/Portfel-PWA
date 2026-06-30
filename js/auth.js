@@ -31,13 +31,35 @@ function getCurrentAuthUser() {
     return currentAuthUser;
 }
 
+function isIosDevice() {
+    return /iPad|iPhone|iPod/i.test(navigator.userAgent || '');
+}
+
+function isStandaloneDisplay() {
+    return window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+}
+
+function isAuthCallbackUrl() {
+    const href = window.location.href;
+    const search = window.location.search || '';
+    const hash = window.location.hash || '';
+    return href.includes('apiKey=')
+        || href.includes('oobCode=')
+        || href.includes('mode=signIn')
+        || search.includes('code=')
+        || hash.includes('access_token=')
+        || hash.includes('id_token=')
+        || href.includes('__/auth/');
+}
+
 function formatAuthError(err) {
     if (!err) return 'Logowanie nie powiodło się.';
     const code = err.code || '';
     const map = {
         'auth/unauthorized-domain': 'Ta domena nie jest autoryzowana w Firebase (Authentication → Settings → Authorized domains).',
         'auth/operation-not-allowed': 'Logowanie Google nie jest włączone w Firebase Console (Authentication → Sign-in method).',
-        'auth/popup-blocked': 'Przeglądarka zablokowała okno logowania — spróbuj ponownie lub otwórz apkę w Safari/Chrome.',
+        'auth/popup-blocked': 'Przeglądarka zablokowała okno logowania. Otwórz apkę w Safari (nie z ikony PWA) i spróbuj ponownie.',
         'auth/network-request-failed': 'Brak połączenia z internetem podczas logowania.',
         'auth/web-storage-unsupported': 'Przeglądarka blokuje pamięć sesji — wyłącz tryb prywatny lub zezwól na ciasteczka.'
     };
@@ -91,19 +113,6 @@ function hideAuthOverlay() {
     document.body.classList.remove('auth-locked');
 }
 
-function isIosDevice() {
-    return /iPad|iPhone|iPod/i.test(navigator.userAgent || '');
-}
-
-function isAuthCallbackUrl() {
-    const href = window.location.href;
-    return href.includes('apiKey=')
-        || href.includes('oobCode=')
-        || href.includes('mode=signIn')
-        || href.includes('code=')
-        || href.includes('__/auth/');
-}
-
 function forceCanonicalIndexUrl() {
     if (isAuthCallbackUrl()) return;
     const base = typeof getBasePath === 'function' ? getBasePath() : '';
@@ -132,44 +141,44 @@ function maybeRegisterServiceWorker() {
     registerServiceWorker();
 }
 
-function shouldUseRedirectSignIn() {
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
-        || window.navigator.standalone === true;
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
-    return isStandalone || isMobile;
+function iosRedirectFailedMessage() {
+    return 'Google Cię zalogowało, ale Safari nie zachowało sesji (znany problem przekierowania na iPhone). '
+        + 'Otwórz w Safari adres z /index.html na końcu, zaloguj się tam — po pierwszym logowaniu PWA zwykle już pamięta sesję.';
 }
 
 async function signInWithGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     setAuthUiMode('checking');
+    forceCanonicalIndexUrl();
+    await unregisterServiceWorkerForAuth();
+
     try {
-        forceCanonicalIndexUrl();
-        if (isIosDevice()) {
-            await unregisterServiceWorkerForAuth();
-        }
-        if (shouldUseRedirectSignIn()) {
-            await auth.signInWithRedirect(provider);
-            return;
-        }
         await auth.signInWithPopup(provider);
-    } catch (err) {
-        console.error('signInWithGoogle', err);
-        if (err?.code === 'auth/popup-closed-by-user') {
+        return;
+    } catch (popupErr) {
+        console.warn('signInWithPopup', popupErr);
+        if (popupErr?.code === 'auth/popup-closed-by-user') {
             setAuthUiMode('signin');
             return;
         }
-        if (err?.code === 'auth/popup-blocked' || err?.code === 'auth/cancelled-popup-request') {
+        const canTryRedirect = popupErr?.code === 'auth/popup-blocked'
+            || popupErr?.code === 'auth/cancelled-popup-request';
+        if (canTryRedirect && !isIosDevice()) {
             try {
                 await auth.signInWithRedirect(provider);
                 return;
             } catch (redirectErr) {
-                console.error('signInWithRedirect fallback', redirectErr);
+                console.error('signInWithRedirect', redirectErr);
                 setAuthUiMode('error', formatAuthError(redirectErr));
                 return;
             }
         }
-        setAuthUiMode('error', formatAuthError(err));
+        if (isIosDevice()) {
+            setAuthUiMode('error', formatAuthError(popupErr) + ' Na iPhone używamy logowania w oknie — nie przekierowania.');
+            return;
+        }
+        setAuthUiMode('error', formatAuthError(popupErr));
     }
 }
 
@@ -227,12 +236,24 @@ async function handleAuthenticatedUser(user) {
         if (typeof cloudSyncUnlocked !== 'undefined') cloudSyncUnlocked = true;
 
         hideAuthOverlay();
+        cleanAuthCallbackFromUrl();
 
         if (typeof bootstrapApp === 'function') bootstrapApp();
         refreshAccountSettingsUI();
         if (isIosDevice()) registerServiceWorker();
     } finally {
         authHandlerInFlight = false;
+    }
+}
+
+function cleanAuthCallbackFromUrl() {
+    if (!isAuthCallbackUrl()) return;
+    try {
+        const base = typeof getBasePath === 'function' ? getBasePath() : '';
+        const path = base ? `${base}/index.html` : '/index.html';
+        window.history.replaceState(null, '', path);
+    } catch (err) {
+        console.warn('cleanAuthCallbackFromUrl', err);
     }
 }
 
@@ -265,11 +286,7 @@ function migrateLocalStorageToUidKey(uid) {
 async function initAuthGate() {
     forceCanonicalIndexUrl();
     document.body.classList.add('auth-locked');
-    if (isAuthCallbackUrl()) {
-        setAuthUiMode('checking');
-    } else {
-        setAuthUiMode('checking');
-    }
+    setAuthUiMode('checking');
 
     const signInBtn = document.getElementById('btn-google-signin');
     if (signInBtn && !signInBtn.dataset.bound) {
@@ -288,24 +305,27 @@ async function initAuthGate() {
         }
     }
 
+    const wasAuthCallback = isAuthCallbackUrl();
+
     try {
         const redirectResult = await auth.getRedirectResult();
         if (redirectResult?.user) {
             await handleAuthenticatedUser(redirectResult.user);
-        } else if (redirectResult?.credential) {
-            const liveUser = auth.currentUser;
-            if (liveUser) await handleAuthenticatedUser(liveUser);
+        } else if (redirectResult?.credential && auth.currentUser) {
+            await handleAuthenticatedUser(auth.currentUser);
+        } else if (wasAuthCallback && !auth.currentUser) {
+            setAuthUiMode('error', iosRedirectFailedMessage());
         }
     } catch (err) {
         console.error('getRedirectResult', err);
-        setAuthUiMode('error', formatAuthError(err));
+        setAuthUiMode('error', wasAuthCallback ? iosRedirectFailedMessage() : formatAuthError(err));
     }
 
     authInitComplete = true;
 
     if (!currentAuthUser && auth.currentUser) {
         await handleAuthenticatedUser(auth.currentUser);
-    } else if (!currentAuthUser) {
+    } else if (!currentAuthUser && authUiMode !== 'error') {
         setAuthUiMode('signin');
     }
 
