@@ -22,6 +22,9 @@ function setTheme(mode) {
         btn.classList.toggle('active', btn.dataset.theme === mode);
     });
     updateThemeColorMeta();
+    if (typeof syncChartJsDefaults === 'function') syncChartJsDefaults();
+    if (typeof invalidateReportsThemeCache === 'function') invalidateReportsThemeCache();
+    if (typeof refreshAllReportsChartThemes === 'function') refreshAllReportsChartThemes();
     refreshCurrentView();
 }
 
@@ -37,6 +40,11 @@ function initTheme() {
     const saved = localStorage.getItem(THEME_KEY) || 'auto';
     setTheme(saved);
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        if ((localStorage.getItem(THEME_KEY) || 'auto') === 'auto') updateThemeColorMeta();
+        if ((localStorage.getItem(THEME_KEY) || 'auto') !== 'auto') return;
+        updateThemeColorMeta();
+        if (typeof syncChartJsDefaults === 'function') syncChartJsDefaults();
+        if (typeof invalidateReportsThemeCache === 'function') invalidateReportsThemeCache();
+        if (typeof refreshAllReportsChartThemes === 'function') refreshAllReportsChartThemes();
+        refreshCurrentView();
     });
 }

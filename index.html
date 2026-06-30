@@ -113,14 +113,7 @@
             <div id="settings-section-budgets" class="settings-section-panel hidden">
                 <div class="settings-section settings-section--budget-editor">
                     <div class="section-label">Limity miesięczne</div>
-                    <p class="settings-hint">Puste pole = brak limitu. Kliknij kategorię, aby rozwinąć podkategorie. Przycisk „6m” wstawia średnią z ostatnich 6 miesięcy.</p>
-                    <label class="settings-toggle-row settings-toggle-row--compact">
-                        <span class="settings-toggle-row-body">
-                            <span class="settings-nav-row-title">Pytaj przed przekroczeniem limitu</span>
-                            <span class="settings-nav-row-desc">Przy zapisie wydatku ≥100% limitu</span>
-                        </span>
-                        <input type="checkbox" id="budget-confirm-over-toggle" onchange="setBudgetConfirmOnOver(this.checked)">
-                    </label>
+                    <p class="settings-hint">Ustaw limit dla kategorii lub podkategorii. Puste pole = brak limitu. Zużycie bieżącego miesiąca widać pod polem.</p>
                     <div id="settings-budget-list" class="budget-editor-list"></div>
                     <button type="button" class="btn-submit category-editor-save settings-budget-save" onclick="saveBudgetEditor()">Zapisz limity</button>
                 </div>
@@ -163,6 +156,13 @@
                             <input type="checkbox" id="notif-pref-insight">
                         </label>
                     </div>
+                    <label class="settings-toggle-row settings-toggle-row--budget-confirm">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title">Pytaj przed przekroczeniem limitu</span>
+                            <span class="settings-nav-row-desc">Okno potwierdzenia przy zapisie wydatku ≥100% limitu kategorii</span>
+                        </span>
+                        <input type="checkbox" id="budget-confirm-over-toggle" onchange="setBudgetConfirmOnOver(this.checked)">
+                    </label>
                 </div>
             </div>
 

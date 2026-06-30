@@ -70,16 +70,48 @@ function setReportsRankLevel(level) {
     renderReports();
 }
 
+function getChartLegendColor() {
+    return isLightTheme() ? '#0f172a' : '#e4e6eb';
+}
+
+function getChartGridColor() {
+    return isLightTheme() ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.08)';
+}
+
 function getReportsChartTheme() {
+    const light = isLightTheme();
+    const legendColor = getChartLegendColor();
+    const gridColor = getChartGridColor();
     return {
-        legendColor: getThemeCssVar('--text', '#0f172a', '#e4e6eb'),
-        gridColor: isLightTheme() ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.08)',
-        expenseColor: isLightTheme() ? 'rgba(220, 38, 38, 0.8)' : 'rgba(248, 113, 113, 0.8)',
-        expenseFill: isLightTheme() ? 'rgba(220, 38, 38, 0.12)' : 'rgba(248, 113, 113, 0.18)',
-        incomeColor: isLightTheme() ? 'rgba(13, 148, 136, 0.85)' : 'rgba(52, 211, 153, 0.8)',
-        prevYearColor: isLightTheme() ? 'rgba(100, 116, 139, 0.55)' : 'rgba(148, 163, 184, 0.5)',
-        tooltipBg: isLightTheme() ? 'rgba(15, 23, 42, 0.92)' : 'rgba(0, 0, 0, 0.88)'
+        legendColor,
+        gridColor,
+        expenseColor: light ? 'rgba(220, 38, 38, 0.8)' : 'rgba(248, 113, 113, 0.8)',
+        expenseFill: light ? 'rgba(220, 38, 38, 0.12)' : 'rgba(248, 113, 113, 0.18)',
+        incomeColor: light ? 'rgba(13, 148, 136, 0.85)' : 'rgba(52, 211, 153, 0.8)',
+        prevYearColor: light ? 'rgba(100, 116, 139, 0.55)' : 'rgba(148, 163, 184, 0.5)',
+        tooltipBg: light ? 'rgba(15, 23, 42, 0.92)' : 'rgba(0, 0, 0, 0.88)'
     };
+}
+
+function syncChartJsDefaults() {
+    if (typeof Chart === 'undefined' || typeof getChartLegendColor !== 'function') return;
+    Chart.defaults.color = getChartLegendColor();
+    Chart.defaults.borderColor = getChartGridColor();
+}
+
+function applyThemeToReportsChart(chart) {
+    if (!chart?.options) return;
+    const theme = getReportsChartTheme();
+    if (chart.options.plugins?.legend?.labels) {
+        chart.options.plugins.legend.labels.color = theme.legendColor;
+    }
+    ['x', 'y'].forEach((axis) => {
+        const scale = chart.options.scales?.[axis];
+        if (!scale) return;
+        if (scale.ticks) scale.ticks.color = theme.legendColor;
+        if (scale.grid) scale.grid.color = theme.gridColor;
+    });
+    chart.update('none');
 }
 
 function getReportsChartOptions(theme, yAxis = true) {
@@ -864,8 +896,8 @@ function renderReportsMonthChart(ctx) {
     const ctx2 = chartEl.getContext('2d');
     if (reportsChartInstance) reportsChartInstance.destroy();
 
-    const legendColor = getThemeCssVar('--text', '#0f172a', '#e4e6eb');
-    const gridColor = isLightTheme() ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.08)';
+    const legendColor = getChartLegendColor();
+    const gridColor = getChartGridColor();
 
     const monthChartOptions = {
         responsive: true,

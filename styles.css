@@ -146,6 +146,16 @@ html[data-theme="dark"] {
     --cash-tx-filter-all-shadow: rgba(0, 0, 0, 0.38);
 }
 
+/* html[data-theme="light"] — jawne wartości na iOS / PWA gdy wymuszony jasny motyw */
+html[data-theme="light"] {
+    --bg: #e4eaf4;
+    --text: #0f172a;
+    --text-muted: #5b6478;
+    --border: rgba(15, 23, 42, 0.1);
+    --card: rgba(255, 255, 255, 0.44);
+    --input-bg: rgba(255, 255, 255, 0.58);
+}
+
 /* html[data-theme="light"] jest zbędne — wartości identyczne z :root.
    Selektor :not([data-theme="light"]) w dark media query sprawia, że dark vars
    nie nadpisują :root gdy user wybrał jasny motyw. */
@@ -3040,6 +3050,12 @@ html:not([data-theme="dark"]) .grid-item.selected {
 .reports-bar-chart-wrap {
     width: 100%;
     min-height: 220px;
+    color: var(--text);
+}
+
+#view-reports .chart-wrapper,
+#view-reports .reports-bar-chart-wrap canvas {
+    color: var(--text);
 }
 
 .reports-bar-chart-wrap--daily {
@@ -6365,7 +6381,7 @@ html:not([data-theme="dark"]) .grid-item.selected {
 .budget-editor-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
 }
 
 .budget-suggest-hint {
@@ -6418,6 +6434,157 @@ html:not([data-theme="dark"]) .grid-item.selected {
     width: 100%;
 }
 
+.settings-section--budget-editor .budget-limit-group {
+    margin-bottom: 0;
+}
+
+.settings-section--budget-editor .budget-limit-group.hidden {
+    display: none;
+}
+
+.settings-section--budget-editor .budget-limit-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.settings-section--budget-editor .budget-limit-title {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.settings-section--budget-editor .budget-limit-panel {
+    padding: 12px;
+}
+
+.settings-section--budget-editor .budget-limit-field {
+    margin-bottom: 8px;
+}
+
+.settings-section--budget-editor .budget-limit-field .section-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.settings-section--budget-editor .budget-limit-input {
+    width: 100%;
+    max-width: 100%;
+    padding: 11px 12px;
+    min-height: 44px;
+    font-size: var(--text-base);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--card);
+    color: var(--text);
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.settings-section--budget-editor .budget-limit-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.settings-section--budget-editor .budget-limit-suggest {
+    margin-top: 6px;
+    font-size: var(--text-2xs);
+}
+
+.settings-section--budget-editor .budget-limit-usage {
+    margin-top: 4px;
+}
+
+.settings-section--budget-editor .budget-limit-usage .budget-row-meta {
+    margin-top: 0;
+    font-size: var(--text-2xs);
+}
+
+.settings-section--budget-editor .budget-limit-usage .budget-bar {
+    margin-top: 6px;
+}
+
+.settings-section--budget-editor .budget-limit-hint {
+    margin: 4px 0 0;
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+.settings-section--budget-editor .budget-limit-subs-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-top: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+}
+
+.settings-section--budget-editor .budget-limit-chevron {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.settings-section--budget-editor .budget-limit-group--subs-open .budget-limit-chevron {
+    transform: rotate(180deg);
+}
+
+.settings-section--budget-editor .budget-limit-subs {
+    display: none;
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--input-bg) 70%, var(--card));
+}
+
+.settings-section--budget-editor .budget-limit-group--subs-open .budget-limit-subs {
+    display: block;
+}
+
+.settings-section--budget-editor .budget-limit-sub {
+    padding: 10px 12px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.settings-section--budget-editor .budget-limit-sub:last-child {
+    border-bottom: none;
+}
+
+.settings-section--budget-editor .budget-limit-sub-title {
+    margin: 0 0 8px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.settings-toggle-row--budget-confirm {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
 .budget-editor-toolbar {
     display: flex;
     gap: 8px;
@@ -6435,99 +6602,6 @@ html:not([data-theme="dark"]) .grid-item.selected {
     padding: 10px 12px;
     font-size: var(--text-sm);
     font-family: inherit;
-}
-
-.budget-edit-group.hidden {
-    display: none;
-}
-
-.budget-edit-group .category-edit-row--main {
-    gap: 8px;
-}
-
-.budget-edit-toggle {
-    flex-shrink: 0;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: none;
-    background: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.budget-edit-toggle--spacer {
-    display: block;
-    cursor: default;
-}
-
-.budget-edit-chevron {
-    width: 18px;
-    height: 18px;
-    fill: currentColor;
-    transition: transform 0.2s ease;
-}
-
-.budget-edit-group--expanded .budget-edit-chevron {
-    transform: rotate(180deg);
-}
-
-.budget-edit-label,
-.budget-edit-sub-label {
-    flex: 1;
-    min-width: 0;
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.budget-edit-sub-label {
-    font-weight: 500;
-    color: var(--text-muted);
-}
-
-.budget-edit-controls {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
-    margin-left: auto;
-}
-
-.budget-edit-group .budget-editor-input {
-    width: 68px;
-    padding: 6px 8px;
-    text-align: right;
-}
-
-.budget-editor-meta {
-    margin: 0;
-    padding: 0 12px 10px 46px;
-    font-size: var(--text-2xs);
-    color: var(--text-muted);
-    line-height: 1.35;
-}
-
-.budget-edit-sub .budget-editor-meta {
-    padding: 0 12px 8px 20px;
-}
-
-.budget-edit-subs {
-    display: none;
-}
-
-.budget-edit-group--expanded .budget-edit-subs {
-    display: block;
-}
-
-.budget-edit-sub:last-child .budget-editor-meta {
-    padding-bottom: 10px;
 }
 
 .analysis-export-links {

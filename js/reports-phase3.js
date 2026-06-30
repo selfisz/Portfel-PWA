@@ -69,6 +69,7 @@ function getReportsDataFingerprint(ctx) {
 
 function getReportsUiStateKey() {
     const parts = [];
+    parts.push(typeof isLightTheme === 'function' && isLightTheme() ? 'th:light' : 'th:dark');
     if (typeof reportsViewType !== 'undefined') parts.push(`vt:${reportsViewType}`);
     if (typeof reportsRankLevel !== 'undefined') parts.push(`rl:${reportsRankLevel}`);
     const excluded = typeof appState !== 'undefined' && appState.reportPrefs?.excludedDebtInstallments;
@@ -2285,6 +2286,43 @@ function scheduleAnalysisSectionPrefetch(ctx, savingsRate) {
             renderAnalysisSectionContent(neighbor, ctx, savingsRate);
         });
     });
+}
+
+function getReportsChartInstancesForThemeRefresh() {
+    return [
+        reportsChartInstance,
+        reportsStructureChartInstance,
+        reportsTrendChartInstance,
+        reportsYoyChartInstance,
+        reportsDowChartInstance,
+        reportsDebtChartInstance,
+        reportsDebtTrendChartInstance,
+        reportsDebtSplitChartInstance,
+        reportsDebtsTabChartInstance,
+        reportsDebtsTabSplitInstance,
+        reportsDebtPeakChartInstance,
+        reportsAssetAllocationChartInstance,
+        reportsAssetsTabAllocationInstance,
+        reportsCashTrendChartInstance,
+        reportsAssetsTabCashTrendInstance,
+        reportsNetWorthTrendChartInstance,
+        reportsAllocationTrendChartInstance,
+        reportsDiversificationChartInstance,
+        reportsCompareChartInstance,
+        reportsCompareWealthChartInstance
+    ].filter(Boolean);
+}
+
+function invalidateReportsThemeCache() {
+    reportsContextCacheKey = '';
+    ANALYSIS_SECTIONS.forEach((section) => {
+        delete reportsRenderedSections[section];
+    });
+}
+
+function refreshAllReportsChartThemes() {
+    if (typeof applyThemeToReportsChart !== 'function') return;
+    getReportsChartInstancesForThemeRefresh().forEach((chart) => applyThemeToReportsChart(chart));
 }
 
 function invalidateAnalysisRenderCache(ctx) {
