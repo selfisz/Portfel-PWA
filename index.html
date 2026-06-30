@@ -115,14 +115,16 @@
                     <div class="section-label">Konto</div>
                     <p class="settings-hint">Zalogowano jako:</p>
                     <p id="settings-account-email" class="settings-account-email">—</p>
-                    <button type="button" id="btn-settings-password-reset" class="settings-action-btn hidden" onclick="sendPasswordResetLink(true)">
-                        <span class="settings-action-btn-title">Wyślij link do zmiany hasła</span>
-                        <span class="settings-action-btn-desc">E-mail z linkiem na Twój adres logowania</span>
-                    </button>
-                    <button type="button" class="settings-action-btn settings-action-btn--danger" onclick="signOutFromApp()">
-                        <span class="settings-action-btn-title">Wyloguj się</span>
-                        <span class="settings-action-btn-desc">Zakończ sesję na tym urządzeniu</span>
-                    </button>
+                    <div id="settings-account-actions" class="settings-account-actions settings-action-grid">
+                        <button type="button" id="btn-settings-password-reset" class="settings-action-btn" onclick="sendPasswordResetLink(true)">
+                            <span class="settings-action-btn-title">Zmiana hasła</span>
+                            <span class="settings-action-btn-desc">Link na e-mail</span>
+                        </button>
+                        <button type="button" class="settings-action-btn settings-action-btn--danger" onclick="signOutFromApp()">
+                            <span class="settings-action-btn-title">Wyloguj się</span>
+                            <span class="settings-action-btn-desc">Koniec sesji</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -226,12 +228,20 @@
                             <span class="backup-status-value" id="backup-local-info">Brak kopii lokalnej</span>
                         </div>
                     </div>
+                    <label class="settings-toggle-row settings-toggle-row--backup-auto">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title">Automatyczna kopia</span>
+                            <span class="settings-nav-row-desc">Raz dziennie przy otwarciu aplikacji (do 10 wersji auto)</span>
+                        </span>
+                        <input type="checkbox" id="auto-cloud-backup-toggle" onchange="onAutoCloudBackupToggle()">
+                    </label>
+                    <p id="auto-cloud-backup-status" class="settings-hint">—</p>
                     <div class="settings-action-group">
                         <span class="settings-action-group-label">Zapisz kopię</span>
                         <div class="settings-action-grid">
                             <button type="button" class="settings-action-btn" id="btn-backup-cloud" onclick="backupToCloud()">
                                 <span class="settings-action-btn-title">Chmura</span>
-                                <span class="settings-action-btn-desc">Dodaj kopię (do 20 wersji)</span>
+                                <span class="settings-action-btn-desc">Ręczna kopia (do 10 wersji)</span>
                             </button>
                             <button type="button" class="settings-action-btn" id="btn-backup-phone" onclick="backupToPhone()">
                                 <span class="settings-action-btn-title">Plik</span>

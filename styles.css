@@ -1040,10 +1040,39 @@ html[data-theme="dark"] .settings-maintenance strong { color: #fbbf24; }
 .cloud-restore-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 16px;
     overflow-y: auto;
     max-height: min(52vh, 420px);
     padding-right: 2px;
+}
+
+.cloud-restore-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cloud-restore-section + .cloud-restore-section {
+    padding-top: 4px;
+    border-top: 1px solid var(--border);
+}
+
+.cloud-restore-section-title {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.cloud-restore-section-empty {
+    margin: 0;
+    padding: 10px 12px;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
 }
 
 .cloud-restore-row {
@@ -1092,6 +1121,27 @@ html[data-theme="dark"] .settings-maintenance strong { color: #fbbf24; }
     background: var(--accent-soft);
     border-radius: 999px;
     padding: 2px 8px;
+}
+
+.cloud-restore-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.cloud-restore-badge--auto {
+    color: var(--text-muted);
+    background: rgba(148, 163, 184, 0.2);
+}
+
+.cloud-restore-badge--manual {
+    color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.settings-toggle-row--backup-auto {
+    margin-top: 12px;
 }
 
 .cloud-restore-meta {
@@ -2345,6 +2395,24 @@ html:not([data-theme="dark"]) .grid-item.selected {
     font-weight: 700;
 }
 
+.tx-badge--archive {
+    background: rgba(148, 163, 184, 0.2);
+    color: var(--text-muted);
+}
+
+.tx-row--archive {
+    opacity: 0.92;
+}
+
+.tx-row--archive .tx-chevron,
+.tx-row--archive .tx-swipe-hint {
+    display: none;
+}
+
+.calendar-day-tx--archive {
+    opacity: 0.92;
+}
+
 .tx-swipe-hint {
     position: absolute;
     right: 0;
@@ -2854,8 +2922,21 @@ body.auth-locked > #settings-overlay {
 
 .settings-account-email {
     font-weight: 600;
-    margin: 4px 0 20px;
+    margin: 4px 0 16px;
     word-break: break-all;
+}
+
+.settings-account-actions {
+    margin-top: 4px;
+}
+
+.settings-account-actions--solo {
+    grid-template-columns: 1fr;
+}
+
+.settings-account-actions .settings-action-btn--danger:active:not(:disabled) {
+    border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+    background: var(--danger-soft);
 }
 
 .settings-action-btn--danger .settings-action-btn-title {

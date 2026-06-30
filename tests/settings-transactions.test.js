@@ -799,3 +799,51 @@ describe('setCategoryEditorType', () => {
         expect(expenseBtn.classList.contains('active')).toBe(false);
     });
 });
+
+describe('automatyczna kopia chmury', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        globalThis.auth = { currentUser: { uid: 'test-uid' } };
+        globalThis.cloudBackupSnapshotsRef = {};
+        _setAppState({
+            transactions: [{ type: 'expense', amount: 10, mainCategory: 'Dom', subCategory: 'A', date: '2025-01-01' }],
+            loans: [],
+            creditCards: [],
+            assets: [],
+            cashMovements: [],
+            categoryBudgets: {}
+        });
+    });
+
+    it('domyślnie włącza automatyczną kopię', () => {
+        expect(isAutoCloudBackupEnabled()).toBe(true);
+    });
+
+    it('zapisuje preferencję wyłączenia', () => {
+        setAutoCloudBackupEnabled(false);
+        expect(isAutoCloudBackupEnabled()).toBe(false);
+        setAutoCloudBackupEnabled(true);
+        expect(isAutoCloudBackupEnabled()).toBe(true);
+    });
+
+    it('tworzy jedną automatyczną kopię dziennie', async () => {
+        let calls = 0;
+        globalThis.saveCloudBackupSnapshot = (_payload, options) => {
+            calls += 1;
+            expect(options.source).toBe('auto');
+            return Promise.resolve();
+        };
+        await maybeRunAutoCloudBackup();
+        expect(calls).toBe(1);
+        await maybeRunAutoCloudBackup();
+        expect(calls).toBe(1);
+    });
+
+    it('nie tworzy kopii gdy przełącznik wyłączony', async () => {
+        setAutoCloudBackupEnabled(false);
+        let calls = 0;
+        globalThis.saveCloudBackupSnapshot = () => { calls += 1; return Promise.resolve(); };
+        await maybeRunAutoCloudBackup();
+        expect(calls).toBe(0);
+    });
+});

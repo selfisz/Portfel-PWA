@@ -31,8 +31,13 @@ function getCurrentAuthUser() {
     return currentAuthUser;
 }
 
+function isLocalDevHost() {
+    const host = window.location.hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+}
+
 function usesEmailPasswordAuth() {
-    return isIosDevice();
+    return isIosDevice() || isLocalDevHost();
 }
 
 function isIosDevice() {
@@ -302,7 +307,10 @@ function refreshAccountSettingsUI() {
     if (!emailEl) return;
     emailEl.textContent = getUserAuthEmail(currentAuthUser) || '—';
     const resetBtn = document.getElementById('btn-settings-password-reset');
-    if (resetBtn) resetBtn.classList.toggle('hidden', !isIosDevice());
+    const actionsGrid = document.getElementById('settings-account-actions');
+    const showReset = usesEmailPasswordAuth();
+    if (resetBtn) resetBtn.classList.toggle('hidden', !showReset);
+    if (actionsGrid) actionsGrid.classList.toggle('settings-account-actions--solo', !showReset);
 }
 
 async function handleAuthenticatedUser(user) {

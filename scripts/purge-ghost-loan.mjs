@@ -1,12 +1,7 @@
 #!/usr/bin/env node
 /** One-shot: remove legacy test loan (412500) from Firestore. */
-import { initializeApp } from 'firebase/app';
-import { doc, getDoc, getFirestore, setDoc } from 'firebase/firestore';
-
-const firebaseConfig = {
-    apiKey: 'AIzaSyAfvk2_lfsaf5QZkH_MVk-kWbG8GFvjSeI',
-    projectId: 'portfel-pwa',
-};
+import { getDoc, setDoc } from 'firebase/firestore';
+import { signInForScripts, userStateRef } from './firebase-auth.mjs';
 
 const LEGACY_TEST_CAPITAL = 412500;
 const LEGACY_TEST_TOTAL = 500000;
@@ -26,13 +21,12 @@ function isLegacyTestLoan(raw) {
     return false;
 }
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const ref = doc(db, 'finances', 'my_state');
+const uid = await signInForScripts();
+const ref = userStateRef(uid);
 const snap = await getDoc(ref);
 
 if (!snap.exists()) {
-    console.log('Brak dokumentu my_state.');
+    console.log(`Brak dokumentu users/${uid}/state/main.`);
     process.exit(0);
 }
 

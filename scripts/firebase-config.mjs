@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 export const firebaseConfig = {
@@ -11,5 +12,8 @@ export const firebaseConfig = {
     measurementId: 'G-MF61T2VZ2K'
 };
 
-const app = initializeApp(firebaseConfig);
+export const ALLOWED_AUTH_EMAIL = 'dawidrekal@gmail.com';
+
+export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+export const auth = getAuth(app);

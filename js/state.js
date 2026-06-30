@@ -425,6 +425,10 @@ function initData() {
         });
     }
 
+    window.setTimeout(() => {
+        if (typeof maybeRunAutoCloudBackup === 'function') maybeRunAutoCloudBackup();
+    }, 4000);
+
     stateSnapshotUnsubscribe = stateRef.onSnapshot((docSnap) => {
         clearSyncTimeout();
         if (docSnap.exists) {

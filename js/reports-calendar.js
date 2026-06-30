@@ -1,4 +1,10 @@
 /* Raporty — kalendarz i drill-down */
+function getCalendarTransactions() {
+    return typeof getMergedTransactions === 'function'
+        ? getMergedTransactions()
+        : appState.transactions;
+}
+
 function setReportsCalendarView(view) {
     reportsCalendarView = view;
     document.getElementById('btn-cal-month')?.classList.toggle('active', view === 'month');
@@ -421,10 +427,10 @@ function renderReportsYearHeatmap() {
     const year = reportsCalendarYear;
     if (labelEl) labelEl.textContent = `Rok ${year}`;
 
-    const yearExpenses = appState.transactions.filter(
+    const yearExpenses = getCalendarTransactions().filter(
         (t) => t.type === 'expense' && t.date.startsWith(String(year))
     );
-    const yearIncome = appState.transactions.filter(
+    const yearIncome = getCalendarTransactions().filter(
         (t) => t.type === 'income' && t.date.startsWith(String(year))
     );
     const byDayExpense = {};
@@ -472,7 +478,7 @@ function openCalendarDayPanel(dateStr) {
     if (!overlay) return;
 
     if (filterEl) {
-        const dayTx = appState.transactions.filter((t) => t.date === dateStr);
+        const dayTx = getCalendarTransactions().filter((t) => t.date === dateStr);
         const cats = new Set();
         dayTx.forEach((t) => cats.add(t.mainCategory));
         filterEl.innerHTML = `<option value="all">Wszystkie</option>
@@ -499,7 +505,7 @@ function renderCalendarDayPanel() {
     const listEl = document.getElementById('calendar-day-list');
     if (!calendarDayDate || !titleEl || !summaryEl || !listEl) return;
 
-    let dayTx = appState.transactions.filter((t) => t.date === calendarDayDate);
+    let dayTx = getCalendarTransactions().filter((t) => t.date === calendarDayDate);
     if (calendarDayFilter === 'expense') dayTx = dayTx.filter((t) => t.type === 'expense');
     else if (calendarDayFilter === 'income') dayTx = dayTx.filter((t) => t.type === 'income');
     else if (calendarDayFilter.startsWith('cat:')) {
@@ -551,13 +557,18 @@ function renderCalendarDayPanel() {
 
     listEl.innerHTML = scheduledHtml + dayTx.map((t) => {
         const globalIndex = appState.transactions.indexOf(t);
+        const fromArchive = typeof isTransactionArchived === 'function' && isTransactionArchived(t);
         const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
         const meta = t.subCategory === '[Bez podkategorii]' ? '' : t.mainCategory;
         const isRec = t.recurringId ? '<span class="tx-badge">&#10227;</span>' : '';
-        return `<div class="calendar-day-tx${globalIndex >= 0 ? ' calendar-day-tx--clickable' : ''}"${globalIndex >= 0 ? ` role="button" tabindex="0" onclick="openTransactionFromCalendarDay(${globalIndex})" onkeydown="if (event.key === 'Enter') openTransactionFromCalendarDay(${globalIndex})"` : ''}>
+        const archiveBadge = fromArchive && typeof formatArchivedTransactionBadge === 'function'
+            ? formatArchivedTransactionBadge()
+            : '';
+        const clickable = globalIndex >= 0;
+        return `<div class="calendar-day-tx${clickable ? ' calendar-day-tx--clickable' : ''}${fromArchive ? ' calendar-day-tx--archive' : ''}"${clickable ? ` role="button" tabindex="0" onclick="openTransactionFromCalendarDay(${globalIndex})" onkeydown="if (event.key === 'Enter') openTransactionFromCalendarDay(${globalIndex})"` : ''}>
             ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
             <div class="tx-info">
-                <div class="tx-title">${escapeHtml(title)}${isRec}</div>
+                <div class="tx-title">${escapeHtml(title)}${isRec}${archiveBadge}</div>
                 ${meta ? `<div class="tx-meta">${escapeHtml(meta)}</div>` : ''}
                 ${t.note ? `<div class="tx-note">${escapeHtml(t.note)}</div>` : ''}
             </div>
@@ -617,7 +628,7 @@ function openMonthDrillDown(year, month) {
 
     const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
     const end = localIsoDate(new Date(year, month + 1, 0));
-    const monthTx = appState.transactions.filter((t) => t.date >= start && t.date <= end);
+    const monthTx = getCalendarTransactions().filter((t) => t.date >= start && t.date <= end);
     const label = new Date(year, month, 1).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
 
     if (titleEl) titleEl.textContent = label.charAt(0).toUpperCase() + label.slice(1);
@@ -633,11 +644,15 @@ function openMonthDrillDown(year, month) {
     const expenses = monthTx.filter((t) => t.type === 'expense').sort((a, b) => b.amount - a.amount);
     listEl.innerHTML = expenses.length
         ? expenses.map((t) => {
+            const fromArchive = typeof isTransactionArchived === 'function' && isTransactionArchived(t);
+            const archiveBadge = fromArchive && typeof formatArchivedTransactionBadge === 'function'
+                ? formatArchivedTransactionBadge()
+                : '';
             const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
-            return `<div class="calendar-day-tx">
+            return `<div class="calendar-day-tx${fromArchive ? ' calendar-day-tx--archive' : ''}">
                 ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, 'expense')}
                 <div class="tx-info">
-                    <div class="tx-title">${escapeHtml(title)}</div>
+                    <div class="tx-title">${escapeHtml(title)}${archiveBadge}</div>
                     <div class="tx-meta">${formatTxDate(t.date)}</div>
                 </div>
                 <div class="tx-amount expense">−${t.amount.toFixed(2)} zł</div>

@@ -10,7 +10,11 @@ function getFinanceStorageKey() {
 }
 const THEME_KEY = 'theme_preference';
 const LOCAL_BACKUP_KEY = 'finanse_local_backup';
-const MAX_CLOUD_BACKUP_SNAPSHOTS = 20;
+const MAX_CLOUD_BACKUP_SNAPSHOTS_MANUAL = 10;
+const MAX_CLOUD_BACKUP_SNAPSHOTS_AUTO = 10;
+const MAX_CLOUD_BACKUP_SNAPSHOTS = MAX_CLOUD_BACKUP_SNAPSHOTS_MANUAL + MAX_CLOUD_BACKUP_SNAPSHOTS_AUTO;
+const AUTO_CLOUD_BACKUP_ENABLED_KEY = 'finanse_auto_cloud_backup_enabled';
+const LAST_AUTO_CLOUD_BACKUP_DATE_KEY = 'finanse_last_auto_cloud_backup_date';
 const LIST_PAGE_SIZE = 6;
 const MODULE_SPLIT_LINE_THRESHOLD = 900;
 const MODULE_SPLIT_BANNER_KEY = 'module_split_banner_dismissed_at';

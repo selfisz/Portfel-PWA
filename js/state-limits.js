@@ -112,6 +112,18 @@ function getMergedTransactions() {
     return mergeArchivedTransactions(appState?.transactions || [], getArchivedTransactions());
 }
 
+function isTransactionArchived(tx) {
+    if (!tx || typeof transactionFingerprint !== 'function') return false;
+    const fp = transactionFingerprint(tx);
+    const inActive = (appState?.transactions || []).some((t) => transactionFingerprint(t) === fp);
+    if (inActive) return false;
+    return getArchivedTransactions().some((t) => transactionFingerprint(t) === fp);
+}
+
+function formatArchivedTransactionBadge() {
+    return '<span class="tx-badge tx-badge--archive" title="Transakcja z archiwum lokalnego">arch.</span>';
+}
+
 function enforceAppStateLimits(options = {}) {
     const result = {
         archivedAdded: 0,

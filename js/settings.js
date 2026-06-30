@@ -83,6 +83,93 @@ function formatCloudBackupCount(count) {
     return `${count} kopii`;
 }
 
+function getAutoCloudBackupDateStorageKey() {
+    const uid = typeof auth !== 'undefined' && auth?.currentUser?.uid
+        ? auth.currentUser.uid
+        : '';
+    return uid ? `${LAST_AUTO_CLOUD_BACKUP_DATE_KEY}_${uid}` : LAST_AUTO_CLOUD_BACKUP_DATE_KEY;
+}
+
+function isAutoCloudBackupEnabled() {
+    try {
+        const raw = localStorage.getItem(AUTO_CLOUD_BACKUP_ENABLED_KEY);
+        if (raw === null) return true;
+        return raw === '1' || raw === 'true';
+    } catch {
+        return true;
+    }
+}
+
+function setAutoCloudBackupEnabled(enabled) {
+    try {
+        localStorage.setItem(AUTO_CLOUD_BACKUP_ENABLED_KEY, enabled ? '1' : '0');
+    } catch { /* ignore */ }
+    syncAutoCloudBackupToggleUI();
+}
+
+function syncAutoCloudBackupToggleUI() {
+    const el = document.getElementById('auto-cloud-backup-toggle');
+    if (el) el.checked = isAutoCloudBackupEnabled();
+}
+
+function onAutoCloudBackupToggle() {
+    const el = document.getElementById('auto-cloud-backup-toggle');
+    const enabled = !!el?.checked;
+    setAutoCloudBackupEnabled(enabled);
+    if (enabled && typeof maybeRunAutoCloudBackup === 'function') {
+        maybeRunAutoCloudBackup();
+    }
+}
+
+function getTodayDateKey() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+function getLastAutoCloudBackupDate() {
+    try {
+        return localStorage.getItem(getAutoCloudBackupDateStorageKey()) || '';
+    } catch {
+        return '';
+    }
+}
+
+function setLastAutoCloudBackupDate(dateKey) {
+    try {
+        localStorage.setItem(getAutoCloudBackupDateStorageKey(), dateKey);
+    } catch { /* ignore */ }
+}
+
+let autoCloudBackupInFlight = false;
+
+async function maybeRunAutoCloudBackup() {
+    if (autoCloudBackupInFlight) return;
+    if (!isAutoCloudBackupEnabled()) return;
+    if (!cloudBackupSnapshotsRef || !cloudBackupRef) return;
+
+    const today = getTodayDateKey();
+    if (getLastAutoCloudBackupDate() === today) return;
+
+    const count = getTransactionCount(appState);
+    if (count < 1) return;
+
+    autoCloudBackupInFlight = true;
+    try {
+        const payload = getExportPayload();
+        await saveCloudBackupSnapshot(payload, { source: 'auto' });
+        setLastAutoCloudBackupDate(today);
+        const settingsOpen = !document.getElementById('settings-overlay')?.classList.contains('hidden');
+        if (settingsOpen && settingsSection === 'backup') refreshBackupInfo();
+    } catch (err) {
+        console.warn('maybeRunAutoCloudBackup', err);
+    } finally {
+        autoCloudBackupInFlight = false;
+    }
+}
+
+function formatCloudBackupSourceLabel(source) {
+    return source === 'auto' ? 'auto' : 'ręczna';
+}
+
 async function refreshBackupInfo() {
     const cloudEl = document.getElementById('backup-cloud-info');
     const localEl = document.getElementById('backup-local-info');
@@ -92,14 +179,37 @@ async function refreshBackupInfo() {
         if (snapshots.length) {
             const latest = snapshots[0];
             const date = formatCloudBackupDate(latest.exportedAt);
+            const autoCount = snapshots.filter((s) => s.backupSource === 'auto').length;
+            const manualCount = snapshots.length - autoCount;
+            const autoToday = isAutoCloudBackupEnabled() && getLastAutoCloudBackupDate() === getTodayDateKey();
             if (cloudEl) {
-                cloudEl.textContent = `${formatCloudBackupCount(snapshots.length)} · ostatnia ${date} · ${latest.transactionCount} trans.`;
+                cloudEl.textContent = `${formatCloudBackupCount(snapshots.length)} (${manualCount} ręczn., ${autoCount} auto) · ostatnia ${date} · ${latest.transactionCount} trans.`;
+            }
+            const autoHint = document.getElementById('auto-cloud-backup-status');
+            if (autoHint) {
+                if (!isAutoCloudBackupEnabled()) {
+                    autoHint.textContent = 'Automatyczna kopia wyłączona.';
+                } else if (autoToday) {
+                    autoHint.textContent = 'Dzisiejsza automatyczna kopia jest już zapisana.';
+                } else {
+                    autoHint.textContent = 'Automatyczna kopia zostanie utworzona przy następnym uruchomieniu aplikacji.';
+                }
             }
         } else if (cloudEl) {
             cloudEl.textContent = 'Brak kopii w chmurze';
+            const autoHint = document.getElementById('auto-cloud-backup-status');
+            if (autoHint) {
+                autoHint.textContent = isAutoCloudBackupEnabled()
+                    ? 'Automatyczna kopia zostanie utworzona przy pierwszym uruchomieniu z danymi.'
+                    : 'Automatyczna kopia wyłączona.';
+            }
         }
     } catch {
         if (cloudEl) cloudEl.textContent = 'Niedostępna — brak połączenia';
+        const autoHint = document.getElementById('auto-cloud-backup-status');
+        if (autoHint && !isAutoCloudBackupEnabled()) {
+            autoHint.textContent = 'Automatyczna kopia wyłączona.';
+        }
     }
     const localRaw = localStorage.getItem(LOCAL_BACKUP_KEY);
     if (localEl) {
@@ -131,6 +241,10 @@ function setSettingsSection(section) {
     });
     if (section === 'budgets') renderBudgetEditor();
     if (section === 'account' && typeof refreshAccountSettingsUI === 'function') refreshAccountSettingsUI();
+    if (section === 'backup') {
+        syncAutoCloudBackupToggleUI();
+        refreshBackupInfo();
+    }
 }
 
 function openSettings(preferredSection) {
@@ -142,6 +256,7 @@ function openSettings(preferredSection) {
         btn.classList.toggle('active', btn.dataset.theme === saved);
     });
     refreshBackupInfo();
+    syncAutoCloudBackupToggleUI();
     if (typeof refreshStorageUsageUI === 'function') refreshStorageUsageUI();
     refreshBudgetSettingsUI();
     let section = settingsSection;
@@ -824,13 +939,13 @@ function closeSettings() {
 
 async function backupToCloud() {
     const count = getTransactionCount(appState);
-    if (!confirm(`Na pewno wysłać kopię do chmury (${count} trans.)?\nZostanie dodana jako nowa wersja (przechowujemy do ${MAX_CLOUD_BACKUP_SNAPSHOTS} kopii).`)) return;
+    if (!confirm(`Na pewno wysłać kopię do chmury (${count} trans.)?\nZostanie dodana jako ręczna wersja (przechowujemy do ${MAX_CLOUD_BACKUP_SNAPSHOTS_MANUAL} ręcznych kopii).`)) return;
 
     const btn = document.getElementById('btn-backup-cloud');
     setSettingsButtonBusy(btn, true, 'Wysyłanie…');
     try {
         const payload = getExportPayload();
-        await saveCloudBackupSnapshot(payload);
+        await saveCloudBackupSnapshot(payload, { source: 'manual' });
         showSettingsToast('Kopia wysłana do chmury');
         refreshBackupInfo();
         hapticFeedback();
@@ -870,6 +985,30 @@ function closeCloudRestorePicker() {
     document.getElementById('cloud-restore-overlay')?.classList.add('hidden');
 }
 
+function renderCloudRestoreRow(snapshot, isLatest) {
+    const date = formatCloudBackupDate(snapshot.exportedAt);
+    const latestBadge = isLatest
+        ? '<span class="cloud-restore-badges"><span class="cloud-restore-badge">najnowsza</span></span>'
+        : '';
+    return `<button type="button" class="cloud-restore-row" data-backup-id="${escapeHtml(snapshot.id)}">
+        <span class="cloud-restore-row-main">
+            <span class="cloud-restore-date">${escapeHtml(date)}</span>
+            ${latestBadge}
+        </span>
+        <span class="cloud-restore-meta">${snapshot.transactionCount} trans.</span>
+    </button>`;
+}
+
+function renderCloudRestoreSection(title, snapshots, latestId) {
+    const rows = snapshots.length
+        ? snapshots.map((snapshot) => renderCloudRestoreRow(snapshot, snapshot.id === latestId)).join('')
+        : '<p class="cloud-restore-section-empty">Brak kopii</p>';
+    return `<div class="cloud-restore-section">
+        <div class="cloud-restore-section-title">${escapeHtml(title)}</div>
+        ${rows}
+    </div>`;
+}
+
 async function openCloudRestorePicker() {
     const overlay = document.getElementById('cloud-restore-overlay');
     const list = document.getElementById('cloud-restore-list');
@@ -883,17 +1022,13 @@ async function openCloudRestorePicker() {
             list.innerHTML = '<p class="cloud-restore-status">Brak kopii w chmurze</p>';
             return;
         }
-        list.innerHTML = snapshots.map((snapshot, index) => {
-            const date = formatCloudBackupDate(snapshot.exportedAt);
-            const latestBadge = index === 0 ? '<span class="cloud-restore-badge">najnowsza</span>' : '';
-            return `<button type="button" class="cloud-restore-row" data-backup-id="${escapeHtml(snapshot.id)}">
-                <span class="cloud-restore-row-main">
-                    <span class="cloud-restore-date">${escapeHtml(date)}</span>
-                    ${latestBadge}
-                </span>
-                <span class="cloud-restore-meta">${snapshot.transactionCount} trans.</span>
-            </button>`;
-        }).join('');
+        const latestId = snapshots[0]?.id || null;
+        const autoSnapshots = snapshots.filter((snapshot) => snapshot.backupSource === 'auto');
+        const manualSnapshots = snapshots.filter((snapshot) => snapshot.backupSource !== 'auto');
+        list.innerHTML = [
+            renderCloudRestoreSection('Automatyczne', autoSnapshots, latestId),
+            renderCloudRestoreSection('Ręczne', manualSnapshots, latestId)
+        ].join('');
         list.onclick = (event) => {
             const row = event.target.closest('[data-backup-id]');
             if (row?.dataset.backupId) restoreCloudBackupById(row.dataset.backupId);

@@ -1054,10 +1054,23 @@ function renderDashboard() {
 
     let listTx = dateFilteredTx;
     const searchHint = document.getElementById('db-search-hint');
-    if (searchHint) searchHint.classList.toggle('visible', !!searchQuery);
+    if (searchHint) {
+        searchHint.classList.toggle('visible', !!searchQuery);
+        if (searchQuery) {
+            const archivedCount = typeof getArchivedTransactions === 'function'
+                ? getArchivedTransactions().length
+                : 0;
+            searchHint.textContent = archivedCount
+                ? 'Przeszukiwanie aktywnych i archiwum lokalnego'
+                : 'Przeszukiwanie wszystkich transakcji';
+        }
+    }
 
     if (searchQuery) {
-        listTx = appState.transactions.filter(t => transactionMatchesSearch(t, searchQuery));
+        const searchSource = typeof getMergedTransactions === 'function'
+            ? getMergedTransactions()
+            : appState.transactions;
+        listTx = searchSource.filter((t) => transactionMatchesSearch(t, searchQuery));
     } else if (activeChartCategory) {
         listTx = listTx.filter((t) => transactionMatchesChartDrill(
             t,
@@ -1223,29 +1236,33 @@ function renderDashboard() {
         }
 
         const globalIndex = appState.transactions.indexOf(t);
+        const fromArchive = typeof isTransactionArchived === 'function' && isTransactionArchived(t);
         const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
         const isRec = t.recurringId ? '<span class="tx-badge">&#10227;</span>' : '';
         const isCard = t.creditCardId ? '<span class="tx-badge tx-badge--card" title="Karta kredytowa">&#128179;</span>' : '';
+        const archiveBadge = fromArchive && typeof formatArchivedTransactionBadge === 'function'
+            ? formatArchivedTransactionBadge()
+            : '';
         const isPlanned = typeof isPlannedTransaction === 'function' && isPlannedTransaction(t);
         const plannedBadge = isPlanned && typeof formatPlannedTransactionBadge === 'function'
             ? formatPlannedTransactionBadge()
             : '';
         const metaText = searchQuery ? `${formatTxDate(t.date)} · ${t.mainCategory}` : t.mainCategory;
         const row = document.createElement('div');
-        row.className = 'tx-row';
+        row.className = fromArchive ? 'tx-row tx-row--archive' : 'tx-row';
         row.innerHTML = `
             ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
             <div class="tx-info">
-                <div class="tx-title">${title}${isRec}${isCard}${plannedBadge}</div>
+                <div class="tx-title">${title}${isRec}${isCard}${archiveBadge}${plannedBadge}</div>
                 <div class="tx-meta">${metaText}</div>
                 ${t.note ? `<div class="tx-note">${t.note}</div>` : ''}
             </div>
             <div class="tx-amount-col">
                 <div class="tx-amount ${t.type}">${t.type === 'expense' ? '-' : '+'}${t.amount.toFixed(2)} zł</div>
             </div>
-            <span class="tx-chevron" aria-hidden="true">›</span>
-            <div class="tx-swipe-hint">Usuń</div>`;
-        attachSwipeDelete(row, globalIndex);
+            ${fromArchive ? '' : '<span class="tx-chevron" aria-hidden="true">›</span>'}
+            ${fromArchive ? '' : '<div class="tx-swipe-hint">Usuń</div>'}`;
+        if (globalIndex >= 0) attachSwipeDelete(row, globalIndex);
         list.appendChild(row);
     });
 

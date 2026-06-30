@@ -5,20 +5,28 @@
     <title>Import Money Pro → Portfel</title>
     <style>
         body { font-family: system-ui, sans-serif; max-width: 520px; margin: 40px auto; padding: 0 16px; }
-        button { padding: 12px 20px; font-size: 1rem; cursor: pointer; }
+        label { display: block; margin: 12px 0 4px; font-size: 0.9rem; }
+        input { width: 100%; box-sizing: border-box; padding: 8px; font-size: 1rem; }
+        button { margin-top: 16px; padding: 12px 20px; font-size: 1rem; cursor: pointer; }
         #log { margin-top: 16px; white-space: pre-wrap; color: #333; }
         .ok { color: #2f855a; }
         .err { color: #c53030; }
     </style>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
     <h1>Import danych Money Pro</h1>
-    <p>Wgra <strong>import-result.json</strong> do Firestore (<code>finances/my_state</code>) i zastąpi obecne transakcje.</p>
+    <p>Wgra <strong>import-result.json</strong> do Firestore (<code>users/&lt;uid&gt;/state/main</code>) i zastąpi obecne transakcje.</p>
+    <label for="admin-email">E-mail</label>
+    <input id="admin-email" type="email" value="dawidrekal@gmail.com" readonly>
+    <label for="admin-password">Hasło Firebase</label>
+    <input id="admin-password" type="password" autocomplete="current-password">
     <button id="btn-import">Wgraj dane</button>
     <div id="log"></div>
     <script>
+        const ALLOWED_AUTH_EMAIL = 'dawidrekal@gmail.com';
         const firebaseConfig = {
             apiKey: "AIzaSyAfvk2_lfsaf5QZkH_MVk-kWbG8GFvjSeI",
             authDomain: "portfel-pwa.firebaseapp.com",
@@ -28,6 +36,7 @@
             appId: "1:370658952228:web:b5fedfe155ea1918e584b1",
         };
         firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
         const db = firebase.firestore();
         const logEl = document.getElementById('log');
 
@@ -35,9 +44,49 @@
             logEl.innerHTML += `<span class="${cls || ''}">${msg}</span>\n`;
         }
 
+        function normalizeImportAppState(raw) {
+            const appState = {
+                transactions: raw.transactions || [],
+                loans: Array.isArray(raw.loans) ? raw.loans : [],
+                creditCards: Array.isArray(raw.creditCards) ? raw.creditCards : [],
+                creditCardMovements: Array.isArray(raw.creditCardMovements) ? raw.creditCardMovements : [],
+                assets: Array.isArray(raw.assets) ? raw.assets : [],
+                cashMovements: Array.isArray(raw.cashMovements) ? raw.cashMovements : [],
+                assetSnapshots: Array.isArray(raw.assetSnapshots) ? raw.assetSnapshots : [],
+                assetValueHistory: Array.isArray(raw.assetValueHistory) ? raw.assetValueHistory : [],
+                categoryBudgets: raw.categoryBudgets && typeof raw.categoryBudgets === 'object' ? raw.categoryBudgets : {}
+            };
+            if (raw.loan && typeof raw.loan === 'object' && !appState.loans.length) {
+                appState.loan = raw.loan;
+            }
+            if (Array.isArray(raw.investments) && raw.investments.length) {
+                appState.investments = raw.investments;
+            }
+            return appState;
+        }
+
+        async function ensureSignedIn() {
+            if (auth.currentUser?.email === ALLOWED_AUTH_EMAIL) {
+                return auth.currentUser.uid;
+            }
+            const email = document.getElementById('admin-email').value.trim();
+            const password = document.getElementById('admin-password').value;
+            if (!password) throw new Error('Podaj hasło Firebase.');
+            const cred = await auth.signInWithEmailAndPassword(email, password);
+            if (cred.user.email !== ALLOWED_AUTH_EMAIL) {
+                await auth.signOut();
+                throw new Error('To konto nie jest na liście dozwolonych.');
+            }
+            return cred.user.uid;
+        }
+
         document.getElementById('btn-import').onclick = async () => {
             logEl.innerHTML = '';
             try {
+                log('Logowanie...');
+                const uid = await ensureSignedIn();
+                log(`Zalogowano (${uid}).`, 'ok');
+
                 log('Ładowanie import-result.json...');
                 const base = location.pathname.includes('/Portfel-PWA')
                     ? '/Portfel-PWA'
@@ -46,19 +95,24 @@
                         : '';
                 const res = await fetch(`${base}/scripts/import-result.json`);
                 if (!res.ok) throw new Error('Brak import-result.json — uruchom najpierw import-moneypro.py');
-                const appState = await res.json();
+                const raw = await res.json();
+                const appState = normalizeImportAppState(raw);
                 log(`Znaleziono ${appState.transactions.length} transakcji. Wgrywanie...`);
 
-                localStorage.setItem('app_finance_state', JSON.stringify(appState));
+                localStorage.setItem(`app_finance_state_${uid}`, JSON.stringify(appState));
                 log('Zapisano lokalnie (localStorage).', 'ok');
 
-                try {
-                    await db.collection('finances').doc('my_state').set(appState);
-                    log('Zapisano w Firestore (chmura).', 'ok');
-                } catch (cloudErr) {
-                    log('Chmura niedostępna — dane są tylko lokalnie w tej przeglądarce.', 'err');
-                    log(`Otwórz aplikację: ${location.origin}${base || ''}/index.html`, 'ok');
-                }
+                const exportPayload = {
+                    version: 1,
+                    exportedAt: new Date().toISOString(),
+                    transactionCount: appState.transactions.length,
+                    data: appState
+                };
+                const userRef = db.collection('users').doc(uid);
+                await userRef.collection('state').doc('main').set(appState);
+                await userRef.collection('meta').doc('cloud_backup').set(exportPayload);
+                await userRef.collection('snapshots').add(exportPayload);
+                log(`Zapisano w Firestore (users/${uid}/...).`, 'ok');
 
                 log('Gotowe! Odśwież aplikację Portfel.', 'ok');
             } catch (err) {

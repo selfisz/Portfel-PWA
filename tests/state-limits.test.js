@@ -103,3 +103,22 @@ describe('getMergedTransactions', () => {
         expect(getMergedTransactions()).toHaveLength(2);
     });
 });
+
+describe('isTransactionArchived', () => {
+    it('rozpoznaje transakcję tylko z archiwum', () => {
+        const archivedTx = {
+            type: 'expense', amount: 50, mainCategory: 'Transport', subCategory: 'B', date: '2019-01-01'
+        };
+        runInContext(`appState.transactions = [];`);
+        setArchivedTransactions([archivedTx]);
+        expect(isTransactionArchived(archivedTx)).toBe(true);
+    });
+
+    it('nie oznacza aktywnej transakcji jako archiwum', () => {
+        const activeTx = {
+            type: 'expense', amount: 100, mainCategory: 'Dom', subCategory: 'A', date: '2025-01-01'
+        };
+        runInContext(`appState.transactions = [${JSON.stringify(activeTx)}];`);
+        expect(isTransactionArchived(activeTx)).toBe(false);
+    });
+});

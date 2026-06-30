@@ -1,79 +1,66 @@
-# Backlog — do zrobienia później
+# Backlog — Portfel-PWA
 
-Lista świadomie odłożonych prac. Nie blokuje bieżącego użytkowania przy typowej skali danych.
+Ostatnia aktualizacja: **2026-06-29** (sesja kończona — dokończenie **jutro**).
+
+---
+
+## Na jutro — zamknięcie Auth (checklist)
+
+**Cel:** potwierdzić, że produkcja działa end-to-end; zamknąć wątek audytu pkt 5.
+
+- [ ] **Migracja danych** — w Firebase Console sprawdzić, że po zalogowaniu stan jest pod `users/<uid>/state/main` (nie pusty profil).
+- [ ] **Sync** — dodać transakcję na jednym urządzeniu, odświeżyć na drugim (telefon + PC, to samo konto).
+- [ ] **Kopia zapasowa** — w Ustawieniach: lista snapshotów + przywrócenie kopii z chmury.
+- [ ] **Wylogowanie** — po wylogowaniu brak dostępu do danych w chmurze; po ponownym logowaniu sync wraca.
+- [ ] **iOS PWA** — szybki smoke: logowanie hasłem, odświeżenie, sync (wiadomo z wcześniejszej sesji, że działa — potwierdzić po ostatnich zmianach).
+- [ ] **Opcjonalnie:** po potwierdzonej migracji usunąć blok `match /finances/...` z reguł (legacy już niepotrzebny do odczytu).
+- [ ] **Opcjonalnie:** testy automatyczne auth (emulator / mocki) — niski priorytet.
+
+**Reguły Firestore:** zweryfikowane 2026-06-29 — konsola = `firestore.rules` w repo. **Nie wymagają zmian** przy obecnym kodzie.
 
 ---
 
 ## Archiwum transakcji — wyszukiwanie i kalendarz
 
-**Status:** odłożone (2026-06-29)  
-**Kontekst:** `js/state-limits.js` — limit **3500 aktywnych** transakcji; starsze trafiają do lokalnego archiwum (`finanse_archived_transactions`).
+**Status:** ✅ zamknięte w kodzie (2026-06-29)
 
-### Problem
+Limit **3500 aktywnych** transakcji; starsze w lokalnym archiwum (`finanse_archived_transactions`).
 
-Po przekroczeniu limitu aktywnych transakcji starsze wpisy są w archiwum lokalnym. Nadal widać je w:
+### Zrobione
 
-- raportach (rok / „Całość”) — `getMergedTransactions()` w `js/reports-core.js`
-- eksporcie JSON v2 — pole `archivedTransactions` w `js/settings.js`
+- Wyszukiwarka na pulpicie — `getMergedTransactions()` (`js/dashboard.js`).
+- Kalendarz raportów — `getCalendarTransactions()` (`js/reports-calendar.js`, `js/reports-core.js`).
+- Badge **arch.**, wiersze tylko do odczytu (`js/state-limits.js`).
+- Testy jednostkowe: `tests/state-limits.test.js`.
 
-Nie widać ich w:
+### Odłożone (niski priorytet)
 
-- **wyszukiwarce na pulpicie** — `js/dashboard.js` (`renderDashboard`, filtr `db-search` używa tylko `appState.transactions`)
-- **kalendarzu** — `js/reports-calendar.js` (tylko `appState.transactions`)
-
-### Do zrobienia
-
-1. Wyszukiwanie transakcji na pulpicie powinno przeszukiwać **aktywne + archiwum** (`getMergedTransactions()` lub równoważnie).
-2. Kalendarz powinien pokazywać dni z transakcjami z archiwum (przynajmniej przy widoku historycznym).
-3. Rozważyć oznaczenie w UI, że wynik pochodzi z archiwum (np. badge „archiwum”).
-4. Testy: scenariusz >3500 transakcji, wyszukiwanie i kalendarz dla daty w archiwum.
-
-### Uwagi
-
-- Archiwum jest **tylko lokalne** (nie sync do Firestore) — osobna decyzja, czy kiedyś syncować archiwum lub trzymać pełną historię w chmurze.
-- Limit 3500 dotyczy **liczby** transakcji, nie wieku — przy mniejszej bazie transakcje sprzed wielu lat pozostają aktywne.
+- Smoke/E2E przy >3500 transakcjach.
+- Sync archiwum do Firestore — osobna decyzja (dziś archiwum **tylko lokalne**).
 
 ---
 
 ## Firestore Auth + reguły bezpieczeństwa (audyt pkt 5)
 
-**Status:** odłożone (2026-06-29)  
-**Kontekst:** `firestore.rules` — dziś `finances/my_state`, `cloud_backup`, `backups` są **publicznie zapisywalne** (tylko ograniczenie po `docId`, bez `request.auth`). Aplikacja nie ma logowania; sync idzie w **jeden wspólny dokument** (`js/firebase.js` → `stateRef`).
+**Status:** kod ✅ · reguły ✅ · **weryfikacja migracji + testy manualne — jutro**
 
-### Problem
+Jedno konto (`dawidrekal@gmail.com`), hybryda logowania (iOS/localhost: hasło, PC produkcja: Google), ścieżki `users/{uid}/state/main`, `meta/cloud_backup`, `snapshots/`.
 
-- Każdy z kluczem API z klienta może czytać i modyfikować dane finansowe w chmurze.
-- REST fallback w `js/firebase.js` (`fetchFirestoreDocumentRest`, `fetchAppStateRest`) używa wyłącznie `apiKey` — po zaostrzeniu reguł dostanie **403**.
-- Skrypt `scripts/upload-to-firestore.mjs` też nie uwzględnia Auth.
+### Zrobione
 
-### Ryzyko wdrożenia „od razu”
-
-**Nie wdrażać twardych reguł przed logowaniem w apce** — inaczej:
-
-- sync (`stateRef.set`, `onSnapshot`) przestanie działać;
-- auto-odzysk kopii z chmury i lista snapshotów — błędy uprawnień;
-- kropka sync: offline / pending (patrz `js/sync-queue.js`).
-
-**Lokalne dane (`localStorage`, eksport JSON) zostają** — dotknięta jest głównie chmura.
-
-Inne pułapki:
-
-- zmiana modelu: z `finances/my_state` na `users/{uid}/state` — migracja i przypisanie starych danych;
-- telefon + komputer muszą używać **tego samego konta** Firebase;
-- PWA na iOS — sesja / wylogowanie bywa kapryśne;
-- zła migracja → pusty profil w chmurze albo nadpisanie nowszych danych.
-
-### Do zrobienia (bezpieczna kolejność)
-
-1. **Decyzja produktowa:** jedno konto (Ty, wiele urządzeń) vs wspólny portfel domowy; metoda logowania (Google / e-mail / Anonymous Auth).
-2. **UI logowania** w apce + zapis do `users/{uid}/…` (na razie **równolegle** ze starym `my_state`).
-3. **Migracja przy pierwszym logowaniu:** skopiuj `my_state` → dokument użytkownika, jeśli konto jest puste.
-4. **Przepisać REST fallbacki** na SDK z tokenem Auth albo usunąć po weryfikacji.
-5. **Dopiero na końcu** zaostrzyć `firestore.rules` i zablokować zapis do `my_state` / anonimowy dostęp.
-6. Zaktualizować skrypty admina (`upload-to-firestore.mjs`) — service account lub logowanie.
-7. Testy: sync po logowaniu, odzysk kopii, wylogowanie, dwa urządzenia na jednym koncie, stara wersja apki (jeśli jeszcze w użyciu).
+| Element | Pliki |
+|---------|--------|
+| UI logowania + reset hasła | `index.html`, `js/auth.js`, `styles.css` |
+| Zapis pod `users/{uid}/…` | `js/firebase.js`, `js/state.js` |
+| Migracja z `finances/my_state` | `js/firebase.js` |
+| REST bez tokenu usunięty | `js/firebase.js` |
+| Reguły w repo = konsola | `firestore.rules` |
+| Skrypty admina z Auth | `scripts/firebase-auth.mjs`, `restore-cloud-backup.mjs`, `upload-to-firestore.mjs`, `purge-ghost-loan.mjs`, `import.html`, `import-moneypro.py` |
+| Sync po auth, storage per uid | `js/bootstrap.js`, `js/sync-queue.js`, `js/constants.js` |
+| Sekcja Konto | `js/settings.js` |
 
 ### Uwagi
 
-- **Nigdy:** najpierw `allow read, write: if request.auth != null` w produkcji, potem login w apce.
-- Wdrożenie etapami minimalizuje ryzyko utraty dostępu do chmury (nie do danych lokalnych).
+- Lokalne dane (`localStorage`, eksport JSON) niezależne od chmury.
+- Archiwum transakcji nie syncuje się do Firestore.
+- Skrypty Node/Python: `$env:FIREBASE_AUTH_PASSWORD` przed uruchomieniem.

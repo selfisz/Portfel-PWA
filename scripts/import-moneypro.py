@@ -2,6 +2,7 @@
 """Import transakcji z backupu Money Pro (.back) do Firestore Portfel-PWA."""
 
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -16,6 +17,8 @@ FIREBASE_CONFIG = {
     "apiKey": "AIzaSyAfvk2_lfsaf5QZkH_MVk-kWbG8GFvjSeI",
     "projectId": "portfel-pwa",
 }
+
+FIREBASE_AUTH_EMAIL = os.environ.get("FIREBASE_AUTH_EMAIL", "dawidrekal@gmail.com")
 
 DEFAULT_APP_STATE = {
     "currentType": "expense",
@@ -147,32 +150,99 @@ def to_firestore_value(value):
     raise TypeError(f"Nieobsługiwany typ: {type(value)}")
 
 
+def sign_in_with_password(email: str, password: str) -> tuple[str, str]:
+    url = (
+        "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
+        f"?key={FIREBASE_CONFIG['apiKey']}"
+    )
+    body = json.dumps(
+        {"email": email, "password": password, "returnSecureToken": True}
+    ).encode("utf-8")
+    req = request.Request(
+        url,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with request.urlopen(req) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        body_text = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Logowanie Firebase HTTP {exc.code}: {body_text}") from exc
+
+    uid = data.get("localId")
+    id_token = data.get("idToken")
+    if not uid or not id_token:
+        raise RuntimeError("Logowanie Firebase: brak uid lub tokenu w odpowiedzi.")
+    return uid, id_token
+
+
+def firestore_patch_document(path: str, payload: dict, id_token: str) -> None:
+    url = (
+        f"https://firestore.googleapis.com/v1/projects/{FIREBASE_CONFIG['projectId']}"
+        f"/databases/(default)/documents/{path}"
+    )
+    body = json.dumps(
+        {"fields": to_firestore_value(payload)["mapValue"]["fields"]}
+    ).encode("utf-8")
+    req = request.Request(
+        url,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {id_token}",
+        },
+        method="PATCH",
+    )
+    try:
+        with request.urlopen(req) as response:
+            response.read()
+    except error.HTTPError as exc:
+        body_text = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Firestore {path} HTTP {exc.code}: {body_text}") from exc
+
+
+def firestore_add_snapshot(uid: str, payload: dict, id_token: str) -> None:
+    url = (
+        f"https://firestore.googleapis.com/v1/projects/{FIREBASE_CONFIG['projectId']}"
+        f"/databases/(default)/documents/users/{uid}/snapshots"
+    )
+    body = json.dumps(
+        {"fields": to_firestore_value(payload)["mapValue"]["fields"]}
+    ).encode("utf-8")
+    req = request.Request(
+        url,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {id_token}",
+        },
+        method="POST",
+    )
+    try:
+        with request.urlopen(req) as response:
+            response.read()
+    except error.HTTPError as exc:
+        body_text = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Firestore snapshots HTTP {exc.code}: {body_text}") from exc
+
+
 def upload_to_firestore(app_state: dict) -> None:
+    password = os.environ.get("FIREBASE_AUTH_PASSWORD")
+    if not password:
+        raise RuntimeError("Ustaw zmienną środowiskową FIREBASE_AUTH_PASSWORD.")
+
+    uid, id_token = sign_in_with_password(FIREBASE_AUTH_EMAIL, password)
     export_payload = {
         "version": 1,
         "exportedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "transactionCount": len(app_state.get("transactions") or []),
         "data": app_state,
     }
-    for doc_id, payload in (("my_state", app_state), ("cloud_backup", export_payload)):
-        url = (
-            f"https://firestore.googleapis.com/v1/projects/{FIREBASE_CONFIG['projectId']}"
-            f"/databases/(default)/documents/finances/{doc_id}"
-            f"?key={FIREBASE_CONFIG['apiKey']}"
-        )
-        body = json.dumps({"fields": to_firestore_value(payload)["mapValue"]["fields"]}).encode("utf-8")
-        req = request.Request(
-            url,
-            data=body,
-            headers={"Content-Type": "application/json"},
-            method="PATCH",
-        )
-        try:
-            with request.urlopen(req) as response:
-                response.read()
-        except error.HTTPError as exc:
-            body_text = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Firestore {doc_id} HTTP {exc.code}: {body_text}") from exc
+    firestore_patch_document(f"users/{uid}/state/main", app_state, id_token)
+    firestore_patch_document(f"users/{uid}/meta/cloud_backup", export_payload, id_token)
+    firestore_add_snapshot(uid, export_payload, id_token)
 
 
 def main() -> int:
@@ -199,7 +269,7 @@ def main() -> int:
 
     try:
         upload_to_firestore(app_state)
-        firestore_msg = "Firestore: finances/my_state + cloud_backup zaktualizowane."
+        firestore_msg = f"Firestore: users/<uid>/state/main + cloud_backup zaktualizowane."
     except RuntimeError as exc:
         firestore_msg = (
             "Firestore z terminala niedostępny — otwórz scripts/import.html w przeglądarce.\n"

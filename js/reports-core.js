@@ -257,7 +257,9 @@ function renderReportsCalendar() {
 
     const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
     const monthEnd = localIsoDate(new Date(year, month + 1, 0));
-    const monthTx = appState.transactions.filter((t) => t.date >= monthStart && t.date <= monthEnd);
+    const monthTx = (typeof getCalendarTransactions === 'function'
+        ? getCalendarTransactions()
+        : appState.transactions).filter((t) => t.date >= monthStart && t.date <= monthEnd);
 
     const expenseByDay = {};
     const incomeByDay = {};
@@ -316,7 +318,9 @@ function openCalendarDay(dateStr) {
     const listEl = document.getElementById('calendar-day-list');
     if (!overlay || !titleEl || !summaryEl || !listEl) return;
 
-    const dayTx = appState.transactions
+    const dayTx = (typeof getCalendarTransactions === 'function'
+        ? getCalendarTransactions()
+        : appState.transactions)
         .filter((t) => t.date === dateStr)
         .sort((a, b) => {
             if (a.type !== b.type) return a.type === 'expense' ? -1 : 1;
@@ -341,13 +345,17 @@ function openCalendarDay(dateStr) {
         listEl.innerHTML = '<div class="empty-state"><p>Brak transakcji tego dnia</p></div>';
     } else {
         listEl.innerHTML = dayTx.map((t) => {
+            const fromArchive = typeof isTransactionArchived === 'function' && isTransactionArchived(t);
+            const archiveBadge = fromArchive && typeof formatArchivedTransactionBadge === 'function'
+                ? formatArchivedTransactionBadge()
+                : '';
             const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
             const meta = t.subCategory === '[Bez podkategorii]' ? '' : t.mainCategory;
             const isRec = t.recurringId ? '<span class="tx-badge">&#10227;</span>' : '';
-            return `<div class="calendar-day-tx">
+            return `<div class="calendar-day-tx${fromArchive ? ' calendar-day-tx--archive' : ''}">
                 ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
                 <div class="tx-info">
-                    <div class="tx-title">${escapeHtml(title)}${isRec}</div>
+                    <div class="tx-title">${escapeHtml(title)}${isRec}${archiveBadge}</div>
                     ${meta ? `<div class="tx-meta">${escapeHtml(meta)}</div>` : ''}
                     ${t.note ? `<div class="tx-note">${escapeHtml(t.note)}</div>` : ''}
                 </div>

@@ -36,11 +36,16 @@ function configureFirestoreRefs(uid) {
     cloudBackupSnapshotsRef = userRef.collection('snapshots');
 }
 
+function getCloudBackupSnapshotSource(data) {
+    return data?.backupSource === 'auto' ? 'auto' : 'manual';
+}
+
 function cloudBackupSnapshotMeta(data, id) {
     return {
         id,
         exportedAt: data?.exportedAt || null,
-        transactionCount: data?.transactionCount || data?.data?.transactions?.length || 0
+        transactionCount: data?.transactionCount || data?.data?.transactions?.length || 0,
+        backupSource: getCloudBackupSnapshotSource(data)
     };
 }
 
@@ -73,7 +78,17 @@ async function pruneCloudBackupSnapshots() {
     if (!cloudBackupSnapshotsRef) return;
     try {
         const snap = await cloudBackupSnapshotsRef.orderBy('exportedAt', 'desc').get();
-        const excess = snap.docs.slice(MAX_CLOUD_BACKUP_SNAPSHOTS);
+        const autoDocs = [];
+        const manualDocs = [];
+        snap.docs.forEach((doc) => {
+            const source = getCloudBackupSnapshotSource(doc.data());
+            if (source === 'auto') autoDocs.push(doc);
+            else manualDocs.push(doc);
+        });
+        const excess = [
+            ...autoDocs.slice(MAX_CLOUD_BACKUP_SNAPSHOTS_AUTO),
+            ...manualDocs.slice(MAX_CLOUD_BACKUP_SNAPSHOTS_MANUAL)
+        ];
         if (!excess.length) return;
         const batch = db.batch();
         excess.forEach((doc) => batch.delete(doc.ref));
@@ -83,12 +98,14 @@ async function pruneCloudBackupSnapshots() {
     }
 }
 
-async function saveCloudBackupSnapshot(payload) {
+async function saveCloudBackupSnapshot(payload, options = {}) {
     if (!cloudBackupSnapshotsRef || !cloudBackupRef) return;
     await ensureLegacyCloudBackupMigrated();
+    const backupSource = options.source === 'auto' ? 'auto' : 'manual';
     const snapshotPayload = {
         ...payload,
-        exportedAt: payload.exportedAt || new Date().toISOString()
+        exportedAt: payload.exportedAt || new Date().toISOString(),
+        backupSource
     };
     await cloudBackupSnapshotsRef.add(snapshotPayload);
     await cloudBackupRef.set(snapshotPayload);
