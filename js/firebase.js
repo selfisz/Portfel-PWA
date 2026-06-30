@@ -10,71 +10,30 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-const stateRef = db.collection('finances').doc('my_state');
-const cloudBackupRef = db.collection('finances').doc('cloud_backup');
-const cloudBackupVaultRef = db.collection('finances').doc('backups');
-const cloudBackupSnapshotsRef = cloudBackupVaultRef.collection('snapshots');
+const auth = firebase.auth();
+
+let stateRef = null;
+let cloudBackupRef = null;
+let cloudBackupSnapshotsRef = null;
 let legacyCloudBackupMigrated = false;
+let configuredFirestoreUid = null;
 
-// Persistence wyłączone — na iOS PWA powodowało zawieszanie onSnapshot
-// i serwowanie pustego/starego cache zamiast danych z serwera.
-
-function decodeFirestoreValue(field) {
-    if (!field || typeof field !== 'object') return field;
-    if ('stringValue' in field) return field.stringValue;
-    if ('integerValue' in field) return Number(field.integerValue);
-    if ('doubleValue' in field) return field.doubleValue;
-    if ('booleanValue' in field) return field.booleanValue;
-    if ('nullValue' in field) return null;
-    if ('timestampValue' in field) return field.timestampValue;
-    if ('arrayValue' in field) {
-        const values = field.arrayValue.values;
-        return values ? values.map(decodeFirestoreValue) : [];
+function configureFirestoreRefs(uid) {
+    if (!uid) {
+        stateRef = null;
+        cloudBackupRef = null;
+        cloudBackupSnapshotsRef = null;
+        configuredFirestoreUid = null;
+        legacyCloudBackupMigrated = false;
+        return;
     }
-    if ('mapValue' in field) {
-        const out = {};
-        const nested = field.mapValue.fields || {};
-        Object.keys(nested).forEach((key) => {
-            out[key] = decodeFirestoreValue(nested[key]);
-        });
-        return out;
-    }
-    return null;
-}
-
-function decodeFirestoreDocument(doc) {
-    if (!doc?.fields) return null;
-    const out = {};
-    Object.keys(doc.fields).forEach((key) => {
-        out[key] = decodeFirestoreValue(doc.fields[key]);
-    });
-    return out;
-}
-
-async function fetchFirestoreDocumentRest(collectionId, documentId) {
-    return fetchFirestoreDocumentPathRest(`${encodeURIComponent(collectionId)}/${encodeURIComponent(documentId)}`);
-}
-
-async function fetchFirestoreDocumentPathRest(documentPath) {
-    const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/${documentPath}?key=${encodeURIComponent(firebaseConfig.apiKey)}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const doc = await res.json();
-    if (doc.error) throw new Error(doc.error.message || 'Firestore REST');
-    return decodeFirestoreDocument(doc);
-}
-
-async function fetchFirestoreCollectionRest(collectionPath) {
-    const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/${collectionPath}?key=${encodeURIComponent(firebaseConfig.apiKey)}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const body = await res.json();
-    if (body.error) throw new Error(body.error.message || 'Firestore REST');
-    const docs = body.documents || [];
-    return docs.map((doc) => {
-        const id = doc.name.split('/').pop();
-        return { id, ...decodeFirestoreDocument(doc) };
-    });
+    if (configuredFirestoreUid === uid && stateRef) return;
+    configuredFirestoreUid = uid;
+    legacyCloudBackupMigrated = false;
+    const userRef = db.collection('users').doc(uid);
+    stateRef = userRef.collection('state').doc('main');
+    cloudBackupRef = userRef.collection('meta').doc('cloud_backup');
+    cloudBackupSnapshotsRef = userRef.collection('snapshots');
 }
 
 function cloudBackupSnapshotMeta(data, id) {
@@ -94,7 +53,7 @@ function sortCloudBackupSnapshots(items) {
 }
 
 async function ensureLegacyCloudBackupMigrated() {
-    if (legacyCloudBackupMigrated) return;
+    if (legacyCloudBackupMigrated || !cloudBackupSnapshotsRef || !cloudBackupRef) return;
     legacyCloudBackupMigrated = true;
     try {
         const existing = await cloudBackupSnapshotsRef.limit(1).get();
@@ -111,6 +70,7 @@ async function ensureLegacyCloudBackupMigrated() {
 }
 
 async function pruneCloudBackupSnapshots() {
+    if (!cloudBackupSnapshotsRef) return;
     try {
         const snap = await cloudBackupSnapshotsRef.orderBy('exportedAt', 'desc').get();
         const excess = snap.docs.slice(MAX_CLOUD_BACKUP_SNAPSHOTS);
@@ -124,6 +84,7 @@ async function pruneCloudBackupSnapshots() {
 }
 
 async function saveCloudBackupSnapshot(payload) {
+    if (!cloudBackupSnapshotsRef || !cloudBackupRef) return;
     await ensureLegacyCloudBackupMigrated();
     const snapshotPayload = {
         ...payload,
@@ -135,6 +96,7 @@ async function saveCloudBackupSnapshot(payload) {
 }
 
 async function listCloudBackupSnapshots() {
+    if (!cloudBackupSnapshotsRef || !cloudBackupRef) return [];
     await ensureLegacyCloudBackupMigrated();
     const byId = new Map();
 
@@ -144,18 +106,7 @@ async function listCloudBackupSnapshots() {
             byId.set(doc.id, cloudBackupSnapshotMeta(doc.data(), doc.id));
         });
     } catch (err) {
-        console.warn('listCloudBackupSnapshots SDK', err);
-    }
-
-    if (!byId.size) {
-        try {
-            const restDocs = await fetchFirestoreCollectionRest('finances/backups/snapshots');
-            restDocs.forEach((doc) => {
-                byId.set(doc.id, cloudBackupSnapshotMeta(doc, doc.id));
-            });
-        } catch (err) {
-            console.warn('listCloudBackupSnapshots REST', err);
-        }
+        console.warn('listCloudBackupSnapshots', err);
     }
 
     if (!byId.size) {
@@ -176,19 +127,13 @@ async function listCloudBackupSnapshots() {
 }
 
 async function getCloudBackupSnapshotById(id) {
-    if (!id) return null;
+    if (!id || !cloudBackupSnapshotsRef || !cloudBackupRef) return null;
     if (id === 'cloud_backup') {
         try {
             const snap = await cloudBackupRef.get();
             if (snap.exists) return { id, ...snap.data() };
         } catch (err) {
             console.warn('getCloudBackupSnapshotById legacy', err);
-        }
-        try {
-            const data = await fetchFirestoreDocumentRest('finances', 'cloud_backup');
-            if (data) return { id, ...data };
-        } catch (err) {
-            console.warn('getCloudBackupSnapshotById legacy REST', err);
         }
         return null;
     }
@@ -197,14 +142,7 @@ async function getCloudBackupSnapshotById(id) {
         const snap = await cloudBackupSnapshotsRef.doc(id).get();
         if (snap.exists) return { id: snap.id, ...snap.data() };
     } catch (err) {
-        console.warn('getCloudBackupSnapshotById SDK', err);
-    }
-
-    try {
-        const data = await fetchFirestoreDocumentPathRest(`finances/backups/snapshots/${encodeURIComponent(id)}`);
-        if (data) return { id, ...data };
-    } catch (err) {
-        console.warn('getCloudBackupSnapshotById REST', err);
+        console.warn('getCloudBackupSnapshotById', err);
     }
     return null;
 }
@@ -216,6 +154,7 @@ async function getCloudBackupPayload() {
         if (latest) return latest;
     }
 
+    if (!cloudBackupRef) return null;
     const sdkSources = ['server', 'default'];
     for (const source of sdkSources) {
         try {
@@ -225,29 +164,7 @@ async function getCloudBackupPayload() {
             console.warn(`getCloudBackupPayload SDK (${source})`, err);
         }
     }
-    try {
-        return await fetchFirestoreDocumentRest('finances', 'cloud_backup');
-    } catch (err) {
-        console.warn('getCloudBackupPayload REST cloud_backup', err);
-    }
-    try {
-        const state = await fetchFirestoreDocumentRest('finances', 'my_state');
-        if (state && Array.isArray(state.transactions)) {
-            return {
-                version: 1,
-                exportedAt: new Date().toISOString(),
-                transactionCount: state.transactions.length,
-                data: state
-            };
-        }
-    } catch (err) {
-        console.warn('getCloudBackupPayload REST my_state', err);
-    }
     return null;
-}
-
-async function fetchAppStateRest() {
-    return fetchFirestoreDocumentRest('finances', 'my_state');
 }
 
 function withFirestoreTimeout(promise, ms = 8000) {
@@ -257,4 +174,63 @@ function withFirestoreTimeout(promise, ms = 8000) {
             window.setTimeout(() => reject(new Error('Firestore timeout')), ms);
         })
     ]);
+}
+
+function legacyMigrationStorageKey(uid) {
+    return `legacy_finances_migrated_${uid}`;
+}
+
+async function migrateLegacyUserDataIfNeeded(uid) {
+    if (!uid || !stateRef) return;
+    if (localStorage.getItem(legacyMigrationStorageKey(uid)) === '1') return;
+
+    try {
+        const userStateSnap = await stateRef.get();
+        if (userStateSnap.exists) {
+            const data = userStateSnap.data();
+            if (data?.transactions?.length || data?.loans?.length || data?.assets?.length) {
+                localStorage.setItem(legacyMigrationStorageKey(uid), '1');
+                return;
+            }
+        }
+    } catch (err) {
+        console.warn('migrateLegacyUserDataIfNeeded check', err);
+    }
+
+    const legacyStateRef = db.collection('finances').doc('my_state');
+    try {
+        const legacySnap = await legacyStateRef.get();
+        if (legacySnap.exists) {
+            const data = legacySnap.data();
+            if (data && (data.transactions?.length || data.loans?.length || data.assets?.length)) {
+                await stateRef.set(data);
+                console.info('Migracja: przeniesiono stan z finances/my_state');
+            }
+        }
+    } catch (err) {
+        console.warn('migrateLegacyUserDataIfNeeded state', err);
+    }
+
+    try {
+        const legacySnaps = await db.collection('finances').doc('backups').collection('snapshots').get();
+        for (const doc of legacySnaps.docs) {
+            await cloudBackupSnapshotsRef.doc(doc.id).set(doc.data());
+        }
+        if (!legacySnaps.empty) {
+            console.info(`Migracja: przeniesiono ${legacySnaps.size} kopii zapasowych`);
+        }
+    } catch (err) {
+        console.warn('migrateLegacyUserDataIfNeeded snapshots', err);
+    }
+
+    try {
+        const legacyBackup = await db.collection('finances').doc('cloud_backup').get();
+        if (legacyBackup.exists) {
+            await cloudBackupRef.set(legacyBackup.data());
+        }
+    } catch (err) {
+        console.warn('migrateLegacyUserDataIfNeeded cloud_backup', err);
+    }
+
+    localStorage.setItem(legacyMigrationStorageKey(uid), '1');
 }

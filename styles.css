@@ -2718,6 +2718,85 @@ html:not([data-theme="dark"]) .grid-item.selected {
 }
 
 /* Onboarding */
+body.auth-locked > header,
+body.auth-locked > main,
+body.auth-locked > .bottom-nav,
+body.auth-locked > #module-split-banner,
+body.auth-locked > #notifications-overlay,
+body.auth-locked > #settings-overlay {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.auth-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg, #f5f3ef);
+    z-index: 350;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    padding-bottom: calc(16px + var(--safe-bottom));
+}
+
+.auth-overlay.hidden { display: none; }
+
+.auth-card {
+    width: 100%;
+    max-width: 400px;
+}
+
+.auth-checking {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin: 12px 0 0;
+}
+
+.auth-error {
+    color: var(--danger, #c62828);
+    font-size: 0.875rem;
+    margin: 12px 0 0;
+}
+
+.btn-google-signin {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    margin-top: 20px;
+    padding: 14px 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 12px);
+    background: var(--card);
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
+}
+
+.btn-google-signin:active {
+    transform: scale(0.98);
+}
+
+.btn-google-signin-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.settings-account-email {
+    font-weight: 600;
+    margin: 4px 0 20px;
+    word-break: break-all;
+}
+
+.settings-action-btn--danger .settings-action-btn-title {
+    color: var(--danger, #c62828);
+}
+
 .onboarding-overlay {
     position: fixed;
     inset: 0;

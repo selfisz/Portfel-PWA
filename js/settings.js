@@ -23,7 +23,7 @@ function applyBackupPayload(payload) {
     normalizeAppState(data);
     cloudSyncUnlocked = true;
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
+        localStorage.setItem(getFinanceStorageKey(), JSON.stringify(getPersistedState(appState)));
     } catch (err) {
         throw new Error('Brak miejsca w pamięci telefonu — zwolnij miejsce w Safari.');
     }
@@ -118,7 +118,7 @@ async function refreshBackupInfo() {
 }
 
 const SETTINGS_SECTION_KEY = 'settings_section';
-const SETTINGS_SECTIONS = ['appearance', 'categories', 'budgets', 'notifications', 'backup'];
+const SETTINGS_SECTIONS = ['account', 'appearance', 'categories', 'budgets', 'notifications', 'backup'];
 let settingsSection = 'appearance';
 
 function setSettingsSection(section) {
@@ -130,6 +130,7 @@ function setSettingsSection(section) {
         document.getElementById(`btn-settings-${id}`)?.classList.toggle('active', id === section);
     });
     if (section === 'budgets') renderBudgetEditor();
+    if (section === 'account' && typeof refreshAccountSettingsUI === 'function') refreshAccountSettingsUI();
 }
 
 function openSettings(preferredSection) {

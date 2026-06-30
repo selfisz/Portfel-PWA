@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanse-pwa-v213';
+const CACHE_NAME = 'finanse-pwa-v214';
 
 const ASSETS = [
   './',
@@ -7,6 +7,7 @@ const ASSETS = [
   'styles.css',
   'js/constants.js',
   'js/firebase.js',
+  'js/auth.js',
   'js/state.js',
   'js/format.js',
   'js/theme.js',

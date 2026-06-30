@@ -57,6 +57,7 @@ let reportsDebtCalendarYear = null;
 let reportsDebtCalendarMonth = null;
 let reportsLastPeriod = null;
 let cloudSyncUnlocked = false;
+let stateSnapshotUnsubscribe = null;
 function getPersistedState(raw = appState) {
     const data = raw ?? appState ?? {};
     const transactions = typeof normalizeTransactionsArray === 'function'
@@ -226,8 +227,15 @@ function applyMigrations() {
     return hadCategory || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration || hadAnalyticsMigration;
 }
 
+function stopCloudSync() {
+    if (stateSnapshotUnsubscribe) {
+        stateSnapshotUnsubscribe();
+        stateSnapshotUnsubscribe = null;
+    }
+}
+
 function readStoredAppStateRaw() {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(getFinanceStorageKey());
     if (stored) {
         try {
             return JSON.parse(stored);
@@ -262,7 +270,7 @@ function setSyncStatus(mode, txCount) {
 
 function readLocalRawBeforeSync() {
     try {
-        const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        const raw = JSON.parse(localStorage.getItem(getFinanceStorageKey()) || 'null');
         return raw === null ? null : raw;
     } catch {
         return null;
@@ -306,7 +314,7 @@ function syncFromRemoteData(remoteData) {
     checkAndProcessRecurringTransactions();
 
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
+        localStorage.setItem(getFinanceStorageKey(), JSON.stringify(getPersistedState(appState)));
     } catch (err) {
         console.error('syncFromRemoteData localStorage', err);
     }
@@ -321,22 +329,6 @@ function syncFromRemoteData(remoteData) {
     }
     if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
     return finalCount;
-}
-
-async function tryFetchCloudViaRest() {
-    if (typeof fetchAppStateRest !== 'function') return null;
-    try {
-        const fetchPromise = fetchAppStateRest();
-        const data = typeof withFirestoreTimeout === 'function'
-            ? await withFirestoreTimeout(fetchPromise, 12000)
-            : await fetchPromise;
-        if (data?.transactions?.length) {
-            return syncFromRemoteData(data);
-        }
-    } catch (err) {
-        console.warn('tryFetchCloudViaRest', err);
-    }
-    return null;
 }
 
 async function autoRecoverFromCloudBackupIfNeeded() {
@@ -388,24 +380,28 @@ function normalizeAppState(raw) {
 }
 
 function initData() {
+    if (!stateRef || typeof stateRef.onSnapshot !== 'function') return;
+
+    stopCloudSync();
     let localRaw = readStoredAppStateRaw();
+    const storageKey = getFinanceStorageKey();
 
     if (localRaw) {
-        if (!localStorage.getItem(STORAGE_KEY)) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(localRaw)));
+        if (!localStorage.getItem(storageKey)) {
+            localStorage.setItem(storageKey, JSON.stringify(getPersistedState(localRaw)));
         }
         applyRemoteAppState(localRaw);
         applyMigrations();
         checkAndProcessRecurringTransactions();
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState(appState)));
+            localStorage.setItem(storageKey, JSON.stringify(getPersistedState(appState)));
         } catch (err) {
             console.error('initData localStorage', err);
         }
         refreshCurrentView();
     }
 
-    cloudSyncUnlocked = getTransactionCount(appState) >= 100;
+    cloudSyncUnlocked = true;
     setSyncStatus('');
 
     const settleSyncIndicator = () => {
@@ -423,16 +419,13 @@ function initData() {
         syncTimeout = null;
     };
 
-    tryFetchCloudViaRest().then((count) => {
-        if (count !== null) clearSyncTimeout();
-        else if (getTransactionCount(appState) < 100) {
-            autoRecoverFromCloudBackupIfNeeded().then((recovered) => {
-                if (recovered) clearSyncTimeout();
-            });
-        }
-    });
+    if (getTransactionCount(appState) < 100) {
+        autoRecoverFromCloudBackupIfNeeded().then((recovered) => {
+            if (recovered) clearSyncTimeout();
+        });
+    }
 
-    stateRef.onSnapshot((docSnap) => {
+    stateSnapshotUnsubscribe = stateRef.onSnapshot((docSnap) => {
         clearSyncTimeout();
         if (docSnap.exists) {
             syncFromRemoteData(docSnap.data());
@@ -444,17 +437,14 @@ function initData() {
         else setSyncStatus('online', 0);
     }, (error) => {
         console.error('Błąd synchronizacji', error);
-        tryFetchCloudViaRest()
-            .then((count) => {
-                if (count === null && getTransactionCount(appState) < 100) {
-                    return autoRecoverFromCloudBackupIfNeeded();
-                }
-                return count !== null;
-            })
-            .finally(() => {
+        clearSyncTimeout();
+        settleSyncIndicator();
+        if (getTransactionCount(appState) < 100) {
+            autoRecoverFromCloudBackupIfNeeded().finally(() => {
                 clearSyncTimeout();
                 settleSyncIndicator();
             });
+        }
     });
 }
 
@@ -465,7 +455,7 @@ function saveState(options = {}) {
     const payload = getPersistedState(appState);
     const payloadBytes = typeof estimateJsonBytes === 'function' ? estimateJsonBytes(payload) : 0;
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        localStorage.setItem(getFinanceStorageKey(), JSON.stringify(payload));
     } catch (err) {
         console.error('localStorage.setItem', err);
         setSyncStatus('offline', payload.transactions.length);
@@ -480,6 +470,10 @@ function saveState(options = {}) {
         if (typeof showAppToast === 'function') {
             showAppToast('Zapis do chmury wstrzymany — baza jest zbyt duża. Wyeksportuj kopię JSON.', 'error');
         }
+        return;
+    }
+    if (!stateRef || typeof stateRef.set !== 'function') {
+        setSyncStatus('offline', payload.transactions.length);
         return;
     }
     if (typeof queueCloudSync === 'function') {

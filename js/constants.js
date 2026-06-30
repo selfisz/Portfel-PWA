@@ -1,4 +1,13 @@
 const STORAGE_KEY = 'app_finance_state';
+let activeFinanceStorageKey = null;
+
+function setFinanceStorageKey(uid) {
+    activeFinanceStorageKey = uid ? `${STORAGE_KEY}_${uid}` : null;
+}
+
+function getFinanceStorageKey() {
+    return activeFinanceStorageKey || STORAGE_KEY;
+}
 const THEME_KEY = 'theme_preference';
 const LOCAL_BACKUP_KEY = 'finanse_local_backup';
 const MAX_CLOUD_BACKUP_SNAPSHOTS = 20;

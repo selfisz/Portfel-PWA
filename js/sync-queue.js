@@ -4,6 +4,7 @@ let cloudSyncRetryAttempt = 0;
 
 function canPushPayloadToCloud(payload, options = {}) {
     if (!payload || typeof payload !== 'object') return false;
+    if (typeof isUserSignedIn === 'function' && !isUserSignedIn()) return false;
     const bytes = typeof estimateJsonBytes === 'function' ? estimateJsonBytes(payload) : 0;
     if (bytes > MAX_FIRESTORE_PAYLOAD_BYTES) return false;
     if (!cloudSyncUnlocked && !options.forceCloud && (payload.transactions?.length || 0) < 50) return false;
