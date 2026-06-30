@@ -2665,6 +2665,15 @@ html:not([data-theme="dark"]) .grid-item.selected {
     border-radius: 999px;
 }
 
+.chart-view-filter .hero-summary-action {
+    color: var(--text-muted);
+}
+
+.chart-view-filter .hero-summary-action-sep {
+    color: var(--text-muted);
+    opacity: 0.45;
+}
+
 .chart-card-header {
     display: flex;
     align-items: center;
@@ -6354,7 +6363,9 @@ html:not([data-theme="dark"]) .grid-item.selected {
 }
 
 .budget-editor-list {
-    gap: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .budget-suggest-hint {
@@ -6412,11 +6423,6 @@ html:not([data-theme="dark"]) .grid-item.selected {
     gap: 8px;
     align-items: center;
     margin-bottom: 12px;
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    padding: 8px 0;
-    background: var(--card);
 }
 
 .budget-editor-search {
@@ -6431,148 +6437,97 @@ html:not([data-theme="dark"]) .grid-item.selected {
     font-family: inherit;
 }
 
-.budget-editor-card {
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    margin-bottom: 10px;
-    background: var(--input-bg);
-    overflow: hidden;
-}
-
-.budget-editor-card.hidden {
+.budget-edit-group.hidden {
     display: none;
 }
 
-.budget-editor-card-header {
-    display: flex;
-    align-items: center;
+.budget-edit-group .category-edit-row--main {
     gap: 8px;
-    width: 100%;
-    padding: 10px 12px;
+}
+
+.budget-edit-toggle {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    padding: 0;
     border: none;
-    background: transparent;
-    color: inherit;
-    font-family: inherit;
-    text-align: left;
+    background: none;
+    color: var(--text-muted);
     cursor: pointer;
-}
-
-.budget-editor-card-leading {
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-width: 0;
-    flex: 1;
+    justify-content: center;
 }
 
-.budget-editor-card-title {
-    font-weight: 600;
-    font-size: var(--text-sm);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.budget-editor-card-count {
-    font-size: var(--text-2xs);
-    color: var(--text-muted);
-    white-space: nowrap;
-}
-
-.budget-editor-card-limit {
-    flex-shrink: 0;
-}
-
-.budget-editor-card-chevron {
-    flex-shrink: 0;
-    color: var(--text-muted);
-    transform: rotate(90deg);
-    transition: transform 0.15s ease;
-    font-size: var(--text-lg);
-    line-height: 1;
-}
-
-.budget-editor-card--expanded .budget-editor-card-chevron {
-    transform: rotate(-90deg);
-}
-
-.budget-editor-card-body {
-    display: none;
-    padding: 0 12px 10px;
-    border-top: 1px solid var(--border);
-}
-
-.budget-editor-card--expanded .budget-editor-card-body {
+.budget-edit-toggle--spacer {
     display: block;
+    cursor: default;
 }
 
-.budget-editor-card-usage,
-.budget-editor-card-hint {
-    padding: 0 12px 8px;
+.budget-edit-chevron {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+    transition: transform 0.2s ease;
 }
 
-.budget-editor-sub-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px 10px;
-    align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border);
+.budget-edit-group--expanded .budget-edit-chevron {
+    transform: rotate(180deg);
 }
 
-.budget-editor-sub-row:last-child {
-    border-bottom: none;
-}
-
-.budget-editor-sub-label {
-    font-size: var(--text-sm);
-    color: var(--text-muted);
+.budget-edit-label,
+.budget-edit-sub-label {
+    flex: 1;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.budget-money-field {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 2px 4px 2px 2px;
-}
-
-.budget-money-field .btn-budget-suggest {
-    flex-shrink: 0;
-}
-
-.budget-money-input {
-    width: 72px;
-    border: none;
-    background: transparent;
-    text-align: right;
     font-size: var(--text-sm);
     font-weight: 600;
     color: var(--text);
-    font-family: inherit;
-    padding: 6px 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.budget-money-input:focus {
-    outline: none;
+.budget-edit-sub-label {
+    font-weight: 500;
+    color: var(--text-muted);
 }
 
-.budget-money-suffix {
+.budget-edit-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.budget-edit-group .budget-editor-input {
+    width: 68px;
+    padding: 6px 8px;
+    text-align: right;
+}
+
+.budget-editor-meta {
+    margin: 0;
+    padding: 0 12px 10px 46px;
     font-size: var(--text-2xs);
     color: var(--text-muted);
-    padding-right: 4px;
+    line-height: 1.35;
 }
 
-.budget-editor-sub-row .budget-suggest-hint {
-    grid-column: 1 / -1;
-    margin: 0;
-    font-size: var(--text-2xs);
+.budget-edit-sub .budget-editor-meta {
+    padding: 0 12px 8px 20px;
+}
+
+.budget-edit-subs {
+    display: none;
+}
+
+.budget-edit-group--expanded .budget-edit-subs {
+    display: block;
+}
+
+.budget-edit-sub:last-child .budget-editor-meta {
+    padding-bottom: 10px;
 }
 
 .analysis-export-links {
@@ -7193,81 +7148,48 @@ button.reports-debt-split-item strong {
     font-size: var(--text-sm);
 }
 
-.debt-installment-summary {
+.debt-installment-total {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 14px;
-    padding: 12px 14px;
-    border-radius: var(--radius-md);
-    background: var(--accent-soft);
+    margin-bottom: 4px;
+    font-size: var(--text-sm);
 }
 
-.debt-installment-summary-main {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-}
-
-.debt-installment-summary-main .label {
+.debt-installment-total .label {
     font-size: var(--text-xs);
     color: var(--text-muted);
 }
 
-.debt-installment-summary-main strong {
+.debt-installment-total strong {
     font-size: var(--text-md);
+    font-variant-numeric: tabular-nums;
 }
 
-.debt-installment-summary-detail {
+.debt-installment-total-meta {
+    margin: 0 0 10px;
     font-size: var(--text-2xs);
     color: var(--text-muted);
+    line-height: 1.35;
+}
+
+.debt-installment-summary {
+    margin-bottom: 0;
 }
 
 .debt-installment-row {
-    display: flex;
-    gap: 8px;
-    align-items: stretch;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border);
-    font-size: var(--text-sm);
-}
-
-.debt-installment-include-btn {
-    flex-shrink: 0;
-    width: 36px;
-    min-height: 44px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--input-bg);
-    color: var(--text-muted);
-    font-size: var(--text-sm);
-    font-weight: 700;
-    cursor: pointer;
-    font-family: inherit;
-    align-self: center;
-}
-
-.debt-installment-include-btn.active {
-    background: color-mix(in srgb, var(--success) 18%, var(--input-bg));
-    border-color: color-mix(in srgb, var(--success) 45%, var(--border));
-    color: var(--success);
-}
-
-.debt-installment-row-main {
-    flex: 1;
-    min-width: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 8px 12px;
     align-items: center;
-    padding: 4px 0;
-    border-radius: var(--radius-sm);
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: var(--text-sm);
 }
 
 .debt-installment-row--excluded {
-    opacity: 0.58;
+    opacity: 0.5;
 }
 
 .debt-installment-row--excluded .debt-installment-amount {
@@ -7331,7 +7253,7 @@ button.reports-debt-split-item strong {
 }
 
 @media (max-width: 480px) {
-    .debt-installment-row-main {
+    .debt-installment-row {
         grid-template-columns: minmax(0, 1fr) auto;
     }
 
@@ -7365,9 +7287,12 @@ button.reports-debt-split-item strong {
     font-size: var(--text-xs);
 }
 
-#analysis-section-debts .debt-installment-summary {
-    margin-bottom: 10px;
-    padding: 10px 12px;
+#analysis-section-debts .debt-installment-total {
+    font-size: var(--text-xs);
+}
+
+#analysis-section-debts .debt-installment-total strong {
+    font-size: var(--text-sm);
 }
 
 #analysis-section-debts .debt-installment-row {

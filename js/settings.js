@@ -623,74 +623,79 @@ function parseBudgetMoneyValue(raw) {
     return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 
-function formatBudgetMoneyInputValue(value) {
-    if (!(value > 0)) return '';
-    return value.toLocaleString('pl-PL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+function formatBudgetEditorMeta(mainCategory, subCategory, suggested) {
+    if (typeof getCurrentMonthKey !== 'function') return '';
+    const monthKey = getCurrentMonthKey();
+    let spent = 0;
+    let status = null;
+    if (subCategory && typeof getSubCategorySpentInMonth === 'function') {
+        spent = getSubCategorySpentInMonth(mainCategory, subCategory, monthKey);
+        status = typeof getSubCategoryBudgetStatus === 'function'
+            ? getSubCategoryBudgetStatus(mainCategory, subCategory, monthKey)
+            : null;
+    } else if (typeof getCategorySpentInMonth === 'function') {
+        spent = getCategorySpentInMonth(mainCategory, monthKey);
+        status = typeof getCategoryBudgetStatus === 'function'
+            ? getCategoryBudgetStatus(mainCategory, monthKey)
+            : null;
+    }
+    const parts = [];
+    if (status && status.limit > 0) {
+        parts.push(`Ten miesiąc: ${formatPlnAmount(status.spent)} / ${formatPlnAmount(status.limit)} (${status.pct}%)`);
+    } else if (spent > 0) {
+        parts.push(`Ten miesiąc: ${formatPlnAmount(spent)}`);
+    }
+    if (suggested > 0) parts.push(`śr. 6m: ${formatPlnAmount(suggested)}`);
+    return parts.join(' · ');
 }
 
-function onBudgetMoneyInputBlur(input) {
-    if (!input) return;
-    const value = parseBudgetMoneyValue(input.value);
-    input.value = formatBudgetMoneyInputValue(value);
-    input.dataset.rawValue = value > 0 ? String(value) : '';
-}
-
-function toggleBudgetEditorCard(btn) {
-    const card = btn?.closest('.budget-editor-card');
-    if (!card) return;
-    const expanded = card.classList.toggle('budget-editor-card--expanded');
+function toggleBudgetEditorGroup(btn) {
+    const group = btn?.closest('.budget-edit-group');
+    if (!group) return;
+    const expanded = group.classList.toggle('budget-edit-group--expanded');
     btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
 }
 
 function filterBudgetEditorList(query) {
     const q = String(query || '').trim().toLowerCase();
-    document.querySelectorAll('#settings-budget-list .budget-editor-card').forEach((card) => {
-        const hay = (card.dataset.search || '').toLowerCase();
-        card.classList.toggle('hidden', q.length > 0 && !hay.includes(q));
+    document.querySelectorAll('#settings-budget-list .budget-edit-group').forEach((group) => {
+        const hay = (group.dataset.search || '').toLowerCase();
+        group.classList.toggle('hidden', q.length > 0 && !hay.includes(q));
     });
 }
 
-function renderBudgetEditorMoneyField({ kind, mainCategory, subCategory = null, inputDataset }) {
+function renderBudgetEditorControls(kind, mainCategory, subCategory, inputDataset) {
     const budgets = kind === 'sub' ? (appState.subCategoryBudgets || {}) : (appState.categoryBudgets || {});
     const budgetKey = kind === 'sub' && typeof makeSubCategoryBudgetKey === 'function'
         ? makeSubCategoryBudgetKey(mainCategory, subCategory)
         : mainCategory;
-    const budget = budgets[budgetKey] || 0;
+    const budget = budgets[budgetKey] || '';
     const datasetAttrs = Object.entries(inputDataset)
         .map(([key, value]) => `data-${key}="${String(value).replace(/"/g, '&quot;')}"`)
         .join(' ');
     const suggestHandler = kind === 'sub'
         ? `applySubBudgetSuggestion(this)`
         : `applyBudgetSuggestion(this)`;
-    return `<div class="budget-money-field">
+    return `<div class="budget-edit-controls">
         <button type="button" class="btn-budget-suggest" ${datasetAttrs} onclick="${suggestHandler}" title="Średnia z 6 mies.">6m</button>
-        <input type="text" inputmode="decimal" class="budget-input budget-editor-input budget-money-input" ${datasetAttrs}
-            value="${budget > 0 ? formatBudgetMoneyInputValue(budget) : ''}"
-            data-raw-value="${budget > 0 ? budget : ''}"
-            placeholder="—" onblur="onBudgetMoneyInputBlur(this)" aria-label="Limit">
-        <span class="budget-money-suffix">zł</span>
+        <input type="number" class="budget-input budget-editor-input" min="0" step="50" ${datasetAttrs}
+            value="${budget || ''}" placeholder="—" aria-label="Limit">
     </div>`;
 }
 
 function renderBudgetEditorSubRow(mainCategory, subCategory) {
     const suggested = suggestSubCategoryBudget(mainCategory, subCategory);
-    const usagePreview = typeof renderBudgetEditorUsagePreview === 'function'
-        ? renderBudgetEditorUsagePreview(mainCategory, subCategory)
-        : '';
-    return `<div class="budget-editor-sub-row" data-search="${escapeHtml(`${mainCategory} ${subCategory}`)}">
-        <span class="budget-editor-sub-label">${escapeHtml(subCategory)}</span>
-        ${renderBudgetEditorMoneyField({
-            kind: 'sub',
-            mainCategory,
-            subCategory,
-            inputDataset: { kind: 'sub', main: mainCategory, sub: subCategory }
-        })}
-        ${usagePreview}
-        ${suggested > 0 ? `<span class="budget-suggest-hint">śr. 6m: ${formatPlnAmount(suggested)}</span>` : ''}
+    const meta = formatBudgetEditorMeta(mainCategory, subCategory, suggested);
+    return `<div class="budget-edit-sub" data-search="${escapeHtml(`${mainCategory} ${subCategory}`)}">
+        <div class="category-edit-row category-edit-row--sub budget-edit-row">
+            <span class="budget-edit-sub-label">${escapeHtml(subCategory)}</span>
+            ${renderBudgetEditorControls('sub', mainCategory, subCategory, { kind: 'sub', main: mainCategory, sub: subCategory })}
+        </div>
+        ${meta ? `<p class="budget-editor-meta">${escapeHtml(meta)}</p>` : ''}
     </div>`;
 }
 
-function renderBudgetEditorCard(cat) {
+function renderBudgetEditorGroup(cat) {
     const subs = categoryTree.expense[cat] || [];
     const mainBudget = (appState.categoryBudgets || {})[cat] || 0;
     const subBudgets = appState.subCategoryBudgets || {};
@@ -700,34 +705,26 @@ function renderBudgetEditorCard(cat) {
             : `${cat}\u0001${sub}`;
         return (subBudgets[key] || 0) > 0;
     });
-    const expanded = mainBudget > 0 || hasSubBudget || subs.length === 0;
+    const expanded = mainBudget > 0 || hasSubBudget;
     const suggested = suggestCategoryBudget(cat);
-    const usagePreview = typeof renderBudgetEditorUsagePreview === 'function'
-        ? renderBudgetEditorUsagePreview(cat, null)
-        : '';
+    const meta = formatBudgetEditorMeta(cat, null, suggested);
     const subRows = subs.map((sub) => renderBudgetEditorSubRow(cat, sub)).join('');
     const searchBlob = [cat, ...subs].join(' ');
-    return `<article class="budget-editor-card${expanded ? ' budget-editor-card--expanded' : ''}" data-search="${escapeHtml(searchBlob)}">
-        <button type="button" class="budget-editor-card-header" aria-expanded="${expanded ? 'true' : 'false'}"
-            onclick="toggleBudgetEditorCard(this)">
-            <span class="budget-editor-card-leading">
-                ${renderCategoryIcon(cat, 'list', null, 'expense')}
-                <span class="budget-editor-card-title">${escapeHtml(cat)}</span>
-                ${subs.length ? `<span class="budget-editor-card-count">${subs.length} podkat.</span>` : ''}
-            </span>
-            <span class="budget-editor-card-limit" onclick="event.stopPropagation()">
-                ${renderBudgetEditorMoneyField({
-                    kind: 'main',
-                    mainCategory: cat,
-                    inputDataset: { kind: 'main', cat }
-                })}
-            </span>
-            ${subs.length ? '<span class="budget-editor-card-chevron" aria-hidden="true">›</span>' : ''}
-        </button>
-        ${usagePreview ? `<div class="budget-editor-card-usage">${usagePreview}</div>` : ''}
-        ${suggested > 0 ? `<p class="budget-suggest-hint budget-editor-card-hint">Średnia z ostatnich 6 mies.: ${formatPlnAmount(suggested)}</p>` : ''}
-        ${subs.length ? `<div class="budget-editor-card-body">${subRows}</div>` : ''}
-    </article>`;
+    const toggleBtn = subs.length
+        ? `<button type="button" class="budget-edit-toggle" aria-expanded="${expanded ? 'true' : 'false'}" aria-label="Rozwiń podkategorie" onclick="toggleBudgetEditorGroup(this)">
+            <svg class="budget-edit-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+        </button>`
+        : '<span class="budget-edit-toggle budget-edit-toggle--spacer" aria-hidden="true"></span>';
+    return `<div class="category-edit-group budget-edit-group${expanded ? ' budget-edit-group--expanded' : ''}" data-search="${escapeHtml(searchBlob)}">
+        <div class="category-edit-row category-edit-row--main budget-edit-row">
+            ${toggleBtn}
+            ${renderCategoryIcon(cat, 'list', null, 'expense')}
+            <span class="budget-edit-label">${escapeHtml(cat)}</span>
+            ${renderBudgetEditorControls('main', cat, null, { kind: 'main', cat })}
+        </div>
+        ${meta ? `<p class="budget-editor-meta">${escapeHtml(meta)}</p>` : ''}
+        ${subs.length ? `<div class="category-edit-subs budget-edit-subs">${subRows}</div>` : ''}
+    </div>`;
 }
 
 function renderBudgetEditor() {
@@ -738,32 +735,26 @@ function renderBudgetEditor() {
         <input type="search" class="budget-editor-search" placeholder="Szukaj kategorii…" oninput="filterBudgetEditorList(this.value)" aria-label="Szukaj kategorii">
         <button type="button" class="btn-outline btn-outline--compact budget-editor-fill-all" onclick="applyAllBudgetSuggestions()">Średnia 6m</button>
     </div>`;
-    list.innerHTML = toolbar + categories.map((cat) => renderBudgetEditorCard(cat)).join('');
+    list.innerHTML = toolbar + categories.map((cat) => renderBudgetEditorGroup(cat)).join('');
 }
 
 function applyBudgetSuggestion(btn) {
-    const scope = btn.closest('.budget-editor-card, .budget-editor-sub-row, .budget-editor-row');
+    const scope = btn.closest('.budget-edit-group, .budget-edit-sub, .budget-edit-row');
     const input = scope?.querySelector('.budget-editor-input[data-kind="main"]') || scope?.querySelector('.budget-editor-input');
     const cat = btn.dataset.cat;
     if (!input || !cat) return;
     const value = suggestCategoryBudget(cat);
-    if (value > 0) {
-        input.value = formatBudgetMoneyInputValue(value);
-        input.dataset.rawValue = String(value);
-    }
+    if (value > 0) input.value = value;
 }
 
 function applySubBudgetSuggestion(btn) {
-    const scope = btn.closest('.budget-editor-sub-row, .budget-editor-row');
+    const scope = btn.closest('.budget-edit-sub, .budget-edit-row');
     const input = scope?.querySelector('.budget-editor-input');
     const main = btn.dataset.main;
     const sub = btn.dataset.sub;
     if (!input || !main || !sub) return;
     const value = suggestSubCategoryBudget(main, sub);
-    if (value > 0) {
-        input.value = formatBudgetMoneyInputValue(value);
-        input.dataset.rawValue = String(value);
-    }
+    if (value > 0) input.value = value;
 }
 
 function applyAllBudgetSuggestions() {
@@ -771,19 +762,13 @@ function applyAllBudgetSuggestions() {
         const kind = input.dataset.kind;
         if (kind === 'sub' && input.dataset.main && input.dataset.sub) {
             const value = suggestSubCategoryBudget(input.dataset.main, input.dataset.sub);
-            if (value > 0) {
-                input.value = formatBudgetMoneyInputValue(value);
-                input.dataset.rawValue = String(value);
-            }
+            if (value > 0) input.value = value;
             return;
         }
         const cat = input.dataset.cat;
         if (!cat) return;
         const value = suggestCategoryBudget(cat);
-        if (value > 0) {
-            input.value = formatBudgetMoneyInputValue(value);
-            input.dataset.rawValue = String(value);
-        }
+        if (value > 0) input.value = value;
     });
 }
 
@@ -794,7 +779,7 @@ function saveBudgetEditor() {
     appState.categoryBudgets = {};
     appState.subCategoryBudgets = {};
     inputs.forEach((input) => {
-        const value = parseBudgetMoneyValue(input.dataset.rawValue || input.value);
+        const value = parseBudgetMoneyValue(input.value);
         if (input.dataset.kind === 'sub' && input.dataset.main && input.dataset.sub) {
             const key = typeof makeSubCategoryBudgetKey === 'function'
                 ? makeSubCategoryBudgetKey(input.dataset.main, input.dataset.sub)

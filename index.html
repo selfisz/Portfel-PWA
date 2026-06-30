@@ -1391,8 +1391,21 @@
 
                 <div id="reports-debts-installments-card" class="card debts-panel-card">
                     <h2 class="dashboard-section-title">Raty i terminy</h2>
-                    <p class="reports-hint">Kliknij ○/✓ przy pozycji, aby włączyć lub wyłączyć ją z sumy rat miesięcznych.</p>
                     <div id="reports-debt-installment-summary"></div>
+                    <div id="reports-debt-installment-filter-block" class="chart-view-filter hidden">
+                        <button type="button" id="reports-debt-installment-filter-toggle" class="chart-view-filter-toggle" onclick="toggleReportsDebtInstallmentFilter()" aria-expanded="false" aria-controls="reports-debt-installment-filter-panel">
+                            <span>Dostosuj sumę</span>
+                            <svg class="chart-view-filter-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                        </button>
+                        <div id="reports-debt-installment-filter-panel" class="chart-view-filter-panel hidden">
+                            <div class="hero-summary-actions">
+                                <button type="button" class="hero-summary-action" onclick="setAllDebtInstallmentsInSummary(true)">Zaznacz wszystko</button>
+                                <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                                <button type="button" class="hero-summary-action" onclick="setAllDebtInstallmentsInSummary(false)">Odznacz wszystko</button>
+                            </div>
+                            <nav id="reports-debt-installment-chips" class="chart-view-filter-chips" aria-label="Raty wliczane w sumę"></nav>
+                        </div>
+                    </div>
                     <div id="reports-debt-installment-list"></div>
                 </div>
 

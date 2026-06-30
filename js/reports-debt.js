@@ -1389,6 +1389,50 @@ function updateReportsDebtsSectionVisibility(ctx) {
     setReportsDebtsCardVisible('reports-debts-freedom-card', freedomItems.length > 0 || loanPaymentsInPeriod > 0);
 }
 
+let debtInstallmentFilterExpanded = false;
+
+function toggleReportsDebtInstallmentFilter() {
+    debtInstallmentFilterExpanded = !debtInstallmentFilterExpanded;
+    const panel = document.getElementById('reports-debt-installment-filter-panel');
+    const toggle = document.getElementById('reports-debt-installment-filter-toggle');
+    if (panel) panel.classList.toggle('hidden', !debtInstallmentFilterExpanded);
+    if (toggle) toggle.setAttribute('aria-expanded', debtInstallmentFilterExpanded ? 'true' : 'false');
+}
+
+function setAllDebtInstallmentsInSummary(included) {
+    const rows = collectDebtInstallmentRows();
+    if (!rows.length) return;
+    if (!appState.reportPrefs || typeof appState.reportPrefs !== 'object') appState.reportPrefs = {};
+    if (included) {
+        appState.reportPrefs.excludedDebtInstallments = [];
+    } else {
+        appState.reportPrefs.excludedDebtInstallments = rows.map((row) => getDebtInstallmentKey(row.kind, row.id));
+    }
+    saveState();
+    renderReportsDebtInstallmentList();
+}
+
+function renderReportsDebtInstallmentFilter(rows) {
+    const block = document.getElementById('reports-debt-installment-filter-block');
+    const chipsEl = document.getElementById('reports-debt-installment-chips');
+    if (!block || !chipsEl) return;
+
+    if (rows.length < 2) {
+        block.classList.add('hidden');
+        chipsEl.innerHTML = '';
+        return;
+    }
+
+    block.classList.remove('hidden');
+    chipsEl.innerHTML = rows.map((row) => {
+        const included = isDebtInstallmentIncludedInSummary(row);
+        const toggleFn = `toggleDebtInstallmentInSummary('${escapeHtml(row.kind)}','${escapeHtml(row.id)}')`;
+        const est = row.estimated ? ' ~' : '';
+        return `<button type="button" class="toggle-btn loans-chip${included ? ' active' : ''}"
+            onclick="${toggleFn}" aria-pressed="${included ? 'true' : 'false'}">${escapeHtml(row.name)}${est}</button>`;
+    }).join('');
+}
+
 function renderReportsDebtInstallmentList() {
     const el = document.getElementById('reports-debt-installment-list');
     if (!el) return;
@@ -1403,20 +1447,16 @@ function renderReportsDebtInstallmentList() {
     const cardTotal = includedRows.filter((r) => r.estimated).reduce((s, r) => s + r.amount, 0);
 
     if (summaryEl) {
-        const cardHint = cardTotal > 0
-            ? `<span class="debt-installment-summary-detail">kredyty ${formatPlnAmount(loanTotal)} · karty ~${formatPlnAmount(cardTotal)}</span>`
-            : '';
-        const excludeHint = excludedCount > 0
-            ? `<span class="debt-installment-summary-detail">w sumie ${includedRows.length}/${rows.length} pozycji</span>`
-            : '';
-        summaryEl.innerHTML = `<div class="debt-installment-summary">
-            <div class="debt-installment-summary-main">
-                <span class="label">Suma rat / miesiąc</span>
-                <strong class="expense">${formatPlnAmount(monthlyTotal)}</strong>
-            </div>
-            ${cardHint}${excludeHint}
-        </div>`;
+        const details = [];
+        if (cardTotal > 0) details.push(`kredyty ${formatPlnAmount(loanTotal)} · karty ~${formatPlnAmount(cardTotal)}`);
+        if (excludedCount > 0) details.push(`${includedRows.length}/${rows.length} w sumie`);
+        summaryEl.innerHTML = `<div class="debt-installment-total">
+            <span class="label">Suma rat / miesiąc</span>
+            <strong class="expense">${formatPlnAmount(monthlyTotal)}</strong>
+        </div>${details.length ? `<p class="debt-installment-total-meta">${details.join(' · ')}</p>` : ''}`;
     }
+
+    renderReportsDebtInstallmentFilter(rows);
 
     if (!rows.length) {
         if (summaryEl) summaryEl.innerHTML = '';
@@ -1430,19 +1470,11 @@ function renderReportsDebtInstallmentList() {
             : `openCreditCardDetails('${escapeHtml(row.id)}')`;
         const estClass = row.estimated ? ' debt-installment-row--estimated' : '';
         const included = isDebtInstallmentIncludedInSummary(row);
-        const toggleFn = `toggleDebtInstallmentInSummary('${escapeHtml(row.kind)}','${escapeHtml(row.id)}')`;
-        return `<div class="debt-installment-row${estClass}${included ? '' : ' debt-installment-row--excluded'}">
-            <button type="button" class="debt-installment-include-btn${included ? ' active' : ''}"
-                aria-pressed="${included ? 'true' : 'false'}"
-                aria-label="${included ? 'Wyłącz z sumy' : 'Włącz do sumy'}"
-                title="${included ? 'Wyłącz z sumy miesięcznej' : 'Włącz do sumy miesięcznej'}"
-                onclick="event.stopPropagation(); ${toggleFn}">${included ? '✓' : '○'}</button>
-            <div class="debt-installment-row-main ${row.kind}-clickable" role="button" tabindex="0"
-                onclick="${openFn}" onkeydown="if (event.key==='Enter') ${openFn}">
-                <span class="debt-installment-name">${escapeHtml(row.name)}${row.estimated ? ' <em>szac.</em>' : ''}</span>
-                <span class="debt-installment-amount">${formatPlnAmount(row.amount)}</span>
-                <span class="debt-installment-date">${escapeHtml(row.dateLabel)}</span>
-            </div>
+        return `<div class="debt-installment-row${estClass}${included ? '' : ' debt-installment-row--excluded'} ${row.kind}-clickable" role="button" tabindex="0"
+            onclick="${openFn}" onkeydown="if (event.key==='Enter') ${openFn}">
+            <span class="debt-installment-name">${escapeHtml(row.name)}${row.estimated ? ' <em>szac.</em>' : ''}</span>
+            <span class="debt-installment-amount">${formatPlnAmount(row.amount)}</span>
+            <span class="debt-installment-date">${escapeHtml(row.dateLabel)}</span>
         </div>`;
     }).join('');
 }

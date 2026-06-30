@@ -473,7 +473,7 @@ describe('renderBudgetEditor', () => {
         });
         renderBudgetEditor();
         const html = document.getElementById('settings-budget-list').innerHTML;
-        expect(html).toContain('budget-editor-card-title');
+        expect(html).toContain('budget-edit-label');
         expect(html).toContain('Jedzenie');
         expect(html).toContain('Transport');
     });
