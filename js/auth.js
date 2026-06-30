@@ -3,9 +3,19 @@ const ALLOWED_AUTH_EMAILS = ['dawidrekal@gmail.com'];
 let authReady = false;
 let currentAuthUser = null;
 let authUiMode = 'checking';
+let authInitComplete = false;
+let authDenyLock = false;
+let authHandlerInFlight = false;
 
 function normalizeAuthEmail(email) {
     return (email || '').trim().toLowerCase();
+}
+
+function getUserAuthEmail(user) {
+    if (!user) return '';
+    if (user.email) return user.email;
+    const googleProvider = (user.providerData || []).find((p) => p.providerId === 'google.com');
+    return googleProvider?.email || user.providerData?.[0]?.email || '';
 }
 
 function isEmailAllowed(email) {
@@ -19,6 +29,20 @@ function isUserSignedIn() {
 
 function getCurrentAuthUser() {
     return currentAuthUser;
+}
+
+function formatAuthError(err) {
+    if (!err) return 'Logowanie nie powiodło się.';
+    const code = err.code || '';
+    const map = {
+        'auth/unauthorized-domain': 'Ta domena nie jest autoryzowana w Firebase (Authentication → Settings → Authorized domains).',
+        'auth/operation-not-allowed': 'Logowanie Google nie jest włączone w Firebase Console (Authentication → Sign-in method).',
+        'auth/popup-blocked': 'Przeglądarka zablokowała okno logowania — spróbuj ponownie lub otwórz apkę w Safari/Chrome.',
+        'auth/network-request-failed': 'Brak połączenia z internetem podczas logowania.',
+        'auth/web-storage-unsupported': 'Przeglądarka blokuje pamięć sesji — wyłącz tryb prywatny lub zezwól na ciasteczka.'
+    };
+    if (map[code]) return map[code];
+    return err.message || 'Logowanie nie powiodło się.';
 }
 
 function setAuthUiMode(mode, message) {
@@ -46,7 +70,7 @@ function setAuthUiMode(mode, message) {
         if (mode === 'signin') {
             messageEl.textContent = 'Zaloguj się kontem Google, aby korzystać z aplikacji.';
         } else if (isDenied) {
-            messageEl.textContent = 'To konto nie ma uprawnień. Dostęp przyznaje administrator.';
+            messageEl.textContent = message || 'To konto nie ma uprawnień. Dostęp przyznaje administrator.';
         } else if (isChecking) {
             messageEl.textContent = 'Sprawdzanie sesji…';
         } else {
@@ -54,7 +78,7 @@ function setAuthUiMode(mode, message) {
         }
     }
     if (checkingEl) checkingEl.classList.toggle('hidden', !isChecking);
-    if (signInBtn) signInBtn.classList.toggle('hidden', isChecking);
+    if (signInBtn) signInBtn.classList.toggle('hidden', isChecking || isDenied);
     if (errorEl) {
         const errText = isError ? (message || 'Logowanie nie powiodło się.') : '';
         errorEl.textContent = errText;
@@ -67,14 +91,19 @@ function hideAuthOverlay() {
     document.body.classList.remove('auth-locked');
 }
 
+function shouldUseRedirectSignIn() {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+    return isStandalone || isMobile;
+}
+
 async function signInWithGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     setAuthUiMode('checking');
     try {
-        const isStandalone = window.matchMedia('(display-mode: standalone)').matches
-            || window.navigator.standalone === true;
-        if (isStandalone) {
+        if (shouldUseRedirectSignIn()) {
             await auth.signInWithRedirect(provider);
             return;
         }
@@ -85,7 +114,17 @@ async function signInWithGoogle() {
             setAuthUiMode('signin');
             return;
         }
-        setAuthUiMode('error', err?.message || 'Nie udało się zalogować przez Google.');
+        if (err?.code === 'auth/popup-blocked' || err?.code === 'auth/cancelled-popup-request') {
+            try {
+                await auth.signInWithRedirect(provider);
+                return;
+            } catch (redirectErr) {
+                console.error('signInWithRedirect fallback', redirectErr);
+                setAuthUiMode('error', formatAuthError(redirectErr));
+                return;
+            }
+        }
+        setAuthUiMode('error', formatAuthError(err));
     }
 }
 
@@ -105,39 +144,54 @@ async function signOutFromApp() {
 function refreshAccountSettingsUI() {
     const emailEl = document.getElementById('settings-account-email');
     if (!emailEl) return;
-    emailEl.textContent = currentAuthUser?.email || '—';
+    emailEl.textContent = getUserAuthEmail(currentAuthUser) || '—';
 }
 
 async function handleAuthenticatedUser(user) {
-    if (!isEmailAllowed(user.email)) {
-        currentAuthUser = null;
-        authReady = true;
-        try {
-            await auth.signOut();
-        } catch (err) {
-            console.warn('signOut denied user', err);
+    if (!user || authHandlerInFlight) return;
+    authHandlerInFlight = true;
+    try {
+        const email = getUserAuthEmail(user);
+        if (!isEmailAllowed(email)) {
+            currentAuthUser = null;
+            authReady = true;
+            authDenyLock = true;
+            try {
+                await auth.signOut();
+            } catch (err) {
+                console.warn('signOut denied user', err);
+            }
+            setAuthUiMode('denied', `Zalogowano jako ${email || 'nieznany e-mail'}, ale to konto nie ma dostępu. Użyj: ${ALLOWED_AUTH_EMAILS[0]}.`);
+            return;
         }
-        setAuthUiMode('denied');
-        return;
+
+        currentAuthUser = user;
+        authReady = true;
+        authDenyLock = false;
+
+        if (typeof setFinanceStorageKey === 'function') setFinanceStorageKey(user.uid);
+        migrateLocalStorageToUidKey(user.uid);
+        configureFirestoreRefs(user.uid);
+
+        try {
+            await migrateLegacyUserDataIfNeeded(user.uid);
+        } catch (err) {
+            console.warn('migrateLegacyUserDataIfNeeded', err);
+        }
+
+        if (typeof cloudSyncUnlocked !== 'undefined') cloudSyncUnlocked = true;
+
+        hideAuthOverlay();
+
+        if (typeof bootstrapApp === 'function') bootstrapApp();
+        refreshAccountSettingsUI();
+    } finally {
+        authHandlerInFlight = false;
     }
-
-    currentAuthUser = user;
-    authReady = true;
-
-    if (typeof setFinanceStorageKey === 'function') setFinanceStorageKey(user.uid);
-    migrateLocalStorageToUidKey(user.uid);
-    configureFirestoreRefs(user.uid);
-    await migrateLegacyUserDataIfNeeded(user.uid);
-
-    if (typeof cloudSyncUnlocked !== 'undefined') cloudSyncUnlocked = true;
-
-    hideAuthOverlay();
-
-    if (typeof bootstrapApp === 'function') bootstrapApp();
-    refreshAccountSettingsUI();
 }
 
 function handleSignedOutUser() {
+    if (!authInitComplete || authDenyLock || authUiMode === 'denied') return;
     currentAuthUser = null;
     authReady = true;
     configureFirestoreRefs(null);
@@ -162,7 +216,7 @@ function migrateLocalStorageToUidKey(uid) {
     }
 }
 
-function initAuthGate() {
+async function initAuthGate() {
     document.body.classList.add('auth-locked');
     setAuthUiMode('checking');
 
@@ -172,20 +226,43 @@ function initAuthGate() {
         signInBtn.addEventListener('click', () => signInWithGoogle());
     }
 
-    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch((err) => {
-        console.warn('auth persistence', err);
-    });
+    try {
+        await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+    } catch (err) {
+        console.warn('auth persistence LOCAL failed, trying SESSION', err);
+        try {
+            await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+        } catch (sessionErr) {
+            console.warn('auth persistence SESSION failed', sessionErr);
+        }
+    }
 
-    auth.getRedirectResult().catch((err) => {
+    try {
+        const redirectResult = await auth.getRedirectResult();
+        if (redirectResult?.user) {
+            await handleAuthenticatedUser(redirectResult.user);
+        } else if (redirectResult?.credential) {
+            const liveUser = auth.currentUser;
+            if (liveUser) await handleAuthenticatedUser(liveUser);
+        }
+    } catch (err) {
         console.error('getRedirectResult', err);
-        setAuthUiMode('error', err?.message || 'Logowanie przekierowania nie powiodło się.');
-    });
+        setAuthUiMode('error', formatAuthError(err));
+    }
+
+    authInitComplete = true;
+
+    if (!currentAuthUser && auth.currentUser) {
+        await handleAuthenticatedUser(auth.currentUser);
+    } else if (!currentAuthUser) {
+        setAuthUiMode('signin');
+    }
 
     auth.onAuthStateChanged((user) => {
         if (user) {
             handleAuthenticatedUser(user).catch((err) => {
                 console.error('handleAuthenticatedUser', err);
-                setAuthUiMode('error', 'Nie udało się przygotować sesji.');
+                setAuthUiMode('error', formatAuthError(err));
             });
         } else {
             handleSignedOutUser();
@@ -197,7 +274,15 @@ function initAuthGate() {
 }
 
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initAuthGate);
+    document.addEventListener('DOMContentLoaded', () => {
+        initAuthGate().catch((err) => {
+            console.error('initAuthGate', err);
+            setAuthUiMode('error', formatAuthError(err));
+        });
+    });
 } else {
-    initAuthGate();
+    initAuthGate().catch((err) => {
+        console.error('initAuthGate', err);
+        setAuthUiMode('error', formatAuthError(err));
+    });
 }
