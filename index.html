@@ -318,8 +318,15 @@
                 <button id="btn-category-editor-income" type="button" class="toggle-btn income" onclick="setCategoryEditorType('income')">Wpływy</button>
             </div>
             <div id="category-editor-list" class="category-editor-list"></div>
-            <p class="category-editor-hint">Możesz zmieniać nazwy, dodawać własne pozycje albo usuwać niepotrzebne (×). Usunięte kategorie znikają z listy wyboru, ale zostają w historii transakcji.</p>
+            <p class="category-editor-hint">Możesz zmieniać nazwy i ikony (kliknij ikonę), dodawać własne pozycje albo usuwać niepotrzebne (×). Usunięte kategorie znikają z listy wyboru, ale zostają w historii transakcji.</p>
             <button type="button" class="btn-submit btn-submit--form category-editor-save" onclick="saveCategoryEditor()">Zapisz zmiany</button>
+        </div>
+        <div id="category-icon-picker" class="category-icon-picker hidden" onclick="if (event.target === this) closeCategoryIconPicker()">
+            <div class="category-icon-picker-panel" onclick="event.stopPropagation()">
+                <p class="category-icon-picker-title">Wybierz ikonę</p>
+                <div id="category-icon-picker-grid" class="category-icon-picker-grid"></div>
+                <button type="button" class="category-icon-picker-reset" onclick="resetCategoryIconPicker()">Przywróć domyślną</button>
+            </div>
         </div>
     </div>
 

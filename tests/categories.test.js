@@ -34,6 +34,7 @@ beforeAll(() => {
 
   // Stuby stanu
   globalThis.formState = { formMode: 'expense', currentType: 'expense', selectedMainCategory: '', selectedSubCategory: '' };
+  globalThis.appState = { categoryIcons: { expense: { mains: {}, subs: {} }, income: { mains: {}, subs: {} } } };
   globalThis.selectMainCategoryForm = () => {};
   globalThis.renderMainCategoriesForm = () => {};
   globalThis.activeChartCategory = null;
@@ -55,6 +56,7 @@ beforeEach(() => {
   globalThis.isLightTheme = () => true;
   globalThis.activeChartCategory = null;
   globalThis.chartViewType = 'expense';
+  globalThis.appState = { categoryIcons: { expense: { mains: {}, subs: {} }, income: { mains: {}, subs: {} } } };
   _setCategoryTree(JSON.parse(JSON.stringify(DEFAULT_CATEGORY_TREE)));
 });
 
@@ -207,6 +209,18 @@ describe('getCategoryIconPath', () => {
 
   it('obsługuje null jako subCategory', () => {
     expect(() => getCategoryIconPath('Transport', null)).not.toThrow();
+  });
+
+  it('używa nadpisanej ikony z appState.categoryIcons', () => {
+    const customPath = categoryIconPaths['Samochód'];
+    appState.categoryIcons.expense.mains['MojaKategoria'] = customPath;
+    expect(getCategoryIconPath('MojaKategoria', null, 'expense')).toBe(customPath);
+  });
+
+  it('używa nadpisanej ikony podkategorii', () => {
+    const customPath = subCategoryIconPaths['Paliwo'];
+    appState.categoryIcons.expense.subs['Dom|MojaSub'] = customPath;
+    expect(getCategoryIconPath('Dom', 'MojaSub', 'expense')).toBe(customPath);
   });
 });
 

@@ -283,7 +283,104 @@ function openCategoryEditor() {
 }
 
 function closeCategoryEditor() {
+    closeCategoryIconPicker();
     document.getElementById('category-editor-overlay').classList.add('hidden');
+}
+
+let categoryIconPickerTarget = null;
+
+function updateCategoryEditIconButton(btn, mainLabel, sub, txType) {
+    const path = btn.dataset.iconPath || getCategoryIconPath(mainLabel, sub || null, txType);
+    const color = resolveIconColor(mainLabel, sub || null, txType);
+    btn.innerHTML = `<span class="cat-icon-wrap cat-icon-wrap--chip" style="background:${categoryColorAlpha(color, 0.16)};color:${color}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${path}"/></svg></span>`;
+}
+
+function createCategoryEditIconButton(mainLabel, sub, txType, options = {}) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = options.isMain
+        ? 'category-edit-icon-btn category-edit-icon-btn--main'
+        : 'category-edit-icon-btn';
+    btn.setAttribute('aria-label', sub ? 'Zmień ikonę podkategorii' : 'Zmień ikonę kategorii');
+    btn.dataset.originalMain = mainLabel || '';
+    if (sub) btn.dataset.originalSub = sub;
+    const override = getCategoryIconOverride(txType, mainLabel, sub || null);
+    if (override) btn.dataset.iconPath = override;
+    updateCategoryEditIconButton(btn, mainLabel || 'Inne', sub || null, txType);
+    btn.onclick = () => openCategoryIconPicker(btn);
+    return btn;
+}
+
+function ensureCategoryIconPickerGrid() {
+    const grid = document.getElementById('category-icon-picker-grid');
+    if (!grid || grid.childElementCount) return;
+    getCategoryIconPresets().forEach(({ path, label }) => {
+        const presetBtn = document.createElement('button');
+        presetBtn.type = 'button';
+        presetBtn.className = 'category-icon-preset-btn';
+        presetBtn.title = label;
+        presetBtn.dataset.path = path;
+        presetBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${path}"/></svg>`;
+        presetBtn.onclick = () => selectCategoryIcon(path);
+        grid.appendChild(presetBtn);
+    });
+}
+
+function openCategoryIconPicker(targetBtn) {
+    categoryIconPickerTarget = targetBtn;
+    ensureCategoryIconPickerGrid();
+    document.getElementById('category-icon-picker')?.classList.remove('hidden');
+}
+
+function closeCategoryIconPicker() {
+    document.getElementById('category-icon-picker')?.classList.add('hidden');
+    categoryIconPickerTarget = null;
+}
+
+function refreshCategoryEditIconFromRow(iconBtn) {
+    const row = iconBtn.closest('.category-edit-row');
+    const group = iconBtn.closest('.category-edit-group');
+    const mainInput = group?.querySelector('.category-edit-input--main');
+    const subInput = row?.querySelector('.category-edit-input--sub');
+    const main = mainInput?.value.trim() || 'Inne';
+    const sub = subInput?.value.trim() || null;
+    const isMain = iconBtn.classList.contains('category-edit-icon-btn--main');
+    updateCategoryEditIconButton(iconBtn, main, isMain ? null : sub, categoryEditorType);
+}
+
+function selectCategoryIcon(path) {
+    if (!categoryIconPickerTarget) return;
+    categoryIconPickerTarget.dataset.iconPath = path;
+    refreshCategoryEditIconFromRow(categoryIconPickerTarget);
+    closeCategoryIconPicker();
+}
+
+function resetCategoryIconPicker() {
+    if (!categoryIconPickerTarget) return;
+    delete categoryIconPickerTarget.dataset.iconPath;
+    refreshCategoryEditIconFromRow(categoryIconPickerTarget);
+    closeCategoryIconPicker();
+}
+
+function saveCategoryEditorIcons(type, groups) {
+    ensureCategoryIconsState();
+    const mains = {};
+    const subs = {};
+    groups.forEach((group) => {
+        const mainInput = group.querySelector('.category-edit-input--main');
+        const main = mainInput?.value.trim();
+        if (!main) return;
+        const mainBtn = group.querySelector('.category-edit-icon-btn--main');
+        if (mainBtn?.dataset.iconPath) mains[main] = mainBtn.dataset.iconPath;
+        group.querySelectorAll('.category-edit-row--sub').forEach((row) => {
+            const subInput = row.querySelector('.category-edit-input--sub');
+            const sub = subInput?.value.trim();
+            if (!sub) return;
+            const btn = row.querySelector('.category-edit-icon-btn');
+            if (btn?.dataset.iconPath) subs[`${main}|${sub}`] = btn.dataset.iconPath;
+        });
+    });
+    appState.categoryIcons[type] = { mains, subs };
 }
 
 function setCategoryEditorType(type) {
@@ -354,7 +451,8 @@ function deleteCategoryEditorMainGroup(group) {
 function createCategoryEditSubRow(sub, mainLabel, txType, options = {}) {
     const subRow = document.createElement('div');
     subRow.className = 'category-edit-row category-edit-row--sub';
-    subRow.innerHTML = renderCategoryIcon(mainLabel, 'chip', sub || null, txType);
+    const iconBtn = createCategoryEditIconButton(mainLabel, sub || null, txType);
+    subRow.appendChild(iconBtn);
     const subInput = document.createElement('input');
     subInput.type = 'text';
     subInput.className = 'category-edit-input category-edit-input--sub';
@@ -362,6 +460,10 @@ function createCategoryEditSubRow(sub, mainLabel, txType, options = {}) {
     subInput.dataset.original = sub || '';
     subInput.maxLength = 40;
     if (options.placeholder) subInput.placeholder = options.placeholder;
+    subInput.addEventListener('input', () => {
+        const main = options.group ? getCategoryEditorMainLabel(options.group) : mainLabel;
+        updateCategoryEditIconButton(iconBtn, main, subInput.value.trim() || 'Inne', txType);
+    });
     subRow.appendChild(subInput);
     if (options.group) {
         const delBtn = createCategoryEditDeleteButton('Usuń podkategorię');
@@ -377,7 +479,8 @@ function createCategoryEditGroup(main, subs, txType) {
 
     const mainRow = document.createElement('div');
     mainRow.className = 'category-edit-row category-edit-row--main';
-    mainRow.innerHTML = renderCategoryIcon(main || 'Inne', 'chip', null, txType);
+    const mainIconBtn = createCategoryEditIconButton(main || 'Inne', null, txType, { isMain: true });
+    mainRow.appendChild(mainIconBtn);
     const mainInput = document.createElement('input');
     mainInput.type = 'text';
     mainInput.className = 'category-edit-input category-edit-input--main';
@@ -385,6 +488,9 @@ function createCategoryEditGroup(main, subs, txType) {
     mainInput.dataset.original = main || '';
     mainInput.maxLength = 40;
     if (!main) mainInput.placeholder = 'Nowa kategoria główna';
+    mainInput.addEventListener('input', () => {
+        updateCategoryEditIconButton(mainIconBtn, mainInput.value.trim() || 'Inne', null, txType);
+    });
     mainRow.appendChild(mainInput);
     const mainDelBtn = createCategoryEditDeleteButton('Usuń kategorię');
     mainDelBtn.onclick = () => deleteCategoryEditorMainGroup(group);
@@ -666,6 +772,7 @@ function saveCategoryEditor() {
     });
 
     migrateRecentCategories(mainMap, subRenames, type);
+    saveCategoryEditorIcons(type, groups);
     saveState();
     hapticFeedback();
     closeCategoryEditor();

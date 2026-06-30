@@ -247,6 +247,9 @@ function validateBackupPayload(payload) {
         assetSnapshots: sanitizeAssetSnapshotsList(data.assetSnapshots, report),
         assetValueHistory: sanitizeAssetValueHistoryList(data.assetValueHistory, report),
         categoryTree: sanitizeCategoryTree(data.categoryTree),
+        categoryIcons: typeof sanitizeCategoryIcons === 'function'
+            ? sanitizeCategoryIcons(data.categoryIcons)
+            : { expense: { mains: {}, subs: {} }, income: { mains: {}, subs: {} } },
         categoryBudgets: sanitizeNumericRecord(data.categoryBudgets),
         subCategoryBudgets: sanitizeNumericRecord(data.subCategoryBudgets),
         reportPrefs: sanitizeReportPrefs(data.reportPrefs),

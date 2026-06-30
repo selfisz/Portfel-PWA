@@ -12,6 +12,10 @@ let appState = {
     assetValueHistory: [],
     categoryBudgets: {},
     subCategoryBudgets: {},
+    categoryIcons: {
+        expense: { mains: {}, subs: {} },
+        income: { mains: {}, subs: {} }
+    },
     reportPrefs: {},
     deletedAssetIds: []
 };
@@ -84,6 +88,12 @@ function getPersistedState(raw = appState) {
         subCategoryBudgets: data.subCategoryBudgets && typeof data.subCategoryBudgets === 'object'
             ? data.subCategoryBudgets
             : {},
+        categoryIcons: typeof sanitizeCategoryIcons === 'function'
+            ? sanitizeCategoryIcons(data.categoryIcons)
+            : {
+                expense: { mains: {}, subs: {} },
+                income: { mains: {}, subs: {} }
+            },
         reportPrefs: data.reportPrefs && typeof data.reportPrefs === 'object'
             ? data.reportPrefs
             : {},

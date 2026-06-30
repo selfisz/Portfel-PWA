@@ -150,7 +150,39 @@ const subCategoryIconPaths = {
 
 const MORTGAGE_ICON_PATH = 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z';
 
-function getCategoryIconPath(mainCategory, subCategory = null) {
+function ensureCategoryIconsState() {
+    if (typeof appState === 'undefined' || !appState) return;
+    if (!appState.categoryIcons || typeof appState.categoryIcons !== 'object') {
+        appState.categoryIcons = { expense: { mains: {}, subs: {} }, income: { mains: {}, subs: {} } };
+    }
+    ['expense', 'income'].forEach((type) => {
+        if (!appState.categoryIcons[type] || typeof appState.categoryIcons[type] !== 'object') {
+            appState.categoryIcons[type] = { mains: {}, subs: {} };
+        }
+        if (!appState.categoryIcons[type].mains) appState.categoryIcons[type].mains = {};
+        if (!appState.categoryIcons[type].subs) appState.categoryIcons[type].subs = {};
+    });
+}
+
+function resolveCategoryTxType(mainCategory, txType) {
+    if (txType === 'income' || txType === 'expense') return txType;
+    if (categoryTree?.income?.[mainCategory] && !categoryTree?.expense?.[mainCategory]) return 'income';
+    return formState?.currentType || 'expense';
+}
+
+function getCategoryIconOverride(txType, mainCategory, subCategory = null) {
+    ensureCategoryIconsState();
+    const bucket = appState?.categoryIcons?.[txType];
+    if (!bucket) return null;
+    if (subCategory) {
+        const subKey = `${mainCategory}|${subCategory}`;
+        if (bucket.subs[subKey]) return bucket.subs[subKey];
+    }
+    if (bucket.mains[mainCategory]) return bucket.mains[mainCategory];
+    return null;
+}
+
+function getDefaultCategoryIconPath(mainCategory, subCategory = null) {
     if (subCategory && subCategoryIconPaths[subCategory]) {
         return subCategoryIconPaths[subCategory];
     }
@@ -158,6 +190,51 @@ function getCategoryIconPath(mainCategory, subCategory = null) {
         return MORTGAGE_ICON_PATH;
     }
     return categoryIconPaths[mainCategory] || categoryIconPaths['Inne'];
+}
+
+function getCategoryIconPath(mainCategory, subCategory = null, txType = null) {
+    const type = resolveCategoryTxType(mainCategory, txType);
+    const override = getCategoryIconOverride(type, mainCategory, subCategory);
+    if (override) return override;
+    return getDefaultCategoryIconPath(mainCategory, subCategory);
+}
+
+function getCategoryIconPresets() {
+    if (getCategoryIconPresets._cache) return getCategoryIconPresets._cache;
+    const byPath = new Map();
+    Object.entries(categoryIconPaths).forEach(([label, path]) => {
+        if (!byPath.has(path)) byPath.set(path, label);
+    });
+    Object.entries(subCategoryIconPaths).forEach(([label, path]) => {
+        if (!byPath.has(path)) byPath.set(path, label);
+    });
+    getCategoryIconPresets._cache = [...byPath.entries()].map(([path, label]) => ({ path, label }));
+    return getCategoryIconPresets._cache;
+}
+
+function sanitizeCategoryIcons(raw) {
+    const empty = { expense: { mains: {}, subs: {} }, income: { mains: {}, subs: {} } };
+    if (!raw || typeof raw !== 'object') return empty;
+    const result = { expense: { mains: {}, subs: {} }, income: { mains: {}, subs: {} } };
+    ['expense', 'income'].forEach((type) => {
+        const src = raw[type];
+        if (!src || typeof src !== 'object') return;
+        if (src.mains && typeof src.mains === 'object') {
+            Object.entries(src.mains).forEach(([key, path]) => {
+                if (typeof key === 'string' && key && typeof path === 'string' && path) {
+                    result[type].mains[key] = path;
+                }
+            });
+        }
+        if (src.subs && typeof src.subs === 'object') {
+            Object.entries(src.subs).forEach(([key, path]) => {
+                if (typeof key === 'string' && key.includes('|') && typeof path === 'string' && path) {
+                    result[type].subs[key] = path;
+                }
+            });
+        }
+    });
+    return result;
 }
 
 function categoryColorAlpha(hex, alpha) {
@@ -172,7 +249,7 @@ function categoryColorAlpha(hex, alpha) {
 
 function renderCategoryIcon(mainCategory, variant = 'grid', subCategory = null, txType = 'expense') {
     const color = resolveIconColor(mainCategory, subCategory, txType);
-    const path = getCategoryIconPath(mainCategory, subCategory);
+    const path = getCategoryIconPath(mainCategory, subCategory, txType);
     const wrapClass = variant === 'list' ? 'cat-icon-wrap cat-icon-wrap--list' : variant === 'chip' ? 'cat-icon-wrap cat-icon-wrap--chip' : 'cat-icon-wrap';
     return `<span class="${wrapClass}" style="background:${categoryColorAlpha(color, 0.16)};color:${color}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${path}"/></svg></span>`;
 }

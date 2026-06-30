@@ -1195,6 +1195,108 @@ html[data-theme="dark"] .settings-maintenance strong { color: #fbbf24; }
     margin-top: 4px;
 }
 
+.category-edit-icon-btn {
+    flex-shrink: 0;
+    border: none;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+    border-radius: var(--radius-xs);
+    line-height: 0;
+}
+
+.category-edit-icon-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.category-edit-icon-btn .cat-icon-wrap--chip {
+    pointer-events: none;
+}
+
+.category-icon-picker {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.category-icon-picker.hidden {
+    display: none;
+}
+
+.category-icon-picker-panel {
+    width: min(100%, 360px);
+    max-height: min(80vh, 520px);
+    overflow: auto;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--card);
+    padding: 16px;
+    box-shadow: var(--shadow-lg, 0 8px 32px rgba(0, 0, 0, 0.35));
+}
+
+.category-icon-picker-title {
+    margin: 0 0 12px;
+    font-size: var(--text-base);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.category-icon-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.category-icon-preset-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    background: var(--input-bg);
+    color: var(--text);
+    cursor: pointer;
+    padding: 8px;
+}
+
+.category-icon-preset-btn svg {
+    width: 22px;
+    height: 22px;
+}
+
+.category-icon-preset-btn:hover,
+.category-icon-preset-btn:focus-visible {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.category-icon-picker-reset {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    padding: 10px 12px;
+    background: var(--input-bg);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: var(--text-sm);
+    cursor: pointer;
+}
+
+.category-icon-picker-reset:hover,
+.category-icon-picker-reset:focus-visible {
+    color: var(--text);
+    border-color: var(--accent);
+}
+
 .cloud-restore-panel {
     max-height: min(85vh, 640px);
 }
