@@ -2787,6 +2787,43 @@ body.auth-locked > #settings-overlay {
     flex-shrink: 0;
 }
 
+.auth-email-form {
+    margin-top: 20px;
+    text-align: left;
+}
+
+.auth-email-form.hidden {
+    display: none;
+}
+
+.auth-field {
+    display: block;
+    margin-bottom: 14px;
+}
+
+.auth-field-label {
+    display: block;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.auth-field input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 12px);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.auth-email-submit {
+    width: 100%;
+    margin-top: 6px;
+}
+
 .settings-account-email {
     font-weight: 600;
     margin: 4px 0 20px;
