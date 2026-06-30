@@ -2824,6 +2824,34 @@ body.auth-locked > #settings-overlay {
     margin-top: 6px;
 }
 
+.auth-link-btn {
+    display: block;
+    width: 100%;
+    margin-top: 14px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent, #3b6fd9);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+}
+
+.auth-hint {
+    margin: 14px 0 0;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+    text-align: left;
+}
+
+.auth-info {
+    color: var(--accent, #2e7d32);
+    font-size: 0.875rem;
+    margin: 12px 0 0;
+}
+
 .settings-account-email {
     font-weight: 600;
     margin: 4px 0 20px;

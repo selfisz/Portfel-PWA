@@ -65,6 +65,7 @@ function setAuthUiMode(mode, message) {
     const titleEl = document.getElementById('auth-title');
     const messageEl = document.getElementById('auth-message');
     const errorEl = document.getElementById('auth-error');
+    const infoEl = document.getElementById('auth-info');
     const checkingEl = document.getElementById('auth-checking');
     const signInBtn = document.getElementById('btn-google-signin');
     const emailForm = document.getElementById('auth-email-form');
@@ -102,6 +103,10 @@ function setAuthUiMode(mode, message) {
         const errText = isError ? (message || 'Logowanie nie powiodło się.') : '';
         errorEl.textContent = errText;
         errorEl.classList.toggle('hidden', !errText);
+    }
+    if (infoEl && isError) {
+        infoEl.textContent = '';
+        infoEl.classList.add('hidden');
     }
 }
 
@@ -144,6 +149,81 @@ async function unregisterServiceWorkerForAuth() {
 function maybeRegisterServiceWorker() {
     if (isIosDevice() && !currentAuthUser) return;
     registerServiceWorker();
+}
+
+function getPasswordResetContinueUrl() {
+    const base = typeof getBasePath === 'function' ? getBasePath() : '';
+    if (window.location.origin && window.location.origin !== 'null') {
+        return `${window.location.origin}${base}/index.html`;
+    }
+    return 'https://selfisz.github.io/Portfel-PWA/index.html';
+}
+
+function showAuthInfo(message) {
+    const infoEl = document.getElementById('auth-info');
+    const errorEl = document.getElementById('auth-error');
+    if (errorEl) {
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+    }
+    if (infoEl) {
+        infoEl.textContent = message || '';
+        infoEl.classList.toggle('hidden', !message);
+    }
+}
+
+async function sendPasswordResetLink(fromSettings = false) {
+    const emailInput = document.getElementById('auth-email');
+    const email = normalizeAuthEmail(
+        fromSettings ? getUserAuthEmail(currentAuthUser) : emailInput?.value
+    );
+
+    if (!email) {
+        if (fromSettings && typeof showAppToast === 'function') {
+            showAppToast('Brak adresu e-mail na koncie.', 'error');
+        } else {
+            setAuthUiMode('error', 'Podaj e-mail, na który wysłać link.');
+        }
+        return;
+    }
+    if (!isEmailAllowed(email)) {
+        if (fromSettings && typeof showAppToast === 'function') {
+            showAppToast('Ten adres nie ma uprawnień.', 'error');
+        } else {
+            setAuthUiMode('denied', `Konto ${email} nie ma dostępu.`);
+        }
+        return;
+    }
+
+    const resetBtn = document.getElementById('btn-password-reset');
+    const settingsBtn = document.getElementById('btn-settings-password-reset');
+    const activeBtn = fromSettings ? settingsBtn : resetBtn;
+    if (!fromSettings) setAuthUiMode('checking');
+    if (activeBtn) activeBtn.disabled = true;
+
+    try {
+        await auth.sendPasswordResetEmail(email, {
+            url: getPasswordResetContinueUrl(),
+            handleCodeInApp: false
+        });
+        const msg = `Wysłano link na ${email}. Sprawdź skrzynkę (także spam), ustaw hasło i wróć do logowania.`;
+        if (fromSettings && typeof showAppToast === 'function') {
+            showAppToast(msg, 'success');
+        } else {
+            setAuthUiMode('signin');
+            showAuthInfo(msg);
+        }
+    } catch (err) {
+        console.error('sendPasswordResetLink', err);
+        const errMsg = formatAuthError(err);
+        if (fromSettings && typeof showAppToast === 'function') {
+            showAppToast(errMsg, 'error');
+        } else {
+            setAuthUiMode('error', errMsg);
+        }
+    } finally {
+        if (activeBtn) activeBtn.disabled = false;
+    }
 }
 
 async function signInWithEmailPassword(event) {
@@ -221,6 +301,8 @@ function refreshAccountSettingsUI() {
     const emailEl = document.getElementById('settings-account-email');
     if (!emailEl) return;
     emailEl.textContent = getUserAuthEmail(currentAuthUser) || '—';
+    const resetBtn = document.getElementById('btn-settings-password-reset');
+    if (resetBtn) resetBtn.classList.toggle('hidden', !isIosDevice());
 }
 
 async function handleAuthenticatedUser(user) {
