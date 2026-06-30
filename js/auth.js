@@ -91,6 +91,47 @@ function hideAuthOverlay() {
     document.body.classList.remove('auth-locked');
 }
 
+function isIosDevice() {
+    return /iPad|iPhone|iPod/i.test(navigator.userAgent || '');
+}
+
+function isAuthCallbackUrl() {
+    const href = window.location.href;
+    return href.includes('apiKey=')
+        || href.includes('oobCode=')
+        || href.includes('mode=signIn')
+        || href.includes('code=')
+        || href.includes('__/auth/');
+}
+
+function forceCanonicalIndexUrl() {
+    if (isAuthCallbackUrl()) return;
+    const base = typeof getBasePath === 'function' ? getBasePath() : '';
+    const canonicalPath = base ? `${base}/index.html` : '/index.html';
+    const path = window.location.pathname;
+    if (path === canonicalPath) return;
+    const baseOnly = base || '/';
+    const atBase = path === baseOnly || path === `${baseOnly}/`;
+    if (!atBase && !path.endsWith('/index.html')) return;
+    const next = `${canonicalPath}${window.location.search}${window.location.hash}`;
+    window.history.replaceState(null, '', next);
+}
+
+async function unregisterServiceWorkerForAuth() {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) await reg.unregister();
+    } catch (err) {
+        console.warn('unregisterServiceWorkerForAuth', err);
+    }
+}
+
+function maybeRegisterServiceWorker() {
+    if (isIosDevice() && !currentAuthUser) return;
+    registerServiceWorker();
+}
+
 function shouldUseRedirectSignIn() {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches
         || window.navigator.standalone === true;
@@ -103,6 +144,10 @@ async function signInWithGoogle() {
     provider.setCustomParameters({ prompt: 'select_account' });
     setAuthUiMode('checking');
     try {
+        forceCanonicalIndexUrl();
+        if (isIosDevice()) {
+            await unregisterServiceWorkerForAuth();
+        }
         if (shouldUseRedirectSignIn()) {
             await auth.signInWithRedirect(provider);
             return;
@@ -185,6 +230,7 @@ async function handleAuthenticatedUser(user) {
 
         if (typeof bootstrapApp === 'function') bootstrapApp();
         refreshAccountSettingsUI();
+        if (isIosDevice()) registerServiceWorker();
     } finally {
         authHandlerInFlight = false;
     }
@@ -217,8 +263,13 @@ function migrateLocalStorageToUidKey(uid) {
 }
 
 async function initAuthGate() {
+    forceCanonicalIndexUrl();
     document.body.classList.add('auth-locked');
-    setAuthUiMode('checking');
+    if (isAuthCallbackUrl()) {
+        setAuthUiMode('checking');
+    } else {
+        setAuthUiMode('checking');
+    }
 
     const signInBtn = document.getElementById('btn-google-signin');
     if (signInBtn && !signInBtn.dataset.bound) {
@@ -270,7 +321,7 @@ async function initAuthGate() {
     });
 
     initTheme();
-    registerServiceWorker();
+    maybeRegisterServiceWorker();
 }
 
 if (document.readyState === 'loading') {

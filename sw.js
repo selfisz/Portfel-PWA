@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanse-pwa-v215';
+const CACHE_NAME = 'finanse-pwa-v216';
 
 const ASSETS = [
   './',
@@ -57,6 +57,15 @@ function isAppShellRequest(url) {
     || path.endsWith('manifest.json');
 }
 
+function isAuthNavigation(url) {
+  const search = url.search || '';
+  return search.includes('apiKey=')
+    || search.includes('oobCode=')
+    || search.includes('mode=signIn')
+    || search.includes('code=')
+    || url.pathname.includes('__/auth/');
+}
+
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME)
@@ -77,6 +86,10 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
   const url = new URL(e.request.url);
+
+  // OAuth / Firebase Auth — nigdy nie przechwytuj (szczególnie iOS Safari / PWA).
+  if (e.request.mode === 'navigate' || isAuthNavigation(url)) return;
+
   if (!isAppShellRequest(url)) return;
 
   e.respondWith(
