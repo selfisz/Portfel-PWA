@@ -68,6 +68,9 @@
             <h1 id="view-title">Pulpit</h1>
         </div>
         <div class="header-actions">
+            <button type="button" id="btn-skryba" class="btn-icon btn-icon--skryba hidden" onclick="toggleSkrybaPanel()" aria-label="Skryba — asystent AI" aria-expanded="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h3l3 3 3-3h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+            </button>
             <button type="button" id="btn-notifications" class="btn-icon btn-icon--bell" onclick="toggleNotificationsPanel()" aria-label="Powiadomienia" aria-expanded="false">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6V11a7 7 0 0 0-5-6.71V4a2 2 0 1 0-4 0v.29A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2z"/></svg>
                 <span id="notifications-badge" class="notifications-badge hidden">0</span>
@@ -85,6 +88,17 @@
             <span id="module-split-banner-text">Moduł JS przekroczył próg — rozważ dalszy podział w js/.</span>
         </div>
         <button type="button" onclick="dismissModuleSplitBanner()">OK</button>
+    </div>
+
+    <div id="skryba-overlay" class="skryba-overlay hidden" onclick="if (event.target === this) closeSkrybaPanel()">
+        <div class="skryba-panel settings-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-skryba"></div>
+            <div id="skryba-messages" class="skryba-messages"></div>
+            <div class="skryba-composer">
+                <textarea id="skryba-input" class="skryba-input" rows="2" placeholder="Np. 20 zł zakupy biedronka…" onkeydown="onSkrybaInputKeydown(event)"></textarea>
+                <button type="button" id="btn-skryba-send" class="skryba-send-btn" onclick="sendSkrybaMessage()" aria-label="Wyślij">Wyślij</button>
+            </div>
+        </div>
     </div>
 
     <div id="notifications-overlay" class="notifications-overlay hidden" onclick="if (event.target === this) closeNotificationsPanel()">
@@ -106,6 +120,7 @@
                 <button id="btn-settings-appearance" type="button" class="analysis-subnav-btn active" onclick="setSettingsSection('appearance')">Wygląd</button>
                 <button id="btn-settings-categories" type="button" class="analysis-subnav-btn" onclick="setSettingsSection('categories')">Kategorie</button>
                 <button id="btn-settings-budgets" type="button" class="analysis-subnav-btn" onclick="setSettingsSection('budgets')">Budżety</button>
+                <button id="btn-settings-assistant" type="button" class="analysis-subnav-btn" onclick="setSettingsSection('assistant')">Asystent AI</button>
                 <button id="btn-settings-notifications" type="button" class="analysis-subnav-btn" onclick="setSettingsSection('notifications')">Powiadomienia</button>
                 <button id="btn-settings-backup" type="button" class="analysis-subnav-btn" onclick="setSettingsSection('backup')">Kopia</button>
             </nav>
@@ -164,6 +179,33 @@
                     <p class="settings-hint">Ustaw limit dla kategorii lub podkategorii. Puste pole = brak limitu. Zużycie bieżącego miesiąca widać pod polem.</p>
                     <div id="settings-budget-list" class="budget-editor-list"></div>
                     <button type="button" class="btn-submit category-editor-save settings-budget-save" onclick="saveBudgetEditor()">Zapisz limity</button>
+                </div>
+            </div>
+
+            <div id="settings-section-assistant" class="settings-section-panel hidden">
+                <div class="settings-section">
+                    <div class="section-label">Skryba — asystent AI</div>
+                    <p class="settings-hint">Naturalne polecenia w czacie (Gemini). Klucz API zostaje tylko w tej przeglądarce — nie trafia do chmury Portfela.</p>
+                    <label class="settings-toggle-row">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title">Włącz Skrybę</span>
+                            <span class="settings-nav-row-desc">Ikona w nagłówku obok powiadomień</span>
+                        </span>
+                        <input type="checkbox" id="assistant-enabled-toggle" onchange="onAssistantEnabledToggle()">
+                    </label>
+                    <label class="settings-toggle-row">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title">Potwierdzaj dodanie transakcji</span>
+                            <span class="settings-nav-row-desc">Wyłączone = zapis od razu po rozpoznaniu polecenia</span>
+                        </span>
+                        <input type="checkbox" id="assistant-confirm-tx-toggle" onchange="onAssistantConfirmTxToggle()" checked>
+                    </label>
+                    <div class="form-group settings-api-key-group">
+                        <label for="assistant-api-key">Klucz API Gemini</label>
+                        <input type="password" id="assistant-api-key" class="settings-api-key-input" autocomplete="off" placeholder="AIza…" onblur="onAssistantApiKeyBlur()">
+                        <p class="settings-hint">Utwórz w <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>. Zalecany osobny klucz tylko do Portfela.</p>
+                        <button type="button" class="btn-text-link settings-api-key-save" onclick="saveAssistantApiKey()">Zapisz klucz</button>
+                    </div>
                 </div>
             </div>
 
@@ -1702,6 +1744,7 @@
     <script src="js/investments.js"></script>
     <script src="js/loans.js"></script>
     <script src="js/settings.js"></script>
+    <script src="js/assistant.js"></script>
     <script src="js/notifications.js"></script>
     <script src="js/budget-ui.js"></script>
     <script src="js/budget-alerts.js"></script>

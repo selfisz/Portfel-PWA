@@ -228,7 +228,7 @@ async function refreshBackupInfo() {
 }
 
 const SETTINGS_SECTION_KEY = 'settings_section';
-const SETTINGS_SECTIONS = ['account', 'appearance', 'categories', 'budgets', 'notifications', 'backup'];
+const SETTINGS_SECTIONS = ['account', 'appearance', 'categories', 'budgets', 'assistant', 'notifications', 'backup'];
 let settingsSection = 'appearance';
 
 function setSettingsSection(section) {
@@ -244,6 +244,9 @@ function setSettingsSection(section) {
     if (section === 'backup') {
         syncAutoCloudBackupToggleUI();
         refreshBackupInfo();
+    }
+    if (section === 'assistant' && typeof syncAssistantSettingsUI === 'function') {
+        syncAssistantSettingsUI();
     }
 }
 

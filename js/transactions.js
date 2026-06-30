@@ -249,6 +249,43 @@ function formatTransactionSavedToast(tx, isEdit = false) {
     return `${verb} — ${categoryLabel} · ${sign}${formatPlnAmount(tx.amount)}`;
 }
 
+function commitTransactionData(txData, options = {}) {
+    const normalized = typeof normalizeTransaction === 'function'
+        ? normalizeTransaction(txData)
+        : null;
+    if (!normalized) {
+        return { ok: false, error: 'Nieprawidłowa transakcja.' };
+    }
+    if (!options.skipBudgetConfirm && typeof confirmTransactionBudgetIfNeeded === 'function'
+        && !confirmTransactionBudgetIfNeeded(normalized, null)) {
+        return { ok: false, error: 'cancelled' };
+    }
+
+    appState.transactions.unshift(normalized);
+
+    if (!syncCreditCardOnTransactionSave(normalized, null)) {
+        appState.transactions.shift();
+        return { ok: false, error: 'Nie zapisano — problem z kartą kredytową.' };
+    }
+    if (!syncCashOnTransactionSave(normalized, null)) {
+        syncCreditCardOnTransactionSave({}, normalized);
+        appState.transactions.shift();
+        return { ok: false, error: 'Nie zapisano — brak zmiany salda gotówki.' };
+    }
+    if (!syncAssetOnTransactionSave(normalized, null)) {
+        syncCashOnTransactionSave({}, normalized);
+        syncCreditCardOnTransactionSave({}, normalized);
+        appState.transactions.shift();
+        return { ok: false, error: 'Nie zapisano — problem z powiązanym aktywem.' };
+    }
+
+    addRecentCategory(normalized.type, normalized.mainCategory, normalized.subCategory);
+    appState.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+    saveState();
+    if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
+    return { ok: true, tx: normalized };
+}
+
 function saveTransaction() {
     const amount = parsePlnInput(document.getElementById('tx-amount').value);
     const date = document.getElementById('tx-date').value;
