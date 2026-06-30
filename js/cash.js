@@ -228,6 +228,12 @@ function resolveTransactionAffectsCash(type, paidWithCard, checkboxChecked) {
     return checkboxChecked !== false;
 }
 
+function getCashMovementDateForTransaction(tx) {
+    const today = localIsoDate(new Date());
+    if (tx?.date && tx.date > today) return today;
+    return tx.date || today;
+}
+
 function syncCashOnTransactionSave(tx, previousTx = null) {
     if (previousTx?.cashMovementId) {
         removeCashMovement(previousTx.cashMovementId);
@@ -241,7 +247,9 @@ function syncCashOnTransactionSave(tx, previousTx = null) {
     const delta = tx.type === 'income' ? amount : -amount;
     const movement = registerCashMovement({
         delta,
-        date: tx.date,
+        date: typeof getCashMovementDateForTransaction === 'function'
+            ? getCashMovementDateForTransaction(tx)
+            : tx.date,
         note: tx.note || (tx.type === 'income' ? 'Wpływ' : 'Wydatek'),
         source: 'transaction',
         sourceRef: `${tx.date}|${tx.type}|${tx.mainCategory}|${tx.amount}`

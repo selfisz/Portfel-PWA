@@ -248,6 +248,7 @@ function validateBackupPayload(payload) {
         assetValueHistory: sanitizeAssetValueHistoryList(data.assetValueHistory, report),
         categoryTree: sanitizeCategoryTree(data.categoryTree),
         categoryBudgets: sanitizeNumericRecord(data.categoryBudgets),
+        subCategoryBudgets: sanitizeNumericRecord(data.subCategoryBudgets),
         reportPrefs: sanitizeReportPrefs(data.reportPrefs),
         deletedAssetIds: sanitizeStringArray(data.deletedAssetIds)
     };

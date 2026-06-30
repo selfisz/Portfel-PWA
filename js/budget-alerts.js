@@ -11,31 +11,41 @@ function saveBudgetAlertState(state) {
     localStorage.setItem(NOTIFICATION_ALERT_STATE_KEY, JSON.stringify(state));
 }
 
-function getCategorySpentInMonth(mainCategory, monthKey) {
-    const start = `${monthKey}-01`;
-    const [year, month] = monthKey.split('-').map(Number);
-    const end = localIsoDate(new Date(year, month, 0));
-    return (appState.transactions || [])
-        .filter((t) => t.type === 'expense' && t.mainCategory === mainCategory && t.date >= start && t.date <= end)
-        .reduce((sum, t) => sum + t.amount, 0);
+function getBudgetLimitForPayload(payload = {}) {
+    if (payload.scope === 'sub' && payload.category && payload.subCategory) {
+        return typeof getSubCategoryBudgetLimit === 'function'
+            ? getSubCategoryBudgetLimit(payload.category, payload.subCategory)
+            : 0;
+    }
+    return appState.categoryBudgets?.[payload.category] || 0;
+}
+
+function getBudgetSpentForPayload(payload = {}) {
+    const monthKey = payload.monthKey || getCurrentMonthKey();
+    if (payload.scope === 'sub' && payload.category && payload.subCategory) {
+        return typeof getSubCategorySpentInMonth === 'function'
+            ? getSubCategorySpentInMonth(payload.category, payload.subCategory, monthKey)
+            : 0;
+    }
+    return getCategorySpentInMonth(payload.category, monthKey);
 }
 
 function isNotificationResolved(item) {
     const payload = item.payload || {};
     if (item.type === 'budget_warn' || item.type === 'budget_over') {
         const monthKey = payload.monthKey || getCurrentMonthKey();
-        const limit = appState.categoryBudgets?.[payload.category];
+        const limit = getBudgetLimitForPayload(payload);
         if (!limit || limit <= 0) return true;
-        const spent = getCategorySpentInMonth(payload.category, monthKey);
+        const spent = getBudgetSpentForPayload(payload);
         if (item.type === 'budget_over') return spent < limit;
         return spent < limit * 0.8;
     }
     if (item.type === 'budget_pace') {
         const monthKey = payload.monthKey || getCurrentMonthKey();
         if (monthKey !== getCurrentMonthKey()) return true;
-        const limit = appState.categoryBudgets?.[payload.category];
+        const limit = getBudgetLimitForPayload(payload);
         if (!limit || limit <= 0) return true;
-        const spent = getCategorySpentInMonth(payload.category, monthKey);
+        const spent = getBudgetSpentForPayload(payload);
         if (spent >= limit * 0.8) return true;
         const now = new Date();
         const dayOfMonth = now.getDate();
@@ -113,26 +123,32 @@ function isNotificationResolved(item) {
 
 function evaluateBudgetAlerts() {
     const monthKey = getCurrentMonthKey();
-    const budgets = appState.categoryBudgets || {};
     const alertState = getBudgetAlertState();
     const created = [];
+    const statuses = typeof getAllCategoryBudgetStatuses === 'function'
+        ? getAllCategoryBudgetStatuses(monthKey)
+        : [];
 
-    Object.keys(budgets).forEach((category) => {
-        const limit = budgets[category];
-        if (!limit || limit <= 0) return;
-        const spent = getCategorySpentInMonth(category, monthKey);
-        const pct = (spent / limit) * 100;
-        const stateKey = `${monthKey}|${category}`;
+    statuses.forEach((status) => {
+        const stateKey = `${monthKey}|${status.key}`;
         if (!alertState[stateKey]) alertState[stateKey] = { warned80: false, warned100: false };
+        const pct = status.pct;
 
         if (pct >= 100 && !alertState[stateKey].warned100) {
             alertState[stateKey].warned100 = true;
             const result = upsertNotification({
                 id: `budget-over|${stateKey}`,
                 type: 'budget_over',
-                title: `Limit przekroczony: ${category}`,
-                body: `${formatPlnAmount(spent)} z ${formatPlnAmount(limit)} (${Math.round(pct)}%)`,
-                payload: { category, monthKey, threshold: 100 }
+                title: `Limit przekroczony: ${status.label}`,
+                body: `${formatPlnAmount(status.spent)} z ${formatPlnAmount(status.limit)} (${pct}%)`,
+                payload: {
+                    scope: status.scope,
+                    category: status.category,
+                    subCategory: status.subCategory,
+                    budgetKey: status.key,
+                    monthKey,
+                    threshold: 100
+                }
             });
             if (result?.isNew) created.push(result.item);
         } else if (pct >= 80 && pct < 100 && !alertState[stateKey].warned80) {
@@ -140,9 +156,16 @@ function evaluateBudgetAlerts() {
             const result = upsertNotification({
                 id: `budget-warn|${stateKey}`,
                 type: 'budget_warn',
-                title: `Limit 80%: ${category}`,
-                body: `${formatPlnAmount(spent)} z ${formatPlnAmount(limit)} (${Math.round(pct)}%)`,
-                payload: { category, monthKey, threshold: 80 }
+                title: `Limit 80%: ${status.label}`,
+                body: `${formatPlnAmount(status.spent)} z ${formatPlnAmount(status.limit)} (${pct}%)`,
+                payload: {
+                    scope: status.scope,
+                    category: status.category,
+                    subCategory: status.subCategory,
+                    budgetKey: status.key,
+                    monthKey,
+                    threshold: 80
+                }
             });
             if (result?.isNew) created.push(result.item);
         }

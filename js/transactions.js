@@ -137,6 +137,7 @@ function setTransactionType(type, keepSelection = false) {
     document.getElementById('sub-category-wrapper').style.display = 'none';
     renderMainCategoriesForm();
     updateAddFormAmountStyle();
+    if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();
 }
 
 function updateAddFormAmountStyle() {
@@ -165,6 +166,7 @@ function resetStandardFormAfterSave() {
     clearAddFormError();
     updateAddFormCashHints();
     updateAddFormAmountStyle();
+    if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();
     focusAmountField();
     renderDashboard();
 }
@@ -191,6 +193,7 @@ function renderMainCategoriesForm() {
     renderRecentCategories();
     populateTransactionAssetSelect();
     updateAddFormCashHints();
+    if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();
 }
 
 function selectMainCategoryForm(cat, element) {
@@ -201,6 +204,7 @@ function selectMainCategoryForm(cat, element) {
     formState.selectedSubCategory = '';
     renderSubCategoriesForm(cat);
     renderRecentCategories();
+    if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();
 }
 
 function renderSubCategoriesForm(cat) {
@@ -297,6 +301,9 @@ function saveTransaction() {
     }
 
     const previousTx = editingTxIndex !== null ? { ...appState.transactions[editingTxIndex] } : null;
+    if (typeof confirmTransactionBudgetIfNeeded === 'function' && !confirmTransactionBudgetIfNeeded(txData, previousTx)) {
+        return;
+    }
     const savedEditingIndex = editingTxIndex;
 
     if (editingTxIndex !== null) {

@@ -67,8 +67,20 @@ function getReportsDataFingerprint(ctx) {
     return parts.join(':');
 }
 
+function getReportsUiStateKey() {
+    const parts = [];
+    if (typeof reportsViewType !== 'undefined') parts.push(`vt:${reportsViewType}`);
+    if (typeof reportsRankLevel !== 'undefined') parts.push(`rl:${reportsRankLevel}`);
+    const excluded = typeof appState !== 'undefined' && appState.reportPrefs?.excludedDebtInstallments;
+    if (Array.isArray(excluded) && excluded.length) {
+        parts.push(`dex:${[...excluded].sort().join(',')}`);
+    }
+    return parts.join('|');
+}
+
 function getReportsRenderCacheKey(ctx) {
-    return `${getReportsContextCacheKey(ctx)}|${getReportsDataFingerprint(ctx)}`;
+    const uiKey = getReportsUiStateKey();
+    return `${getReportsContextCacheKey(ctx)}|${getReportsDataFingerprint(ctx)}|${uiKey}`;
 }
 
 function setAnalysisSectionLoading(section, loading) {
@@ -2154,6 +2166,8 @@ function renderOverviewSection(ctx, savingsRate) {
     }
     if (typeof renderReportsStructureChart === 'function') renderReportsStructureChart(ctx);
     if (typeof renderReportsMonthChart === 'function') renderReportsMonthChart(ctx);
+    if (typeof updateReportsForecastVisibility === 'function') updateReportsForecastVisibility(ctx);
+    if (typeof updateReportsBudgetOverviewVisibility === 'function') updateReportsBudgetOverviewVisibility(ctx);
     const { chartPeriod, chartRangeStart, chartRangeEnd } = getChartParamsFromOverviewCtx(ctx);
     renderReportsDailyAvg(chartPeriod, ctx.periodTx, chartRangeStart, chartRangeEnd);
     renderReportsSavingsGoal(savingsRate);
@@ -2320,6 +2334,9 @@ function renderPhase3Reports(ctx, savingsRate) {
     updateReportsDaySummaryVisibility(ctx);
     updateReportsMonthSummaryVisibility(ctx);
     updateReportsForecastVisibility(ctx);
+    if (typeof updateReportsBudgetOverviewVisibility === 'function') {
+        updateReportsBudgetOverviewVisibility(ctx);
+    }
 
     if (ctx.mode !== 'compare') {
         renderAnalysisSectionContent(analysisSection, ctx, savingsRate);

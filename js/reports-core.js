@@ -735,6 +735,9 @@ function renderReportsTopCategories(periodTx) {
         const txs = expanded
             ? getTopCategoryTransactions(entry, periodTx).sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount)
             : [];
+        const budgetBar = typeof renderInlineBudgetBar === 'function' && typeof getTopCategoryBudgetStatus === 'function'
+            ? renderInlineBudgetBar(getTopCategoryBudgetStatus(entry))
+            : '';
         return `<div class="reports-top-group${expanded ? ' reports-top-group--open' : ''}">
             <button type="button" class="reports-top-item" data-top-key="${encodeURIComponent(catKey)}">
                 <span class="reports-top-rank">${index + 1}</span>
@@ -742,6 +745,7 @@ function renderReportsTopCategories(periodTx) {
                 <div class="reports-top-text">
                     <span class="reports-top-name">${escapeHtml(entry.label)}</span>
                     ${meta ? `<span class="reports-top-meta">${escapeHtml(meta)}</span>` : ''}
+                    ${budgetBar}
                 </div>
                 <div class="reports-top-col">
                     <span class="reports-top-amount">${formatPlnAmount(entry.amount)}</span>

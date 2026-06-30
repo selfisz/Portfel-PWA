@@ -114,6 +114,8 @@ beforeAll(() => {
     loadScript('js/credit-cards.js');
     loadScript('js/loans.js');
     loadScript('js/transactions.js');
+    loadScript('js/notifications.js');
+    loadScript('js/budget-ui.js');
     loadScript('js/settings.js');
 
     runInContext(`
@@ -138,6 +140,8 @@ beforeEach(() => {
         assetSnapshots: [],
         assetValueHistory: [],
         categoryBudgets: {},
+        subCategoryBudgets: {},
+        reportPrefs: {},
         creditCardMovements: []
     });
     _setCategoryTree(JSON.parse(JSON.stringify(DEFAULT_CATEGORY_TREE)));
@@ -468,8 +472,8 @@ describe('renderBudgetEditor', () => {
             income: DEFAULT_CATEGORY_TREE.income
         });
         renderBudgetEditor();
-        const html = document.getElementById('budget-editor-list').innerHTML;
-        expect(html).toContain('budget-editor-cat-label');
+        const html = document.getElementById('settings-budget-list').innerHTML;
+        expect(html).toContain('budget-editor-card-title');
         expect(html).toContain('Jedzenie');
         expect(html).toContain('Transport');
     });
@@ -480,9 +484,11 @@ describe('renderBudgetEditor', () => {
 // ===========================================================================
 describe('saveBudgetEditor', () => {
     function setInputs(inputs) {
+        const listEl = document.getElementById('settings-budget-list');
+        listEl.querySelectorAll = () => inputs;
         const prevOverride = querySelectorAllOverride;
         querySelectorAllOverride = (sel) => {
-            if (sel === '#budget-editor-list .budget-editor-input') return inputs;
+            if (sel === '#settings-budget-list .budget-editor-input') return inputs;
             if (prevOverride) return prevOverride(sel);
             return { forEach: () => {} };
         };
@@ -490,8 +496,8 @@ describe('saveBudgetEditor', () => {
 
     it('zapisuje limity budżetowe', () => {
         setInputs([
-            { dataset: { cat: 'Jedzenie' }, value: '800' },
-            { dataset: { cat: 'Transport' }, value: '300' }
+            { dataset: { kind: 'main', cat: 'Jedzenie' }, value: '800' },
+            { dataset: { kind: 'main', cat: 'Transport' }, value: '300' }
         ]);
         saveBudgetEditor();
         const budgets = _getAppState().categoryBudgets;
@@ -501,21 +507,32 @@ describe('saveBudgetEditor', () => {
 
     it('usuwa limit gdy wartość = 0', () => {
         _setAppState({ ..._getAppState(), categoryBudgets: { Jedzenie: 500 } });
-        setInputs([{ dataset: { cat: 'Jedzenie' }, value: '0' }]);
+        setInputs([{ dataset: { kind: 'main', cat: 'Jedzenie' }, value: '0' }]);
         saveBudgetEditor();
         expect(_getAppState().categoryBudgets['Jedzenie']).toBeUndefined();
     });
 
     it('ignoruje ujemne wartości (traktuje jako 0 → usuwa)', () => {
-        setInputs([{ dataset: { cat: 'Transport' }, value: '-50' }]);
+        setInputs([{ dataset: { kind: 'main', cat: 'Transport' }, value: '-50' }]);
         saveBudgetEditor();
         expect(_getAppState().categoryBudgets['Transport']).toBeUndefined();
     });
 
     it('ignoruje puste inputy', () => {
-        setInputs([{ dataset: { cat: 'Jedzenie' }, value: '' }]);
+        setInputs([{ dataset: { kind: 'main', cat: 'Jedzenie' }, value: '' }]);
         saveBudgetEditor();
         expect(_getAppState().categoryBudgets['Jedzenie']).toBeUndefined();
+    });
+
+    it('zapisuje limity podkategorii', () => {
+        setInputs([
+            { dataset: { kind: 'sub', main: 'Jedzenie', sub: 'Sklep' }, value: '400' }
+        ]);
+        saveBudgetEditor();
+        const key = typeof makeSubCategoryBudgetKey === 'function'
+            ? makeSubCategoryBudgetKey('Jedzenie', 'Sklep')
+            : 'Jedzenie\u0001Sklep';
+        expect(_getAppState().subCategoryBudgets[key]).toBe(400);
     });
 
     it('applyAllBudgetSuggestions uzupełnia tylko kategorie ze średnią > 0', () => {
@@ -523,10 +540,12 @@ describe('saveBudgetEditor', () => {
         const m0 = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-10`;
         const prev = new Date(now.getFullYear(), now.getMonth() - 1, 10);
         const m1 = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-10`;
-        const jedzenieInput = { dataset: { cat: 'Jedzenie' }, value: '' };
-        const transportInput = { dataset: { cat: 'Transport' }, value: '' };
+        const jedzenieInput = { dataset: { kind: 'main', cat: 'Jedzenie' }, value: '' };
+        const transportInput = { dataset: { kind: 'main', cat: 'Transport' }, value: '' };
+        const listEl = document.getElementById('settings-budget-list');
+        listEl.querySelectorAll = () => [jedzenieInput, transportInput];
         querySelectorAllOverride = (sel) => {
-            if (sel === '#budget-editor-list .budget-editor-input') return [jedzenieInput, transportInput];
+            if (sel === '#settings-budget-list .budget-editor-input') return [jedzenieInput, transportInput];
             return { forEach: () => {} };
         };
         _setAppState({ ..._getAppState(), transactions: [
@@ -540,9 +559,11 @@ describe('saveBudgetEditor', () => {
 
     it('nie nadpisuje budżetów innych kategorii', () => {
         _setAppState({ ..._getAppState(), categoryBudgets: { Dom: 1000 } });
-        setInputs([{ dataset: { cat: 'Jedzenie' }, value: '500' }]);
+        setInputs([
+            { dataset: { kind: 'main', cat: 'Jedzenie' }, value: '500' },
+            { dataset: { kind: 'main', cat: 'Dom' }, value: '1000' }
+        ]);
         saveBudgetEditor();
-        // Dom powinien zostać
         expect(_getAppState().categoryBudgets['Dom']).toBe(1000);
         expect(_getAppState().categoryBudgets['Jedzenie']).toBe(500);
     });

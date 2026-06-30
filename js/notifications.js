@@ -269,7 +269,15 @@ function navigateFromNotification(item) {
         return;
     }
     if (item.type === 'budget_warn' || item.type === 'budget_over' || item.type === 'budget_pace') {
-        if (typeof openBudgetEditor === 'function') openBudgetEditor();
+        const reportsNav = document.querySelector('.nav-item[onclick*="\'reports\'"]');
+        if (typeof switchView === 'function') switchView('reports', 'Raporty', reportsNav);
+        if (typeof setAnalysisSection === 'function') setAnalysisSection('overview');
+        if (typeof expandReportsBudgetFromNotification === 'function') {
+            expandReportsBudgetFromNotification(item.payload || {});
+        }
+        requestAnimationFrame(() => {
+            document.getElementById('reports-budget-overview-card')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
         return;
     }
     if (item.type === 'recurring_missing') {

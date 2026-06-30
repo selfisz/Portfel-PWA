@@ -1306,6 +1306,33 @@ function renderReportsDebtLoansPortfolio(ctx) {
     renderReportsDebtPortfolio(ctx);
 }
 
+function getDebtInstallmentKey(kind, id) {
+    return `${kind}:${id}`;
+}
+
+function getExcludedDebtInstallmentSet() {
+    const raw = appState.reportPrefs?.excludedDebtInstallments;
+    return new Set(Array.isArray(raw) ? raw : []);
+}
+
+function isDebtInstallmentIncludedInSummary(row) {
+    return !getExcludedDebtInstallmentSet().has(getDebtInstallmentKey(row.kind, row.id));
+}
+
+function toggleDebtInstallmentInSummary(kind, id) {
+    if (!appState.reportPrefs || typeof appState.reportPrefs !== 'object') appState.reportPrefs = {};
+    const key = getDebtInstallmentKey(kind, id);
+    const excluded = Array.isArray(appState.reportPrefs.excludedDebtInstallments)
+        ? [...appState.reportPrefs.excludedDebtInstallments]
+        : [];
+    const idx = excluded.indexOf(key);
+    if (idx >= 0) excluded.splice(idx, 1);
+    else excluded.push(key);
+    appState.reportPrefs.excludedDebtInstallments = excluded;
+    saveState();
+    renderReportsDebtInstallmentList();
+}
+
 function collectDebtInstallmentRows() {
     const rows = [];
     getActiveLoans().forEach((loan) => {
@@ -1367,22 +1394,27 @@ function renderReportsDebtInstallmentList() {
     if (!el) return;
 
     const rows = collectDebtInstallmentRows();
+    const includedRows = rows.filter(isDebtInstallmentIncludedInSummary);
+    const excludedCount = rows.length - includedRows.length;
 
     const summaryEl = document.getElementById('reports-debt-installment-summary');
-    const monthlyTotal = rows.reduce((s, r) => s + r.amount, 0);
-    const loanTotal = rows.filter((r) => !r.estimated).reduce((s, r) => s + r.amount, 0);
-    const cardTotal = rows.filter((r) => r.estimated).reduce((s, r) => s + r.amount, 0);
+    const monthlyTotal = includedRows.reduce((s, r) => s + r.amount, 0);
+    const loanTotal = includedRows.filter((r) => !r.estimated).reduce((s, r) => s + r.amount, 0);
+    const cardTotal = includedRows.filter((r) => r.estimated).reduce((s, r) => s + r.amount, 0);
 
     if (summaryEl) {
         const cardHint = cardTotal > 0
             ? `<span class="debt-installment-summary-detail">kredyty ${formatPlnAmount(loanTotal)} · karty ~${formatPlnAmount(cardTotal)}</span>`
+            : '';
+        const excludeHint = excludedCount > 0
+            ? `<span class="debt-installment-summary-detail">w sumie ${includedRows.length}/${rows.length} pozycji</span>`
             : '';
         summaryEl.innerHTML = `<div class="debt-installment-summary">
             <div class="debt-installment-summary-main">
                 <span class="label">Suma rat / miesiąc</span>
                 <strong class="expense">${formatPlnAmount(monthlyTotal)}</strong>
             </div>
-            ${cardHint}
+            ${cardHint}${excludeHint}
         </div>`;
     }
 
@@ -1397,11 +1429,20 @@ function renderReportsDebtInstallmentList() {
             ? `openLoanDetails('${escapeHtml(row.id)}')`
             : `openCreditCardDetails('${escapeHtml(row.id)}')`;
         const estClass = row.estimated ? ' debt-installment-row--estimated' : '';
-        return `<div class="debt-installment-row${estClass} ${row.kind}-clickable" role="button" tabindex="0"
-            onclick="${openFn}" onkeydown="if (event.key==='Enter') ${openFn}">
-            <span class="debt-installment-name">${escapeHtml(row.name)}${row.estimated ? ' <em>szac.</em>' : ''}</span>
-            <span class="debt-installment-amount">${formatPlnAmount(row.amount)}</span>
-            <span class="debt-installment-date">${escapeHtml(row.dateLabel)}</span>
+        const included = isDebtInstallmentIncludedInSummary(row);
+        const toggleFn = `toggleDebtInstallmentInSummary('${escapeHtml(row.kind)}','${escapeHtml(row.id)}')`;
+        return `<div class="debt-installment-row${estClass}${included ? '' : ' debt-installment-row--excluded'}">
+            <button type="button" class="debt-installment-include-btn${included ? ' active' : ''}"
+                aria-pressed="${included ? 'true' : 'false'}"
+                aria-label="${included ? 'Wyłącz z sumy' : 'Włącz do sumy'}"
+                title="${included ? 'Wyłącz z sumy miesięcznej' : 'Włącz do sumy miesięcznej'}"
+                onclick="event.stopPropagation(); ${toggleFn}">${included ? '✓' : '○'}</button>
+            <div class="debt-installment-row-main ${row.kind}-clickable" role="button" tabindex="0"
+                onclick="${openFn}" onkeydown="if (event.key==='Enter') ${openFn}">
+                <span class="debt-installment-name">${escapeHtml(row.name)}${row.estimated ? ' <em>szac.</em>' : ''}</span>
+                <span class="debt-installment-amount">${formatPlnAmount(row.amount)}</span>
+                <span class="debt-installment-date">${escapeHtml(row.dateLabel)}</span>
+            </div>
         </div>`;
     }).join('');
 }

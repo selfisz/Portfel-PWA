@@ -72,120 +72,142 @@
         <div class="settings-panel">
             <div id="panel-header-settings"></div>
 
-            <div class="settings-section">
-                <div class="section-label">Wygląd</div>
-                <div class="theme-selector" id="theme-selector">
-                    <button type="button" class="theme-option" data-theme="light" onclick="setTheme('light')">Jasny</button>
-                    <button type="button" class="theme-option" data-theme="dark" onclick="setTheme('dark')">Ciemny</button>
-                    <button type="button" class="theme-option" data-theme="auto" onclick="setTheme('auto')">Auto</button>
-                </div>
-            </div>
+            <nav class="analysis-subnav settings-subnav" aria-label="Sekcje ustawień">
+                <button id="btn-settings-appearance" type="button" class="analysis-subnav-btn active" onclick="setSettingsSection('appearance')">Wygląd</button>
+                <button id="btn-settings-categories" type="button" class="analysis-subnav-btn" onclick="setSettingsSection('categories')">Kategorie</button>
+                <button id="btn-settings-budgets" type="button" class="analysis-subnav-btn" onclick="setSettingsSection('budgets')">Budżety</button>
+                <button id="btn-settings-notifications" type="button" class="analysis-subnav-btn" onclick="setSettingsSection('notifications')">Powiadomienia</button>
+                <button id="btn-settings-backup" type="button" class="analysis-subnav-btn" onclick="setSettingsSection('backup')">Kopia</button>
+            </nav>
 
-            <div id="module-split-notice" class="settings-maintenance hidden">
-                <strong>Konserwacja kodu</strong>
-                <p>Największy moduł w <code>js/</code> ma <span id="module-split-lines">—</span> linii (próg: <span id="module-split-threshold">900</span>).</p>
-            </div>
-
-            <div class="settings-section">
-                <div class="section-label">Kategorie</div>
-                <button type="button" class="settings-nav-row" onclick="openCategoryEditor()">
-                    <span class="settings-nav-row-body">
-                        <span class="settings-nav-row-title">Kategorie i podkategorie</span>
-                        <span class="settings-nav-row-desc">Zmień nazwy lub dodaj własne — obowiązuje w całej aplikacji</span>
-                    </span>
-                    <span class="settings-nav-row-chevron" aria-hidden="true">›</span>
-                </button>
-            </div>
-
-            <div class="settings-section">
-                <div class="section-label">Budżety</div>
-                <button type="button" class="settings-nav-row" onclick="openBudgetEditor()">
-                    <span class="settings-nav-row-body">
-                        <span class="settings-nav-row-title">Limity kategorii</span>
-                        <span class="settings-nav-row-desc">Opcjonalne limity miesięczne ze sugestią 6m</span>
-                    </span>
-                    <span class="settings-nav-row-chevron" aria-hidden="true">›</span>
-                </button>
-            </div>
-
-            <div class="settings-section">
-                <div class="section-label">Powiadomienia</div>
-                <label class="settings-toggle-row">
-                    <span class="settings-toggle-row-body">
-                        <span class="settings-nav-row-title">Włącz powiadomienia</span>
-                        <span class="settings-nav-row-desc">Limity, raty, karty, tempo wydatków i insights</span>
-                    </span>
-                    <input type="checkbox" id="notif-pref-enabled" onchange="onNotificationMasterToggle()">
-                </label>
-                <p id="notif-permission-status" class="settings-hint notif-permission-status"></p>
-                <div id="notif-pref-subtoggles" class="notif-pref-subtoggles hidden">
-                    <label class="settings-toggle-row settings-toggle-row--sub">
-                        <span class="settings-nav-row-title">Limity budżetu (80% / 100%)</span>
-                        <input type="checkbox" id="notif-pref-budget">
-                    </label>
-                    <label class="settings-toggle-row settings-toggle-row--sub">
-                        <span class="settings-nav-row-title">Raty kredytów (dzień wcześniej i w terminie)</span>
-                        <input type="checkbox" id="notif-pref-loan">
-                    </label>
-                    <label class="settings-toggle-row settings-toggle-row--sub">
-                        <span class="settings-nav-row-title">Karty (50 dni od transakcji + 1. dzień miesiąca)</span>
-                        <input type="checkbox" id="notif-pref-card">
-                    </label>
-                    <label class="settings-toggle-row settings-toggle-row--sub">
-                        <span class="settings-nav-row-title">Tempo wydatków (prognoza limitu)</span>
-                        <input type="checkbox" id="notif-pref-pace">
-                    </label>
-                    <label class="settings-toggle-row settings-toggle-row--sub">
-                        <span class="settings-nav-row-title">Brakujące stałe opłaty</span>
-                        <input type="checkbox" id="notif-pref-recurring">
-                    </label>
-                    <label class="settings-toggle-row settings-toggle-row--sub">
-                        <span class="settings-nav-row-title">Insights (anomalie, IKZE, cel oszczędności)</span>
-                        <input type="checkbox" id="notif-pref-insight">
-                    </label>
-                </div>
-            </div>
-
-            <div class="settings-section settings-section--backup">
-                <div class="section-label">Kopia zapasowa</div>
-                <p id="storage-usage-info" class="settings-hint storage-usage-info">—</p>
-                <div class="backup-status-grid">
-                    <div class="backup-status-card">
-                        <span class="backup-status-label">Chmura</span>
-                        <span class="backup-status-value" id="backup-cloud-info">Sprawdzanie…</span>
-                    </div>
-                    <div class="backup-status-card">
-                        <span class="backup-status-label">Telefon</span>
-                        <span class="backup-status-value" id="backup-local-info">Brak kopii lokalnej</span>
+            <div id="settings-section-appearance" class="settings-section-panel">
+                <div class="settings-section">
+                    <div class="section-label">Motyw</div>
+                    <div class="theme-selector" id="theme-selector">
+                        <button type="button" class="theme-option" data-theme="light" onclick="setTheme('light')">Jasny</button>
+                        <button type="button" class="theme-option" data-theme="dark" onclick="setTheme('dark')">Ciemny</button>
+                        <button type="button" class="theme-option" data-theme="auto" onclick="setTheme('auto')">Auto</button>
                     </div>
                 </div>
-                <div class="settings-action-group">
-                    <span class="settings-action-group-label">Zapisz kopię</span>
-                    <div class="settings-action-grid">
-                        <button type="button" class="settings-action-btn" id="btn-backup-cloud" onclick="backupToCloud()">
-                            <span class="settings-action-btn-title">Chmura</span>
-                            <span class="settings-action-btn-desc">Dodaj kopię (do 20 wersji)</span>
-                        </button>
-                        <button type="button" class="settings-action-btn" id="btn-backup-phone" onclick="backupToPhone()">
-                            <span class="settings-action-btn-title">Plik</span>
-                            <span class="settings-action-btn-desc">Pobierz JSON</span>
-                        </button>
+
+                <div id="module-split-notice" class="settings-maintenance hidden">
+                    <strong>Konserwacja kodu</strong>
+                    <p>Największy moduł w <code>js/</code> ma <span id="module-split-lines">—</span> linii (próg: <span id="module-split-threshold">900</span>).</p>
+                </div>
+            </div>
+
+            <div id="settings-section-categories" class="settings-section-panel hidden">
+                <div class="settings-section">
+                    <div class="section-label">Kategorie wydatków i wpływów</div>
+                    <p class="settings-hint">Zmień nazwy, dodaj własne pozycje lub usuń nieużywane — obowiązuje w całej aplikacji.</p>
+                    <button type="button" class="settings-nav-row settings-nav-row--standalone" onclick="openCategoryEditor()">
+                        <span class="settings-nav-row-body">
+                            <span class="settings-nav-row-title">Edytuj kategorie i podkategorie</span>
+                            <span class="settings-nav-row-desc">Osobne listy dla wydatków i wpływów</span>
+                        </span>
+                        <span class="settings-nav-row-chevron" aria-hidden="true">›</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="settings-section-budgets" class="settings-section-panel hidden">
+                <div class="settings-section settings-section--budget-editor">
+                    <div class="section-label">Limity miesięczne</div>
+                    <p class="settings-hint">Puste pole = brak limitu. Kliknij kategorię, aby rozwinąć podkategorie. Przycisk „6m” wstawia średnią z ostatnich 6 miesięcy.</p>
+                    <label class="settings-toggle-row settings-toggle-row--compact">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title">Pytaj przed przekroczeniem limitu</span>
+                            <span class="settings-nav-row-desc">Przy zapisie wydatku ≥100% limitu</span>
+                        </span>
+                        <input type="checkbox" id="budget-confirm-over-toggle" onchange="setBudgetConfirmOnOver(this.checked)">
+                    </label>
+                    <div id="settings-budget-list" class="budget-editor-list"></div>
+                    <button type="button" class="btn-submit category-editor-save settings-budget-save" onclick="saveBudgetEditor()">Zapisz limity</button>
+                </div>
+            </div>
+
+            <div id="settings-section-notifications" class="settings-section-panel hidden">
+                <div class="settings-section">
+                    <div class="section-label">Powiadomienia</div>
+                    <label class="settings-toggle-row">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title">Włącz powiadomienia</span>
+                            <span class="settings-nav-row-desc">Limity, raty kredytów, karty, tempo wydatków i insights</span>
+                        </span>
+                        <input type="checkbox" id="notif-pref-enabled" onchange="onNotificationMasterToggle()">
+                    </label>
+                    <p id="notif-permission-status" class="settings-hint notif-permission-status"></p>
+                    <div id="notif-pref-subtoggles" class="notif-pref-subtoggles hidden">
+                        <label class="settings-toggle-row settings-toggle-row--sub">
+                            <span class="settings-nav-row-title">Alerty 80% / 100% limitu</span>
+                            <input type="checkbox" id="notif-pref-budget">
+                        </label>
+                        <label class="settings-toggle-row settings-toggle-row--sub">
+                            <span class="settings-nav-row-title">Raty kredytów (dzień wcześniej i w terminie)</span>
+                            <input type="checkbox" id="notif-pref-loan">
+                        </label>
+                        <label class="settings-toggle-row settings-toggle-row--sub">
+                            <span class="settings-nav-row-title">Karty (50 dni od transakcji + 1. dzień miesiąca)</span>
+                            <input type="checkbox" id="notif-pref-card">
+                        </label>
+                        <label class="settings-toggle-row settings-toggle-row--sub">
+                            <span class="settings-nav-row-title">Tempo wydatków (prognoza limitu)</span>
+                            <input type="checkbox" id="notif-pref-pace">
+                        </label>
+                        <label class="settings-toggle-row settings-toggle-row--sub">
+                            <span class="settings-nav-row-title">Brakujące stałe opłaty</span>
+                            <input type="checkbox" id="notif-pref-recurring">
+                        </label>
+                        <label class="settings-toggle-row settings-toggle-row--sub">
+                            <span class="settings-nav-row-title">Insights (anomalie, IKZE, cel oszczędności)</span>
+                            <input type="checkbox" id="notif-pref-insight">
+                        </label>
                     </div>
                 </div>
-                <div class="settings-action-group">
-                    <span class="settings-action-group-label">Przywróć kopię</span>
-                    <div class="settings-action-grid">
-                        <button type="button" class="settings-action-btn settings-action-btn--restore" id="btn-restore-cloud" onclick="restoreFromCloud()">
-                            <span class="settings-action-btn-title">Z chmury</span>
-                            <span class="settings-action-btn-desc">Wybierz datę kopii</span>
-                        </button>
-                        <button type="button" class="settings-action-btn settings-action-btn--restore" id="btn-restore-file" onclick="restoreFromPhoneFile()">
-                            <span class="settings-action-btn-title">Z pliku</span>
-                            <span class="settings-action-btn-desc">Wybierz JSON</span>
-                        </button>
+            </div>
+
+            <div id="settings-section-backup" class="settings-section-panel hidden">
+                <div class="settings-section settings-section--backup">
+                    <div class="section-label">Kopia zapasowa</div>
+                    <p id="storage-usage-info" class="settings-hint storage-usage-info">—</p>
+                    <div class="backup-status-grid">
+                        <div class="backup-status-card">
+                            <span class="backup-status-label">Chmura</span>
+                            <span class="backup-status-value" id="backup-cloud-info">Sprawdzanie…</span>
+                        </div>
+                        <div class="backup-status-card">
+                            <span class="backup-status-label">Telefon</span>
+                            <span class="backup-status-value" id="backup-local-info">Brak kopii lokalnej</span>
+                        </div>
                     </div>
+                    <div class="settings-action-group">
+                        <span class="settings-action-group-label">Zapisz kopię</span>
+                        <div class="settings-action-grid">
+                            <button type="button" class="settings-action-btn" id="btn-backup-cloud" onclick="backupToCloud()">
+                                <span class="settings-action-btn-title">Chmura</span>
+                                <span class="settings-action-btn-desc">Dodaj kopię (do 20 wersji)</span>
+                            </button>
+                            <button type="button" class="settings-action-btn" id="btn-backup-phone" onclick="backupToPhone()">
+                                <span class="settings-action-btn-title">Plik</span>
+                                <span class="settings-action-btn-desc">Pobierz JSON</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="settings-action-group">
+                        <span class="settings-action-group-label">Przywróć kopię</span>
+                        <div class="settings-action-grid">
+                            <button type="button" class="settings-action-btn settings-action-btn--restore" id="btn-restore-cloud" onclick="restoreFromCloud()">
+                                <span class="settings-action-btn-title">Z chmury</span>
+                                <span class="settings-action-btn-desc">Wybierz datę kopii</span>
+                            </button>
+                            <button type="button" class="settings-action-btn settings-action-btn--restore" id="btn-restore-file" onclick="restoreFromPhoneFile()">
+                                <span class="settings-action-btn-title">Z pliku</span>
+                                <span class="settings-action-btn-desc">Wybierz JSON</span>
+                            </button>
+                        </div>
+                    </div>
+                    <input type="file" id="backup-file-input" accept=".json,application/json" hidden onchange="handleBackupFileSelect(event)">
                 </div>
-                <input type="file" id="backup-file-input" accept=".json,application/json" hidden onchange="handleBackupFileSelect(event)">
             </div>
         </div>
     </div>
@@ -200,16 +222,6 @@
             <div id="category-editor-list" class="category-editor-list"></div>
             <p class="category-editor-hint">Możesz zmieniać nazwy, dodawać własne pozycje albo usuwać niepotrzebne (×). Usunięte kategorie znikają z listy wyboru, ale zostają w historii transakcji.</p>
             <button type="button" class="btn-submit btn-submit--form category-editor-save" onclick="saveCategoryEditor()">Zapisz zmiany</button>
-        </div>
-    </div>
-
-    <div id="budget-editor-overlay" class="settings-overlay category-editor-overlay hidden" onclick="if (event.target === this) closeBudgetEditor()">
-        <div class="settings-panel category-editor-panel">
-            <div id="panel-header-budget-editor"></div>
-            <p class="settings-hint">Puste pole = brak limitu. „6m” przy kategorii lub poniżej wstawia średnią z ostatnich 6 miesięcy.</p>
-            <button type="button" class="btn-outline budget-editor-fill-all" onclick="applyAllBudgetSuggestions()">Uzupełnij ze średniej 6m</button>
-            <div id="budget-editor-list" class="category-editor-list budget-editor-list"></div>
-            <button type="button" class="btn-submit category-editor-save" onclick="saveBudgetEditor()">Zapisz limity</button>
         </div>
     </div>
 
@@ -663,7 +675,7 @@
                     <div id="add-form-standard">
                         <div class="form-group form-group--amount">
                             <label for="tx-amount">Kwota (PLN)</label>
-                            <input type="text" id="tx-amount" inputmode="decimal" placeholder="0,00" autocomplete="off" enterkeyhint="done" oninput="clearAddFormError()">
+                            <input type="text" id="tx-amount" inputmode="decimal" placeholder="0,00" autocomplete="off" enterkeyhint="done" oninput="clearAddFormError(); if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();">
                         </div>
                         <div class="form-group" id="recent-categories-wrapper" style="display:none;">
                             <label>Ostatnio używane</label>
@@ -677,9 +689,10 @@
                             <label>Podkategoria</label>
                             <div id="sub-category-grid" class="grid-selector"></div>
                         </div>
+                        <div id="tx-budget-preview" class="tx-budget-preview hidden" aria-live="polite"></div>
                         <div class="form-group">
                             <label>Data</label>
-                            <input type="date" id="tx-date" onchange="clearAddFormError()">
+                            <input type="date" id="tx-date" onchange="clearAddFormError(); if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();">
                         </div>
                         <div class="form-group">
                             <label>Notatka</label>
@@ -1009,6 +1022,17 @@
                 <div id="reports-forecast-card" class="card dashboard-panel hidden">
                     <h2 class="dashboard-section-title">Prognoza miesiąca</h2>
                     <div id="reports-forecast"></div>
+                </div>
+
+                <div id="reports-budget-overview-card" class="card dashboard-panel hidden">
+                    <div class="chart-card-header">
+                        <h2 class="dashboard-section-title">Budżet miesiąca</h2>
+                        <button type="button" class="btn-text-link" onclick="openBudgetEditor()">Ustaw limity</button>
+                    </div>
+                    <p id="reports-budget-overview-summary" class="reports-hint budget-overview-summary"></p>
+                    <p class="reports-hint">Bieżący miesiąc kalendarzowy — wliczone są też zakupy kartą i zaplanowane wydatki w miesiącu z daty.</p>
+                    <div id="reports-budget-overview-list"></div>
+                    <button type="button" id="reports-budget-overview-toggle" class="btn-text-link hidden" onclick="toggleReportsBudgetOverviewShowAll()"></button>
                 </div>
 
                 <div class="card chart-card dashboard-panel">
@@ -1367,6 +1391,7 @@
 
                 <div id="reports-debts-installments-card" class="card debts-panel-card">
                     <h2 class="dashboard-section-title">Raty i terminy</h2>
+                    <p class="reports-hint">Kliknij ○/✓ przy pozycji, aby włączyć lub wyłączyć ją z sumy rat miesięcznych.</p>
                     <div id="reports-debt-installment-summary"></div>
                     <div id="reports-debt-installment-list"></div>
                 </div>
@@ -1609,6 +1634,7 @@
     <script src="js/loans.js"></script>
     <script src="js/settings.js"></script>
     <script src="js/notifications.js"></script>
+    <script src="js/budget-ui.js"></script>
     <script src="js/budget-alerts.js"></script>
     <script src="js/debt-reminders.js"></script>
     <script src="js/reports-calendar.js"></script>

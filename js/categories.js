@@ -340,6 +340,7 @@ function createSubCategoryItem(sub) {
         item.classList.add('selected');
         formState.selectedSubCategory = sub;
         renderRecentCategories();
+        if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();
     };
     return item;
 }

@@ -580,6 +580,7 @@ function onCreditCardPurchaseToggle() {
     if (selectWrap) selectWrap.classList.toggle('hidden', !checked);
     if (cashWrap) cashWrap.classList.toggle('hidden', !!checked);
     if (checked) populateCreditCardSelectors();
+    if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();
 }
 
 function populateAddCreditCardForm() {

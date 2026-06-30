@@ -20,6 +20,7 @@ beforeAll(() => {
     loadScript('js/format.js');
     loadScript('js/portfolio.js');
     loadScript('js/notifications.js');
+    loadScript('js/budget-ui.js');
     loadScript('js/budget-alerts.js');
     loadScript('js/debt-reminders.js');
 

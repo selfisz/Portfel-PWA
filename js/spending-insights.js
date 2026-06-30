@@ -24,30 +24,32 @@ function evaluateSpendingPaceAlerts() {
     const daysRemaining = daysInMonth - dayOfMonth;
     const todayStr = localIsoDate(now);
     const created = [];
-    const budgets = appState.categoryBudgets || {};
+    const statuses = typeof getAllCategoryBudgetStatuses === 'function'
+        ? getAllCategoryBudgetStatuses(monthKey)
+        : [];
 
-    Object.keys(budgets).forEach((category) => {
-        const limit = budgets[category];
-        if (!limit || limit <= 0) return;
-
-        const spent = getCategorySpentInMonth(category, monthKey);
-        if (spent >= limit * 0.8) return;
-
-        const dailyAvg = spent / dayOfMonth;
+    statuses.forEach((status) => {
+        if (status.pct >= 80) return;
+        const dailyAvg = status.spent / dayOfMonth;
         if (dailyAvg <= 0) return;
-
         const forecast = dailyAvg * daysInMonth;
-        if (forecast <= limit) return;
+        if (forecast <= status.limit) return;
 
-        const daysUntilLimit = Math.ceil((limit - spent) / dailyAvg);
+        const daysUntilLimit = Math.ceil((status.limit - status.spent) / dailyAvg);
         const hitDate = addDaysToIsoDate(todayStr, Math.max(1, daysUntilLimit));
 
         const result = upsertNotification({
-            id: `budget-pace|${monthKey}|${category}`,
+            id: `budget-pace|${monthKey}|${status.key}`,
             type: 'budget_pace',
-            title: `Szybkie tempo: ${category}`,
-            body: `Przy ${formatPlnAmount(dailyAvg)}/dzień limit ${formatPlnAmount(limit)} skończy się ok. ${formatTxDate(hitDate)} — zostało ${daysRemaining} dni miesiąca.`,
-            payload: { category, monthKey }
+            title: `Szybkie tempo: ${status.label}`,
+            body: `Przy ${formatPlnAmount(dailyAvg)}/dzień limit ${formatPlnAmount(status.limit)} skończy się ok. ${formatTxDate(hitDate)} — zostało ${daysRemaining} dni miesiąca.`,
+            payload: {
+                scope: status.scope,
+                category: status.category,
+                subCategory: status.subCategory,
+                budgetKey: status.key,
+                monthKey
+            }
         });
         if (result?.isNew) created.push(result.item);
     });

@@ -11,6 +11,7 @@ let appState = {
     assetSnapshots: [],
     assetValueHistory: [],
     categoryBudgets: {},
+    subCategoryBudgets: {},
     reportPrefs: {},
     deletedAssetIds: []
 };
@@ -78,6 +79,9 @@ function getPersistedState(raw = appState) {
             : JSON.parse(JSON.stringify(DEFAULT_CATEGORY_TREE)),
         categoryBudgets: data.categoryBudgets && typeof data.categoryBudgets === 'object'
             ? data.categoryBudgets
+            : {},
+        subCategoryBudgets: data.subCategoryBudgets && typeof data.subCategoryBudgets === 'object'
+            ? data.subCategoryBudgets
             : {},
         reportPrefs: data.reportPrefs && typeof data.reportPrefs === 'object'
             ? data.reportPrefs

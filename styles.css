@@ -5978,6 +5978,146 @@ html:not([data-theme="dark"]) .grid-item.selected {
     border-color: var(--danger);
 }
 
+.budget-row--compact {
+    padding: 8px 10px;
+}
+
+.budget-row--compact .budget-row-meta {
+    font-size: var(--text-2xs);
+}
+
+.budget-status-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.budget-status-group {
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+}
+
+.budget-status-group.reports-top-group {
+    border-bottom: none;
+}
+
+.budget-status-group.budget-status-group--over {
+    border-color: var(--danger);
+}
+
+.budget-status-group.reports-top-group--open {
+    border-color: var(--accent);
+}
+
+.budget-row--clickable {
+    width: 100%;
+    display: block;
+    position: relative;
+    padding: 10px 34px 10px 12px;
+    border: none;
+    background: transparent;
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+    color: inherit;
+}
+
+.budget-row--clickable.budget-row--over {
+    border-color: transparent;
+}
+
+.budget-row-chevron {
+    position: absolute;
+    right: 10px;
+    top: 14px;
+}
+
+.budget-status-group .reports-top-tx-list {
+    padding: 0 12px 10px 12px;
+    border-top: 1px solid var(--border);
+}
+
+.reports-top-budget {
+    margin-top: 6px;
+}
+
+.reports-top-budget-meta {
+    margin-top: 0;
+}
+
+.reports-top-budget-bar {
+    margin-top: 4px;
+}
+
+.budget-editor-group {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+}
+
+.budget-editor-group:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.budget-editor-row--sub {
+    margin-left: 18px;
+}
+
+.budget-editor-row--sub .budget-editor-cat-label {
+    font-size: var(--text-xs);
+    font-weight: 500;
+}
+
+.budget-editor-usage-hint {
+    margin: 4px 0 0;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+#reports-budget-overview-toggle {
+    margin-top: 8px;
+}
+
+.budget-overview-summary {
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+
+.budget-row-limit {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.budget-bar-fill--warn { background: var(--warning, #f59e0b) !important; }
+.budget-bar-fill--over { background: var(--danger) !important; }
+
+.budget-empty-state { padding: 12px 0; }
+
+.tx-budget-preview {
+    margin: 4px 0 12px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+}
+
+.tx-budget-preview-label {
+    margin: 0 0 8px;
+    font-size: var(--text-xs);
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.tx-budget-preview-hint {
+    margin: 8px 0 0;
+}
+
 .budget-row-head {
     display: flex;
     align-items: center;
@@ -5991,6 +6131,12 @@ html:not([data-theme="dark"]) .grid-item.selected {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.budget-row-amount {
+    font-size: var(--text-sm);
+    font-weight: 700;
     white-space: nowrap;
 }
 
@@ -6236,6 +6382,197 @@ html:not([data-theme="dark"]) .grid-item.selected {
 
 .budget-editor-input {
     width: 80px;
+}
+
+.settings-subnav {
+    margin: 0 0 16px;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.settings-section-panel.hidden {
+    display: none;
+}
+
+.settings-nav-row--standalone {
+    margin-top: 4px;
+}
+
+.settings-toggle-row--compact {
+    margin-bottom: 14px;
+}
+
+.settings-section--budget-editor .settings-budget-save {
+    margin-top: 16px;
+    width: 100%;
+}
+
+.budget-editor-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 8px 0;
+    background: var(--card);
+}
+
+.budget-editor-search {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--input-bg);
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: var(--text-sm);
+    font-family: inherit;
+}
+
+.budget-editor-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: 10px;
+    background: var(--input-bg);
+    overflow: hidden;
+}
+
+.budget-editor-card.hidden {
+    display: none;
+}
+
+.budget-editor-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.budget-editor-card-leading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+}
+
+.budget-editor-card-title {
+    font-weight: 600;
+    font-size: var(--text-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.budget-editor-card-count {
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.budget-editor-card-limit {
+    flex-shrink: 0;
+}
+
+.budget-editor-card-chevron {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    transform: rotate(90deg);
+    transition: transform 0.15s ease;
+    font-size: var(--text-lg);
+    line-height: 1;
+}
+
+.budget-editor-card--expanded .budget-editor-card-chevron {
+    transform: rotate(-90deg);
+}
+
+.budget-editor-card-body {
+    display: none;
+    padding: 0 12px 10px;
+    border-top: 1px solid var(--border);
+}
+
+.budget-editor-card--expanded .budget-editor-card-body {
+    display: block;
+}
+
+.budget-editor-card-usage,
+.budget-editor-card-hint {
+    padding: 0 12px 8px;
+}
+
+.budget-editor-sub-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 10px;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.budget-editor-sub-row:last-child {
+    border-bottom: none;
+}
+
+.budget-editor-sub-label {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.budget-money-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 2px 4px 2px 2px;
+}
+
+.budget-money-field .btn-budget-suggest {
+    flex-shrink: 0;
+}
+
+.budget-money-input {
+    width: 72px;
+    border: none;
+    background: transparent;
+    text-align: right;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text);
+    font-family: inherit;
+    padding: 6px 2px;
+}
+
+.budget-money-input:focus {
+    outline: none;
+}
+
+.budget-money-suffix {
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+    padding-right: 4px;
+}
+
+.budget-editor-sub-row .budget-suggest-hint {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: var(--text-2xs);
 }
 
 .analysis-export-links {
@@ -6889,13 +7226,53 @@ button.reports-debt-split-item strong {
 }
 
 .debt-installment-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: var(--text-sm);
+}
+
+.debt-installment-include-btn {
+    flex-shrink: 0;
+    width: 36px;
+    min-height: 44px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--input-bg);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    align-self: center;
+}
+
+.debt-installment-include-btn.active {
+    background: color-mix(in srgb, var(--success) 18%, var(--input-bg));
+    border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+    color: var(--success);
+}
+
+.debt-installment-row-main {
+    flex: 1;
+    min-width: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 8px 12px;
     align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border);
-    font-size: var(--text-sm);
+    padding: 4px 0;
+    border-radius: var(--radius-sm);
+}
+
+.debt-installment-row--excluded {
+    opacity: 0.58;
+}
+
+.debt-installment-row--excluded .debt-installment-amount {
+    text-decoration: line-through;
+    color: var(--text-muted);
 }
 
 .debt-installment-row:last-child {
@@ -6954,7 +7331,7 @@ button.reports-debt-split-item strong {
 }
 
 @media (max-width: 480px) {
-    .debt-installment-row {
+    .debt-installment-row-main {
         grid-template-columns: minmax(0, 1fr) auto;
     }
 
