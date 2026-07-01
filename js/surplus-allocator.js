@@ -88,8 +88,14 @@ function buildIkzeScenarioDetail(used, limit, room, alloc, year) {
     return lines.join(' ');
 }
 
-function buildMortgageOverpaymentScenario(amount) {
-    const loan = pickMortgageLoan();
+function getInterestBearingLoans() {
+    if (typeof getActiveLoans !== 'function') return [];
+    return getActiveLoans()
+        .filter((loan) => !loan.archived && (loan.currentCapitalLeft || 0) > 0 && (loan.interestRate || 0) > 0)
+        .sort((a, b) => (b.interestRate || 0) - (a.interestRate || 0));
+}
+
+function buildLoanOverpaymentScenario(amount, loan) {
     if (!loan || typeof calculateOverpaymentScenarios !== 'function') return null;
 
     const safeAmount = Math.max(0, Number(amount) || 0);
@@ -97,7 +103,9 @@ function buildMortgageOverpaymentScenario(amount) {
     const sim = calculateOverpaymentScenarios(loan, { lumpSum: alloc });
     if (!sim) return null;
 
-    const loanName = loan.name || loan.subCategory || 'Kredyt hipoteczny';
+    const loanName = typeof getLoanDisplayName === 'function'
+        ? getLoanDisplayName(loan)
+        : (loan.name || loan.subCategory || 'Kredyt');
     const payoffLabel = (dateStr) => (dateStr ? formatTxDate(dateStr) : '—');
     const shortenDelta = sim.savedMonthsShorten > 0 && typeof formatMonthsDuration === 'function'
         ? ` (−${formatMonthsDuration(sim.savedMonthsShorten)})`
@@ -111,10 +119,13 @@ function buildMortgageOverpaymentScenario(amount) {
     const lowerInterestDelta = sim.savedInterestLower > 0
         ? ` (−${formatPlnAmount(sim.savedInterestLower)})`
         : '';
+    const rateLabel = loan.interestRate
+        ? `${loan.interestRate.toLocaleString('pl-PL', { maximumFractionDigits: 2 })}%`
+        : '—';
 
     return {
-        id: 'loan',
-        title: `Nadpłata hipoteczna: ${loanName}`,
+        id: `loan-${loan.id}`,
+        title: `Nadpłata: ${loanName} (${rateLabel})`,
         amount: alloc,
         headline: alloc > 0 ? formatPlnAmount(alloc) : '—',
         detail: alloc > 0
@@ -134,6 +145,12 @@ function buildMortgageOverpaymentScenario(amount) {
         </div>
         <p class="reports-hint surplus-overpay-meta">Kapitał ${formatPlnAmount(sim.params.balance)} · rata ${formatPlnAmount(sim.params.payment)} · stopa ${sim.params.annualRate ? `${sim.params.annualRate}%` : '—'}</p>` : ''
     };
+}
+
+function buildMortgageOverpaymentScenario(amount) {
+    const loan = typeof pickMortgageLoan === 'function' ? pickMortgageLoan() : null;
+    if (!loan) return null;
+    return buildLoanOverpaymentScenario(amount, loan);
 }
 
 function buildSurplusScenarios(amount, ctx) {
@@ -157,8 +174,10 @@ function buildSurplusScenarios(amount, ctx) {
         });
     }
 
-    const mortgage = buildMortgageOverpaymentScenario(safeAmount);
-    if (mortgage) scenarios.push(mortgage);
+    getInterestBearingLoans().forEach((loan) => {
+        const scenario = buildLoanOverpaymentScenario(safeAmount, loan);
+        if (scenario) scenarios.push(scenario);
+    });
 
     const avgExpense = getAverageMonthlyExpenses();
     const cash = getOperationalCashBalance();
@@ -215,7 +234,7 @@ function renderSurplusAllocator(ctx) {
             </div>`
             : '';
         const overpayBlock = s.overpayHtml || '';
-        return `<div class="surplus-scenario surplus-scenario--${s.id}">
+        return `<div class="surplus-scenario surplus-scenario--${String(s.id).startsWith('loan') ? 'loan' : s.id}">
             <div class="surplus-scenario-head">
                 <span class="surplus-scenario-title">${escapeHtml(s.title)}</span>
                 <strong class="surplus-scenario-amount">${escapeHtml(s.headline)}</strong>

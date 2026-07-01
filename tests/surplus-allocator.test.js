@@ -73,7 +73,7 @@ describe('surplus-allocator', () => {
         expect(ikze.amount).toBe(1000);
         expect(ikze.taxRefund).toBe(320);
         expect(ikze.detail).toContain('32%');
-        const loan = scenarios.find((s) => s.id === 'loan');
+        const loan = scenarios.find((s) => String(s.id).startsWith('loan-'));
         expect(loan).toBeTruthy();
         expect(loan.title).toContain('hipoteczn');
         expect(loan.overpayHtml).toContain('Skróć okres');
@@ -81,11 +81,65 @@ describe('surplus-allocator', () => {
         expect(scenarios.some((s) => s.id === 'cushion')).toBe(true);
     });
 
-    it('ukrywa nadpłatę hipoteczną bez kredytu hipotecznego', () => {
-        globalThis.isMortgageLoan = () => false;
+    it('pokazuje nadpłatę dla każdego kredytu z oprocentowaniem', () => {
+        globalThis.getActiveLoans = () => ([
+            {
+                id: 'loan-1',
+                name: 'Kredyt hipoteczny',
+                subCategory: 'Kredyt hipoteczny',
+                interestRate: 6.5,
+                currentCapitalLeft: 300000,
+                nextInstallmentAmount: 2500,
+                archived: false,
+                details: { remainingInstallments: 240 }
+            },
+            {
+                id: 'loan-2',
+                name: 'Alior',
+                subCategory: 'Raty',
+                interestRate: 9.2,
+                currentCapitalLeft: 20000,
+                nextInstallmentAmount: 800,
+                archived: false
+            }
+        ]);
+        globalThis.getLoanDisplayName = (loan) => loan.name;
         const scenarios = buildSurplusScenarios(1000, { periodTx: [], mode: 'month', period: '2026-06' });
-        expect(scenarios.some((s) => s.id === 'loan')).toBe(false);
-        globalThis.isMortgageLoan = () => true;
+        const loanScenarios = scenarios.filter((s) => String(s.id).startsWith('loan-'));
+        expect(loanScenarios).toHaveLength(2);
+        expect(loanScenarios[0].title).toContain('Alior');
+        globalThis.getActiveLoans = () => [{
+            id: 'loan-1',
+            name: 'Kredyt hipoteczny',
+            subCategory: 'Kredyt hipoteczny',
+            interestRate: 6.5,
+            currentCapitalLeft: 300000,
+            nextInstallmentAmount: 2500,
+            archived: false,
+            details: { remainingInstallments: 240 }
+        }];
+    });
+
+    it('ukrywa nadpłatę bez kredytów z oprocentowaniem', () => {
+        globalThis.getActiveLoans = () => [{
+            id: 'loan-1',
+            name: 'Kredyt 0%',
+            interestRate: 0,
+            currentCapitalLeft: 10000,
+            archived: false
+        }];
+        const scenarios = buildSurplusScenarios(1000, { periodTx: [], mode: 'month', period: '2026-06' });
+        expect(scenarios.some((s) => String(s.id).startsWith('loan-'))).toBe(false);
+        globalThis.getActiveLoans = () => [{
+            id: 'loan-1',
+            name: 'Kredyt hipoteczny',
+            subCategory: 'Kredyt hipoteczny',
+            interestRate: 6.5,
+            currentCapitalLeft: 300000,
+            nextInstallmentAmount: 2500,
+            archived: false,
+            details: { remainingInstallments: 240 }
+        }];
     });
 
     it('IKZE przy zerowej kwocie nie pokazuje wykorzystanego limitu', () => {

@@ -49,6 +49,58 @@ function sumCardRepaymentsInRange(start, end) {
         .reduce((s, m) => s + m.amount, 0);
 }
 
+function sumLoanPaymentsForLoanInRange(loan, start, end) {
+    if (!loan) return 0;
+    return getTransactionsInRange(start, end)
+        .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
+        .reduce((s, t) => s + t.amount, 0);
+}
+
+function sumCardRepaymentsForCardInRange(cardId, start, end) {
+    return getCreditCardMovementsInRange(start, end)
+        .filter((m) => m.cardId === cardId && m.type === 'repayment')
+        .reduce((s, m) => s + m.amount, 0);
+}
+
+function sumScheduledDebtPaymentsInRange(startDate, endDate) {
+    if (typeof getScheduledDebtPaymentsOnDate !== 'function' || !startDate || !endDate) return 0;
+    const start = new Date(`${startDate}T12:00:00`);
+    const end = new Date(`${endDate}T12:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return 0;
+
+    let total = 0;
+    const seen = new Set();
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = localIsoDate(d);
+        getScheduledDebtPaymentsOnDate(dateStr).forEach((payment) => {
+            const key = `${payment.type}:${payment.id}:${dateStr}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            total += payment.amount;
+        });
+    }
+    return Math.round(total * 100) / 100;
+}
+
+function sumDebtInstallmentPaymentsInRange(startDate, endDate) {
+    const loanPaid = getActiveLoans().reduce(
+        (sum, loan) => sum + sumLoanPaymentsForLoanInRange(loan, startDate, endDate),
+        0
+    );
+    const cardPaid = sumCardRepaymentsInRange(startDate, endDate);
+    return Math.round((loanPaid + cardPaid) * 100) / 100;
+}
+
+function getDebtInstallmentRemainingSummary(startDate, endDate) {
+    const planned = sumScheduledDebtPaymentsInRange(startDate, endDate);
+    const paid = sumDebtInstallmentPaymentsInRange(startDate, endDate);
+    return {
+        planned,
+        paid,
+        remaining: Math.max(0, Math.round((planned - paid) * 100) / 100)
+    };
+}
+
 function getDebtPaymentsInPeriod(ctx) {
     const loanPayments = ctx.periodTx
         .filter((t) => t.type === 'expense' && isLoanOrDebtPayment(t))
@@ -1333,15 +1385,46 @@ function toggleDebtInstallmentInSummary(kind, id) {
     renderReportsDebtInstallmentList();
 }
 
-function collectDebtInstallmentRows() {
+function collectDebtInstallmentRows(bounds = null) {
+    const { startDate, endDate } = bounds?.startDate && bounds?.endDate
+        ? bounds
+        : (typeof getMonthDateBounds === 'function' ? getMonthDateBounds() : { startDate: '', endDate: '' });
     const rows = [];
-    getActiveLoans().forEach((loan) => {
-        if (!(loan.nextInstallmentAmount > 0 && loan.currentCapitalLeft > 0)) return;
-        const due = loan.nextInstallmentDue || '';
+    const loanScheduled = new Map();
+    const loanDueDates = new Map();
+
+    if (typeof getScheduledDebtPaymentsOnDate === 'function' && startDate && endDate) {
+        const start = new Date(`${startDate}T12:00:00`);
+        const end = new Date(`${endDate}T12:00:00`);
+        const seen = new Set();
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dateStr = localIsoDate(d);
+            getScheduledDebtPaymentsOnDate(dateStr).forEach((payment) => {
+                if (payment.type !== 'loan') return;
+                const key = `${payment.id}|${dateStr}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+                loanScheduled.set(payment.id, (loanScheduled.get(payment.id) || 0) + payment.amount);
+                if (!loanDueDates.has(payment.id) || dateStr < loanDueDates.get(payment.id)) {
+                    loanDueDates.set(payment.id, dateStr);
+                }
+            });
+        }
+    }
+
+    loanScheduled.forEach((scheduledTotal, loanId) => {
+        const loan = getLoanById(loanId);
+        if (!loan) return;
+        const paid = sumLoanPaymentsForLoanInRange(loan, startDate, endDate);
+        const remaining = Math.max(0, Math.round((scheduledTotal - paid) * 100) / 100);
+        if (remaining <= 0) return;
+        const due = loanDueDates.get(loanId) || loan.nextInstallmentDue || '';
         rows.push({
             sortKey: due || '9999-99-99',
             name: getLoanDisplayName(loan),
-            amount: loan.nextInstallmentAmount,
+            amount: remaining,
+            scheduledAmount: scheduledTotal,
+            paidAmount: paid,
             dateLabel: due ? formatTxDate(due) : '—',
             estimated: false,
             kind: 'loan',
@@ -1353,10 +1436,16 @@ function collectDebtInstallmentRows() {
         if (!(card.currentBalance > 0)) return;
         const hint = typeof getCardRepaymentHint === 'function' ? getCardRepaymentHint(card) : null;
         if (!hint) return;
+        const scheduled = Math.min(hint.amount, card.currentBalance);
+        const paid = sumCardRepaymentsForCardInRange(card.id, startDate, endDate);
+        const remaining = Math.max(0, Math.round((scheduled - paid) * 100) / 100);
+        if (remaining <= 0) return;
         rows.push({
             sortKey: `9998-${String(hint.day).padStart(2, '0')}`,
             name: card.name,
-            amount: hint.amount,
+            amount: remaining,
+            scheduledAmount: scheduled,
+            paidAmount: paid,
             dateLabel: `~${hint.day}. dnia miesiąca`,
             estimated: true,
             kind: 'card',
@@ -1445,14 +1534,25 @@ function renderReportsDebtInstallmentList() {
     const monthlyTotal = includedRows.reduce((s, r) => s + r.amount, 0);
     const loanTotal = includedRows.filter((r) => !r.estimated).reduce((s, r) => s + r.amount, 0);
     const cardTotal = includedRows.filter((r) => r.estimated).reduce((s, r) => s + r.amount, 0);
+    const monthBounds = typeof getMonthDateBounds === 'function' ? getMonthDateBounds() : null;
+    const monthSummary = monthBounds
+        ? getDebtInstallmentRemainingSummary(monthBounds.startDate, monthBounds.endDate)
+        : null;
 
     if (summaryEl) {
         const details = [];
-        if (cardTotal > 0) details.push(`kredyty ${formatPlnAmount(loanTotal)} · karty ~${formatPlnAmount(cardTotal)}`);
+        if (loanTotal > 0 || cardTotal > 0) {
+            details.push(`pozostało ${formatPlnAmount(monthlyTotal)}`);
+            if (loanTotal > 0) details.push(`kredyty ${formatPlnAmount(loanTotal)}`);
+            if (cardTotal > 0) details.push(`karty ~${formatPlnAmount(cardTotal)}`);
+        }
+        if (monthSummary && monthSummary.paid > 0) {
+            details.push(`zapłacono ${formatPlnAmount(monthSummary.paid)}`);
+        }
         if (excludedCount > 0) details.push(`${includedRows.length}/${rows.length} w sumie`);
         summaryEl.innerHTML = `<div class="debt-installment-total">
-            <span class="label">Suma rat / miesiąc</span>
-            <strong class="expense">${formatPlnAmount(monthlyTotal)}</strong>
+            <span class="label">Pozostało do spłaty w tym miesiącu</span>
+            <strong class="expense">${formatPlnAmount(monthSummary?.remaining ?? monthlyTotal)}</strong>
         </div>${details.length ? `<p class="debt-installment-total-meta">${details.join(' · ')}</p>` : ''}`;
     }
 
@@ -1470,11 +1570,14 @@ function renderReportsDebtInstallmentList() {
             : `openCreditCardDetails('${escapeHtml(row.id)}')`;
         const estClass = row.estimated ? ' debt-installment-row--estimated' : '';
         const included = isDebtInstallmentIncludedInSummary(row);
+        const paidHint = row.paidAmount > 0
+            ? ` · zapłacono ${formatPlnAmount(row.paidAmount)}`
+            : '';
         return `<div class="debt-installment-row${estClass}${included ? '' : ' debt-installment-row--excluded'} ${row.kind}-clickable" role="button" tabindex="0"
             onclick="${openFn}" onkeydown="if (event.key==='Enter') ${openFn}">
             <span class="debt-installment-name">${escapeHtml(row.name)}${row.estimated ? ' <em>szac.</em>' : ''}</span>
             <span class="debt-installment-amount">${formatPlnAmount(row.amount)}</span>
-            <span class="debt-installment-date">${escapeHtml(row.dateLabel)}</span>
+            <span class="debt-installment-date">${escapeHtml(row.dateLabel)}${paidHint}</span>
         </div>`;
     }).join('');
 }

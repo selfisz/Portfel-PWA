@@ -944,6 +944,7 @@ function formatDashboardInstallmentsTitle() {
 function renderUpcomingLoanInstallments() {
     const section = document.getElementById('dashboard-upcoming-loans');
     const list = document.getElementById('dashboard-upcoming-loans-list');
+    const summaryEl = document.getElementById('dashboard-upcoming-loans-summary');
     const titleEl = document.getElementById('dashboard-upcoming-loans-title');
     if (!section || !list) return;
 
@@ -957,6 +958,27 @@ function renderUpcomingLoanInstallments() {
 
     const { startDate, endDate } = getDashboardDates();
     const installments = getUpcomingLoanInstallments({ startDate, endDate });
+    const installmentSummary = typeof getDebtInstallmentRemainingSummary === 'function'
+        ? getDebtInstallmentRemainingSummary(startDate, endDate)
+        : null;
+
+    if (summaryEl && installmentSummary) {
+        summaryEl.classList.remove('hidden');
+        const paidLine = installmentSummary.paid > 0
+            ? ` · zapłacono ${formatPlnAmount(installmentSummary.paid)}`
+            : '';
+        const plannedLine = installmentSummary.planned > 0
+            ? `zaplanowano ${formatPlnAmount(installmentSummary.planned)}${paidLine}`
+            : '';
+        summaryEl.innerHTML = `<div class="dashboard-installments-summary-grid">
+            <span class="label">Pozostało do spłaty w tym miesiącu</span>
+            <strong class="expense">${formatPlnAmount(installmentSummary.remaining)}</strong>
+        </div>${plannedLine ? `<p class="dashboard-installments-summary-meta">${plannedLine}</p>` : ''}`;
+    } else if (summaryEl) {
+        summaryEl.classList.add('hidden');
+        summaryEl.innerHTML = '';
+    }
+
     const emptyLabel = isDashboardForecastPeriod()
         ? 'Brak zaplanowanych rat w następnym miesiącu.'
         : 'W tym okresie wszystko spłacone.';
@@ -965,14 +987,25 @@ function renderUpcomingLoanInstallments() {
         return;
     }
 
+    const paidByLoan = new Map();
+    if (typeof sumLoanPaymentsForLoanInRange === 'function') {
+        installments.forEach((loan) => {
+            if (!paidByLoan.has(loan.id)) {
+                paidByLoan.set(loan.id, sumLoanPaymentsForLoanInRange(loan, startDate, endDate));
+            }
+        });
+    }
+
     list.innerHTML = installments.map((loan) => {
         const days = daysUntilDate(loan.nextInstallmentDue);
         const overdue = days !== null && days < 0;
         const dueLabel = formatDueLabel(days);
+        const paid = paidByLoan.get(loan.id) || 0;
+        const paidNote = paid > 0 ? ` · zapłacono ${formatPlnAmount(paid)}` : '';
         return `<div class="dashboard-action-row${overdue ? ' dashboard-action-row--overdue' : ''}">
             <div class="dashboard-action-info">
                 <strong class="dashboard-action-name">${escapeHtml(getLoanDisplayName(loan))}</strong>
-                <span class="dashboard-action-meta">${formatPlnAmount(loan.nextInstallmentAmount)} · ${formatTxDate(loan.nextInstallmentDue)}${dueLabel ? ` · ${dueLabel}` : ''}</span>
+                <span class="dashboard-action-meta">${formatPlnAmount(loan.nextInstallmentAmount)} · ${formatTxDate(loan.nextInstallmentDue)}${dueLabel ? ` · ${dueLabel}` : ''}${paidNote}</span>
             </div>
             <button type="button" class="dashboard-quick-action-btn" onclick="payLoanInstallment('${escapeHtml(loan.id)}')">Zapłać</button>
         </div>`;

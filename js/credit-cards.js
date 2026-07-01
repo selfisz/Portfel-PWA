@@ -206,7 +206,13 @@ function registerCreditCardMovement(cardId, type, amount, date, note) {
         if (!cashMovement) return null;
     }
 
-    adjustCreditCardBalance(cardId, delta);
+    const updatedCard = adjustCreditCardBalance(cardId, delta);
+    if (!updatedCard) {
+        if (cashMovement?.id && typeof removeCashMovement === 'function') {
+            removeCashMovement(cashMovement.id);
+        }
+        return null;
+    }
     if (!Array.isArray(appState.creditCardMovements)) appState.creditCardMovements = [];
     appState.creditCardMovements.unshift(movement);
 
@@ -628,7 +634,8 @@ function saveCreditCardMovementFromAdd() {
     document.getElementById('add-credit-card-note').value = '';
     renderCreditCardsSection();
     renderDashboardCreditCards();
-    switchView('dashboard', 'Pulpit', document.querySelectorAll('.nav-item')[0]);
+    renderLoans();
+    refreshCurrentView();
 }
 
 function renderDashboardCreditCards() {
