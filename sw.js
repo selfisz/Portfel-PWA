@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanse-pwa-v236';
+const CACHE_NAME = 'finanse-pwa-v237';
 
 const ASSETS = [
   './',

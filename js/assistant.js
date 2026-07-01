@@ -274,16 +274,31 @@ function scrollSkrybaToBottom() {
     if (list) list.scrollTop = list.scrollHeight;
 }
 
+function syncSkrybaViewport() {
+    const overlay = document.getElementById('skryba-overlay');
+    if (!overlay || overlay.classList.contains('hidden')) return;
+    const vv = window.visualViewport;
+    if (vv) {
+        overlay.style.height = `${vv.height}px`;
+        overlay.style.top = `${vv.offsetTop}px`;
+    }
+    scrollSkrybaToBottom();
+}
+
+function clearSkrybaViewportStyles() {
+    const overlay = document.getElementById('skryba-overlay');
+    if (!overlay) return;
+    overlay.style.height = '';
+    overlay.style.top = '';
+}
+
 function bindSkrybaViewport() {
     if (skrybaViewportBound || !window.visualViewport) return;
     skrybaViewportBound = true;
-    const update = () => {
-        const overlay = document.getElementById('skryba-overlay');
-        if (!overlay || overlay.classList.contains('hidden')) return;
-        scrollSkrybaToBottom();
-    };
+    const update = () => syncSkrybaViewport();
     window.visualViewport.addEventListener('resize', update);
     window.visualViewport.addEventListener('scroll', update);
+    window.addEventListener('orientationchange', update);
 }
 
 function toggleSkrybaPanel() {
@@ -311,11 +326,16 @@ function openSkrybaPanel() {
     skrybaShowChatView();
     skrybaLoadActiveThreadIntoUi();
     bindSkrybaViewport();
-    window.setTimeout(() => document.getElementById('skryba-input')?.focus(), 80);
+    syncSkrybaViewport();
+    window.setTimeout(() => {
+        document.getElementById('skryba-input')?.focus();
+        syncSkrybaViewport();
+    }, 80);
 }
 
 function closeSkrybaPanel() {
     skrybaPersistActiveThread();
+    clearSkrybaViewportStyles();
     document.getElementById('skryba-overlay')?.classList.add('hidden');
     document.body.classList.remove('skryba-open');
     const btn = document.getElementById('btn-skryba');
