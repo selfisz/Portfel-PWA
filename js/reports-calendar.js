@@ -134,7 +134,7 @@ function getScheduledDebtPaymentsOnDate(dateStr) {
             type: 'card',
             id: card.id,
             name: card.name,
-            amount: hint.amount,
+            amount: Math.min(hint.amount, card.currentBalance),
             estimated: true
         });
     });

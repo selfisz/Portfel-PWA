@@ -46,6 +46,7 @@ beforeAll(() => {
   globalThis.getLoanById = () => null;
   globalThis.getCreditCardDebtTotal = () => 0;
   globalThis.getCreditCardAvailable = (c) => (c.limit || 0) - (c.currentBalance || 0);
+  globalThis.getCreditCardById = (id) => (globalThis.appState?.creditCards || []).find((c) => c.id === id) || null;
   globalThis.isMortgageLoan = () => false;
   globalThis.openLoanDetails = () => {};
   globalThis.openCreditCardDetails = () => {};
@@ -489,5 +490,40 @@ describe('addMonthsToToday', () => {
     const result = addMonthsToToday(12);
     const expectedYear = new Date().getFullYear() + 1;
     expect(result.startsWith(String(expectedYear))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getRecentCardRepaymentAverage
+// ---------------------------------------------------------------------------
+describe('getRecentCardRepaymentAverage', () => {
+  function monthDate(offsetMonths, day = 15) {
+    const d = new Date();
+    d.setMonth(d.getMonth() + offsetMonths);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  it('ignoruje jednorazową dużą spłatę przy szacowaniu raty miesięcznej', () => {
+    _setAppState({
+      ..._getAppState(),
+      creditCards: [{ id: 'c1', name: 'mBank', limit: 20000, currentBalance: 3000 }],
+      creditCardMovements: [
+        { id: 'm1', cardId: 'c1', type: 'repayment', amount: 500, date: monthDate(-2) },
+        { id: 'm2', cardId: 'c1', type: 'repayment', amount: 500, date: monthDate(-1) },
+        { id: 'm3', cardId: 'c1', type: 'repayment', amount: 10000, date: monthDate(0) }
+      ]
+    });
+    expect(getRecentCardRepaymentAverage('c1')).toBe(500);
+  });
+
+  it('nie traktuje pojedynczej spłaty większej niż saldo jako raty miesięcznej', () => {
+    _setAppState({
+      ..._getAppState(),
+      creditCards: [{ id: 'c1', name: 'mBank', limit: 20000, currentBalance: 2000 }],
+      creditCardMovements: [
+        { id: 'm1', cardId: 'c1', type: 'repayment', amount: 10000, date: monthDate(0) }
+      ]
+    });
+    expect(getRecentCardRepaymentAverage('c1')).toBe(0);
   });
 });

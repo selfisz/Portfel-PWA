@@ -200,6 +200,15 @@ function addMonthsToToday(months) {
     return localIsoDate(d);
 }
 
+function medianOf(values) {
+    if (!values.length) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 1
+        ? sorted[mid]
+        : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
 function getRecentCardRepaymentAverage(cardId, months = 3) {
     const end = localIsoDate(new Date());
     const startDate = new Date();
@@ -208,13 +217,32 @@ function getRecentCardRepaymentAverage(cardId, months = 3) {
     const repayments = getCreditCardMovementsInRange(start, end)
         .filter((m) => m.cardId === cardId && m.type === 'repayment');
     if (!repayments.length) return 0;
+
     const byMonth = {};
     repayments.forEach((m) => {
         const key = m.date.slice(0, 7);
         byMonth[key] = (byMonth[key] || 0) + m.amount;
     });
-    const monthTotals = Object.values(byMonth);
-    return monthTotals.reduce((s, v) => s + v, 0) / monthTotals.length;
+    let monthTotals = Object.values(byMonth);
+
+    if (monthTotals.length === 1) {
+        const card = typeof getCreditCardById === 'function' ? getCreditCardById(cardId) : null;
+        const only = monthTotals[0];
+        const balance = card?.currentBalance || 0;
+        if (balance > 0 && only > balance * 1.05) return 0;
+        return only;
+    }
+
+    const sorted = [...monthTotals].sort((a, b) => a - b);
+    if (sorted.length === 2 && sorted[1] > sorted[0] * 2) {
+        monthTotals = [sorted[0]];
+    } else {
+        const median = medianOf(sorted);
+        const cap = Math.max(median * 2, median + 500);
+        monthTotals = sorted.filter((total) => total <= cap);
+    }
+    if (!monthTotals.length) return 0;
+    return Math.round(medianOf(monthTotals) * 100) / 100;
 }
 
 function estimateLoanPayoff(loan) {
