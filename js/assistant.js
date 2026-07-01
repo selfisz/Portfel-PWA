@@ -200,40 +200,37 @@ function buildAssistantSystemPrompt() {
     const today = typeof localIsoDate === 'function'
         ? localIsoDate(new Date())
         : new Date().toISOString().slice(0, 10);
-    return `Jesteś Skryba — asystent finansowy aplikacji Portfel (język polski).
+    return `Jesteś API klasyfikującym intencje użytkownika aplikacji Portfel (język polski).
+Odpowiadaj WYŁĄCZNIE jednym obiektem JSON. Bez markdown, bez \`\`\`json, bez tekstu przed ani po JSON.
+
 Dzisiejsza data: ${today}.
 Kategorie wydatków (main → sub): ${JSON.stringify(expense)}
 Kategorie wpływów (main → sub): ${JSON.stringify(income)}
 
-Odpowiadaj WYŁĄCZNIE poprawnym JSON (bez markdown):
+Schemat odpowiedzi:
 {
   "intent": "add_transaction" | "search" | "debt_today" | "reply",
-  "reply": "krótka odpowiedź po polsku dla użytkownika",
-  "transaction": {
-    "amount": number,
-    "type": "expense" | "income",
-    "mainCategory": "dokładna nazwa z drzewa",
-    "subCategory": "podkategoria lub [Bez podkategorii]",
-    "date": "YYYY-MM-DD",
-    "note": "opcjonalna notatka"
-  },
-  "search": {
-    "query": "szukany tekst",
-    "mainCategory": "opcjonalnie",
-    "subCategory": "opcjonalnie",
-    "type": "expense|income|all",
-    "daysBack": number lub null
-  }
+  "reply": "krótka odpowiedź po polsku",
+  "transaction": { "amount": number, "type": "expense"|"income", "mainCategory": "...", "subCategory": "...", "date": "YYYY-MM-DD", "note": "..." } | null,
+  "search": { "query": "...", "mainCategory": "..."|null, "subCategory": "..."|null, "type": "expense"|"income"|"all", "daysBack": number|null } | null
 }
 
-Zasady:
-- add_transaction: gdy użytkownik podaje kwotę i opis zakupu/wpływu.
-- search: gdy pyta o historię, „kiedy kupiłem…”, listę transakcji.
-- debt_today: gdy pyta o ratę dziś, spłatę kredytu/karty na dziś.
-- reply: ogólna odpowiedź bez akcji.
-- Używaj TYLKO kategorii z podanego drzewa. Biedronka/Lidl → Zakupy. Paliwo → Samochód › Paliwo.
+Zasady intencji:
+- add_transaction: kwota + opis zakupu/wpływu → transaction wypełnione, search=null
+- search: historia, „kiedy kupiłem…”, lista transakcji → search wypełnione, transaction=null
+- debt_today: rata/spłata kredytu lub karty na dziś → transaction=null, search=null
+- reply: ogólna rozmowa → transaction=null, search=null
+- Używaj TYLKO kategorii z drzewa (dokładna wielkość liter). Biedronka/Lidl → Zakupy. Paliwo → Samochód › Paliwo.
+- amount: liczba dodatnia (kropka dziesiętna, bez „zł”).
 - Brak daty w tekście → ${today}.
-- transaction tylko przy intent add_transaction. search tylko przy intent search.`;
+
+Przykłady:
+Użytkownik: "20 zł biedronka"
+{"intent":"add_transaction","reply":"Dodaję zakup w Biedronce.","transaction":{"amount":20,"type":"expense","mainCategory":"Zakupy","subCategory":"[Bez podkategorii]","date":"${today}","note":"Biedronka"},"search":null}
+Użytkownik: "kiedy kupowałem ubrania?"
+{"intent":"search","reply":"Szukam transakcji z ubrań.","transaction":null,"search":{"query":"ubrania","mainCategory":"Osobista","subCategory":"Ubrania","type":"expense","daysBack":null}}
+Użytkownik: "cześć"
+{"intent":"reply","reply":"Cześć! Podaj kwotę i opis, a dodam transakcję.","transaction":null,"search":null}`;
 }
 
 function resolveAssistantCategories(type, mainCategory, subCategory) {
@@ -270,45 +267,52 @@ function parseAssistantResponse(raw) {
     }
 }
 
-async function callGeminiAssistant(userMessage) {
+function buildGroqAssistantMessages(userMessage) {
+    const historyMessages = skrybaChatHistory.slice(-8).map((entry) => ({
+        role: entry.role === 'user' ? 'user' : 'assistant',
+        content: entry.text
+    }));
+    return [
+        { role: 'system', content: buildAssistantSystemPrompt() },
+        ...historyMessages,
+        { role: 'user', content: userMessage }
+    ];
+}
+
+async function callGroqAssistant(userMessage, { retry = true } = {}) {
     const apiKey = getAssistantApiKey();
     if (!apiKey) {
-        throw new Error('Ustaw klucz API Gemini w Ustawienia → Asystent AI.');
+        throw new Error('Ustaw klucz API Groq w Ustawienia → Asystent AI.');
     }
 
-    const historyContents = skrybaChatHistory.slice(-8).map((entry) => ({
-        role: entry.role === 'user' ? 'user' : 'model',
-        parts: [{ text: entry.text }]
-    }));
-
-    const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${ASSISTANT_GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
-        {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                systemInstruction: { parts: [{ text: buildAssistantSystemPrompt() }] },
-                contents: [
-                    ...historyContents,
-                    { role: 'user', parts: [{ text: userMessage }] }
-                ],
-                generationConfig: {
-                    temperature: 0.15,
-                    responseMimeType: 'application/json'
-                }
-            })
-        }
-    );
+    const response = await fetch(ASSISTANT_GROQ_API_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: ASSISTANT_GROQ_MODEL,
+            temperature: 0.15,
+            max_tokens: 1024,
+            response_format: { type: 'json_object' },
+            messages: buildGroqAssistantMessages(userMessage)
+        })
+    });
 
     if (!response.ok) {
         const errText = await response.text();
-        throw new Error(`Gemini HTTP ${response.status}: ${errText.slice(0, 200)}`);
+        throw new Error(`Groq HTTP ${response.status}: ${errText.slice(0, 200)}`);
     }
 
     const data = await response.json();
-    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const rawText = data?.choices?.[0]?.message?.content;
     if (!rawText) throw new Error('Pusta odpowiedź modelu.');
-    return parseAssistantResponse(rawText);
+    const parsed = parseAssistantResponse(rawText);
+    if (!parsed && retry) {
+        return callGroqAssistant(userMessage, { retry: false });
+    }
+    return parsed;
 }
 
 function getAssistantTransactionsSource() {
@@ -464,7 +468,7 @@ async function sendSkrybaMessage() {
     const typingBubble = list?.lastElementChild;
 
     try {
-        const parsed = await callGeminiAssistant(text);
+        const parsed = await callGroqAssistant(text);
         typingBubble?.remove();
         if (!parsed) {
             appendSkrybaMessage('assistant', 'Nie rozumiem odpowiedzi modelu — spróbuj ponownie.');
@@ -474,7 +478,7 @@ async function sendSkrybaMessage() {
         await handleAssistantIntent(parsed);
     } catch (err) {
         typingBubble?.remove();
-        appendSkrybaMessage('assistant', err.message || 'Błąd połączenia z Gemini.');
+        appendSkrybaMessage('assistant', err.message || 'Błąd połączenia z Groq.');
         console.warn('sendSkrybaMessage', err);
     } finally {
         if (sendBtn) sendBtn.disabled = false;

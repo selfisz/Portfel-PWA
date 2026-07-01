@@ -185,7 +185,7 @@
             <div id="settings-section-assistant" class="settings-section-panel hidden">
                 <div class="settings-section">
                     <div class="section-label">Skryba — asystent AI</div>
-                    <p class="settings-hint">Naturalne polecenia w czacie (Gemini). Klucz API zostaje tylko w tej przeglądarce — nie trafia do chmury Portfela.</p>
+                    <p class="settings-hint">Naturalne polecenia w czacie (Groq). Klucz API zostaje tylko w tej przeglądarce — nie trafia do chmury Portfela.</p>
                     <label class="settings-toggle-row">
                         <span class="settings-toggle-row-body">
                             <span class="settings-nav-row-title">Włącz Skrybę</span>
@@ -201,9 +201,9 @@
                         <input type="checkbox" id="assistant-confirm-tx-toggle" onchange="onAssistantConfirmTxToggle()" checked>
                     </label>
                     <div class="form-group settings-api-key-group">
-                        <label for="assistant-api-key">Klucz API Gemini</label>
-                        <input type="password" id="assistant-api-key" class="settings-api-key-input" autocomplete="off" placeholder="AIza…" onblur="onAssistantApiKeyBlur()">
-                        <p class="settings-hint">Utwórz w <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>. Zalecany osobny klucz tylko do Portfela.</p>
+                        <label for="assistant-api-key">Klucz API Groq</label>
+                        <input type="password" id="assistant-api-key" class="settings-api-key-input" autocomplete="off" placeholder="gsk_…" onblur="onAssistantApiKeyBlur()">
+                        <p class="settings-hint">Utwórz w <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Groq Console</a>. Darmowy plan bez karty. Zalecany osobny klucz tylko do Portfela.</p>
                         <button type="button" class="btn-text-link settings-api-key-save" onclick="saveAssistantApiKey()">Zapisz klucz</button>
                     </div>
                 </div>
