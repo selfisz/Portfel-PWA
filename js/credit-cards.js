@@ -227,11 +227,14 @@ function reverseCreditCardPurchase(cardId, amount) {
 
 function syncCreditCardOnTransactionSave(tx, previousTx = null) {
     if (previousTx?.creditCardId && previousTx.type === 'expense') {
-        reverseCreditCardPurchase(previousTx.creditCardId, previousTx.amount);
+        const reversed = reverseCreditCardPurchase(previousTx.creditCardId, previousTx.amount);
+        if (reversed === null) return false;
     }
     if (tx.creditCardId && tx.type === 'expense') {
-        applyCreditCardPurchase(tx.creditCardId, tx.amount);
+        const applied = applyCreditCardPurchase(tx.creditCardId, tx.amount);
+        if (applied === null) return false;
     }
+    return true;
 }
 
 function syncCreditCardOnTransactionDelete(tx) {

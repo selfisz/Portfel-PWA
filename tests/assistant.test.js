@@ -26,9 +26,11 @@ beforeAll(() => {
     globalThis.DEFAULT_CATEGORY_TREE = globalThis.categoryTree;
     globalThis.getMergedTransactions = () => globalThis.appState.transactions;
     globalThis.localIsoDate = (d) => d.toISOString().slice(0, 10);
-    globalThis.formatPlnAmount = (n) => `${Number(n).toFixed(2)} zł`;
+  globalThis.formatPlnAmount = (n) => `${Number(n).toFixed(2)} zł`;
+  globalThis.parsePlnInput = (raw) => parseFloat(String(raw).replace(',', '.'));
+  globalThis.localIsoDate = (d) => d.toISOString().slice(0, 10);
 
-    loadScript('js/constants.js');
+  loadScript('js/constants.js');
     loadScript('js/search-utils.js');
     loadScript('js/assistant.js');
 
@@ -112,5 +114,14 @@ describe('isAssistantSummarizeCommand', () => {
         expect(isAssistantSummarizeCommand('Suma?')).toBe(true);
         expect(isAssistantSummarizeCommand('ile łącznie')).toBe(true);
         expect(isAssistantSummarizeCommand('pokaż ubezpieczenie')).toBe(false);
+    });
+});
+
+describe('tryParseLocalAddTransaction', () => {
+    it('parsuje prosty wydatek', () => {
+        const parsed = tryParseLocalAddTransaction('20 zł biedronka');
+        expect(parsed?.intent).toBe('add_transaction');
+        expect(parsed?.transaction?.amount).toBe(20);
+        expect(parsed?.transaction?.mainCategory).toBe('Zakupy');
     });
 });

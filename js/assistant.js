@@ -1,6 +1,9 @@
 let skrybaChatHistory = [];
 let skrybaPendingTransaction = null;
 let skrybaLastSearchResults = [];
+let skrybaThreads = [];
+let skrybaActiveThreadId = null;
+let skrybaViewportBound = false;
 
 const SKRYBA_USER_AVATAR_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
 const SKRYBA_ASSISTANT_AVATAR_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h3l3 3 3-3h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>';
@@ -90,6 +93,199 @@ function saveAssistantApiKey() {
     }
 }
 
+function loadSkrybaThreadsFromStorage() {
+    try {
+        const raw = localStorage.getItem(ASSISTANT_THREADS_KEY);
+        if (!raw) {
+            skrybaThreads = [];
+            skrybaActiveThreadId = null;
+            return;
+        }
+        const data = JSON.parse(raw);
+        skrybaThreads = Array.isArray(data.threads) ? data.threads : [];
+        skrybaActiveThreadId = data.activeId || null;
+    } catch {
+        skrybaThreads = [];
+        skrybaActiveThreadId = null;
+    }
+}
+
+function saveSkrybaThreadsToStorage() {
+    try {
+        localStorage.setItem(ASSISTANT_THREADS_KEY, JSON.stringify({
+            activeId: skrybaActiveThreadId,
+            threads: skrybaThreads.slice(0, SKRYBA_MAX_THREADS)
+        }));
+    } catch { /* ignore */ }
+}
+
+function getSkrybaThreadById(id) {
+    return skrybaThreads.find((t) => t.id === id) || null;
+}
+
+function createSkrybaThread(title = 'Nowa rozmowa') {
+    return {
+        id: `thread_${Date.now()}`,
+        title,
+        updatedAt: Date.now(),
+        messages: [],
+        lastSearchResults: []
+    };
+}
+
+function skrybaPersistActiveThread() {
+    if (!skrybaActiveThreadId) return;
+    const thread = getSkrybaThreadById(skrybaActiveThreadId);
+    if (!thread) return;
+    thread.messages = skrybaChatHistory.map((m) => ({ role: m.role, text: m.text }));
+    thread.lastSearchResults = skrybaLastSearchResults;
+    thread.updatedAt = Date.now();
+    const firstUser = thread.messages.find((m) => m.role === 'user');
+    if (firstUser?.text) {
+        thread.title = firstUser.text.slice(0, 48) + (firstUser.text.length > 48 ? '…' : '');
+    }
+    skrybaThreads.sort((a, b) => b.updatedAt - a.updatedAt);
+    saveSkrybaThreadsToStorage();
+}
+
+function ensureActiveSkrybaThread() {
+    if (skrybaActiveThreadId && getSkrybaThreadById(skrybaActiveThreadId)) return;
+    const thread = createSkrybaThread();
+    skrybaThreads.unshift(thread);
+    skrybaActiveThreadId = thread.id;
+    saveSkrybaThreadsToStorage();
+}
+
+function skrybaLoadActiveThreadIntoUi() {
+    const thread = getSkrybaThreadById(skrybaActiveThreadId);
+    skrybaChatHistory = thread?.messages ? thread.messages.map((m) => ({ ...m })) : [];
+    skrybaLastSearchResults = Array.isArray(thread?.lastSearchResults)
+        ? thread.lastSearchResults
+        : [];
+    skrybaPendingTransaction = null;
+    const list = document.getElementById('skryba-messages');
+    if (list) list.innerHTML = '';
+    if (!skrybaChatHistory.length) {
+        renderSkrybaWelcomeIfEmpty();
+    } else {
+        skrybaChatHistory.forEach((entry) => {
+            if (entry.role === 'user' || entry.role === 'assistant') {
+                appendSkrybaMessage(entry.role, entry.text, '', { skipPersist: true, skipScroll: true });
+            }
+        });
+        scrollSkrybaToBottom();
+    }
+    updateSkrybaHeaderForChat();
+}
+
+function skrybaStartNewThread() {
+    skrybaPersistActiveThread();
+    const thread = createSkrybaThread();
+    skrybaThreads.unshift(thread);
+    skrybaActiveThreadId = thread.id;
+    saveSkrybaThreadsToStorage();
+    skrybaLoadActiveThreadIntoUi();
+    skrybaShowChatView();
+    document.getElementById('skryba-input')?.focus();
+}
+
+function clearSkrybaConversation() {
+    skrybaStartNewThread();
+}
+
+function skrybaOpenThread(threadId) {
+    skrybaPersistActiveThread();
+    skrybaActiveThreadId = threadId;
+    saveSkrybaThreadsToStorage();
+    skrybaLoadActiveThreadIntoUi();
+    skrybaShowChatView();
+}
+
+function formatSkrybaThreadDate(ts) {
+    const d = new Date(ts);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+        return d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+    }
+    return d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
+}
+
+function renderSkrybaThreadsList() {
+    const list = document.getElementById('skryba-threads-list');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!skrybaThreads.length) {
+        const empty = document.createElement('p');
+        empty.className = 'skryba-threads-empty';
+        empty.textContent = 'Brak zapisanych rozmów. Rozpocznij nową i wróć tutaj później.';
+        list.appendChild(empty);
+        return;
+    }
+    skrybaThreads.forEach((thread) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'skryba-thread-item';
+        const last = thread.messages?.[thread.messages.length - 1];
+        const preview = last?.text?.slice(0, 60) || 'Pusta rozmowa';
+        btn.innerHTML = `<p class="skryba-thread-item-title">${escapeHtml(thread.title || 'Rozmowa')}</p>
+            <p class="skryba-thread-item-meta">${escapeHtml(formatSkrybaThreadDate(thread.updatedAt))} · ${escapeHtml(preview)}</p>`;
+        btn.onclick = () => skrybaOpenThread(thread.id);
+        list.appendChild(btn);
+    });
+}
+
+function updateSkrybaHeaderForChat() {
+    const titleEl = document.getElementById('skryba-header-title');
+    const subEl = document.getElementById('skryba-header-subtitle');
+    const thread = getSkrybaThreadById(skrybaActiveThreadId);
+    if (titleEl) titleEl.textContent = 'Skryba';
+    if (subEl) {
+        if (thread?.title) {
+            subEl.textContent = thread.title;
+            subEl.classList.remove('hidden');
+        } else {
+            subEl.textContent = '';
+            subEl.classList.add('hidden');
+        }
+    }
+}
+
+function skrybaShowThreadsView() {
+    skrybaPersistActiveThread();
+    document.getElementById('skryba-threads-view')?.classList.remove('hidden');
+    document.getElementById('skryba-chat-view')?.classList.add('hidden');
+    document.getElementById('btn-skryba-back')?.classList.remove('hidden');
+    const titleEl = document.getElementById('skryba-header-title');
+    const subEl = document.getElementById('skryba-header-subtitle');
+    if (titleEl) titleEl.textContent = 'Historia rozmów';
+    if (subEl) subEl.classList.add('hidden');
+    renderSkrybaThreadsList();
+}
+
+function skrybaShowChatView() {
+    document.getElementById('skryba-threads-view')?.classList.add('hidden');
+    document.getElementById('skryba-chat-view')?.classList.remove('hidden');
+    document.getElementById('btn-skryba-back')?.classList.add('hidden');
+    updateSkrybaHeaderForChat();
+}
+
+function scrollSkrybaToBottom() {
+    const list = document.getElementById('skryba-messages');
+    if (list) list.scrollTop = list.scrollHeight;
+}
+
+function bindSkrybaViewport() {
+    if (skrybaViewportBound || !window.visualViewport) return;
+    skrybaViewportBound = true;
+    const update = () => {
+        const overlay = document.getElementById('skryba-overlay');
+        if (!overlay || overlay.classList.contains('hidden')) return;
+        scrollSkrybaToBottom();
+    };
+    window.visualViewport.addEventListener('resize', update);
+    window.visualViewport.addEventListener('scroll', update);
+}
+
 function toggleSkrybaPanel() {
     const panel = document.getElementById('skryba-overlay');
     if (!panel) return;
@@ -104,37 +300,33 @@ function openSkrybaPanel() {
         }
         return;
     }
+    loadSkrybaThreadsFromStorage();
+    ensureActiveSkrybaThread();
     const overlay = document.getElementById('skryba-overlay');
     if (!overlay) return;
     overlay.classList.remove('hidden');
     document.body.classList.add('skryba-open');
     const btn = document.getElementById('btn-skryba');
     if (btn) btn.setAttribute('aria-expanded', 'true');
-    renderSkrybaWelcomeIfEmpty();
-    document.getElementById('skryba-input')?.focus();
+    skrybaShowChatView();
+    skrybaLoadActiveThreadIntoUi();
+    bindSkrybaViewport();
+    window.setTimeout(() => document.getElementById('skryba-input')?.focus(), 80);
 }
 
 function closeSkrybaPanel() {
+    skrybaPersistActiveThread();
     document.getElementById('skryba-overlay')?.classList.add('hidden');
     document.body.classList.remove('skryba-open');
     const btn = document.getElementById('btn-skryba');
     if (btn) btn.setAttribute('aria-expanded', 'false');
+    document.getElementById('skryba-input')?.blur();
 }
 
 function renderSkrybaWelcomeIfEmpty() {
     const list = document.getElementById('skryba-messages');
     if (!list || list.children.length) return;
-    appendSkrybaMessage('assistant', 'Cześć, jestem Skryba. Mogę dodać transakcję (np. „20 zł zakupy biedronka”), wyszukać w historii (np. „ubezpieczenie”) albo podsumować listę (np. „suma?” po wynikach).');
-}
-
-function clearSkrybaConversation() {
-    skrybaChatHistory = [];
-    skrybaLastSearchResults = [];
-    skrybaPendingTransaction = null;
-    const list = document.getElementById('skryba-messages');
-    if (list) list.innerHTML = '';
-    renderSkrybaWelcomeIfEmpty();
-    document.getElementById('skryba-input')?.focus();
+    appendSkrybaMessage('assistant', 'Cześć! Mogę dodać wydatek (np. „20 zł biedronka”), wyszukać w historii albo podsumować wyniki („suma?”). Płatności kartą ustaw ręcznie w formularzu.', '', { skipPersist: true });
 }
 
 function createSkrybaAvatar(role) {
@@ -145,7 +337,7 @@ function createSkrybaAvatar(role) {
     return avatar;
 }
 
-function appendSkrybaMessage(role, text, extraHtml = '') {
+function appendSkrybaMessage(role, text, extraHtml = '', options = {}) {
     const list = document.getElementById('skryba-messages');
     if (!list) return;
     const row = document.createElement('div');
@@ -174,7 +366,7 @@ function appendSkrybaMessage(role, text, extraHtml = '') {
     }
 
     list.appendChild(row);
-    list.scrollTop = list.scrollHeight;
+    if (!options.skipScroll) scrollSkrybaToBottom();
 }
 
 function appendSkrybaPendingTransaction(tx) {
@@ -203,25 +395,43 @@ function confirmSkrybaPendingTransaction() {
     const result = commitAssistantTransaction(skrybaPendingTransaction);
     skrybaPendingTransaction = null;
     if (!result.ok) {
-        appendSkrybaMessage('assistant', result.error === 'cancelled'
+        const msg = result.error === 'cancelled'
             ? 'Anulowano zapis transakcji.'
-            : (result.error || 'Nie udało się zapisać.'));
+            : (result.error || 'Nie udało się zapisać.');
+        appendSkrybaMessage('assistant', msg);
+        skrybaChatHistory.push({ role: 'assistant', text: msg });
+        skrybaPersistActiveThread();
         return;
     }
-    appendSkrybaMessage('assistant', `Zapisano: ${formatAssistantTransactionPreview(result.tx)}`);
+    const msg = `Zapisano: ${formatAssistantTransactionPreview(result.tx)}`;
+    appendSkrybaMessage('assistant', msg);
+    skrybaChatHistory.push({ role: 'assistant', text: msg });
+    skrybaPersistActiveThread();
     if (typeof hapticFeedback === 'function') hapticFeedback();
 }
 
 function cancelSkrybaPendingTransaction() {
     skrybaPendingTransaction = null;
-    appendSkrybaMessage('assistant', 'OK, nie dodaję transakcji.');
+    const msg = 'OK, nie dodaję transakcji.';
+    appendSkrybaMessage('assistant', msg);
+    skrybaChatHistory.push({ role: 'assistant', text: msg });
+    skrybaPersistActiveThread();
 }
 
 function commitAssistantTransaction(txData) {
     if (typeof commitTransactionData !== 'function') {
         return { ok: false, error: 'Brak obsługi zapisu transakcji.' };
     }
-    return commitTransactionData(txData, { skipBudgetConfirm: true });
+    const sanitized = {
+        amount: txData.amount,
+        type: txData.type,
+        mainCategory: txData.mainCategory,
+        subCategory: txData.subCategory,
+        date: txData.date,
+        note: txData.note || '',
+        affectsCash: true
+    };
+    return commitTransactionData(sanitized, { skipBudgetConfirm: true });
 }
 
 function getAssistantCategoryCatalog() {
@@ -235,43 +445,28 @@ function buildAssistantSystemPrompt() {
     const today = typeof localIsoDate === 'function'
         ? localIsoDate(new Date())
         : new Date().toISOString().slice(0, 10);
-    return `Jesteś API klasyfikującym intencje użytkownika aplikacji Portfel (język polski).
-Odpowiadaj WYŁĄCZNIE jednym obiektem JSON. Bez markdown, bez \`\`\`json, bez tekstu przed ani po JSON.
+    return `Jesteś Skryba — asystent finansowy aplikacji Portfel (język polski).
+Odpowiadaj WYŁĄCZNIE jednym obiektem JSON. Bez markdown, bez tekstu poza JSON.
 
 Dzisiejsza data: ${today}.
-Kategorie wydatków (main → sub): ${JSON.stringify(expense)}
-Kategorie wpływów (main → sub): ${JSON.stringify(income)}
+Kategorie wydatków: ${JSON.stringify(expense)}
+Kategorie wpływów: ${JSON.stringify(income)}
 
-Schemat odpowiedzi:
-{
-  "intent": "add_transaction" | "search" | "summarize" | "debt_today" | "reply",
-  "reply": "krótka odpowiedź po polsku",
-  "transaction": { "amount": number, "type": "expense"|"income", "mainCategory": "...", "subCategory": "...", "date": "YYYY-MM-DD", "note": "..." } | null,
-  "search": { "query": "...", "mainCategory": "..."|null, "subCategory": "..."|null, "type": "expense"|"income"|"all", "daysBack": number|null } | null,
-  "summarize": { "operation": "sum"|"count", "scope": "last_search" } | null
-}
+Schemat:
+{"intent":"add_transaction|search|summarize|debt_today|reply","reply":"po polsku","transaction":{...}|null,"search":{...}|null,"summarize":{...}|null}
 
-Zasady intencji:
-- add_transaction: kwota + opis zakupu/wpływu → transaction wypełnione, search=null, summarize=null
-- search: historia, „kiedy kupiłem…”, lista transakcji → search wypełnione, transaction=null, summarize=null
-- summarize: po wcześniejszej liście wyników — „suma?”, „ile łącznie?”, „policz” → summarize wypełnione, transaction=null, search=null
-- debt_today: rata/spłata kredytu lub karty na dziś → transaction=null, search=null, summarize=null
-- reply: ogólna rozmowa → transaction=null, search=null, summarize=null
-- W search.query podawaj rdzeń/słowo kluczowe (np. ubezpieczenie), nie całe zdanie.
-- Nie ustawiaj mainCategory/subCategory w search, jeśli nie jesteś pewien — zostaw null.
-- Używaj TYLKO kategorii z drzewa (dokładna wielkość liter). Biedronka/Lidl → Zakupy. Paliwo → Samochód › Paliwo.
-- amount: liczba dodatnia (kropka dziesiętna, bez „zł”).
-- Brak daty w tekście → ${today}.
+Zasady:
+- add_transaction: użytkownik podaje kwotę i opis. Zwykły wydatek gotówkowy — bez karty kredytowej.
+- search: pytania o historię. query = słowo kluczowe (np. ubezpieczenie). mainCategory/subCategory tylko gdy pewny, inaczej null.
+- summarize: „suma?”, „ile łącznie?” po wcześniejszej liście → operation sum|count, scope last_search.
+- debt_today: raty/spłaty na dziś.
+- reply: small talk lub gdy brak danych.
+- Biedronka/Lidl → Zakupy. Paliwo → Samochód › Paliwo.
+- amount: liczba, kropka dziesiętna. Brak daty → ${today}.
+- Analizuj kontekst poprzednich wiadomości w rozmowie.
 
-Przykłady:
-Użytkownik: "20 zł biedronka"
-{"intent":"add_transaction","reply":"Dodaję zakup w Biedronce.","transaction":{"amount":20,"type":"expense","mainCategory":"Zakupy","subCategory":"[Bez podkategorii]","date":"${today}","note":"Biedronka"},"search":null}
-Użytkownik: "kiedy kupowałem ubrania?"
-{"intent":"search","reply":"Szukam transakcji z ubrań.","transaction":null,"search":{"query":"ubrania","mainCategory":null,"subCategory":null,"type":"expense","daysBack":null},"summarize":null}
-Użytkownik: "Suma?"
-{"intent":"summarize","reply":"Sumuję poprzednią listę.","transaction":null,"search":null,"summarize":{"operation":"sum","scope":"last_search"}}
-Użytkownik: "cześć"
-{"intent":"reply","reply":"Cześć! Podaj kwotę i opis, a dodam transakcję.","transaction":null,"search":null,"summarize":null}`;
+Przykład: "20 zł biedronka"
+{"intent":"add_transaction","reply":"Zakupy w Biedronce.","transaction":{"amount":20,"type":"expense","mainCategory":"Zakupy","subCategory":"[Bez podkategorii]","date":"${today}","note":"Biedronka"},"search":null,"summarize":null}`;
 }
 
 function resolveAssistantCategories(type, mainCategory, subCategory) {
@@ -308,8 +503,61 @@ function parseAssistantResponse(raw) {
     }
 }
 
+function tryParseLocalAddTransaction(text) {
+    const t = String(text || '').trim();
+    if (!t || t.length < 4) return null;
+    let amount = null;
+    let desc = '';
+    const m1 = t.match(/^(\d+(?:[.,]\d{1,2})?)\s*(?:zł|zl|pln)?\s+(.+)$/i);
+    const m2 = t.match(/^(.+?)\s+(\d+(?:[.,]\d{1,2})?)\s*(?:zł|zl|pln)?$/i);
+    if (m1) {
+        amount = typeof parsePlnInput === 'function' ? parsePlnInput(m1[1]) : parseFloat(m1[1].replace(',', '.'));
+        desc = m1[2].trim();
+    } else if (m2) {
+        desc = m2[1].trim();
+        amount = typeof parsePlnInput === 'function' ? parsePlnInput(m2[2]) : parseFloat(m2[2].replace(',', '.'));
+    }
+    if (!Number.isFinite(amount) || amount <= 0 || desc.length < 2) return null;
+
+    const lower = desc.toLowerCase();
+    let type = 'expense';
+    let mainCategory = 'Różne';
+    let subCategory = '[Bez podkategorii]';
+    if (/wynagrodzenie|pensja|wpływ|wplyw|premia/.test(lower)) {
+        type = 'income';
+        mainCategory = 'Wynagrodzenie';
+    } else if (/biedronka|lidl|kaufland|żabka|zabka|carrefour|aldi|dino|zakupy/.test(lower)) {
+        mainCategory = 'Zakupy';
+    } else if (/orlen|paliwo|bp |circle k|stacja/.test(lower)) {
+        mainCategory = 'Samochód';
+        subCategory = 'Paliwo';
+    } else if (/netflix|spotify|hbo|subskrypcj/.test(lower)) {
+        mainCategory = 'Subskrypcje';
+    } else if (/uber|bolt|taxi|bilet/.test(lower)) {
+        mainCategory = 'Transport';
+    }
+
+    const today = typeof localIsoDate === 'function'
+        ? localIsoDate(new Date())
+        : new Date().toISOString().slice(0, 10);
+    return {
+        intent: 'add_transaction',
+        reply: `Dodaję: ${desc} — ${amount.toFixed(2)} zł.`,
+        transaction: {
+            amount,
+            type,
+            mainCategory,
+            subCategory,
+            date: today,
+            note: desc
+        },
+        search: null,
+        summarize: null
+    };
+}
+
 function buildGroqAssistantMessages(userMessage) {
-    const historyMessages = skrybaChatHistory.slice(-8).map((entry) => ({
+    const historyMessages = skrybaChatHistory.slice(-12).map((entry) => ({
         role: entry.role === 'user' ? 'user' : 'assistant',
         content: entry.text
     }));
@@ -334,7 +582,7 @@ async function callGroqAssistant(userMessage, { retry = true } = {}) {
         },
         body: JSON.stringify({
             model: ASSISTANT_GROQ_MODEL,
-            temperature: 0.15,
+            temperature: 0.2,
             max_tokens: 1024,
             response_format: { type: 'json_object' },
             messages: buildGroqAssistantMessages(userMessage)
@@ -434,17 +682,22 @@ function formatAssistantSummarize(items, operation = 'sum') {
     return `Łącznie (${items.length} transakcji): ${summary}.`;
 }
 
+async function dispatchAssistantParsed(parsed, userMessage) {
+    const displayText = await handleAssistantIntent(parsed, userMessage);
+    if (displayText) {
+        skrybaChatHistory.push({ role: 'assistant', text: displayText });
+    }
+    skrybaPersistActiveThread();
+}
+
 function tryHandleLocalSkrybaCommand(text) {
     if (!isAssistantSummarizeCommand(text)) return false;
     const operation = getAssistantSummarizeOperation(text);
     const reply = formatAssistantSummarize(skrybaLastSearchResults, operation);
     appendSkrybaMessage('assistant', reply);
     skrybaChatHistory.push({ role: 'assistant', text: reply });
+    skrybaPersistActiveThread();
     return true;
-}
-
-function recordSkrybaAssistantReply(displayText) {
-    if (displayText) skrybaChatHistory.push({ role: 'assistant', text: displayText });
 }
 
 function runAssistantDebtToday() {
@@ -494,13 +747,14 @@ async function handleAssistantIntent(parsed, userMessage = '') {
             mainCategory: cats.mainCategory,
             subCategory: cats.subCategory,
             date: /^\d{4}-\d{2}-\d{2}$/.test(String(raw.date || '')) ? raw.date : today,
-            note: typeof raw.note === 'string' ? raw.note : ''
+            note: typeof raw.note === 'string' ? raw.note : '',
+            affectsCash: true
         };
         const normalized = typeof normalizeTransaction === 'function'
             ? normalizeTransaction(tx)
             : null;
         if (!normalized) {
-            const msg = reply || 'Nie udało się zbudować transakcji z opisu.';
+            const msg = reply || 'Nie udało się zbudować transakcji. Podaj kwotę i opis, np. „15 zł kawa”.';
             appendSkrybaMessage('assistant', msg);
             return msg;
         }
@@ -553,7 +807,7 @@ async function handleAssistantIntent(parsed, userMessage = '') {
         return msg;
     }
 
-    const msg = reply || 'Nie jestem pewien, jak pomóc — spróbuj inaczej sformułować.';
+    const msg = reply || 'Napisz kwotę i opis (np. „30 zł obiad”), albo zapytaj o historię.';
     appendSkrybaMessage('assistant', msg);
     return msg;
 }
@@ -565,10 +819,17 @@ async function sendSkrybaMessage() {
     if (!text) return;
 
     input.value = '';
-    appendSkrybaMessage('user', text);
     skrybaChatHistory.push({ role: 'user', text });
+    appendSkrybaMessage('user', text);
+    skrybaPersistActiveThread();
 
     if (tryHandleLocalSkrybaCommand(text)) return;
+
+    const localTx = tryParseLocalAddTransaction(text);
+    if (localTx) {
+        await dispatchAssistantParsed(localTx, text);
+        return;
+    }
 
     if (!getAssistantApiKey()) {
         appendSkrybaMessage('assistant', 'Brak klucza API. Ustaw go w Ustawienia → Asystent AI.');
@@ -576,7 +837,7 @@ async function sendSkrybaMessage() {
     }
 
     if (sendBtn) sendBtn.disabled = true;
-    appendSkrybaMessage('assistant', '…');
+    appendSkrybaMessage('assistant', '…', '', { skipPersist: true });
 
     const list = document.getElementById('skryba-messages');
     const typingBubble = list?.lastElementChild;
@@ -585,14 +846,17 @@ async function sendSkrybaMessage() {
         const parsed = await callGroqAssistant(text);
         typingBubble?.remove();
         if (!parsed) {
-            appendSkrybaMessage('assistant', 'Nie rozumiem odpowiedzi modelu — spróbuj ponownie.');
+            appendSkrybaMessage('assistant', 'Nie rozumiem odpowiedzi modelu — spróbuj inaczej sformułować.');
+            skrybaPersistActiveThread();
             return;
         }
-        const displayText = await handleAssistantIntent(parsed, text);
-        recordSkrybaAssistantReply(displayText);
+        await dispatchAssistantParsed(parsed, text);
     } catch (err) {
         typingBubble?.remove();
-        appendSkrybaMessage('assistant', err.message || 'Błąd połączenia z Groq.');
+        const msg = err.message || 'Błąd połączenia z Groq.';
+        appendSkrybaMessage('assistant', msg);
+        skrybaChatHistory.push({ role: 'assistant', text: msg });
+        skrybaPersistActiveThread();
         console.warn('sendSkrybaMessage', err);
     } finally {
         if (sendBtn) sendBtn.disabled = false;
@@ -608,6 +872,7 @@ function onSkrybaInputKeydown(event) {
 }
 
 function initSkrybaAssistant() {
+    loadSkrybaThreadsFromStorage();
     syncSkrybaHeaderVisibility();
 }
 

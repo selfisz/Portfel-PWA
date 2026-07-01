@@ -114,7 +114,6 @@ function mountPanelHeader(mountId, header) {
 function initPanelHeaders() {
     mountPanelHeader('panel-header-settings', createPanelHeader('Ustawienia', { onClose: closeSettings }));
     mountPanelHeader('panel-header-notifications', createPanelHeader('Powiadomienia', { onClose: closeNotificationsPanel }));
-    mountPanelHeader('panel-header-skryba', createPanelHeader('Skryba', { onClose: closeSkrybaPanel }));
     mountPanelHeader('panel-header-category-editor', createPanelHeader('Kategorie', { onClose: closeCategoryEditor }));
     mountPanelHeader('panel-header-cloud-restore', createPanelHeader('Kopia z chmury', { onClose: closeCloudRestorePicker }));
     mountPanelHeader('panel-header-asset-picker', createPanelHeader('Dodaj aktywo', { onClose: closeAssetPicker }));
