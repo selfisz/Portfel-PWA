@@ -517,11 +517,7 @@ function getDashboardDates() {
     return { startDate, endDate };
 }
 function transactionMatchesSearch(t, searchQuery) {
-    return t.mainCategory.toLowerCase().includes(searchQuery) ||
-        t.subCategory.toLowerCase().includes(searchQuery) ||
-        (t.note && t.note.toLowerCase().includes(searchQuery)) ||
-        t.amount.toString().includes(searchQuery) ||
-        t.date.includes(searchQuery);
+    return transactionMatchesFuzzyQuery(t, searchQuery);
 }
 
 function getTransactionSubCategoryLabel(t) {

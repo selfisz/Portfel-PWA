@@ -1,5 +1,9 @@
 let skrybaChatHistory = [];
 let skrybaPendingTransaction = null;
+let skrybaLastSearchResults = [];
+
+const SKRYBA_USER_AVATAR_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
+const SKRYBA_ASSISTANT_AVATAR_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h3l3 3 3-3h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>';
 
 function isAssistantEnabled() {
     try {
@@ -120,24 +124,55 @@ function closeSkrybaPanel() {
 function renderSkrybaWelcomeIfEmpty() {
     const list = document.getElementById('skryba-messages');
     if (!list || list.children.length) return;
-    appendSkrybaMessage('assistant', 'Cześć, jestem Skryba. Mogę dodać transakcję z opisu (np. „20 zł zakupy biedronka”) albo wyszukać w historii (np. „kiedy kupiłem ubrania?”).');
+    appendSkrybaMessage('assistant', 'Cześć, jestem Skryba. Mogę dodać transakcję (np. „20 zł zakupy biedronka”), wyszukać w historii (np. „ubezpieczenie”) albo podsumować listę (np. „suma?” po wynikach).');
+}
+
+function clearSkrybaConversation() {
+    skrybaChatHistory = [];
+    skrybaLastSearchResults = [];
+    skrybaPendingTransaction = null;
+    const list = document.getElementById('skryba-messages');
+    if (list) list.innerHTML = '';
+    renderSkrybaWelcomeIfEmpty();
+    document.getElementById('skryba-input')?.focus();
+}
+
+function createSkrybaAvatar(role) {
+    const avatar = document.createElement('div');
+    avatar.className = `skryba-msg-avatar skryba-msg-avatar--${role}`;
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.innerHTML = role === 'user' ? SKRYBA_USER_AVATAR_SVG : SKRYBA_ASSISTANT_AVATAR_SVG;
+    return avatar;
 }
 
 function appendSkrybaMessage(role, text, extraHtml = '') {
     const list = document.getElementById('skryba-messages');
     if (!list) return;
     const row = document.createElement('div');
-    row.className = `skryba-msg skryba-msg--${role}`;
+    row.className = `skryba-msg skryba-msg--${role}${text === '…' ? ' skryba-msg--typing' : ''}`;
+
+    const body = document.createElement('div');
+    body.className = 'skryba-msg-body';
     const bubble = document.createElement('div');
     bubble.className = 'skryba-msg-bubble';
     bubble.textContent = text;
-    row.appendChild(bubble);
+    body.appendChild(bubble);
     if (extraHtml) {
         const extra = document.createElement('div');
         extra.className = 'skryba-msg-extra';
         extra.innerHTML = extraHtml;
-        row.appendChild(extra);
+        body.appendChild(extra);
     }
+
+    const avatar = createSkrybaAvatar(role);
+    if (role === 'user') {
+        row.appendChild(body);
+        row.appendChild(avatar);
+    } else {
+        row.appendChild(avatar);
+        row.appendChild(body);
+    }
+
     list.appendChild(row);
     list.scrollTop = list.scrollHeight;
 }
@@ -209,17 +244,21 @@ Kategorie wpływów (main → sub): ${JSON.stringify(income)}
 
 Schemat odpowiedzi:
 {
-  "intent": "add_transaction" | "search" | "debt_today" | "reply",
+  "intent": "add_transaction" | "search" | "summarize" | "debt_today" | "reply",
   "reply": "krótka odpowiedź po polsku",
   "transaction": { "amount": number, "type": "expense"|"income", "mainCategory": "...", "subCategory": "...", "date": "YYYY-MM-DD", "note": "..." } | null,
-  "search": { "query": "...", "mainCategory": "..."|null, "subCategory": "..."|null, "type": "expense"|"income"|"all", "daysBack": number|null } | null
+  "search": { "query": "...", "mainCategory": "..."|null, "subCategory": "..."|null, "type": "expense"|"income"|"all", "daysBack": number|null } | null,
+  "summarize": { "operation": "sum"|"count", "scope": "last_search" } | null
 }
 
 Zasady intencji:
-- add_transaction: kwota + opis zakupu/wpływu → transaction wypełnione, search=null
-- search: historia, „kiedy kupiłem…”, lista transakcji → search wypełnione, transaction=null
-- debt_today: rata/spłata kredytu lub karty na dziś → transaction=null, search=null
-- reply: ogólna rozmowa → transaction=null, search=null
+- add_transaction: kwota + opis zakupu/wpływu → transaction wypełnione, search=null, summarize=null
+- search: historia, „kiedy kupiłem…”, lista transakcji → search wypełnione, transaction=null, summarize=null
+- summarize: po wcześniejszej liście wyników — „suma?”, „ile łącznie?”, „policz” → summarize wypełnione, transaction=null, search=null
+- debt_today: rata/spłata kredytu lub karty na dziś → transaction=null, search=null, summarize=null
+- reply: ogólna rozmowa → transaction=null, search=null, summarize=null
+- W search.query podawaj rdzeń/słowo kluczowe (np. ubezpieczenie), nie całe zdanie.
+- Nie ustawiaj mainCategory/subCategory w search, jeśli nie jesteś pewien — zostaw null.
 - Używaj TYLKO kategorii z drzewa (dokładna wielkość liter). Biedronka/Lidl → Zakupy. Paliwo → Samochód › Paliwo.
 - amount: liczba dodatnia (kropka dziesiętna, bez „zł”).
 - Brak daty w tekście → ${today}.
@@ -228,9 +267,11 @@ Przykłady:
 Użytkownik: "20 zł biedronka"
 {"intent":"add_transaction","reply":"Dodaję zakup w Biedronce.","transaction":{"amount":20,"type":"expense","mainCategory":"Zakupy","subCategory":"[Bez podkategorii]","date":"${today}","note":"Biedronka"},"search":null}
 Użytkownik: "kiedy kupowałem ubrania?"
-{"intent":"search","reply":"Szukam transakcji z ubrań.","transaction":null,"search":{"query":"ubrania","mainCategory":"Osobista","subCategory":"Ubrania","type":"expense","daysBack":null}}
+{"intent":"search","reply":"Szukam transakcji z ubrań.","transaction":null,"search":{"query":"ubrania","mainCategory":null,"subCategory":null,"type":"expense","daysBack":null},"summarize":null}
+Użytkownik: "Suma?"
+{"intent":"summarize","reply":"Sumuję poprzednią listę.","transaction":null,"search":null,"summarize":{"operation":"sum","scope":"last_search"}}
 Użytkownik: "cześć"
-{"intent":"reply","reply":"Cześć! Podaj kwotę i opis, a dodam transakcję.","transaction":null,"search":null}`;
+{"intent":"reply","reply":"Cześć! Podaj kwotę i opis, a dodam transakcję.","transaction":null,"search":null,"summarize":null}`;
 }
 
 function resolveAssistantCategories(type, mainCategory, subCategory) {
@@ -333,28 +374,77 @@ function runAssistantSearch(search) {
 
     let items = getAssistantTransactionsSource();
     if (typeFilter) items = items.filter((t) => t.type === typeFilter);
-    if (search?.mainCategory) {
-        items = items.filter((t) => t.mainCategory === search.mainCategory);
-    }
-    if (search?.subCategory) {
-        items = items.filter((t) => t.subCategory === search.subCategory);
-    }
+    items = filterItemsByFuzzyCategoryField(items, 'mainCategory', search?.mainCategory);
+    items = filterItemsByFuzzyCategoryField(items, 'subCategory', search?.subCategory);
     if (minDate) items = items.filter((t) => t.date >= minDate);
-    if (query) {
-        items = items.filter((t) => (
-            t.mainCategory.toLowerCase().includes(query)
-            || t.subCategory.toLowerCase().includes(query)
-            || (t.note && t.note.toLowerCase().includes(query))
-            || String(t.amount).includes(query)
-        ));
-    }
+    if (query) items = items.filter((t) => transactionMatchesFuzzyQuery(t, query));
 
-    return items.slice(0, 12);
+    return items.slice(0, 100);
 }
 
 function formatAssistantSearchResults(items) {
     if (!items.length) return 'Nie znalazłem pasujących transakcji.';
-    return items.map((t) => formatAssistantTransactionPreview(t)).join('\n');
+    const shown = items.slice(0, 12);
+    const lines = shown.map((t) => formatAssistantTransactionPreview(t));
+    if (items.length > shown.length) {
+        lines.push(`… i ${items.length - shown.length} więcej (zapytaj o sumę).`);
+    }
+    return lines.join('\n');
+}
+
+function isAssistantSummarizeCommand(text) {
+    const normalized = String(text || '').toLowerCase().trim().replace(/[?!.…]+$/g, '');
+    if (!normalized) return false;
+    if (/^(suma|razem|podsumuj|łącznie|lacznie|ile to)$/.test(normalized)) return true;
+    if (/^ile (łącznie|lacznie|razem|to łącznie|to lacznie)$/.test(normalized)) return true;
+    if (/^(policz|ile pozycji|ile transakcji)$/.test(normalized)) return true;
+    return /^ile (jest|mam) (transakcj|pozycji)/.test(normalized);
+}
+
+function getAssistantSummarizeOperation(text, summarizePayload) {
+    if (summarizePayload?.operation === 'count') return 'count';
+    const normalized = String(text || '').toLowerCase();
+    if (/policz|ile (jest|mam) (transakcj|pozycji)|ile pozycji|ile transakcji/.test(normalized)) {
+        return 'count';
+    }
+    return 'sum';
+}
+
+function formatAssistantSummarize(items, operation = 'sum') {
+    if (!items.length) {
+        return 'Najpierw wyszukaj transakcje, potem zapytam o sumę.';
+    }
+    if (operation === 'count') {
+        return `Liczba transakcji: ${items.length}.`;
+    }
+    let expenseTotal = 0;
+    let incomeTotal = 0;
+    items.forEach((t) => {
+        const amount = Number(t.amount) || 0;
+        if (t.type === 'income') incomeTotal += amount;
+        else expenseTotal += amount;
+    });
+    const format = typeof formatPlnAmount === 'function'
+        ? formatPlnAmount
+        : (n) => `${Number(n).toFixed(2)} zł`;
+    const parts = [];
+    if (expenseTotal > 0) parts.push(`wydatki: ${format(expenseTotal)}`);
+    if (incomeTotal > 0) parts.push(`wpływy: ${format(incomeTotal)}`);
+    const summary = parts.length ? parts.join(', ') : format(0);
+    return `Łącznie (${items.length} transakcji): ${summary}.`;
+}
+
+function tryHandleLocalSkrybaCommand(text) {
+    if (!isAssistantSummarizeCommand(text)) return false;
+    const operation = getAssistantSummarizeOperation(text);
+    const reply = formatAssistantSummarize(skrybaLastSearchResults, operation);
+    appendSkrybaMessage('assistant', reply);
+    skrybaChatHistory.push({ role: 'assistant', text: reply });
+    return true;
+}
+
+function recordSkrybaAssistantReply(displayText) {
+    if (displayText) skrybaChatHistory.push({ role: 'assistant', text: displayText });
 }
 
 function runAssistantDebtToday() {
@@ -387,7 +477,7 @@ function runAssistantDebtToday() {
     return lines.join('\n');
 }
 
-async function handleAssistantIntent(parsed) {
+async function handleAssistantIntent(parsed, userMessage = '') {
     const intent = parsed?.intent || 'reply';
     const reply = String(parsed?.reply || '').trim();
 
@@ -410,40 +500,62 @@ async function handleAssistantIntent(parsed) {
             ? normalizeTransaction(tx)
             : null;
         if (!normalized) {
-            appendSkrybaMessage('assistant', reply || 'Nie udało się zbudować transakcji z opisu.');
-            return;
+            const msg = reply || 'Nie udało się zbudować transakcji z opisu.';
+            appendSkrybaMessage('assistant', msg);
+            return msg;
         }
         if (isAssistantConfirmTxEnabled()) {
             appendSkrybaMessage('assistant', reply || 'Sprawdź propozycję:');
             appendSkrybaPendingTransaction(normalized);
-            return;
+            return reply || 'Sprawdź propozycję:';
         }
         const result = commitAssistantTransaction(normalized);
         if (!result.ok) {
-            appendSkrybaMessage('assistant', result.error || 'Nie udało się zapisać.');
-            return;
+            const msg = result.error || 'Nie udało się zapisać.';
+            appendSkrybaMessage('assistant', msg);
+            return msg;
         }
-        appendSkrybaMessage('assistant', reply
+        const msg = reply
             ? `${reply}\n${formatAssistantTransactionPreview(result.tx)}`
-            : `Zapisano: ${formatAssistantTransactionPreview(result.tx)}`);
+            : `Zapisano: ${formatAssistantTransactionPreview(result.tx)}`;
+        appendSkrybaMessage('assistant', msg);
         if (typeof hapticFeedback === 'function') hapticFeedback();
-        return;
+        return msg;
     }
 
     if (intent === 'search') {
         const items = runAssistantSearch(parsed.search || {});
+        skrybaLastSearchResults = items;
         const body = formatAssistantSearchResults(items);
-        appendSkrybaMessage('assistant', reply ? `${reply}\n${body}` : body);
-        return;
+        const msg = reply ? `${reply}\n${body}` : body;
+        appendSkrybaMessage('assistant', msg);
+        return msg;
+    }
+
+    if (intent === 'summarize') {
+        const operation = getAssistantSummarizeOperation(userMessage, parsed.summarize);
+        const scope = parsed?.summarize?.scope || 'last_search';
+        if (scope !== 'last_search' || !skrybaLastSearchResults.length) {
+            const msg = reply || 'Najpierw wyszukaj transakcje, potem zapytam o sumę.';
+            appendSkrybaMessage('assistant', msg);
+            return msg;
+        }
+        const body = formatAssistantSummarize(skrybaLastSearchResults, operation);
+        const msg = reply ? `${reply}\n${body}` : body;
+        appendSkrybaMessage('assistant', msg);
+        return msg;
     }
 
     if (intent === 'debt_today') {
         const body = runAssistantDebtToday();
-        appendSkrybaMessage('assistant', reply ? `${reply}\n${body}` : body);
-        return;
+        const msg = reply ? `${reply}\n${body}` : body;
+        appendSkrybaMessage('assistant', msg);
+        return msg;
     }
 
-    appendSkrybaMessage('assistant', reply || 'Nie jestem pewien, jak pomóc — spróbuj inaczej sformułować.');
+    const msg = reply || 'Nie jestem pewien, jak pomóc — spróbuj inaczej sformułować.';
+    appendSkrybaMessage('assistant', msg);
+    return msg;
 }
 
 async function sendSkrybaMessage() {
@@ -452,14 +564,16 @@ async function sendSkrybaMessage() {
     const text = input?.value.trim();
     if (!text) return;
 
+    input.value = '';
+    appendSkrybaMessage('user', text);
+    skrybaChatHistory.push({ role: 'user', text });
+
+    if (tryHandleLocalSkrybaCommand(text)) return;
+
     if (!getAssistantApiKey()) {
         appendSkrybaMessage('assistant', 'Brak klucza API. Ustaw go w Ustawienia → Asystent AI.');
         return;
     }
-
-    input.value = '';
-    appendSkrybaMessage('user', text);
-    skrybaChatHistory.push({ role: 'user', text });
 
     if (sendBtn) sendBtn.disabled = true;
     appendSkrybaMessage('assistant', '…');
@@ -474,8 +588,8 @@ async function sendSkrybaMessage() {
             appendSkrybaMessage('assistant', 'Nie rozumiem odpowiedzi modelu — spróbuj ponownie.');
             return;
         }
-        skrybaChatHistory.push({ role: 'assistant', text: JSON.stringify(parsed) });
-        await handleAssistantIntent(parsed);
+        const displayText = await handleAssistantIntent(parsed, text);
+        recordSkrybaAssistantReply(displayText);
     } catch (err) {
         typingBubble?.remove();
         appendSkrybaMessage('assistant', err.message || 'Błąd połączenia z Groq.');

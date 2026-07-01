@@ -360,6 +360,29 @@ body.skryba-open {
     border-radius: 0;
 }
 
+.skryba-panel-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 16px 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.skryba-clear-chat {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 0;
+}
+
+.skryba-clear-chat:hover,
+.skryba-clear-chat:focus-visible {
+    color: var(--accent);
+}
+
 .skryba-messages {
     flex: 1;
     overflow-y: auto;
@@ -371,16 +394,64 @@ body.skryba-open {
 
 .skryba-msg {
     display: flex;
-    flex-direction: column;
-    max-width: 92%;
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 8px;
+    max-width: 100%;
 }
 
 .skryba-msg--user {
     align-self: flex-end;
+    flex-direction: row;
 }
 
 .skryba-msg--assistant {
     align-self: flex-start;
+}
+
+.skryba-msg-body {
+    display: flex;
+    flex-direction: column;
+    max-width: min(100%, 320px);
+}
+
+.skryba-msg--user .skryba-msg-body {
+    align-items: flex-end;
+}
+
+.skryba-msg-avatar {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+}
+
+.skryba-msg-avatar svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+}
+
+.skryba-msg-avatar--user {
+    background: var(--accent-soft);
+    border-color: transparent;
+    color: var(--accent);
+}
+
+.skryba-msg-avatar--assistant {
+    background: var(--accent);
+    border-color: transparent;
+    color: #fff;
+}
+
+.skryba-msg--typing .skryba-msg-bubble {
+    opacity: 0.7;
 }
 
 .skryba-msg-bubble {

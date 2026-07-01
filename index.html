@@ -93,6 +93,9 @@
     <div id="skryba-overlay" class="skryba-overlay hidden" onclick="if (event.target === this) closeSkrybaPanel()">
         <div class="skryba-panel settings-panel" onclick="event.stopPropagation()">
             <div id="panel-header-skryba"></div>
+            <div class="skryba-panel-toolbar">
+                <button type="button" class="skryba-clear-chat" onclick="clearSkrybaConversation()">Nowa rozmowa</button>
+            </div>
             <div id="skryba-messages" class="skryba-messages"></div>
             <div class="skryba-composer">
                 <textarea id="skryba-input" class="skryba-input" rows="2" placeholder="Np. 20 zł zakupy biedronka…" onkeydown="onSkrybaInputKeydown(event)"></textarea>
@@ -1732,6 +1735,7 @@
     <script src="js/firebase.js"></script>
     <script src="js/state.js"></script>
     <script src="js/format.js"></script>
+    <script src="js/search-utils.js"></script>
     <script src="js/theme.js"></script>
     <script src="js/categories.js"></script>
     <script src="js/loan-details.js"></script>
