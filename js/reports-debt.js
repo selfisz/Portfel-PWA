@@ -91,13 +91,18 @@ function sumDebtInstallmentPaymentsInRange(startDate, endDate) {
     return Math.round((loanPaid + cardPaid) * 100) / 100;
 }
 
-function getDebtInstallmentRemainingSummary(startDate, endDate) {
-    const planned = sumScheduledDebtPaymentsInRange(startDate, endDate);
-    const paid = sumDebtInstallmentPaymentsInRange(startDate, endDate);
+function getDebtInstallmentRemainingSummary(startDate, endDate, options = {}) {
+    const rows = collectDebtInstallmentRows({ startDate, endDate });
+    const filtered = options.loansOnly
+        ? rows.filter((row) => row.kind === 'loan')
+        : rows;
+    const planned = filtered.reduce((sum, row) => sum + (row.scheduledAmount || 0), 0);
+    const paid = filtered.reduce((sum, row) => sum + (row.paidAmount || 0), 0);
+    const remaining = filtered.reduce((sum, row) => sum + (row.amount || 0), 0);
     return {
-        planned,
-        paid,
-        remaining: Math.max(0, Math.round((planned - paid) * 100) / 100)
+        planned: Math.round(planned * 100) / 100,
+        paid: Math.round(paid * 100) / 100,
+        remaining: Math.round(remaining * 100) / 100
     };
 }
 

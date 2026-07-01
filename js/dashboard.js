@@ -957,9 +957,20 @@ function renderUpcomingLoanInstallments() {
     if (titleEl) titleEl.textContent = formatDashboardInstallmentsTitle();
 
     const { startDate, endDate } = getDashboardDates();
-    const installments = getUpcomingLoanInstallments({ startDate, endDate });
+    const loanRows = typeof collectDebtInstallmentRows === 'function'
+        ? collectDebtInstallmentRows({ startDate, endDate }).filter((row) => row.kind === 'loan')
+        : getUpcomingLoanInstallments({ startDate, endDate }).map((loan) => ({
+            id: loan.id,
+            name: getLoanDisplayName(loan),
+            amount: loan.nextInstallmentAmount,
+            scheduledAmount: loan.nextInstallmentAmount,
+            paidAmount: typeof sumLoanPaymentsForLoanInRange === 'function'
+                ? sumLoanPaymentsForLoanInRange(loan, startDate, endDate)
+                : 0,
+            sortKey: loan.nextInstallmentDue || '9999-99-99'
+        }));
     const installmentSummary = typeof getDebtInstallmentRemainingSummary === 'function'
-        ? getDebtInstallmentRemainingSummary(startDate, endDate)
+        ? getDebtInstallmentRemainingSummary(startDate, endDate, { loansOnly: true })
         : null;
 
     if (summaryEl && installmentSummary) {
@@ -976,32 +987,23 @@ function renderUpcomingLoanInstallments() {
     const emptyLabel = isDashboardForecastPeriod()
         ? 'Brak zaplanowanych rat w następnym miesiącu.'
         : 'W tym okresie wszystko spłacone.';
-    if (!installments.length) {
+    if (!loanRows.length) {
         list.innerHTML = `<p class="upcoming-loans-empty">${emptyLabel}</p>`;
         return;
     }
 
-    const paidByLoan = new Map();
-    if (typeof sumLoanPaymentsForLoanInRange === 'function') {
-        installments.forEach((loan) => {
-            if (!paidByLoan.has(loan.id)) {
-                paidByLoan.set(loan.id, sumLoanPaymentsForLoanInRange(loan, startDate, endDate));
-            }
-        });
-    }
-
-    list.innerHTML = installments.map((loan) => {
-        const days = daysUntilDate(loan.nextInstallmentDue);
+    list.innerHTML = loanRows.map((row) => {
+        const due = row.sortKey && !row.sortKey.startsWith('9999') ? row.sortKey : '';
+        const days = daysUntilDate(due);
         const overdue = days !== null && days < 0;
         const dueLabel = formatDueLabel(days);
-        const paid = paidByLoan.get(loan.id) || 0;
-        const paidNote = paid > 0 ? ` · zapłacono ${formatPlnAmount(paid)}` : '';
+        const paidNote = row.paidAmount > 0 ? ` · zapłacono ${formatPlnAmount(row.paidAmount)}` : '';
         return `<div class="dashboard-action-row${overdue ? ' dashboard-action-row--overdue' : ''}">
             <div class="dashboard-action-info">
-                <strong class="dashboard-action-name">${escapeHtml(getLoanDisplayName(loan))}</strong>
-                <span class="dashboard-action-meta">${formatPlnAmount(loan.nextInstallmentAmount)} · ${formatTxDate(loan.nextInstallmentDue)}${dueLabel ? ` · ${dueLabel}` : ''}${paidNote}</span>
+                <strong class="dashboard-action-name">${escapeHtml(row.name)}</strong>
+                <span class="dashboard-action-meta">${formatPlnAmount(row.amount)} · ${due ? formatTxDate(due) : '—'}${dueLabel ? ` · ${dueLabel}` : ''}${paidNote}</span>
             </div>
-            <button type="button" class="dashboard-quick-action-btn" onclick="payLoanInstallment('${escapeHtml(loan.id)}')">Zapłać</button>
+            <button type="button" class="dashboard-quick-action-btn" onclick="payLoanInstallment('${escapeHtml(row.id)}')">Zapłać</button>
         </div>`;
     }).join('');
 }

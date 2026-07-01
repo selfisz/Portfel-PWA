@@ -72,10 +72,22 @@ describe('getDebtInstallmentRemainingSummary', () => {
             mainCategory: 'Długi',
             subCategory: 'Raty'
         }];
-        const summary = getDebtInstallmentRemainingSummary('2026-06-01', '2026-06-30');
-        expect(summary.planned).toBe(1200);
-        expect(summary.paid).toBe(1200);
+        const summary = getDebtInstallmentRemainingSummary('2026-06-01', '2026-06-30', { loansOnly: true });
         expect(summary.remaining).toBe(0);
+    });
+
+    it('nie odejmuje spłat karty od rat kredytów', () => {
+        appState.transactions = [];
+        appState.creditCardMovements = [{
+            id: 'm1',
+            cardId: 'card-1',
+            type: 'repayment',
+            amount: 10000,
+            date: '2026-06-10'
+        }];
+        const summary = getDebtInstallmentRemainingSummary('2026-06-01', '2026-06-30', { loansOnly: true });
+        expect(summary.remaining).toBe(1200);
+        expect(getDebtInstallmentRemainingSummary('2026-06-01', '2026-06-30').remaining).toBe(1200);
     });
 });
 
