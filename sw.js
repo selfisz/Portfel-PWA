@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanse-pwa-v237';
+const CACHE_NAME = 'finanse-pwa-v238';
 
 const ASSETS = [
   './',
@@ -30,6 +30,12 @@ const ASSETS = [
   'js/investments.js',
   'js/loans.js',
   'js/settings.js',
+  'js/skryba-dates.js',
+  'js/skryba-entities.js',
+  'js/skryba-tools.js',
+  'js/skryba-actions.js',
+  'js/skryba-prompts.js',
+  'js/skryba-router.js',
   'js/assistant.js',
   'js/notifications.js',
   'js/budget-ui.js',

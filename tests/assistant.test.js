@@ -32,6 +32,12 @@ beforeAll(() => {
 
   loadScript('js/constants.js');
     loadScript('js/search-utils.js');
+    loadScript('js/skryba-dates.js');
+    loadScript('js/skryba-entities.js');
+    loadScript('js/skryba-tools.js');
+    loadScript('js/skryba-actions.js');
+    loadScript('js/skryba-prompts.js');
+    loadScript('js/skryba-router.js');
     loadScript('js/assistant.js');
 
     runInContext(`

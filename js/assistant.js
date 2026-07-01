@@ -1,5 +1,6 @@
 let skrybaChatHistory = [];
 let skrybaPendingTransaction = null;
+let skrybaPendingAction = null;
 let skrybaLastSearchResults = [];
 let skrybaThreads = [];
 let skrybaActiveThreadId = null;
@@ -346,7 +347,7 @@ function closeSkrybaPanel() {
 function renderSkrybaWelcomeIfEmpty() {
     const list = document.getElementById('skryba-messages');
     if (!list || list.children.length) return;
-    appendSkrybaMessage('assistant', 'Cześć! Mogę dodać wydatek (np. „20 zł biedronka”), wyszukać w historii albo podsumować wyniki („suma?”). Płatności kartą ustaw ręcznie w formularzu.', '', { skipPersist: true });
+    appendSkrybaMessage('assistant', 'Cześć! Mogę dodać wydatek, odpowiedzieć na pytania o majątek i wydatki (np. „ile na paliwo w maju?”), spłacić ratę lub kartę — tak jak z pulpitu.', '', { skipPersist: true });
 }
 
 function createSkrybaAvatar(role) {
@@ -438,6 +439,80 @@ function cancelSkrybaPendingTransaction() {
     skrybaPersistActiveThread();
 }
 
+function appendSkrybaPendingAction(action) {
+    skrybaPendingAction = action;
+    const extraHtml = `<div class="skryba-tx-preview">${escapeHtml(action.summary)}</div>
+        <div class="skryba-tx-actions">
+            <button type="button" class="skryba-btn skryba-btn--primary" onclick="confirmSkrybaPendingAction()">Wykonaj</button>
+            <button type="button" class="skryba-btn" onclick="cancelSkrybaPendingAction()">Anuluj</button>
+        </div>`;
+    appendSkrybaMessage('assistant', action.reply || 'Potwierdź operację:', extraHtml);
+}
+
+function confirmSkrybaPendingAction() {
+    if (!skrybaPendingAction) return;
+    const action = skrybaPendingAction;
+    skrybaPendingAction = null;
+    const result = executeSkrybaAction(action.tool, action.params);
+    const msg = result.ok
+        ? result.message
+        : (result.error || 'Operacja nie powiodła się.');
+    appendSkrybaMessage('assistant', msg);
+    skrybaChatHistory.push({ role: 'assistant', text: msg });
+    skrybaPersistActiveThread();
+    if (result.ok && typeof hapticFeedback === 'function') hapticFeedback();
+}
+
+function cancelSkrybaPendingAction() {
+    skrybaPendingAction = null;
+    const msg = 'OK, anulowano operację.';
+    appendSkrybaMessage('assistant', msg);
+    skrybaChatHistory.push({ role: 'assistant', text: msg });
+    skrybaPersistActiveThread();
+}
+
+async function dispatchSkrybaAction(action) {
+    const tool = action?.tool;
+    const params = action?.params || {};
+    const reply = action?.reply || '';
+
+    if (tool === 'add_transaction') {
+        return handleAssistantIntent({
+            intent: 'add_transaction',
+            reply,
+            transaction: params
+        });
+    }
+
+    const preview = buildSkrybaActionPreview(tool, params);
+    if (!preview.ok) {
+        if (preview.clarify?.length) {
+            const msg = `Mam kilka pasujących opcji:\n${preview.clarify.map((l) => `· ${l}`).join('\n')}\nDoprecyzuj nazwę.`;
+            appendSkrybaMessage('assistant', msg);
+            return msg;
+        }
+        const msg = preview.error || 'Nie udało się przygotować operacji.';
+        appendSkrybaMessage('assistant', msg);
+        return msg;
+    }
+
+    if (isAssistantConfirmTxEnabled()) {
+        appendSkrybaPendingAction({
+            tool,
+            params,
+            reply: reply || preview.summary,
+            summary: preview.summary
+        });
+        return reply || preview.summary;
+    }
+
+    const result = executeSkrybaAction(tool, params);
+    const msg = result.ok ? result.message : (result.error || 'Operacja nie powiodła się.');
+    appendSkrybaMessage('assistant', msg);
+    if (result.ok && typeof hapticFeedback === 'function') hapticFeedback();
+    return msg;
+}
+
 function commitAssistantTransaction(txData) {
     if (typeof commitTransactionData !== 'function') {
         return { ok: false, error: 'Brak obsługi zapisu transakcji.' };
@@ -458,35 +533,6 @@ function getAssistantCategoryCatalog() {
     const expense = categoryTree?.expense || DEFAULT_CATEGORY_TREE.expense;
     const income = categoryTree?.income || DEFAULT_CATEGORY_TREE.income;
     return { expense, income };
-}
-
-function buildAssistantSystemPrompt() {
-    const { expense, income } = getAssistantCategoryCatalog();
-    const today = typeof localIsoDate === 'function'
-        ? localIsoDate(new Date())
-        : new Date().toISOString().slice(0, 10);
-    return `Jesteś Skryba — asystent finansowy aplikacji Portfel (język polski).
-Odpowiadaj WYŁĄCZNIE jednym obiektem JSON. Bez markdown, bez tekstu poza JSON.
-
-Dzisiejsza data: ${today}.
-Kategorie wydatków: ${JSON.stringify(expense)}
-Kategorie wpływów: ${JSON.stringify(income)}
-
-Schemat:
-{"intent":"add_transaction|search|summarize|debt_today|reply","reply":"po polsku","transaction":{...}|null,"search":{...}|null,"summarize":{...}|null}
-
-Zasady:
-- add_transaction: użytkownik podaje kwotę i opis. Zwykły wydatek gotówkowy — bez karty kredytowej.
-- search: pytania o historię. query = słowo kluczowe (np. ubezpieczenie). mainCategory/subCategory tylko gdy pewny, inaczej null.
-- summarize: „suma?”, „ile łącznie?” po wcześniejszej liście → operation sum|count, scope last_search.
-- debt_today: raty/spłaty na dziś.
-- reply: small talk lub gdy brak danych.
-- Biedronka/Lidl → Zakupy. Paliwo → Samochód › Paliwo.
-- amount: liczba, kropka dziesiętna. Brak daty → ${today}.
-- Analizuj kontekst poprzednich wiadomości w rozmowie.
-
-Przykład: "20 zł biedronka"
-{"intent":"add_transaction","reply":"Zakupy w Biedronce.","transaction":{"amount":20,"type":"expense","mainCategory":"Zakupy","subCategory":"[Bez podkategorii]","date":"${today}","note":"Biedronka"},"search":null,"summarize":null}`;
 }
 
 function resolveAssistantCategories(type, mainCategory, subCategory) {
@@ -510,17 +556,6 @@ function resolveAssistantCategories(type, mainCategory, subCategory) {
             || (subs[0] || '[Bez podkategorii]');
     }
     return { mainCategory: main, subCategory: sub };
-}
-
-function parseAssistantResponse(raw) {
-    const text = String(raw || '').trim();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
-    try {
-        return JSON.parse(jsonMatch[0]);
-    } catch {
-        return null;
-    }
 }
 
 function tryParseLocalAddTransaction(text) {
@@ -574,54 +609,6 @@ function tryParseLocalAddTransaction(text) {
         search: null,
         summarize: null
     };
-}
-
-function buildGroqAssistantMessages(userMessage) {
-    const historyMessages = skrybaChatHistory.slice(-12).map((entry) => ({
-        role: entry.role === 'user' ? 'user' : 'assistant',
-        content: entry.text
-    }));
-    return [
-        { role: 'system', content: buildAssistantSystemPrompt() },
-        ...historyMessages,
-        { role: 'user', content: userMessage }
-    ];
-}
-
-async function callGroqAssistant(userMessage, { retry = true } = {}) {
-    const apiKey = getAssistantApiKey();
-    if (!apiKey) {
-        throw new Error('Ustaw klucz API Groq w Ustawienia → Asystent AI.');
-    }
-
-    const response = await fetch(ASSISTANT_GROQ_API_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-            model: ASSISTANT_GROQ_MODEL,
-            temperature: 0.2,
-            max_tokens: 1024,
-            response_format: { type: 'json_object' },
-            messages: buildGroqAssistantMessages(userMessage)
-        })
-    });
-
-    if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Groq HTTP ${response.status}: ${errText.slice(0, 200)}`);
-    }
-
-    const data = await response.json();
-    const rawText = data?.choices?.[0]?.message?.content;
-    if (!rawText) throw new Error('Pusta odpowiedź modelu.');
-    const parsed = parseAssistantResponse(rawText);
-    if (!parsed && retry) {
-        return callGroqAssistant(userMessage, { retry: false });
-    }
-    return parsed;
 }
 
 function getAssistantTransactionsSource() {
@@ -751,11 +738,17 @@ function runAssistantDebtToday() {
 }
 
 async function handleAssistantIntent(parsed, userMessage = '') {
-    const intent = parsed?.intent || 'reply';
     const reply = String(parsed?.reply || '').trim();
 
-    if (intent === 'add_transaction' && parsed.transaction) {
-        const raw = parsed.transaction;
+    if (parsed?.mode === 'advisor' && reply) {
+        appendSkrybaMessage('assistant', reply);
+        return reply;
+    }
+
+    const intent = parsed?.intent || (parsed?.mode === 'action' ? parsed.intent : 'reply');
+
+    if (intent === 'add_transaction' && (parsed.transaction || parsed?.action?.params)) {
+        const raw = parsed.transaction || parsed.action.params;
         const type = raw.type === 'income' ? 'income' : 'expense';
         const cats = resolveAssistantCategories(type, raw.mainCategory, raw.subCategory);
         const today = typeof localIsoDate === 'function'
@@ -845,10 +838,39 @@ async function sendSkrybaMessage() {
 
     if (tryHandleLocalSkrybaCommand(text)) return;
 
+    const localAction = typeof tryParseLocalSkrybaAction === 'function'
+        ? tryParseLocalSkrybaAction(text)
+        : null;
+    if (localAction) {
+        const displayText = await dispatchSkrybaAction(localAction);
+        if (displayText) {
+            skrybaChatHistory.push({ role: 'assistant', text: displayText });
+        }
+        skrybaPersistActiveThread();
+        return;
+    }
+
     const localTx = tryParseLocalAddTransaction(text);
     if (localTx) {
         await dispatchAssistantParsed(localTx, text);
         return;
+    }
+
+    const detection = typeof detectSkrybaToolsFromText === 'function'
+        ? detectSkrybaToolsFromText(text)
+        : { tools: [], toolParams: {} };
+    if (typeof isSkrybaAdvisorQuery === 'function'
+        && isSkrybaAdvisorQuery(detection)
+        && detection.tools.length
+        && !getAssistantApiKey()
+        && typeof formatSkrybaOfflineReply === 'function') {
+        const offlineMsg = formatSkrybaOfflineReply(detection.tools, detection.toolParams);
+        if (offlineMsg) {
+            appendSkrybaMessage('assistant', offlineMsg);
+            skrybaChatHistory.push({ role: 'assistant', text: offlineMsg });
+            skrybaPersistActiveThread();
+            return;
+        }
     }
 
     if (!getAssistantApiKey()) {
@@ -863,14 +885,22 @@ async function sendSkrybaMessage() {
     const typingBubble = list?.lastElementChild;
 
     try {
-        const parsed = await callGroqAssistant(text);
+        const routed = await processSkrybaUserMessage(text);
         typingBubble?.remove();
-        if (!parsed) {
+        if (routed.kind === 'action') {
+            const displayText = await dispatchSkrybaAction(routed.action);
+            if (displayText) {
+                skrybaChatHistory.push({ role: 'assistant', text: displayText });
+            }
+            skrybaPersistActiveThread();
+            return;
+        }
+        if (!routed.parsed) {
             appendSkrybaMessage('assistant', 'Nie rozumiem odpowiedzi modelu — spróbuj inaczej sformułować.');
             skrybaPersistActiveThread();
             return;
         }
-        await dispatchAssistantParsed(parsed, text);
+        await dispatchAssistantParsed(routed.parsed, text);
     } catch (err) {
         typingBubble?.remove();
         const msg = err.message || 'Błąd połączenia z Groq.';
