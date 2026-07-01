@@ -964,16 +964,10 @@ function renderUpcomingLoanInstallments() {
 
     if (summaryEl && installmentSummary) {
         summaryEl.classList.remove('hidden');
-        const paidLine = installmentSummary.paid > 0
-            ? ` · zapłacono ${formatPlnAmount(installmentSummary.paid)}`
-            : '';
-        const plannedLine = installmentSummary.planned > 0
-            ? `zaplanowano ${formatPlnAmount(installmentSummary.planned)}${paidLine}`
-            : '';
         summaryEl.innerHTML = `<div class="dashboard-installments-summary-grid">
             <span class="label">Pozostało do spłaty w tym miesiącu</span>
             <strong class="expense">${formatPlnAmount(installmentSummary.remaining)}</strong>
-        </div>${plannedLine ? `<p class="dashboard-installments-summary-meta">${plannedLine}</p>` : ''}`;
+        </div>`;
     } else if (summaryEl) {
         summaryEl.classList.add('hidden');
         summaryEl.innerHTML = '';

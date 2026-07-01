@@ -9986,12 +9986,6 @@ button.reports-debt-split-item strong {
     font-size: var(--text-lg);
 }
 
-.dashboard-installments-summary-meta {
-    margin: 6px 0 0;
-    font-size: var(--text-xs);
-    color: var(--text-muted);
-}
-
 .loan-progress-bar {
     margin-top: 4px;
 }
