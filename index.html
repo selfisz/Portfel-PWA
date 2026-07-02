@@ -1000,27 +1000,29 @@
                                     <button id="btn-compare-preset-custom" type="button" class="toggle-btn loans-chip" onclick="selectComparePreset('custom')">Własny</button>
                                 </nav>
                                 <div id="compare-preset-mom-wrap" class="compare-preset-panel">
-                                    <div class="compare-pickers-row">
-                                        <div class="compare-picker-col">
+                                    <div class="compare-pickers">
+                                        <div class="compare-pickers-labels">
                                             <span class="analysis-period-sub-label">Okres A</span>
-                                            <input type="month" id="reports-compare-a-month" class="analysis-period-month-input" aria-label="Okres A">
-                                        </div>
-                                        <span class="compare-pickers-vs" aria-hidden="true">vs</span>
-                                        <div class="compare-picker-col">
+                                            <span class="compare-pickers-vs-gap" aria-hidden="true"></span>
                                             <span class="analysis-period-sub-label">Okres B</span>
+                                        </div>
+                                        <div class="compare-pickers-controls">
+                                            <input type="month" id="reports-compare-a-month" class="analysis-period-month-input" aria-label="Okres A">
+                                            <span class="compare-pickers-vs" aria-hidden="true">vs</span>
                                             <input type="month" id="reports-compare-b-month" class="analysis-period-month-input" aria-label="Okres B">
                                         </div>
                                     </div>
                                 </div>
                                 <div id="compare-preset-yoy-wrap" class="compare-preset-panel hidden">
-                                    <div class="compare-pickers-row">
-                                        <div class="compare-picker-col">
+                                    <div class="compare-pickers">
+                                        <div class="compare-pickers-labels">
                                             <span class="analysis-period-sub-label">Okres A</span>
-                                            <select id="reports-compare-a-year" class="analysis-period-month-input" aria-label="Rok okresu A"></select>
-                                        </div>
-                                        <span class="compare-pickers-vs" aria-hidden="true">vs</span>
-                                        <div class="compare-picker-col">
+                                            <span class="compare-pickers-vs-gap" aria-hidden="true"></span>
                                             <span class="analysis-period-sub-label">Okres B</span>
+                                        </div>
+                                        <div class="compare-pickers-controls">
+                                            <select id="reports-compare-a-year" class="analysis-period-month-input" aria-label="Rok okresu A"></select>
+                                            <span class="compare-pickers-vs" aria-hidden="true">vs</span>
                                             <select id="reports-compare-b-year" class="analysis-period-month-input" aria-label="Rok okresu B"></select>
                                         </div>
                                     </div>
@@ -1031,18 +1033,19 @@
                                     <p id="reports-compare-same-month-hint" class="reports-hint compare-same-month-hint"></p>
                                 </div>
                                 <div id="compare-preset-custom-wrap" class="compare-preset-panel hidden">
-                                    <div class="compare-pickers-row compare-pickers-row--dates">
-                                        <div class="compare-picker-col">
+                                    <div class="compare-pickers">
+                                        <div class="compare-pickers-labels">
                                             <span class="analysis-period-sub-label">Okres A</span>
+                                            <span class="compare-pickers-vs-gap" aria-hidden="true"></span>
+                                            <span class="analysis-period-sub-label">Okres B</span>
+                                        </div>
+                                        <div class="compare-pickers-controls">
                                             <div class="reports-hero-date-row analysis-period-date-row">
                                                 <input type="date" id="reports-compare-a-start" class="analysis-period-date-input" aria-label="Początek okresu A">
                                                 <span class="reports-hero-date-sep">–</span>
                                                 <input type="date" id="reports-compare-a-end" class="analysis-period-date-input" aria-label="Koniec okresu A">
                                             </div>
-                                        </div>
-                                        <span class="compare-pickers-vs" aria-hidden="true">vs</span>
-                                        <div class="compare-picker-col">
-                                            <span class="analysis-period-sub-label">Okres B</span>
+                                            <span class="compare-pickers-vs" aria-hidden="true">vs</span>
                                             <div class="reports-hero-date-row analysis-period-date-row">
                                                 <input type="date" id="reports-compare-b-start" class="analysis-period-date-input" aria-label="Początek okresu B">
                                                 <span class="reports-hero-date-sep">–</span>
