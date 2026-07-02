@@ -4986,34 +4986,27 @@ body.auth-locked > #settings-overlay {
 }
 
 .compare-pickers-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    gap: 8px;
-    align-items: end;
-}
-
-.compare-pickers-row--dates {
-    align-items: start;
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 
 .compare-picker-col {
+    flex: 1;
     min-width: 0;
 }
 
 .compare-pickers-vs {
-    align-self: end;
-    padding-bottom: 8px;
+    flex-shrink: 0;
+    min-width: 2ch;
+    padding-inline: 4px;
     font-size: var(--text-2xs);
     font-weight: 700;
     opacity: 0.55;
     color: rgba(255, 255, 255, 0.85);
     text-transform: uppercase;
     letter-spacing: 0.04em;
-}
-
-.compare-pickers-row--dates .compare-pickers-vs {
-    align-self: center;
-    padding-bottom: 0;
+    text-align: center;
 }
 
 .compare-preset-panel {
@@ -5023,6 +5016,10 @@ body.auth-locked > #settings-overlay {
 @media (max-width: 420px) {
     .compare-preset-chips {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .compare-pickers-row {
+        gap: 12px;
     }
 }
 
