@@ -138,7 +138,11 @@ function skrybaPersistActiveThread() {
     if (!skrybaActiveThreadId) return;
     const thread = getSkrybaThreadById(skrybaActiveThreadId);
     if (!thread) return;
-    thread.messages = skrybaChatHistory.map((m) => ({ role: m.role, text: m.text }));
+    thread.messages = skrybaChatHistory.map((m) => {
+        const copy = { role: m.role, text: m.text };
+        if (m.meta) copy.meta = JSON.parse(JSON.stringify(m.meta));
+        return copy;
+    });
     thread.lastSearchResults = skrybaLastSearchResults;
     thread.updatedAt = Date.now();
     const firstUser = thread.messages.find((m) => m.role === 'user');
@@ -170,9 +174,16 @@ function skrybaLoadActiveThreadIntoUi() {
         renderSkrybaWelcomeIfEmpty();
     } else {
         skrybaChatHistory.forEach((entry) => {
-            if (entry.role === 'user' || entry.role === 'assistant') {
-                appendSkrybaMessage(entry.role, entry.text, '', { skipPersist: true, skipScroll: true });
+            if (entry.role === 'user') {
+                appendSkrybaMessage('user', entry.text, '', { skipPersist: true, skipScroll: true });
+                return;
             }
+            if (entry.role !== 'assistant') return;
+            if (entry.meta?.pending?.transaction) {
+                restoreSkrybaPendingFromHistoryEntry(entry);
+                return;
+            }
+            appendSkrybaMessage('assistant', entry.text, '', { skipPersist: true, skipScroll: true });
         });
         scrollSkrybaToBottom();
     }
@@ -360,9 +371,11 @@ function createSkrybaAvatar(role) {
 
 function appendSkrybaMessage(role, text, extraHtml = '', options = {}) {
     const list = document.getElementById('skryba-messages');
-    if (!list) return;
+    if (!list) return null;
+    const messageId = options.messageId || `skryba-msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const row = document.createElement('div');
     row.className = `skryba-msg skryba-msg--${role}${text === '…' ? ' skryba-msg--typing' : ''}`;
+    row.dataset.messageId = messageId;
 
     const body = document.createElement('div');
     body.className = 'skryba-msg-body';
@@ -388,17 +401,147 @@ function appendSkrybaMessage(role, text, extraHtml = '', options = {}) {
 
     list.appendChild(row);
     if (!options.skipScroll) scrollSkrybaToBottom();
+    return messageId;
 }
 
-function appendSkrybaPendingTransaction(tx) {
-    skrybaPendingTransaction = tx;
-    const label = formatAssistantTransactionPreview(tx);
-    const extraHtml = `<div class="skryba-tx-preview">${escapeHtml(label)}</div>
-        <div class="skryba-tx-actions">
+function buildSkrybaPendingTransactionExtraHtml() {
+    return `<div class="skryba-tx-actions">
             <button type="button" class="skryba-btn skryba-btn--primary" onclick="confirmSkrybaPendingTransaction()">Dodaj</button>
             <button type="button" class="skryba-btn" onclick="cancelSkrybaPendingTransaction()">Anuluj</button>
         </div>`;
-    appendSkrybaMessage('assistant', 'Proponuję dodać transakcję:', extraHtml);
+}
+
+function getSkrybaPendingTransactionState() {
+    return skrybaPendingTransaction?.status === 'pending' ? skrybaPendingTransaction : null;
+}
+
+function findSkrybaPendingMessageRow() {
+    const id = skrybaPendingTransaction?.domMessageId;
+    if (!id) return null;
+    return document.querySelector(`[data-message-id="${id}"]`);
+}
+
+function updateSkrybaPendingDom() {
+    const pending = getSkrybaPendingTransactionState();
+    if (!pending) return;
+    const row = findSkrybaPendingMessageRow();
+    if (!row) return;
+    const bubble = row.querySelector('.skryba-msg-bubble');
+    const preview = row.querySelector('.skryba-tx-preview');
+    if (bubble) bubble.textContent = pending.replyText || 'Proponuję dodać transakcję:';
+    if (preview) {
+        preview.textContent = formatAssistantTransactionPreview(pending.transaction);
+        preview.classList.add('skryba-tx-preview--updated');
+    }
+    scrollSkrybaToBottom();
+}
+
+function syncSkrybaPendingHistoryEntry() {
+    const pending = getSkrybaPendingTransactionState();
+    if (!pending) return;
+    const idx = skrybaChatHistory.findIndex((e) => e.meta?.pending?.id === pending.id);
+    if (idx < 0) return;
+    skrybaChatHistory[idx] = {
+        role: 'assistant',
+        text: pending.replyText || 'Proponuję dodać transakcję:',
+        meta: {
+            pending: {
+                id: pending.id,
+                transaction: { ...pending.transaction }
+            }
+        }
+    };
+}
+
+function appendSkrybaPendingTransaction(tx, options = {}) {
+    const normalized = typeof normalizeAssistantTransaction === 'function'
+        ? normalizeAssistantTransaction(tx)
+        : tx;
+    if (!normalized) return;
+
+    const pendingId = `pending_${Date.now()}`;
+    const replyText = options.replyText || 'Proponuję dodać transakcję:';
+    const label = formatAssistantTransactionPreview(normalized);
+    const extraHtml = `<div class="skryba-tx-preview">${escapeHtml(label)}</div>${buildSkrybaPendingTransactionExtraHtml()}`;
+    const domMessageId = appendSkrybaMessage('assistant', replyText, extraHtml);
+
+    skrybaPendingTransaction = {
+        id: pendingId,
+        version: 1,
+        status: 'pending',
+        source: options.source || 'ai',
+        transaction: normalized,
+        domMessageId,
+        replyText
+    };
+
+    skrybaChatHistory.push({
+        role: 'assistant',
+        text: replyText,
+        meta: {
+            pending: {
+                id: pendingId,
+                transaction: { ...normalized }
+            }
+        }
+    });
+}
+
+function restoreSkrybaPendingFromHistoryEntry(entry) {
+    const pendingMeta = entry.meta?.pending;
+    if (!pendingMeta?.transaction) {
+        appendSkrybaMessage('assistant', entry.text, '', { skipPersist: true, skipScroll: true });
+        return;
+    }
+    const normalized = typeof normalizeAssistantTransaction === 'function'
+        ? normalizeAssistantTransaction(pendingMeta.transaction)
+        : pendingMeta.transaction;
+    if (!normalized) return;
+
+    const replyText = entry.text || 'Proponuję dodać transakcję:';
+    const label = formatAssistantTransactionPreview(normalized);
+    const extraHtml = `<div class="skryba-tx-preview">${escapeHtml(label)}</div>${buildSkrybaPendingTransactionExtraHtml()}`;
+    const domMessageId = appendSkrybaMessage('assistant', replyText, extraHtml, {
+        skipPersist: true,
+        skipScroll: true
+    });
+
+    skrybaPendingTransaction = {
+        id: pendingMeta.id || `pending_${Date.now()}`,
+        version: 1,
+        status: 'pending',
+        source: 'restored',
+        transaction: normalized,
+        domMessageId,
+        replyText
+    };
+}
+
+function updateSkrybaPendingTransaction(rawTx, replyText) {
+    const pending = getSkrybaPendingTransactionState();
+    if (!pending) return false;
+    const normalized = typeof normalizeAssistantTransaction === 'function'
+        ? normalizeAssistantTransaction({ ...pending.transaction, ...rawTx })
+        : null;
+    if (!normalized) return false;
+
+    pending.version += 1;
+    pending.transaction = normalized;
+    if (replyText) pending.replyText = replyText;
+    updateSkrybaPendingDom();
+    syncSkrybaPendingHistoryEntry();
+    skrybaPersistActiveThread();
+    return true;
+}
+
+function clearSkrybaPendingHistoryMeta() {
+    const pending = skrybaPendingTransaction;
+    if (!pending) return;
+    const idx = skrybaChatHistory.findIndex((e) => e.meta?.pending?.id === pending.id);
+    if (idx >= 0) {
+        const text = skrybaChatHistory[idx].text;
+        skrybaChatHistory[idx] = { role: 'assistant', text };
+    }
 }
 
 function formatAssistantTransactionPreview(tx) {
@@ -412,9 +555,11 @@ function formatAssistantTransactionPreview(tx) {
 }
 
 function confirmSkrybaPendingTransaction() {
-    if (!skrybaPendingTransaction) return;
-    const result = commitAssistantTransaction(skrybaPendingTransaction);
+    const pending = getSkrybaPendingTransactionState();
+    if (!pending) return;
+    const result = commitAssistantTransaction(pending.transaction);
     skrybaPendingTransaction = null;
+    clearSkrybaPendingHistoryMeta();
     if (!result.ok) {
         const msg = result.error === 'cancelled'
             ? 'Anulowano zapis transakcji.'
@@ -433,6 +578,7 @@ function confirmSkrybaPendingTransaction() {
 
 function cancelSkrybaPendingTransaction() {
     skrybaPendingTransaction = null;
+    clearSkrybaPendingHistoryMeta();
     const msg = 'OK, nie dodaję transakcji.';
     appendSkrybaMessage('assistant', msg);
     skrybaChatHistory.push({ role: 'assistant', text: msg });
@@ -517,9 +663,13 @@ function commitAssistantTransaction(txData) {
     if (typeof commitTransactionData !== 'function') {
         return { ok: false, error: 'Brak obsługi zapisu transakcji.' };
     }
+    const type = txData.type === 'income' ? 'income' : 'expense';
+    if (!isAssistantCategoryPairValid(type, txData.mainCategory, txData.subCategory)) {
+        return { ok: false, error: 'Nieprawidłowa kategoria — wybierz parę z listy kategorii aplikacji.' };
+    }
     const sanitized = {
         amount: txData.amount,
-        type: txData.type,
+        type,
         mainCategory: txData.mainCategory,
         subCategory: txData.subCategory,
         date: txData.date,
@@ -535,27 +685,243 @@ function getAssistantCategoryCatalog() {
     return { expense, income };
 }
 
-function resolveAssistantCategories(type, mainCategory, subCategory) {
+function findAssistantCategoryName(name, candidates) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed || !Array.isArray(candidates) || !candidates.length) return null;
+    if (candidates.includes(trimmed)) return trimmed;
+    const lower = trimmed.toLowerCase();
+    const caseMatch = candidates.find((c) => c.toLowerCase() === lower);
+    if (caseMatch) return caseMatch;
+    if (typeof levenshteinDistance !== 'function' || trimmed.length < 3) return null;
+    let best = null;
+    let bestDist = 3;
+    candidates.forEach((c) => {
+        const dist = levenshteinDistance(lower, c.toLowerCase());
+        if (dist <= 2 && dist < bestDist) {
+            best = c;
+            bestDist = dist;
+        }
+    });
+    return best;
+}
+
+function isAssistantCategoryPairValid(type, mainCategory, subCategory) {
+    const tree = type === 'income'
+        ? (categoryTree?.income || DEFAULT_CATEGORY_TREE.income)
+        : (categoryTree?.expense || DEFAULT_CATEGORY_TREE.expense);
+    if (!tree || !mainCategory || !tree[mainCategory]) return false;
+    const subs = tree[mainCategory] || [];
+    if (!subCategory || subCategory === '[Bez podkategorii]') return true;
+    return subs.includes(subCategory);
+}
+
+function validateAssistantCategories(type, mainCategory, subCategory) {
     const tree = type === 'income'
         ? (categoryTree?.income || DEFAULT_CATEGORY_TREE.income)
         : (categoryTree?.expense || DEFAULT_CATEGORY_TREE.expense);
     const mains = Object.keys(tree);
-    let main = String(mainCategory || '').trim();
-    if (!mains.includes(main)) {
-        const lower = main.toLowerCase();
-        main = mains.find((m) => m.toLowerCase() === lower)
-            || mains.find((m) => m.toLowerCase().includes(lower) || lower.includes(m.toLowerCase()))
-            || (type === 'income' ? 'Inne' : 'Różne');
+    const defaultMain = type === 'income' ? 'Inne' : 'Różne';
+    let main = findAssistantCategoryName(mainCategory, mains);
+    if (!main) {
+        main = mains.includes(defaultMain) ? defaultMain : (mains[0] || defaultMain);
     }
-    const subs = tree[main] || [];
+    let subs = tree[main] || [];
     let sub = String(subCategory || '').trim() || '[Bez podkategorii]';
     if (sub !== '[Bez podkategorii]' && !subs.includes(sub)) {
-        const lower = sub.toLowerCase();
-        sub = subs.find((s) => s.toLowerCase() === lower)
-            || subs.find((s) => s.toLowerCase().includes(lower))
-            || (subs[0] || '[Bez podkategorii]');
+        let matchedSub = findAssistantCategoryName(sub, subs);
+        if (!matchedSub) {
+            for (const [candidateMain, candidateSubs] of Object.entries(tree)) {
+                const crossSub = findAssistantCategoryName(sub, candidateSubs || []);
+                if (crossSub) {
+                    main = candidateMain;
+                    subs = candidateSubs || [];
+                    matchedSub = crossSub;
+                    break;
+                }
+            }
+        }
+        if (!matchedSub) {
+            const subLooksLikeOtherMain = findAssistantCategoryName(sub, mains.filter((m) => m !== main));
+            if (subLooksLikeOtherMain) {
+                sub = subs.includes('[Bez podkategorii]') ? '[Bez podkategorii]' : (subs[0] || '[Bez podkategorii]');
+            } else {
+                sub = subs.includes('[Bez podkategorii]') ? '[Bez podkategorii]' : (subs[0] || '[Bez podkategorii]');
+            }
+        } else {
+            sub = matchedSub;
+        }
+    } else if (sub !== '[Bez podkategorii]') {
+        sub = findAssistantCategoryName(sub, subs) || sub;
+    } else if (!subs.includes('[Bez podkategorii]') && subs.length) {
+        sub = subs[0];
     }
     return { mainCategory: main, subCategory: sub };
+}
+
+function resolveAssistantCategories(type, mainCategory, subCategory) {
+    return validateAssistantCategories(type, mainCategory, subCategory);
+}
+
+function resolveCategoryFromUserPhrase(phrase, type = 'expense') {
+    const tree = type === 'income'
+        ? (categoryTree?.income || DEFAULT_CATEGORY_TREE.income)
+        : (categoryTree?.expense || DEFAULT_CATEGORY_TREE.expense);
+    const raw = String(phrase || '').trim();
+    if (!raw) return null;
+
+    const splitParts = raw.split(/\s*[>›/]\s*/);
+    if (splitParts.length >= 2) {
+        const main = findAssistantCategoryName(splitParts[0], Object.keys(tree));
+        if (main) {
+            const subs = tree[main] || [];
+            const subPart = splitParts.slice(1).join(' ').trim();
+            const sub = findAssistantCategoryName(subPart, subs) || '[Bez podkategorii]';
+            return { mainCategory: main, subCategory: sub };
+        }
+    }
+
+    const words = raw.split(/\s+/).filter(Boolean);
+    if (words.length >= 2) {
+        const main = findAssistantCategoryName(words[0], Object.keys(tree));
+        if (main) {
+            const subs = tree[main] || [];
+            const sub = findAssistantCategoryName(words.slice(1).join(' '), subs)
+                || findAssistantCategoryName(words[words.length - 1], subs)
+                || '[Bez podkategorii]';
+            return { mainCategory: main, subCategory: sub };
+        }
+    }
+
+    for (const [main, subs] of Object.entries(tree)) {
+        const sub = findAssistantCategoryName(raw, subs || []);
+        if (sub) return { mainCategory: main, subCategory: sub };
+    }
+
+    const mainOnly = findAssistantCategoryName(raw, Object.keys(tree));
+    if (mainOnly) {
+        const subs = tree[mainOnly] || [];
+        return {
+            mainCategory: mainOnly,
+            subCategory: subs.includes('[Bez podkategorii]') ? '[Bez podkategorii]' : (subs[0] || '[Bez podkategorii]')
+        };
+    }
+    return null;
+}
+
+function normalizeAssistantTransaction(raw) {
+    if (!raw || !Number.isFinite(parseFloat(raw.amount))) return null;
+    const type = raw.type === 'income' ? 'income' : 'expense';
+    const cats = resolveAssistantCategories(type, raw.mainCategory, raw.subCategory);
+    const today = typeof localIsoDate === 'function'
+        ? localIsoDate(new Date())
+        : new Date().toISOString().slice(0, 10);
+    const tx = {
+        amount: parseFloat(raw.amount),
+        type,
+        mainCategory: cats.mainCategory,
+        subCategory: cats.subCategory,
+        date: /^\d{4}-\d{2}-\d{2}$/.test(String(raw.date || '')) ? raw.date : today,
+        note: typeof raw.note === 'string' ? raw.note : '',
+        affectsCash: true
+    };
+    return typeof normalizeTransaction === 'function' ? normalizeTransaction(tx) : null;
+}
+
+function parseSkrybaCorrectionDateToken(token) {
+    const t = String(token || '').toLowerCase().trim();
+    const today = typeof localIsoDate === 'function'
+        ? localIsoDate(new Date())
+        : new Date().toISOString().slice(0, 10);
+    if (t === 'dziś' || t === 'dzisiaj') return today;
+    if (t === 'wczoraj') {
+        const d = new Date(`${today}T12:00:00`);
+        d.setDate(d.getDate() - 1);
+        return typeof localIsoDate === 'function' ? localIsoDate(d) : today;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    return null;
+}
+
+function tryApplyLocalPendingCorrection(text, pending) {
+    const t = String(text || '').trim();
+    if (!t || !pending?.transaction) return null;
+
+    if (/^(anuluj|nie dodawaj|odrzuć|rezygnuj)\b/i.test(t)) {
+        return { action: 'cancel', reply: 'OK, nie dodaję transakcji.' };
+    }
+
+    const patch = { ...pending.transaction };
+    let changed = false;
+
+    const catMatch = t.match(/(?:zmie[nń]|ustaw)\s+kategori[eęę]\s+na\s+(.+)/i)
+        || t.match(/^kategoria[:\s]+(.+)/i);
+    if (catMatch) {
+        const resolved = resolveCategoryFromUserPhrase(catMatch[1].trim(), patch.type);
+        if (resolved) {
+            patch.mainCategory = resolved.mainCategory;
+            patch.subCategory = resolved.subCategory;
+            changed = true;
+        }
+    }
+
+    const amtMatch = t.match(/(?:kwota|zmie[nń]\s+kwot[eęę])\s+(?:na\s+)?(\d+(?:[.,]\d{1,2})?)/i)
+        || (/^(\d+(?:[.,]\d{1,2})?)\s*(?:zł|zl|pln)?$/i.test(t) ? t.match(/^(\d+(?:[.,]\d{1,2})?)/) : null);
+    if (amtMatch) {
+        const amount = typeof parsePlnInput === 'function'
+            ? parsePlnInput(amtMatch[1])
+            : parseFloat(String(amtMatch[1]).replace(',', '.'));
+        if (Number.isFinite(amount) && amount > 0) {
+            patch.amount = amount;
+            changed = true;
+        }
+    }
+
+    const dateMatch = t.match(/(?:data|zmie[nń]\s+dat[eęę])\s+(?:na\s+)?(wczoraj|dzi[sś]|dzisiaj|\d{4}-\d{2}-\d{2})/i);
+    if (dateMatch) {
+        const date = parseSkrybaCorrectionDateToken(dateMatch[1]);
+        if (date) {
+            patch.date = date;
+            changed = true;
+        }
+    }
+
+    const noteMatch = t.match(/(?:notatka|opis|zmie[nń]\s+opis)\s+(?:na\s+)?(.+)/i);
+    if (noteMatch) {
+        patch.note = noteMatch[1].trim();
+        changed = true;
+    }
+
+    if (!changed) return null;
+    return {
+        action: 'update',
+        transaction: patch,
+        reply: 'Zaktualizowałem propozycję transakcji.'
+    };
+}
+
+async function handleSkrybaPendingCorrectionResult(routed) {
+    if (routed.kind === 'pending_cancel') {
+        cancelSkrybaPendingTransaction();
+        return routed.reply;
+    }
+    if (routed.kind === 'pending_update' && routed.transaction) {
+        const ok = updateSkrybaPendingTransaction(routed.transaction, routed.reply);
+        if (!ok) {
+            const msg = 'Nie udało się zaktualizować propozycji — sprawdź kategorię i kwotę.';
+            appendSkrybaMessage('assistant', msg);
+            skrybaChatHistory.push({ role: 'assistant', text: msg });
+            skrybaPersistActiveThread();
+            return msg;
+        }
+        return routed.reply || 'Zaktualizowałem propozycję.';
+    }
+    if (routed.kind === 'pending_clarify') {
+        appendSkrybaMessage('assistant', routed.reply);
+        skrybaChatHistory.push({ role: 'assistant', text: routed.reply });
+        skrybaPersistActiveThread();
+        return routed.reply;
+    }
+    return null;
 }
 
 function tryParseLocalAddTransaction(text) {
@@ -595,14 +961,15 @@ function tryParseLocalAddTransaction(text) {
     const today = typeof localIsoDate === 'function'
         ? localIsoDate(new Date())
         : new Date().toISOString().slice(0, 10);
+    const cats = resolveAssistantCategories(type, mainCategory, subCategory);
     return {
         intent: 'add_transaction',
         reply: `Dodaję: ${desc} — ${amount.toFixed(2)} zł.`,
         transaction: {
             amount,
             type,
-            mainCategory,
-            subCategory,
+            mainCategory: cats.mainCategory,
+            subCategory: cats.subCategory,
             date: today,
             note: desc
         },
@@ -691,7 +1058,10 @@ function formatAssistantSummarize(items, operation = 'sum') {
 
 async function dispatchAssistantParsed(parsed, userMessage) {
     const displayText = await handleAssistantIntent(parsed, userMessage);
-    if (displayText) {
+    const pendingHandled = parsed?.intent === 'add_transaction'
+        && isAssistantConfirmTxEnabled()
+        && getSkrybaPendingTransactionState();
+    if (displayText && !pendingHandled) {
         skrybaChatHistory.push({ role: 'assistant', text: displayText });
     }
     skrybaPersistActiveThread();
@@ -749,22 +1119,8 @@ async function handleAssistantIntent(parsed, userMessage = '') {
 
     if (intent === 'add_transaction' && (parsed.transaction || parsed?.action?.params)) {
         const raw = parsed.transaction || parsed.action.params;
-        const type = raw.type === 'income' ? 'income' : 'expense';
-        const cats = resolveAssistantCategories(type, raw.mainCategory, raw.subCategory);
-        const today = typeof localIsoDate === 'function'
-            ? localIsoDate(new Date())
-            : new Date().toISOString().slice(0, 10);
-        const tx = {
-            amount: parseFloat(raw.amount),
-            type,
-            mainCategory: cats.mainCategory,
-            subCategory: cats.subCategory,
-            date: /^\d{4}-\d{2}-\d{2}$/.test(String(raw.date || '')) ? raw.date : today,
-            note: typeof raw.note === 'string' ? raw.note : '',
-            affectsCash: true
-        };
-        const normalized = typeof normalizeTransaction === 'function'
-            ? normalizeTransaction(tx)
+        const normalized = typeof normalizeAssistantTransaction === 'function'
+            ? normalizeAssistantTransaction(raw)
             : null;
         if (!normalized) {
             const msg = reply || 'Nie udało się zbudować transakcji. Podaj kwotę i opis, np. „15 zł kawa”.';
@@ -772,9 +1128,8 @@ async function handleAssistantIntent(parsed, userMessage = '') {
             return msg;
         }
         if (isAssistantConfirmTxEnabled()) {
-            appendSkrybaMessage('assistant', reply || 'Sprawdź propozycję:');
-            appendSkrybaPendingTransaction(normalized);
-            return reply || 'Sprawdź propozycję:';
+            appendSkrybaPendingTransaction(normalized, { replyText: reply || 'Proponuję dodać transakcję:', source: 'ai' });
+            return reply || 'Proponuję dodać transakcję:';
         }
         const result = commitAssistantTransaction(normalized);
         if (!result.ok) {
@@ -838,6 +1193,41 @@ async function sendSkrybaMessage() {
 
     if (tryHandleLocalSkrybaCommand(text)) return;
 
+    if (getSkrybaPendingTransactionState()) {
+        if (!getAssistantApiKey()) {
+            const local = tryApplyLocalPendingCorrection(text, getSkrybaPendingTransactionState());
+            if (local?.action === 'cancel') {
+                cancelSkrybaPendingTransaction();
+                return;
+            }
+            if (local?.action === 'update' && local.transaction) {
+                updateSkrybaPendingTransaction(local.transaction, local.reply);
+                return;
+            }
+            appendSkrybaMessage('assistant', 'Brak klucza API — popraw propozycję lokalnie (np. „zmień kategorię na Zakupy”, „kwota 50”) albo kliknij Dodaj/Anuluj.');
+            return;
+        }
+        if (sendBtn) sendBtn.disabled = true;
+        appendSkrybaMessage('assistant', '…', '', { skipPersist: true });
+        const list = document.getElementById('skryba-messages');
+        const typingBubble = list?.lastElementChild;
+        try {
+            const routed = await processSkrybaUserMessage(text);
+            typingBubble?.remove();
+            await handleSkrybaPendingCorrectionResult(routed);
+        } catch (err) {
+            typingBubble?.remove();
+            const msg = err.message || 'Błąd połączenia z Groq.';
+            appendSkrybaMessage('assistant', msg);
+            skrybaChatHistory.push({ role: 'assistant', text: msg });
+            skrybaPersistActiveThread();
+        } finally {
+            if (sendBtn) sendBtn.disabled = false;
+            input?.focus();
+        }
+        return;
+    }
+
     const localAction = typeof tryParseLocalSkrybaAction === 'function'
         ? tryParseLocalSkrybaAction(text)
         : null;
@@ -887,9 +1277,16 @@ async function sendSkrybaMessage() {
     try {
         const routed = await processSkrybaUserMessage(text);
         typingBubble?.remove();
+        if (routed.kind === 'pending_cancel' || routed.kind === 'pending_update' || routed.kind === 'pending_clarify') {
+            await handleSkrybaPendingCorrectionResult(routed);
+            return;
+        }
         if (routed.kind === 'action') {
             const displayText = await dispatchSkrybaAction(routed.action);
-            if (displayText) {
+            const pendingHandled = routed.action?.tool === 'add_transaction'
+                && isAssistantConfirmTxEnabled()
+                && getSkrybaPendingTransactionState();
+            if (displayText && !pendingHandled) {
                 skrybaChatHistory.push({ role: 'assistant', text: displayText });
             }
             skrybaPersistActiveThread();

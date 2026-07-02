@@ -608,6 +608,11 @@ body.skryba-open {
     margin-bottom: 8px;
 }
 
+.skryba-tx-preview--updated {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
 .skryba-tx-actions {
     display: flex;
     gap: 8px;

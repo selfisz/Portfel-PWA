@@ -4,25 +4,59 @@ function getSkrybaTodayIso() {
         : new Date().toISOString().slice(0, 10);
 }
 
+function getSkrybaCategoryCatalogForPrompt() {
+    if (typeof getAssistantCategoryCatalog === 'function') {
+        return getAssistantCategoryCatalog();
+    }
+    const fallback = typeof DEFAULT_CATEGORY_TREE !== 'undefined'
+        ? DEFAULT_CATEGORY_TREE
+        : { expense: {}, income: {} };
+    return { expense: fallback.expense || {}, income: fallback.income || {} };
+}
+
+function buildSkrybaCategorySchemaBlock() {
+    const { expense, income } = getSkrybaCategoryCatalogForPrompt();
+    const formatTree = (tree) => Object.entries(tree || {}).map(([main, subs]) => {
+        const subList = Array.isArray(subs) && subs.length ? subs.join(', ') : '[Bez podkategorii]';
+        return `${main} → ${subList}`;
+    }).join('\n');
+
+    return `DOZWOLONE_KATEGORIE (używaj WYŁĄCZNIE tych nazw — bez tworzenia nowych, bez skracania, bez tłumaczenia):
+
+Wydatki:
+${formatTree(expense)}
+
+Wpływy:
+${formatTree(income)}
+
+Zasady mapowania:
+- mainCategory i subCategory muszą być dokładnie z listy powyżej.
+- Gdy brak podkategorii w drzewie — użyj "[Bez podkategorii]".
+- Gdy produkt nie pasuje jednoznacznie — wybierz najbliższą istniejącą parę (np. Różne / Inne), nigdy wymyślonej kategorii spoza listy.`;
+}
+
 function buildSkrybaPlannerPrompt() {
     const today = getSkrybaTodayIso();
+    const categoryBlock = buildSkrybaCategorySchemaBlock();
     return `Jesteś routerem intencji Skryby (Portfel PWA, język polski).
 Odpowiedz WYŁĄCZNIE jednym obiektem JSON. Bez markdown.
 
 Dzisiejsza data: ${today}.
 
+${categoryBlock}
+
 Dostępne narzędzia odczytu (tools):
 - snapshot_wealth — majątek, net worth, gotówka
 - list_debts — kredyty i karty
 - debt_overpay_hints — co nadpłacić (oprocentowanie)
-- filter_transactions — wydatki/wpływy w okresie i kategorii (params: startDate, endDate, mainCategory, subCategory, type, query)
+- filter_transactions — wydatki/wpływy w okresie i kategorii (params: startDate, endDate, mainCategory, subCategory, type, query). mainCategory/subCategory TYLKO z DOZWOLONE_KATEGORIE.
 - debt_schedule_today — raty na dziś
 
 Akcje (action.tool):
 - pay_installment — spłać ratę kredytu (params: loanQuery)
 - repay_loan — spłata kwoty kredytu (params: loanQuery, amount)
 - repay_card — spłata karty (params: cardQuery, amount)
-- add_transaction — nowa transakcja (params jak transaction)
+- add_transaction — nowa transakcja (params jak transaction; kategorie tylko z DOZWOLONE_KATEGORIE)
 
 Schemat planu doradczego:
 {"mode":"plan","tools":["filter_transactions"],"toolParams":{"filter_transactions":{"startDate":"2025-05-01","endDate":"2025-05-31","mainCategory":"Samochód","subCategory":"Paliwo","type":"expense"}},"action":null}
@@ -36,6 +70,7 @@ Nie odpowiadaj użytkownikowi wprost w trybie plan — tylko wskaż tools lub ac
 
 function buildSkrybaAdvisorSystemPrompt(contextJson) {
     const today = getSkrybaTodayIso();
+    const categoryBlock = buildSkrybaCategorySchemaBlock();
     return `Jesteś Skryba — asystent finansowy aplikacji Portfel (język polski).
 Odpowiadaj WYŁĄCZNIE JSON: {"mode":"advisor","reply":"tekst po polsku"}
 
@@ -47,6 +82,9 @@ Zasady:
 - Jeśli brak danych — powiedz wprost.
 - Odpowiedź zwięzła: 1–3 zdania, konkretne kwoty w zł.
 - Przy sumach wydatków używaj sumExpensesPln z filter_transactions.
+- Przy wymienianiu kategorii używaj wyłącznie nazw z DOZWOLONE_KATEGORIE.
+
+${categoryBlock}
 
 === DANE_PONIŻEJ ===
 ${contextJson}
@@ -54,10 +92,8 @@ ${contextJson}
 }
 
 function buildSkrybaActionSystemPrompt() {
-    const { expense, income } = typeof getAssistantCategoryCatalog === 'function'
-        ? getAssistantCategoryCatalog()
-        : { expense: {}, income: {} };
     const today = getSkrybaTodayIso();
+    const categoryBlock = buildSkrybaCategorySchemaBlock();
     return `Jesteś Skryba — asystent finansowy Portfel (polski).
 Odpowiedz JSON jednym z wariantów:
 
@@ -71,8 +107,35 @@ Spłata karty:
 {"mode":"action","intent":"repay_card","reply":"...","action":{"tool":"repay_card","params":{"cardQuery":"mbank","amount":500}}}
 
 Dzisiejsza data: ${today}.
-Kategorie wydatków: ${JSON.stringify(expense)}
-Kategorie wpływów: ${JSON.stringify(income)}`;
+
+${categoryBlock}`;
+}
+
+function buildSkrybaPendingCorrectionPrompt(pendingTransactionJson) {
+    const today = getSkrybaTodayIso();
+    const categoryBlock = buildSkrybaCategorySchemaBlock();
+    return `Jesteś Skryba — asystent Portfel (polski).
+Użytkownik koryguje OCZEKUJĄCĄ transakcję (jeszcze niezapisana). Odpowiedz WYŁĄCZNIE JSON.
+
+Dzisiejsza data: ${today}.
+
+${categoryBlock}
+
+OCZEKUJĄCA_TRANSAKCJA:
+${pendingTransactionJson}
+
+Schematy odpowiedzi:
+Aktualizacja pól:
+{"mode":"correct_pending","reply":"krótko po polsku","transaction":{"amount":50,"type":"expense","mainCategory":"...","subCategory":"...","date":"${today}","note":"..."}}
+
+Anulowanie propozycji (gdy użytkownik wyraźnie rezygnuje):
+{"mode":"cancel_pending","reply":"OK, nie dodaję transakcji."}
+
+Zasady:
+- Zwróć pełny obiekt transaction po korekcie (wszystkie pola).
+- Pola niewymienione przez użytkownika — zachowaj z OCZEKUJĄCA_TRANSAKCJA.
+- Kategorie tylko z DOZWOLONE_KATEGORIE.
+- Nie twórz drugiej transakcji — tylko aktualizuj oczekującą.`;
 }
 
 function parseSkrybaModelJson(raw) {

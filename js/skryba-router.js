@@ -34,11 +34,20 @@ async function callGroqSkrybaRaw(messages, { retry = true } = {}) {
     return parsed;
 }
 
+function formatSkrybaHistoryEntryContent(entry) {
+    const text = String(entry?.text || '');
+    const pendingTx = entry?.meta?.pending?.transaction;
+    if (pendingTx) {
+        return `${text}\n[[PENDING_TX]]:${JSON.stringify(pendingTx)}`;
+    }
+    return text;
+}
+
 function buildSkrybaHistoryMessages(limit = 10) {
     const history = typeof skrybaChatHistory !== 'undefined' ? skrybaChatHistory : [];
     return history.slice(-limit).map((entry) => ({
         role: entry.role === 'user' ? 'user' : 'assistant',
-        content: entry.text
+        content: formatSkrybaHistoryEntryContent(entry)
     }));
 }
 
@@ -70,7 +79,73 @@ async function callGroqSkrybaActionParser(userMessage) {
     return callGroqSkrybaRaw(messages);
 }
 
+async function callGroqSkrybaPendingCorrection(userMessage, pendingTransaction) {
+    const pendingJson = JSON.stringify(pendingTransaction, null, 0);
+    const messages = [
+        { role: 'system', content: buildSkrybaPendingCorrectionPrompt(pendingJson) },
+        ...buildSkrybaHistoryMessages(8),
+        { role: 'user', content: userMessage }
+    ];
+    return callGroqSkrybaRaw(messages);
+}
+
+function isSkrybaUnrelatedQueryWhilePending(text) {
+    const t = String(text || '').toLowerCase();
+    if (/^(anuluj|nie dodawaj|odrzuć|rezygnuj|potwierdź|dodaj|zapisz)/.test(t)) return false;
+    if (/zmie[nń]|kategoria|kwota|data|wczoraj|dzisiaj|dziś/.test(t)) return false;
+    if (/^\d+(?:[.,]\d{1,2})?\s*zł?/.test(t)) return false;
+    return /^(ile|pokaż|pokaz|suma|majątek|majątek|kredyt|hipotek|net worth|saldo)/.test(t)
+        || /\b(ile wyda|ile mam|ile zost|harmonogram)\b/.test(t);
+}
+
+async function processSkrybaPendingCorrection(userMessage) {
+    const pending = typeof getSkrybaPendingTransactionState === 'function'
+        ? getSkrybaPendingTransactionState()
+        : null;
+    if (!pending) return null;
+
+    const local = typeof tryApplyLocalPendingCorrection === 'function'
+        ? tryApplyLocalPendingCorrection(userMessage, pending)
+        : null;
+    if (local?.action === 'cancel') {
+        return { kind: 'pending_cancel', reply: local.reply };
+    }
+    if (local?.action === 'update' && local.transaction) {
+        return { kind: 'pending_update', transaction: local.transaction, reply: local.reply };
+    }
+
+    if (isSkrybaUnrelatedQueryWhilePending(userMessage)) {
+        return {
+            kind: 'pending_clarify',
+            reply: 'Masz oczekującą propozycję transakcji. Najpierw ją popraw (np. „zmień kategorię na Kosmetyki”), kliknij Dodaj/Anuluj, albo napisz „anuluj”.'
+        };
+    }
+
+    const corrected = await callGroqSkrybaPendingCorrection(userMessage, pending.transaction);
+    if (corrected?.mode === 'cancel_pending') {
+        return { kind: 'pending_cancel', reply: corrected.reply || 'OK, nie dodaję transakcji.' };
+    }
+    if (corrected?.mode === 'correct_pending' && corrected.transaction) {
+        return {
+            kind: 'pending_update',
+            transaction: corrected.transaction,
+            reply: corrected.reply || 'Zaktualizowałem propozycję.'
+        };
+    }
+    return {
+        kind: 'pending_clarify',
+        reply: corrected?.reply || 'Nie rozumiem korekty — podaj np. „zmień kategorię na Zakupy” lub „kwota 50”.'
+    };
+}
+
 async function processSkrybaUserMessage(text) {
+    const pending = typeof getSkrybaPendingTransactionState === 'function'
+        ? getSkrybaPendingTransactionState()
+        : null;
+    if (pending) {
+        return processSkrybaPendingCorrection(text);
+    }
+
     const localAction = typeof tryParseLocalSkrybaAction === 'function'
         ? tryParseLocalSkrybaAction(text)
         : null;

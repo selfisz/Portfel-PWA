@@ -20,7 +20,7 @@ beforeAll(() => {
     };
     globalThis.appState = { transactions: [] };
     globalThis.categoryTree = {
-        expense: { Samochód: ['Paliwo', 'Ubezpieczenie'] },
+        expense: { Samochód: ['Paliwo', 'Ubezpieczenie'], Zakupy: ['[Bez podkategorii]'] },
         income: { Inne: [] }
     };
     globalThis.DEFAULT_CATEGORY_TREE = globalThis.categoryTree;
