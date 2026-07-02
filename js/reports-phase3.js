@@ -376,7 +376,10 @@ function populateCompareYearSelects() {
 function updateComparePresetUI() {
     COMPARE_PRESETS.forEach((preset) => {
         const btnId = preset === 'same-month' ? 'btn-compare-preset-same-month' : `btn-compare-preset-${preset}`;
-        document.getElementById(btnId)?.classList.toggle('active', reportsComparePreset === preset);
+        const btn = document.getElementById(btnId);
+        const isActive = reportsComparePreset === preset;
+        btn?.classList.toggle('active', isActive);
+        btn?.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
     document.getElementById('compare-preset-mom-wrap')?.classList.toggle('hidden', reportsComparePreset !== 'mom');
     document.getElementById('compare-preset-yoy-wrap')?.classList.toggle('hidden', reportsComparePreset !== 'yoy');

@@ -4983,23 +4983,33 @@ body.auth-locked > #settings-overlay {
     font-size: var(--text-2xs);
     text-align: center;
     line-height: 1.2;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.compare-preset-chips .toggle-btn.loans-chip.active {
+    background: rgba(255, 255, 255, 0.28);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #fff;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
 .compare-pickers-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    column-gap: 16px;
+    align-items: end;
 }
 
 .compare-picker-col {
-    flex: 1;
     min-width: 0;
 }
 
 .compare-pickers-vs {
     flex-shrink: 0;
     min-width: 2ch;
-    padding-inline: 4px;
+    padding: 0 4px 8px;
     font-size: var(--text-2xs);
     font-weight: 700;
     opacity: 0.55;
@@ -5007,6 +5017,7 @@ body.auth-locked > #settings-overlay {
     text-transform: uppercase;
     letter-spacing: 0.04em;
     text-align: center;
+    line-height: 1;
 }
 
 .compare-preset-panel {
@@ -5019,7 +5030,7 @@ body.auth-locked > #settings-overlay {
     }
 
     .compare-pickers-row {
-        gap: 12px;
+        column-gap: 12px;
     }
 }
 
