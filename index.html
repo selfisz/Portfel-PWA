@@ -1000,17 +1000,15 @@
                                     <button id="btn-compare-preset-custom" type="button" class="toggle-btn loans-chip" onclick="selectComparePreset('custom')">Własny</button>
                                 </nav>
                                 <div id="compare-preset-mom-wrap" class="compare-preset-panel">
-                                    <div class="compare-pickers">
-                                        <div class="compare-pickers-labels">
-                                            <span class="analysis-period-sub-label">Okres A</span>
-                                            <span class="compare-pickers-vs-gap" aria-hidden="true"></span>
-                                            <span class="analysis-period-sub-label">Okres B</span>
-                                        </div>
-                                        <div class="compare-pickers-controls">
-                                            <input type="month" id="reports-compare-a-month" class="analysis-period-month-input" aria-label="Okres A">
-                                            <span class="compare-pickers-vs" aria-hidden="true">vs</span>
-                                            <input type="month" id="reports-compare-b-month" class="analysis-period-month-input" aria-label="Okres B">
-                                        </div>
+                                    <div class="compare-mom-flex-row compare-mom-labels-row">
+                                        <span class="analysis-period-sub-label compare-mom-side">Okres A</span>
+                                        <span class="compare-mom-vs compare-mom-vs--spacer" aria-hidden="true">vs</span>
+                                        <span class="analysis-period-sub-label compare-mom-side">Okres B</span>
+                                    </div>
+                                    <div class="compare-mom-flex-row compare-mom-controls-row">
+                                        <input type="month" id="reports-compare-a-month" class="analysis-period-month-input compare-mom-side" aria-label="Okres A">
+                                        <span class="compare-mom-vs" aria-hidden="true">vs</span>
+                                        <input type="month" id="reports-compare-b-month" class="analysis-period-month-input compare-mom-side" aria-label="Okres B">
                                     </div>
                                 </div>
                                 <div id="compare-preset-yoy-wrap" class="compare-preset-panel hidden">

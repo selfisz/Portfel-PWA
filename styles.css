@@ -5041,6 +5041,66 @@ body.auth-locked > #settings-overlay {
     margin-top: 4px;
 }
 
+#compare-preset-mom-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+#compare-preset-mom-wrap .compare-mom-flex-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
+}
+
+#compare-preset-mom-wrap .compare-mom-vs {
+    flex-shrink: 0;
+    min-width: 1.75rem;
+    padding: 0 4px;
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    opacity: 0.55;
+    color: rgba(255, 255, 255, 0.85);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-align: center;
+    line-height: 1;
+}
+
+#compare-preset-mom-wrap .compare-mom-vs--spacer {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#compare-preset-mom-wrap .compare-mom-side {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#compare-preset-mom-wrap .compare-mom-labels-row .analysis-period-sub-label {
+    margin-bottom: 0;
+}
+
+#compare-preset-mom-wrap input[type="month"].compare-mom-side {
+    width: auto;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+#compare-preset-mom-wrap input[type="month"].compare-mom-side::-webkit-date-and-time-value {
+    display: block;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 @media (max-width: 420px) {
     .compare-preset-chips {
         grid-template-columns: repeat(2, minmax(0, 1fr));
