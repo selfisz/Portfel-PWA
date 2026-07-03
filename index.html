@@ -90,6 +90,10 @@
         <button type="button" onclick="dismissModuleSplitBanner()">OK</button>
     </div>
 
+    <div id="offline-banner" class="offline-banner hidden" role="status" aria-live="polite">
+        <span>Tryb offline — zmiany zapisują się lokalnie i zsynchronizują się po powrocie internetu.</span>
+    </div>
+
     <div id="skryba-overlay" class="skryba-overlay hidden">
         <div class="skryba-shell">
             <header class="skryba-header">
@@ -1779,6 +1783,7 @@
     <script src="js/state-limits.js"></script>
     <script src="js/backup-import.js"></script>
     <script src="js/sync-queue.js"></script>
+    <script src="js/offline.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/transactions.js"></script>
     <script src="js/dashboard.js"></script>

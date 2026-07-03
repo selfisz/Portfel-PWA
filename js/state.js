@@ -389,26 +389,34 @@ function normalizeAppState(raw) {
     return applyRemoteAppState(raw);
 }
 
+function loadLocalFinanceState() {
+    const localRaw = readStoredAppStateRaw();
+    if (!localRaw) return false;
+
+    applyRemoteAppState(localRaw);
+    applyMigrations();
+    checkAndProcessRecurringTransactions();
+    try {
+        localStorage.setItem(getFinanceStorageKey(), JSON.stringify(getPersistedState(appState)));
+    } catch (err) {
+        console.error('loadLocalFinanceState', err);
+    }
+    refreshCurrentView();
+    return true;
+}
+
 function initData() {
-    if (!stateRef || typeof stateRef.onSnapshot !== 'function') return;
+    if (!stateRef || typeof stateRef.onSnapshot !== 'function') {
+        if (loadLocalFinanceState()) {
+            setSyncStatus('offline', getTransactionCount(appState));
+        }
+        if (typeof initOfflineListeners === 'function') initOfflineListeners();
+        return;
+    }
 
     stopCloudSync();
-    let localRaw = readStoredAppStateRaw();
-    const storageKey = getFinanceStorageKey();
-
-    if (localRaw) {
-        if (!localStorage.getItem(storageKey)) {
-            localStorage.setItem(storageKey, JSON.stringify(getPersistedState(localRaw)));
-        }
-        applyRemoteAppState(localRaw);
-        applyMigrations();
-        checkAndProcessRecurringTransactions();
-        try {
-            localStorage.setItem(storageKey, JSON.stringify(getPersistedState(appState)));
-        } catch (err) {
-            console.error('initData localStorage', err);
-        }
-        refreshCurrentView();
+    if (loadLocalFinanceState()) {
+        /* local snapshot loaded — cloud sync continues below */
     }
 
     cloudSyncUnlocked = true;
@@ -452,14 +460,18 @@ function initData() {
     }, (error) => {
         console.error('Błąd synchronizacji', error);
         clearSyncTimeout();
-        settleSyncIndicator();
-        if (getTransactionCount(appState) < 100) {
+        const count = getTransactionCount(appState);
+        if (count > 0) setSyncStatus('offline', count);
+        else settleSyncIndicator();
+        if (count < 100) {
             autoRecoverFromCloudBackupIfNeeded().finally(() => {
                 clearSyncTimeout();
                 settleSyncIndicator();
             });
         }
     });
+
+    if (typeof initOfflineListeners === 'function') initOfflineListeners();
 }
 
 function saveState(options = {}) {

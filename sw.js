@@ -1,4 +1,10 @@
-const CACHE_NAME = 'finanse-pwa-v252';
+const CACHE_NAME = 'finanse-pwa-v253';
+
+const FIREBASE_CDN = [
+  'https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js',
+  'https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js'
+];
 
 const ASSETS = [
   './',
@@ -19,6 +25,7 @@ const ASSETS = [
   'js/state-limits.js',
   'js/backup-import.js',
   'js/sync-queue.js',
+  'js/offline.js',
   'js/ui.js',
   'js/transactions.js',
   'js/dashboard.js',
@@ -55,6 +62,12 @@ const ASSETS = [
   'icons/apple-touch-icon.png'
 ];
 
+function isFirebaseCdnRequest(url) {
+  return url.hostname === 'www.gstatic.com'
+    && url.pathname.includes('/firebasejs/10.8.1/')
+    && url.pathname.endsWith('.js');
+}
+
 function isAppShellRequest(url) {
   if (url.origin !== self.location.origin) return false;
   const path = url.pathname;
@@ -77,7 +90,10 @@ function isAuthNavigation(url) {
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(ASSETS))
+      .then((cache) => Promise.all([
+        cache.addAll(ASSETS),
+        ...FIREBASE_CDN.map((url) => cache.add(url).catch(() => {}))
+      ]))
       .then(() => self.skipWaiting())
   );
 });
@@ -97,6 +113,21 @@ self.addEventListener('fetch', (e) => {
 
   // OAuth / Firebase Auth — nigdy nie przechwytuj (szczególnie iOS Safari / PWA).
   if (e.request.mode === 'navigate' || isAuthNavigation(url)) return;
+
+  if (isFirebaseCdnRequest(url)) {
+    e.respondWith(
+      fetch(e.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
 
   if (!isAppShellRequest(url)) return;
 

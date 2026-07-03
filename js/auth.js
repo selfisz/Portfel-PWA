@@ -349,6 +349,8 @@ async function handleAuthenticatedUser(user) {
 
         hideAuthOverlay();
 
+        if (typeof clearOfflineSession === 'function') clearOfflineSession();
+
         if (typeof bootstrapApp === 'function') bootstrapApp();
         refreshAccountSettingsUI();
         registerServiceWorker();
@@ -358,6 +360,7 @@ async function handleAuthenticatedUser(user) {
 }
 
 function handleSignedOutUser() {
+    if (typeof isOfflineSessionActive === 'function' && isOfflineSessionActive()) return;
     if (!authInitComplete || authDenyLock || authUiMode === 'denied') return;
     currentAuthUser = null;
     authReady = true;
@@ -406,7 +409,7 @@ async function initAuthGate() {
         }
     }
 
-    if (!usesEmailPasswordAuth()) {
+    if (!usesEmailPasswordAuth() && !isAppOffline()) {
         try {
             const redirectResult = await auth.getRedirectResult();
             if (redirectResult?.user) {
@@ -416,7 +419,9 @@ async function initAuthGate() {
             }
         } catch (err) {
             console.error('getRedirectResult', err);
-            setAuthUiMode('error', formatAuthError(err));
+            if (!isAppOffline() || !hasLocalFinanceData()) {
+                setAuthUiMode('error', formatAuthError(err));
+            }
         }
     }
 
@@ -425,7 +430,17 @@ async function initAuthGate() {
     if (!currentAuthUser && auth.currentUser) {
         await handleAuthenticatedUser(auth.currentUser);
     } else if (!currentAuthUser && authUiMode !== 'error') {
-        setAuthUiMode('signin');
+        if (typeof isAppOffline === 'function' && isAppOffline() && typeof hasLocalFinanceData === 'function' && hasLocalFinanceData()) {
+            await new Promise((resolve) => setTimeout(resolve, 1200));
+            if (!currentAuthUser && auth.currentUser) {
+                await handleAuthenticatedUser(auth.currentUser);
+            } else if (!currentAuthUser && typeof bootstrapOfflineSession === 'function') {
+                const ok = await bootstrapOfflineSession();
+                if (!ok) setAuthUiMode('signin');
+            }
+        } else {
+            setAuthUiMode('signin');
+        }
     }
 
     auth.onAuthStateChanged((user) => {
@@ -441,6 +456,7 @@ async function initAuthGate() {
 
     initTheme();
     maybeRegisterServiceWorker();
+    if (typeof initOfflineListeners === 'function') initOfflineListeners();
 }
 
 if (document.readyState === 'loading') {
