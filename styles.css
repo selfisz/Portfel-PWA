@@ -11704,7 +11704,28 @@ button.reports-debt-split-item strong {
 .duplicate-tx-body { margin: 12px 0 16px; }
 .duplicate-tx-list { margin: 8px 0 0; padding-left: 18px; }
 .duplicate-tx-new { margin: 8px 0; }
-.duplicate-tx-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.duplicate-tx-actions,
+.month-close-footer {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.duplicate-tx-actions .btn-submit--form,
+.duplicate-tx-actions .btn-cancel--form,
+.month-close-footer .btn-submit--form,
+.month-close-footer .btn-cancel--form {
+    flex: 1;
+    margin: 0;
+    display: block;
+}
+
+.month-close-banner-btn {
+    flex-shrink: 0;
+    width: auto;
+    min-width: 96px;
+    padding: 10px 16px;
+}
 
 /* Rozliczenie miesiąca */
 .month-close-header {
@@ -11743,12 +11764,7 @@ button.reports-debt-split-item strong {
     grid-template-columns: 1fr 1fr;
     gap: 12px;
 }
-.month-close-footer {
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-    margin-top: 16px;
-}
+
 .month-close-banner {
     display: flex;
     align-items: center;

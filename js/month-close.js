@@ -335,7 +335,7 @@ function renderMonthCloseBannerHtml(monthKey) {
             <strong>Rozlicz ${escapeHtml(formatMonthKeyLabel(monthKey))}</strong>
             <span class="reports-hint">Sprawdź cykliczne, duplikaty i budżet przed zamknięciem miesiąca.</span>
         </div>
-        <button type="button" class="btn-primary btn-sm" onclick="openMonthCloseWizard('${escapeHtml(monthKey)}')">Rozlicz</button>
+        <button type="button" class="btn-submit btn-submit--form month-close-banner-btn" onclick="openMonthCloseWizard('${escapeHtml(monthKey)}')">Rozlicz</button>
     </div>`;
 }
 

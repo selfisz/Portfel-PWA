@@ -88,7 +88,7 @@ function showDuplicateConfirmDialog(tx, candidates) {
     const lines = candidates.slice(0, 3).map(({ tx: other }) => formatDuplicateTransactionLine(other));
     const more = candidates.length > 3 ? `<p class="reports-hint">…i ${candidates.length - 3} podobnych.</p>` : '';
     body.innerHTML = `
-        <p>Nowa transakcja wygląda jak duplikat istniejącego wpisu:</p>
+        <p>Wykryto duplikat — taka transakcja już jest w bazie:</p>
         <p class="duplicate-tx-new"><strong>${escapeHtml(formatDuplicateTransactionLine(tx))}</strong></p>
         <ul class="duplicate-tx-list">${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>
         ${more}`;
