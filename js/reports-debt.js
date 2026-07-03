@@ -821,17 +821,44 @@ function renderReportsYearReview(ctx) {
         </div>`;
 }
 
-function buildReportsPrintBody(ctx, savingsRate) {
-    const s = summarizePeriod(ctx.periodTx);
-    return `<h1 class="reports-pdf-title">Raport finansowy — ${escapeHtml(ctx.label)}</h1>
-        <p class="reports-pdf-summary">Wpływy: ${formatPlnAmount(s.income)} | Wydatki: ${formatPlnAmount(s.expense)} | Bilans: ${formatPlnAmount(s.balance)} | Oszczędności: ${savingsRate}%</p>
-        <table class="reports-pdf-table"><thead><tr><th>Data</th><th>Typ</th><th>Kategoria</th><th>Kwota</th><th>Notatka</th></tr></thead><tbody>
-        ${ctx.periodTx.sort((a, b) => a.date.localeCompare(b.date)).map((t) => `<tr>
+function buildTransactionRowsHtml(periodTx) {
+    return [...periodTx].sort((a, b) => a.date.localeCompare(b.date)).map((t) => `<tr>
             <td>${t.date}</td><td>${t.type === 'expense' ? 'Wydatek' : 'Wpływ'}</td>
             <td>${escapeHtml(t.mainCategory)}${t.subCategory !== '[Bez podkategorii]' ? ' / ' + escapeHtml(t.subCategory) : ''}</td>
             <td>${t.amount.toFixed(2)} zł</td><td>${escapeHtml(t.note || '')}</td>
-        </tr>`).join('')}
-        </tbody></table>`;
+        </tr>`).join('');
+}
+
+function buildTransactionsPeriodSection(periodTx, title, isMainTitle = false) {
+    const s = summarizePeriod(periodTx);
+    const savingsRate = s.income > 0 ? Math.round((s.balance / s.income) * 100) : 0;
+    const headingTag = isMainTitle ? 'h1' : 'h2';
+    const headingClass = isMainTitle ? 'reports-pdf-title' : 'reports-pdf-section-title';
+    return `<section class="reports-pdf-tx-section">
+        <${headingTag} class="${headingClass}">${escapeHtml(title)}</${headingTag}>
+        <p class="reports-pdf-summary">Wpływy: ${formatPlnAmount(s.income)} | Wydatki: ${formatPlnAmount(s.expense)} | Bilans: ${formatPlnAmount(s.balance)} | Oszczędności: ${savingsRate}%</p>
+        <table class="reports-pdf-table"><thead><tr><th>Data</th><th>Typ</th><th>Kategoria</th><th>Kwota</th><th>Notatka</th></tr></thead><tbody>
+        ${buildTransactionRowsHtml(periodTx)}
+        </tbody></table>
+    </section>`;
+}
+
+function buildReportsTransactionsPrintBody(ctx) {
+    if (ctx.mode === 'compare' && ctx.periodA && ctx.periodB) {
+        const { labelA, labelB, banner } = typeof getComparePeriodLabels === 'function'
+            ? getComparePeriodLabels(ctx)
+            : { labelA: 'Okres A', labelB: 'Okres B', banner: 'Porównanie okresów' };
+        return `<h1 class="reports-pdf-title">Transakcje — ${escapeHtml(banner)}</h1>
+        ${buildTransactionsPeriodSection(ctx.periodA.tx, labelA)}
+        ${buildTransactionsPeriodSection(ctx.periodB.tx, labelB)}`;
+    }
+    const title = ctx.label ? `Transakcje — ${ctx.label}` : 'Transakcje';
+    return buildTransactionsPeriodSection(ctx.periodTx || [], title, true);
+}
+
+function buildReportsPrintBody(ctx, savingsRate) {
+    void savingsRate;
+    return buildReportsTransactionsPrintBody(ctx);
 }
 
 function buildReportsPrintHtml(ctx, savingsRate) {

@@ -703,29 +703,17 @@ function renderReportsRecurring() {
     }
 }
 
-function exportReportsCsv() {
+function exportReportsTransactions() {
     const ctx = typeof getReportsPeriodContext === 'function'
         ? getReportsPeriodContext()
-        : { periodTx: getTransactionsForReportsPeriod(document.getElementById('reports-year-select').value) };
-    const periodTx = [...ctx.periodTx].sort((a, b) => a.date.localeCompare(b.date));
-    const fileSuffix = ctx.label?.replace(/\s+/g, '-').toLowerCase() || 'analiza';
-    const headers = ['Data', 'Typ', 'Kategoria', 'Podkategoria', 'Kwota', 'Notatka', 'Cykliczna'];
-    const rows = periodTx.map((t) => [
-        t.date,
-        t.type === 'expense' ? 'Wydatek' : 'Wpływ',
-        t.mainCategory,
-        t.subCategory === '[Bez podkategorii]' ? '' : t.subCategory,
-        t.amount.toFixed(2).replace('.', ','),
-        t.note || '',
-        t.recurringId ? 'Tak' : 'Nie'
-    ]);
-    const csv = '\uFEFF' + [headers, ...rows].map((row) => row.map(escapeCsvField).join(';')).join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `portfel-analiza-${fileSuffix}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+        : { periodTx: [], label: 'Analiza' };
+    if (typeof openPrintPreview === 'function' && typeof buildReportsTransactionsPrintBody === 'function') {
+        openPrintPreview(buildReportsTransactionsPrintBody(ctx), 'Transakcje');
+    }
+}
+
+function exportReportsCsv() {
+    exportReportsTransactions();
 }
 
 function renderReportsTopCategories(periodTx) {

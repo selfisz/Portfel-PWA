@@ -2353,13 +2353,147 @@ function invalidateAnalysisRenderCache(ctx) {
 }
 
 
+const ANALYSIS_SECTION_TITLES = {
+    overview: 'Przegląd',
+    expenses: 'Wydatki',
+    assets: 'Majątek',
+    debts: 'Długi',
+    advanced: 'Więcej'
+};
+
+function getAnalysisSectionCharts(section, isCompare) {
+    if (isCompare) {
+        if (section === 'expenses') return [reportsCompareChartInstance].filter(Boolean);
+        if (section === 'assets') return [reportsCompareWealthChartInstance].filter(Boolean);
+        return [];
+    }
+    const map = {
+        overview: [reportsChartInstance, reportsStructureChartInstance],
+        assets: [
+            reportsAssetsTabAllocationInstance,
+            reportsAssetsTabCashTrendInstance,
+            reportsNetWorthTrendChartInstance
+        ],
+        debts: [
+            reportsDebtsTabChartInstance,
+            reportsDebtsTabSplitInstance,
+            reportsDebtTrendChartInstance,
+            reportsDebtPeakChartInstance
+        ],
+        advanced: [
+            reportsTrendChartInstance,
+            reportsYoyChartInstance,
+            reportsDowChartInstance,
+            reportsAllocationTrendChartInstance,
+            reportsDiversificationChartInstance
+        ]
+    };
+    return (map[section] || []).filter(Boolean);
+}
+
+function sanitizePrintFragment(root) {
+    if (!root) return root;
+    root.querySelectorAll([
+        '.hidden',
+        '[hidden]',
+        'script',
+        'style',
+        'button',
+        'input',
+        'select',
+        'textarea',
+        '.chart-type-toggle',
+        '.reports-hero-expand-toggle',
+        '.loans-hero-summary-toggle',
+        '.assets-hero-summary-toggle',
+        '.btn-text-link',
+        '.btn-outline',
+        '.chart-view-filter'
+    ].join(',')).forEach((el) => el.remove());
+    root.querySelectorAll('[onclick], [onkeydown], [tabindex]').forEach((el) => {
+        el.removeAttribute('onclick');
+        el.removeAttribute('onkeydown');
+        el.removeAttribute('tabindex');
+    });
+    return root;
+}
+
+function replaceChartsWithImages(root, charts) {
+    charts.forEach((chart) => {
+        const canvas = chart?.canvas;
+        if (!canvas?.id || typeof chart.toBase64Image !== 'function') return;
+        const target = root.querySelector(`#${CSS.escape(canvas.id)}`);
+        if (!target) return;
+        const img = document.createElement('img');
+        try {
+            img.src = chart.toBase64Image('image/png', 1);
+        } catch (err) {
+            console.warn('replaceChartsWithImages', err);
+            return;
+        }
+        img.alt = canvas.getAttribute('aria-label') || 'Wykres';
+        img.className = 'reports-pdf-chart-img';
+        target.replaceWith(img);
+    });
+}
+
+function collectAnalysisSectionPrintHtml(section, isCompare) {
+    const host = document.createElement('div');
+    host.className = 'reports-pdf-analysis-body';
+
+    if (isCompare) {
+        const slot = document.getElementById(`analysis-compare-${section}`);
+        if (slot && !slot.hidden) host.innerHTML = slot.innerHTML;
+    } else {
+        const source = document.getElementById(`analysis-section-${section}`);
+        if (source) {
+            source.querySelectorAll(':scope > :not(.analysis-compare-slot)').forEach((child) => {
+                if (child.classList.contains('hidden')) return;
+                host.appendChild(child.cloneNode(true));
+            });
+        }
+    }
+
+    sanitizePrintFragment(host);
+    replaceChartsWithImages(host, getAnalysisSectionCharts(section, isCompare));
+    return host.innerHTML;
+}
+
+function buildAnalysisViewPrintBody(ctx, section) {
+    const isCompare = ctx.mode === 'compare';
+    const sectionTitle = ANALYSIS_SECTION_TITLES[section] || 'Analiza';
+    const periodLabel = isCompare
+        ? (ctx.compareBanner || getComparePeriodLabels(ctx).banner || ctx.label)
+        : ctx.label;
+    const bodyHtml = collectAnalysisSectionPrintHtml(section, isCompare);
+    const emptyNote = bodyHtml.trim()
+        ? ''
+        : '<p class="reports-pdf-summary">Brak treści do wydruku w tej sekcji dla wybranego okresu.</p>';
+
+    return `<h1 class="reports-pdf-title">${escapeHtml(sectionTitle)} — ${escapeHtml(periodLabel)}</h1>
+        ${emptyNote}
+        <div class="reports-pdf-analysis-body">${bodyHtml}</div>`;
+}
+
+
 function exportReportsPdf() {
     const ctx = getReportsPeriodContext();
     const savingsRate = summarizePeriod(ctx.periodTx).savings;
-    renderAllAnalysisSectionsForExport(ctx, savingsRate);
-    if (typeof openPrintPreview === 'function' && typeof buildReportsPrintBody === 'function') {
-        openPrintPreview(buildReportsPrintBody(ctx, savingsRate), 'Raport PDF');
+    const section = analysisSection;
+
+    const finalize = () => {
+        if (typeof openPrintPreview !== 'function' || typeof buildAnalysisViewPrintBody !== 'function') return;
+        openPrintPreview(buildAnalysisViewPrintBody(ctx, section), 'Analiza PDF');
+    };
+
+    if (ctx.mode === 'compare') {
+        renderReportsCompare(ctx);
+        requestAnimationFrame(() => requestAnimationFrame(finalize));
+        return;
     }
+
+    renderAnalysisSectionContent(section, ctx, savingsRate, { force: true });
+    requestAnimationFrame(() => requestAnimationFrame(finalize));
 }
 
 function renderPhase3Reports(ctx, savingsRate) {

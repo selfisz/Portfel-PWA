@@ -7354,6 +7354,25 @@ body.auth-locked > #settings-overlay {
     .reports-pdf-table th {
         background: #f5f5f5 !important;
     }
+
+    .reports-pdf-analysis-body .card,
+    .reports-pdf-analysis-body .compare-overview-card {
+        border: 1px solid #ddd !important;
+        background: #fff !important;
+        box-shadow: none !important;
+    }
+
+    .reports-pdf-analysis-body .hero-balance,
+    .reports-pdf-analysis-body .compare-overview-delta,
+    .reports-pdf-analysis-body .value,
+    .reports-pdf-analysis-body strong {
+        color: #111 !important;
+    }
+
+    .reports-pdf-chart-img {
+        max-height: 280px;
+        object-fit: contain;
+    }
 }
 
 .assets-export-row {
@@ -7471,6 +7490,36 @@ body.auth-locked > #settings-overlay {
 .reports-pdf-disclaimer {
     font-size: var(--text-xs);
     color: var(--text-muted);
+}
+
+.reports-pdf-analysis-body .card {
+    margin-bottom: 14px;
+}
+
+.reports-pdf-analysis-body .hero-card,
+.reports-pdf-analysis-body .dashboard-panel,
+.reports-pdf-analysis-body .chart-card {
+    break-inside: avoid;
+}
+
+.reports-pdf-chart-img {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 8px 0 12px;
+}
+
+.reports-pdf-section-title {
+    margin: 20px 0 8px;
+    font-size: var(--text-lg);
+    font-weight: 700;
+}
+
+.reports-pdf-tx-section + .reports-pdf-tx-section {
+    margin-top: 28px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
 }
 
 .compare-stack {
