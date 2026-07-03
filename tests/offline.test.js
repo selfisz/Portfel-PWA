@@ -47,4 +47,10 @@ describe('offline helpers', () => {
         navigator.onLine = false;
         expect(isAppOffline()).toBe(true);
     });
+
+    it('formatOfflineSyncSuccessMessage odmienia transakcje', () => {
+        expect(formatOfflineSyncSuccessMessage(1)).toContain('1 transakcja');
+        expect(formatOfflineSyncSuccessMessage(3)).toContain('3 transakcje');
+        expect(formatOfflineSyncSuccessMessage(5)).toContain('5 transakcji');
+    });
 });

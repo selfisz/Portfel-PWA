@@ -154,6 +154,12 @@ function initCloudSyncListeners() {
     window.addEventListener('online', () => {
         cloudSyncRetryAttempt = 0;
         clearCloudSyncRetryTimer();
+        if (typeof flushOfflineChangesAfterOnline === 'function') {
+            flushOfflineChangesAfterOnline().catch((err) => {
+                console.warn('flushOfflineChangesAfterOnline', err);
+            });
+            return;
+        }
         resumePendingCloudSync({ silent: true });
     });
 
