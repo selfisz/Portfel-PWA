@@ -1,16 +1,7 @@
 const DUPLICATE_AMOUNT_TOLERANCE = 0.01;
 
-function normalizeDuplicateNote(note) {
-    return String(note || '').toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function duplicateNotesSimilar(a, b) {
-    const na = normalizeDuplicateNote(a);
-    const nb = normalizeDuplicateNote(b);
-    if (!na || !nb) return false;
-    if (na === nb) return true;
-    if (na.includes(nb) || nb.includes(na)) return true;
-    return false;
+function duplicateSubCategory(sub) {
+    return sub || '[Bez podkategorii]';
 }
 
 function isSameDuplicateTransaction(a, b) {
@@ -18,8 +9,8 @@ function isSameDuplicateTransaction(a, b) {
     if (a.type !== b.type) return false;
     if (a.date !== b.date) return false;
     if (Math.abs((a.amount || 0) - (b.amount || 0)) > DUPLICATE_AMOUNT_TOLERANCE) return false;
-    if (a.mainCategory === b.mainCategory && a.subCategory === b.subCategory) return true;
-    if (duplicateNotesSimilar(a.note, b.note)) return true;
+    if (a.mainCategory !== b.mainCategory) return false;
+    if (duplicateSubCategory(a.subCategory) !== duplicateSubCategory(b.subCategory)) return false;
     return true;
 }
 

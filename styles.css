@@ -11736,6 +11736,8 @@ button.reports-debt-split-item strong {
     margin-bottom: 12px;
 }
 .month-close-banner-text { display: flex; flex-direction: column; gap: 4px; }
+#reports-month-close-banner:not(.hidden) { margin-bottom: 12px; }
+#dashboard-month-close-banner:not(.hidden) { display: flex; flex-direction: column; gap: 8px; }
 .btn-sm { padding: 6px 12px; font-size: 0.85rem; }
 
 /* Skryba — głos */

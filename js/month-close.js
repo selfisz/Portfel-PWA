@@ -1,4 +1,5 @@
 const MONTH_CLOSE_STATE_KEY = 'finanse_month_close_state';
+const MONTH_CLOSE_BANNER_LIMIT = 3;
 
 let monthCloseWizardMonthKey = null;
 let monthCloseWizardStep = 0;
@@ -276,7 +277,7 @@ function getActiveMonthCloseKey() {
 }
 
 function getMonthCloseBannerMonths() {
-    return getUnclosedMonthsWithData();
+    return getUnclosedMonthsWithData().slice(-MONTH_CLOSE_BANNER_LIMIT);
 }
 
 function renderMonthCloseWizard() {

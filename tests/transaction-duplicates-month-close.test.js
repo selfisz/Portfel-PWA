@@ -36,13 +36,20 @@ describe('transaction duplicates', () => {
         };
     });
 
-    it('finds duplicate candidates by date amount and type', () => {
-        const tx = { date: '2025-06-10', type: 'expense', amount: 50, mainCategory: 'Zakupy', subCategory: 'Inne', note: '' };
-        const found = findDuplicateCandidates(tx);
-        expect(found.length).toBeGreaterThanOrEqual(1);
+    it('finds duplicate only when date amount and category match', () => {
+        const tx = { date: '2025-06-10', type: 'expense', amount: 50, mainCategory: 'Zakupy', subCategory: 'Zakupy', note: '' };
+        expect(findDuplicateCandidates(tx)).toHaveLength(1);
     });
 
-    it('finds duplicate pairs in range', () => {
+    it('ignores same date and amount with different category', () => {
+        const tx = { date: '2025-06-10', type: 'expense', amount: 50, mainCategory: 'Zakupy', subCategory: 'Inne', note: '' };
+        expect(findDuplicateCandidates(tx)).toHaveLength(0);
+    });
+
+    it('finds duplicate pairs in range only for full match', () => {
+        globalThis.appState.transactions.push({
+            date: '2025-06-10', type: 'expense', amount: 50, mainCategory: 'Zakupy', subCategory: 'Zakupy', note: ''
+        });
         const pairs = findDuplicatePairsInRange('2025-06-01', '2025-06-30');
         expect(pairs.length).toBe(1);
     });
@@ -72,5 +79,16 @@ describe('month close state', () => {
     it('lists unclosed months with data', () => {
         const unclosed = getUnclosedMonthsWithData();
         expect(unclosed).toContain('2025-05');
+    });
+
+    it('limits dashboard banners to last three months', () => {
+        globalThis.appState.transactions = [
+            { date: '2024-01-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' },
+            { date: '2024-02-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' },
+            { date: '2024-03-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' },
+            { date: '2024-04-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' },
+            { date: '2024-05-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' }
+        ];
+        expect(getMonthCloseBannerMonths()).toEqual(['2024-03', '2024-04', '2024-05']);
     });
 });
