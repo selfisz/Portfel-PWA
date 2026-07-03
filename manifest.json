@@ -21,5 +21,46 @@
       "sizes": "512x512",
       "purpose": "any maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dodaj wydatek",
+      "short_name": "Wydatek",
+      "description": "Szybkie dodanie wydatku",
+      "url": "./index.html?view=add&type=expense",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Dodaj wpływ",
+      "short_name": "Wpływ",
+      "description": "Szybkie dodanie wpływu",
+      "url": "./index.html?view=add&type=income",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Analiza",
+      "short_name": "Analiza",
+      "description": "Przegląd wydatków i raportów",
+      "url": "./index.html?view=reports",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }

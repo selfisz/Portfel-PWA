@@ -14,4 +14,5 @@ function bootstrapApp() {
     scheduleMarketPriceRefresh();
     initNotifications();
     checkModuleSplitThreshold();
+    if (typeof applyAppLaunchShortcut === 'function') applyAppLaunchShortcut();
 }

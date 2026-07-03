@@ -129,6 +129,11 @@ function initPanelHeaders() {
         titleId: 'month-drill-title',
         onClose: closeMonthDrill,
     }));
+    mountPanelHeader('panel-header-reports-pdf', createPanelHeader('Raport PDF', {
+        titleId: 'reports-pdf-title',
+        onClose: closeReportsPdfPreview,
+        closeLabel: 'Wróć',
+    }));
 
     mountPanelHeader('panel-header-asset-details', createDetailsPanelHeader({
         titleId: 'asset-details-title',

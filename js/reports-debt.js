@@ -821,20 +821,25 @@ function renderReportsYearReview(ctx) {
         </div>`;
 }
 
-function buildReportsPrintHtml(ctx, savingsRate) {
+function buildReportsPrintBody(ctx, savingsRate) {
     const s = summarizePeriod(ctx.periodTx);
-    return `<!DOCTYPE html><html lang="pl"><head><meta charset="utf-8"><title>Raport Portfel</title>
-        <style>body{font-family:system-ui,sans-serif;padding:24px;color:#111}h1{margin:0 0 8px}table{width:100%;border-collapse:collapse;margin-top:16px}
-        th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5}</style></head><body>
-        <h1>Raport finansowy — ${escapeHtml(ctx.label)}</h1>
-        <p>Wpływy: ${formatPlnAmount(s.income)} | Wydatki: ${formatPlnAmount(s.expense)} | Bilans: ${formatPlnAmount(s.balance)} | Oszczędności: ${savingsRate}%</p>
-        <table><thead><tr><th>Data</th><th>Typ</th><th>Kategoria</th><th>Kwota</th><th>Notatka</th></tr></thead><tbody>
+    return `<h1 class="reports-pdf-title">Raport finansowy — ${escapeHtml(ctx.label)}</h1>
+        <p class="reports-pdf-summary">Wpływy: ${formatPlnAmount(s.income)} | Wydatki: ${formatPlnAmount(s.expense)} | Bilans: ${formatPlnAmount(s.balance)} | Oszczędności: ${savingsRate}%</p>
+        <table class="reports-pdf-table"><thead><tr><th>Data</th><th>Typ</th><th>Kategoria</th><th>Kwota</th><th>Notatka</th></tr></thead><tbody>
         ${ctx.periodTx.sort((a, b) => a.date.localeCompare(b.date)).map((t) => `<tr>
             <td>${t.date}</td><td>${t.type === 'expense' ? 'Wydatek' : 'Wpływ'}</td>
             <td>${escapeHtml(t.mainCategory)}${t.subCategory !== '[Bez podkategorii]' ? ' / ' + escapeHtml(t.subCategory) : ''}</td>
             <td>${t.amount.toFixed(2)} zł</td><td>${escapeHtml(t.note || '')}</td>
         </tr>`).join('')}
-        </tbody></table></body></html>`;
+        </tbody></table>`;
+}
+
+function buildReportsPrintHtml(ctx, savingsRate) {
+    return `<!DOCTYPE html><html lang="pl"><head><meta charset="utf-8"><title>Raport Portfel</title>
+        <style>body{font-family:system-ui,sans-serif;padding:24px;color:#111}h1{margin:0 0 8px}table{width:100%;border-collapse:collapse;margin-top:16px}
+        th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5}</style></head><body>
+        ${buildReportsPrintBody(ctx, savingsRate)}
+        </body></html>`;
 }
 
 function getLoanRemainingMonths(loan) {

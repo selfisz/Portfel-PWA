@@ -2353,20 +2353,32 @@ function invalidateAnalysisRenderCache(ctx) {
 }
 
 
+function closeReportsPdfPreview() {
+    const overlay = document.getElementById('reports-pdf-overlay');
+    if (!overlay) return;
+    overlay.classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+function printReportsPdfPreview() {
+    window.print();
+}
+
+function openReportsPdfPreview(ctx, savingsRate) {
+    const overlay = document.getElementById('reports-pdf-overlay');
+    const content = document.getElementById('reports-pdf-content');
+    if (!overlay || !content || typeof buildReportsPrintBody !== 'function') return;
+    content.innerHTML = buildReportsPrintBody(ctx, savingsRate);
+    overlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    content.scrollTop = 0;
+}
+
 function exportReportsPdf() {
     const ctx = getReportsPeriodContext();
     const savingsRate = summarizePeriod(ctx.periodTx).savings;
     renderAllAnalysisSectionsForExport(ctx, savingsRate);
-    const html = buildReportsPrintHtml(ctx, savingsRate);
-    const win = window.open('', '_blank');
-    if (!win) {
-        alert('Zezwól na wyskakujące okna, aby wyeksportować PDF.');
-        return;
-    }
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => win.print(), 400);
+    openReportsPdfPreview(ctx, savingsRate);
 }
 
 function renderPhase3Reports(ctx, savingsRate) {

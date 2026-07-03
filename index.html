@@ -691,6 +691,18 @@
             <div id="month-drill-list" class="calendar-day-list"></div>
         </div>
     </div>
+
+    <div id="reports-pdf-overlay" class="reports-pdf-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reports-pdf-title">
+        <div class="reports-pdf-shell">
+            <div id="panel-header-reports-pdf"></div>
+            <div id="reports-pdf-content" class="reports-pdf-content"></div>
+            <div class="reports-pdf-footer">
+                <button type="button" class="btn-cancel btn-cancel--form" onclick="closeReportsPdfPreview()">Wróć</button>
+                <button type="button" class="btn-submit btn-submit--form" onclick="printReportsPdfPreview()">Drukuj / PDF</button>
+            </div>
+        </div>
+    </div>
+
     <p id="settings-toast" class="settings-toast hidden"></p>
 
     <div class="container">
@@ -1813,6 +1825,7 @@
     <script src="js/ui.js"></script>
     <script src="js/add-form-ui.js"></script>
     <script src="js/transactions.js"></script>
+    <script src="js/app-shortcuts.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/reports-core.js"></script>
     <script src="js/assets.js"></script>
