@@ -5428,8 +5428,30 @@ body.auth-locked > #settings-overlay {
 
 .analysis-period-chips--months {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 5px;
+}
+
+.analysis-period-chips--years {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+}
+
+.analysis-period-chips--years .analysis-period-chip-all {
+    grid-column: 1 / -1;
+}
+
+.analysis-period-chips--years .toggle-btn.loans-chip,
+.analysis-period-chips--months .toggle-btn.loans-chip {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.loans-hero-summary-chips.analysis-period-chips--years,
+.loans-hero-summary-chips.analysis-period-chips--months {
+    display: grid;
+    flex-direction: unset;
 }
 
 .analysis-period-chips--months .analysis-period-month-chip {

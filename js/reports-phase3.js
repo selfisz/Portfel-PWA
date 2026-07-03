@@ -294,7 +294,7 @@ function renderAnalysisYearChips() {
     const yearSelect = document.getElementById('reports-year-select');
     const currentVal = yearSelect?.value || String(new Date().getFullYear());
     const parts = [
-        `<button type="button" class="toggle-btn loans-chip${reportsPeriodMode === 'year' && currentVal === 'all' ? ' active' : ''}" onclick="selectReportsYear('all')">Całość</button>`
+        `<button type="button" class="toggle-btn loans-chip analysis-period-chip-all${reportsPeriodMode === 'year' && currentVal === 'all' ? ' active' : ''}" onclick="selectReportsYear('all')">Całość</button>`
     ];
     years.forEach((year) => {
         const value = String(year);
