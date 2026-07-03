@@ -253,6 +253,13 @@ function validateBackupPayload(payload) {
         categoryBudgets: sanitizeNumericRecord(data.categoryBudgets),
         subCategoryBudgets: sanitizeNumericRecord(data.subCategoryBudgets),
         reportPrefs: sanitizeReportPrefs(data.reportPrefs),
+        categoryRules: Array.isArray(data.categoryRules) ? data.categoryRules : [],
+        pendingRecurringConfirmations: Array.isArray(data.pendingRecurringConfirmations)
+            ? data.pendingRecurringConfirmations
+            : [],
+        skippedRecurringMonths: data.skippedRecurringMonths && typeof data.skippedRecurringMonths === 'object'
+            ? data.skippedRecurringMonths
+            : {},
         deletedAssetIds: sanitizeStringArray(data.deletedAssetIds)
     };
 

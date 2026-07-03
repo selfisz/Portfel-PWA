@@ -1301,6 +1301,8 @@ function renderAssets() {
             const hasTickers = allActive.some((a) => a.type === 'investment' && a.ticker && !a.archived);
             refreshRow.classList.toggle('hidden', !hasTickers);
         }
+        const exportActions = document.getElementById('assets-export-actions');
+        if (exportActions) exportActions.classList.toggle('hidden', !hasAssets);
         if (typeof updateMarketPricesRefreshHint === 'function') {
             updateMarketPricesRefreshHint();
         }
@@ -1819,4 +1821,45 @@ function sellAssetPartial() {
     if (isFull) closeAssetDetails();
     renderAssets();
     showSettingsToast(`Sprzedano ${qtySold} szt. · P/L: ${gainLabel}`);
+}
+
+function openAssetsPdfDatePicker() {
+    const overlay = document.getElementById('assets-pdf-date-overlay');
+    if (!overlay) return;
+    const input = document.getElementById('assets-pdf-date-input');
+    if (input) input.value = localIsoDate(new Date());
+    overlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeAssetsPdfDatePicker() {
+    document.getElementById('assets-pdf-date-overlay')?.classList.add('hidden');
+    if (document.getElementById('reports-pdf-overlay')?.classList.contains('hidden')
+        && document.getElementById('recurring-confirm-overlay')?.classList.contains('hidden')
+        && document.getElementById('debts-pdf-date-overlay')?.classList.contains('hidden')) {
+        document.body.style.overflow = '';
+    }
+}
+
+function setAssetsPdfDatePreset(offsetDays) {
+    const d = new Date();
+    d.setDate(d.getDate() - offsetDays);
+    exportAssetsPdfForDate(localIsoDate(d));
+}
+
+function exportAssetsPdfForSelectedDate() {
+    const input = document.getElementById('assets-pdf-date-input');
+    exportAssetsPdfForDate(input?.value || localIsoDate(new Date()));
+}
+
+function exportAssetsPdfForDate(dateIso) {
+    if (!dateIso) return;
+    const today = localIsoDate(new Date());
+    if (dateIso >= today && typeof captureAllAssetValueHistory === 'function') {
+        captureAllAssetValueHistory('pdf');
+        if (typeof saveState === 'function') saveState();
+    }
+    closeAssetsPdfDatePicker();
+    if (typeof buildAssetsPrintBody !== 'function' || typeof openPrintPreview !== 'function') return;
+    openPrintPreview(buildAssetsPrintBody(dateIso), 'Majątek PDF');
 }

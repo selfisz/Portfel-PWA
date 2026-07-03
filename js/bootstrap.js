@@ -9,6 +9,7 @@ function bootstrapApp() {
     initOnboarding();
     initPanelHeaders();
     initOverlayCloseIcons();
+    if (typeof initCategoryRulesEditor === 'function') initCategoryRulesEditor();
     initData();
     initCloudSyncListeners();
     scheduleMarketPriceRefresh();

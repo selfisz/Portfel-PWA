@@ -17,6 +17,9 @@ let appState = {
         income: { mains: {}, subs: {} }
     },
     reportPrefs: {},
+    categoryRules: [],
+    pendingRecurringConfirmations: [],
+    skippedRecurringMonths: {},
     deletedAssetIds: []
 };
 
@@ -96,6 +99,13 @@ function getPersistedState(raw = appState) {
             },
         reportPrefs: data.reportPrefs && typeof data.reportPrefs === 'object'
             ? data.reportPrefs
+            : {},
+        categoryRules: Array.isArray(data.categoryRules) ? data.categoryRules : [],
+        pendingRecurringConfirmations: Array.isArray(data.pendingRecurringConfirmations)
+            ? data.pendingRecurringConfirmations
+            : [],
+        skippedRecurringMonths: data.skippedRecurringMonths && typeof data.skippedRecurringMonths === 'object'
+            ? data.skippedRecurringMonths
             : {},
         deletedAssetIds: Array.isArray(data.deletedAssetIds) ? data.deletedAssetIds : []
     };
@@ -529,24 +539,59 @@ function refreshCurrentView() {
 function checkAndProcessRecurringTransactions() {
     const today = new Date();
     const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-    const recurringTxs = appState.transactions.filter(t => t.recurringId);
-    const uniqueRecurringGroups = [...new Set(recurringTxs.map(t => t.recurringId))];
+    if (!Array.isArray(appState.pendingRecurringConfirmations)) {
+        appState.pendingRecurringConfirmations = [];
+    }
+    if (!appState.skippedRecurringMonths || typeof appState.skippedRecurringMonths !== 'object') {
+        appState.skippedRecurringMonths = {};
+    }
 
+    const recurringTxs = appState.transactions.filter((t) => t.recurringId);
+    const uniqueRecurringGroups = [...new Set(recurringTxs.map((t) => t.recurringId))];
     let changesMade = false;
-    uniqueRecurringGroups.forEach(recId => {
-        const history = recurringTxs.filter(t => t.recurringId === recId);
-        const alreadyAddedThisMonth = history.some(t => t.date.startsWith(currentMonthStr));
-        if (!alreadyAddedThisMonth) {
-            // Klonujemy najnowsze wystąpienie (nie pierwsze) żeby zachować aktualne dane
-            const latestTx = history.reduce((newest, t) =>
-                t.date > newest.date ? t : newest
-            , history[0]);
-            const clonedTx = { ...latestTx };
-            clonedTx.date = `${currentMonthStr}-01`;
-            appState.transactions.unshift(clonedTx);
-            changesMade = true;
-        }
+
+    uniqueRecurringGroups.forEach((recId) => {
+        const history = recurringTxs.filter((t) => t.recurringId === recId);
+        const alreadyAddedThisMonth = history.some((t) => t.date.startsWith(currentMonthStr));
+        const skipped = typeof getSkippedRecurringMonths === 'function'
+            ? getSkippedRecurringMonths(recId).includes(currentMonthStr)
+            : (appState.skippedRecurringMonths?.[recId] || []).includes(currentMonthStr);
+        const alreadyPending = appState.pendingRecurringConfirmations.some(
+            (item) => item.recurringId === recId && item.monthKey === currentMonthStr
+        );
+        if (alreadyAddedThisMonth || skipped || alreadyPending) return;
+
+        const latestTx = history.reduce((newest, t) => (
+            t.date > newest.date ? t : newest
+        ), history[0]);
+        const clonedTx = { ...latestTx };
+        clonedTx.date = `${currentMonthStr}-01`;
+        delete clonedTx.cashMovementId;
+        appState.pendingRecurringConfirmations.push({
+            id: `prec_${recId}_${currentMonthStr}`,
+            recurringId: recId,
+            monthKey: currentMonthStr,
+            transaction: clonedTx
+        });
+        changesMade = true;
     });
+
+    appState.pendingRecurringConfirmations = (appState.pendingRecurringConfirmations || [])
+        .map((item) => (typeof normalizePendingRecurringConfirmation === 'function'
+            ? normalizePendingRecurringConfirmation(item)
+            : item))
+        .filter(Boolean)
+        .filter((item) => {
+            const added = recurringTxs.some(
+                (t) => t.recurringId === item.recurringId && t.date.startsWith(item.monthKey)
+            );
+            const skipped = typeof getSkippedRecurringMonths === 'function'
+                ? getSkippedRecurringMonths(item.recurringId).includes(item.monthKey)
+                : (appState.skippedRecurringMonths?.[item.recurringId] || []).includes(item.monthKey);
+            return !added && !skipped;
+        });
+
     if (changesMade) saveState();
-    if (changesMade && typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
+    if (typeof renderRecurringConfirmOverlay === 'function') renderRecurringConfirmOverlay();
+    return changesMade;
 }

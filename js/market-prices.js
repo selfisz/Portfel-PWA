@@ -195,6 +195,7 @@ async function refreshInvestmentPrices(options = {}) {
 
     if (updated > 0) {
         if (typeof saveState === 'function') saveState();
+        if (typeof captureAllAssetValueHistory === 'function') captureAllAssetValueHistory('market');
         if (typeof renderAssets === 'function') renderAssets();
         if (typeof renderReports === 'function'
             && document.getElementById('view-reports')?.classList.contains('active')) {

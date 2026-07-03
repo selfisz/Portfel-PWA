@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanse-pwa-v265';
+const CACHE_NAME = 'finanse-pwa-v268';
 
 const FIREBASE_CDN = [
   'https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js',
@@ -19,6 +19,7 @@ const ASSETS = [
   'js/search-utils.js',
   'js/theme.js',
   'js/categories.js',
+  'js/category-rules.js',
   'js/loan-details.js',
   'js/credit-cards.js',
   'js/portfolio.js',
@@ -29,6 +30,8 @@ const ASSETS = [
   'js/ui.js',
   'js/add-form-ui.js',
   'js/transactions.js',
+  'js/transaction-split.js',
+  'js/recurring-confirm.js',
   'js/app-shortcuts.js',
   'js/dashboard.js',
   'js/reports-core.js',

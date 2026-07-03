@@ -112,6 +112,7 @@ function autoCaptureAssetSnapshotsIfNeeded() {
 
     if (!last) {
         captureAssetSnapshot(currentKey, 'auto');
+        if (typeof captureAllAssetValueHistory === 'function') captureAllAssetValueHistory('auto');
         return true;
     }
 
@@ -132,6 +133,10 @@ function autoCaptureAssetSnapshotsIfNeeded() {
             appState.assetSnapshots[idx] = buildCurrentSnapshotPayload(currentKey, 'auto');
             changed = true;
         }
+    }
+
+    if (changed && typeof captureAllAssetValueHistory === 'function') {
+        captureAllAssetValueHistory('auto');
     }
 
     return changed;
@@ -204,21 +209,73 @@ function getSnapshotMonthChange() {
     };
 }
 
-function recordAssetValueHistory(asset, source = 'manual', note = '') {
+function recordAssetValueHistory(asset, source = 'manual', note = '', dateIso = null) {
     if (!asset?.id) return null;
+    const date = dateIso || localIsoDate(new Date());
     const entry = normalizeAssetValueHistoryEntry({
         assetId: asset.id,
-        date: localIsoDate(new Date()),
+        date,
         valuePln: getAssetValuePln(asset),
         note,
         source
     });
     if (!entry) return null;
     if (!Array.isArray(appState.assetValueHistory)) appState.assetValueHistory = [];
-    const last = getAssetValueHistory().filter((e) => e.assetId === asset.id).pop();
-    if (last && Math.abs(last.valuePln - entry.valuePln) < 0.01 && last.date === entry.date) return last;
+    const last = getAssetValueHistory()
+        .filter((e) => e.assetId === asset.id && e.date === date)
+        .pop();
+    if (last && Math.abs(last.valuePln - entry.valuePln) < 0.01) return last;
     appState.assetValueHistory.push(entry);
     return entry;
+}
+
+function captureAllAssetValueHistory(source = 'auto', dateIso = null) {
+    const assets = typeof getSummaryAssets === 'function' ? getSummaryAssets() : [];
+    const date = dateIso || localIsoDate(new Date());
+    let changed = false;
+    assets.filter((asset) => !asset.archived).forEach((asset) => {
+        const beforeLen = (appState.assetValueHistory || []).length;
+        recordAssetValueHistory(asset, source, '', date);
+        if ((appState.assetValueHistory || []).length > beforeLen) changed = true;
+    });
+    return changed;
+}
+
+function backfillMissingAssetValueHistory() {
+    const assets = typeof getSummaryAssets === 'function' ? getSummaryAssets() : [];
+    const today = localIsoDate(new Date());
+    let changed = false;
+    assets.filter((asset) => !asset.archived).forEach((asset) => {
+        const hasHistory = getAssetValueHistory().some((entry) => entry.assetId === asset.id);
+        if (!hasHistory) {
+            recordAssetValueHistory(asset, 'backfill', '', today);
+            changed = true;
+        }
+    });
+    return changed;
+}
+
+function estimateAssetValueFromMonthSnapshot(asset, asOfDate) {
+    const monthKey = asOfDate.slice(0, 7);
+    const snap = getSnapshotForMonthKey(monthKey);
+    if (!snap?.byType) return null;
+
+    const type = asset.type || 'investment';
+    const typeTotal = snap.byType[type] || 0;
+    if (!(typeTotal > 0)) return null;
+
+    const peers = (typeof getSummaryAssets === 'function' ? getSummaryAssets() : [])
+        .filter((a) => !a.archived && (a.type || 'investment') === type);
+    const currentTypeTotal = peers.reduce((sum, a) => sum + getAssetValuePln(a), 0);
+    if (!(currentTypeTotal > 0)) return null;
+
+    const share = getAssetValuePln(asset) / currentTypeTotal;
+    return {
+        value: typeTotal * share,
+        source: 'snapshot-estimate',
+        asOf: snap.date || `${monthKey}-28`,
+        monthKey
+    };
 }
 
 function getOperationalCashPln() {
@@ -563,6 +620,88 @@ function getLiquidityAfterOverpayment(extraMonthly) {
     return { liquid, after, runway, monthlyExpense };
 }
 
+function getAssetValueAtDate(asset, dateIso) {
+    const today = localIsoDate(new Date());
+    if (!asset || asset.archived) return { value: null, source: 'missing' };
+    if (dateIso >= today) {
+        return { value: getAssetValuePln(asset), source: 'current' };
+    }
+
+    const history = getAssetValueHistory()
+        .filter((entry) => entry.assetId === asset.id && entry.date <= dateIso);
+    if (history.length) {
+        const latest = history[history.length - 1];
+        return { value: latest.valuePln, source: 'history', asOf: latest.date };
+    }
+
+    const fromSnapshot = estimateAssetValueFromMonthSnapshot(asset, dateIso);
+    if (fromSnapshot) return fromSnapshot;
+
+    if (dateIso.slice(0, 7) === today.slice(0, 7)) {
+        return { value: getAssetValuePln(asset), source: 'estimate', asOf: today };
+    }
+
+    return { value: null, source: 'missing' };
+}
+
+function formatAssetValueSourceLabel(val, asOfDate) {
+    if (!val || val.source === 'missing') return '—';
+    if (val.source === 'current') return 'bieżąca';
+    if (val.source === 'estimate') return 'szacunek (bieżąca)';
+    if (val.source === 'snapshot-estimate') {
+        return `szacunek (snapshot ${val.monthKey || asOfDate.slice(0, 7)})`;
+    }
+    if (val.source === 'history' && val.asOf && val.asOf !== asOfDate) {
+        return `z ${val.asOf}`;
+    }
+    if (val.source === 'history') return 'zapis historyczny';
+    return '—';
+}
+
+function formatAssetPdfDateLabel(dateIso) {
+    const d = new Date(`${dateIso}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return dateIso;
+    return d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function buildAssetsPrintBody(asOfDate) {
+    const assets = (typeof getSummaryAssets === 'function' ? getSummaryAssets() : [])
+        .filter((asset) => !asset.archived);
+    const label = formatAssetPdfDateLabel(asOfDate);
+    let total = 0;
+    let missingCount = 0;
+    const rows = assets.map((asset) => {
+        const name = typeof getAssetDisplayName === 'function' ? getAssetDisplayName(asset) : asset.name;
+        const typeLabel = typeof ASSET_TYPE_LABELS !== 'undefined'
+            ? (ASSET_TYPE_LABELS[asset.type] || asset.type || '—')
+            : (asset.type || '—');
+        const val = getAssetValueAtDate(asset, asOfDate);
+        if (val.value === null) {
+            missingCount += 1;
+            return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(typeLabel)}</td><td colspan="2">Brak danych historycznych</td></tr>`;
+        }
+        total += val.value;
+        const meta = formatAssetValueSourceLabel(val, asOfDate);
+        return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(typeLabel)}</td><td>${formatPlnAmount(val.value)}</td><td>${escapeHtml(meta)}</td></tr>`;
+    }).join('');
+
+    const monthKey = asOfDate.slice(0, 7);
+    const snap = typeof getSnapshotForMonthKey === 'function' ? getSnapshotForMonthKey(monthKey) : null;
+    const debtNote = snap
+        ? `<p class="reports-pdf-summary">Zadłużenie (snapshot ${monthKey}): ${formatPlnAmount(snap.totalDebt)} | Majątek netto: ${formatPlnAmount(snap.netWorth)}</p>`
+        : '';
+
+    const disclaimer = missingCount > 0
+        ? `<p class="reports-pdf-summary reports-pdf-disclaimer">Uwaga: ${missingCount} pozycji bez danych na ten dzień. Pozostałe mogą być ze snapshotu miesięcznego lub ostatniego zapisu historii.</p>`
+        : `<p class="reports-pdf-summary reports-pdf-disclaimer">Wartości z historii aktywów lub szacunku ze snapshotu miesięcznego (gdy brak dziennego zapisu).</p>`;
+
+    return `<h1 class="reports-pdf-title">Majątek na dzień ${escapeHtml(label)}</h1>
+        <p class="reports-pdf-summary">Suma aktywów (znane): ${formatPlnAmount(total)} · Pozycji: ${assets.length}</p>
+        ${debtNote}
+        ${disclaimer}
+        <table class="reports-pdf-table"><thead><tr><th>Aktywo</th><th>Typ</th><th>Wartość</th><th>Źródło</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
 function runAssetAnalyticsMigrations() {
     let changed = false;
     if (!Array.isArray(appState.assetSnapshots)) {
@@ -593,5 +732,8 @@ function runAssetAnalyticsMigrations() {
     }
 
     if (autoCaptureAssetSnapshotsIfNeeded()) changed = true;
+    if (typeof backfillMissingAssetValueHistory === 'function' && backfillMissingAssetValueHistory()) {
+        changed = true;
+    }
     return changed;
 }

@@ -577,25 +577,24 @@ describe('deleteTransaction', () => {
         globalThis.syncCreditCardOnTransactionDelete = () => {};
         globalThis.syncCashOnTransactionDelete = () => {};
         globalThis.syncAssetOnTransactionDelete = () => {};
+        globalThis.showUndoToast = () => {};
     });
 
-    it('usuwa transakcję po confirm=true', () => {
+    it('usuwa transakcję na podanym indeksie', () => {
         _setAppState({ ..._getAppState(), transactions: [
             { date: '2024-01-01', type: 'expense', mainCategory: 'Jedzenie', subCategory: 'Biedronka', amount: 100 },
             { date: '2024-01-02', type: 'expense', mainCategory: 'Transport', subCategory: 'Paliwo', amount: 200 }
         ]});
-        globalThis.confirm = () => true;
         deleteTransaction(0);
         expect(_getAppState().transactions.length).toBe(1);
         expect(_getAppState().transactions[0].mainCategory).toBe('Transport');
     });
 
-    it('nie usuwa transakcji gdy confirm=false', () => {
+    it('nie usuwa transakcji gdy indeks poza zakresem', () => {
         _setAppState({ ..._getAppState(), transactions: [
             { date: '2024-01-01', type: 'expense', mainCategory: 'Jedzenie', subCategory: 'Biedronka', amount: 100 }
         ]});
-        globalThis.confirm = () => false;
-        deleteTransaction(0);
+        deleteTransaction(3);
         expect(_getAppState().transactions.length).toBe(1);
     });
 
@@ -605,8 +604,7 @@ describe('deleteTransaction', () => {
         _setAppState({ ..._getAppState(), transactions: [
             { date: '2024-01-01', type: 'expense', mainCategory: 'Jedzenie', subCategory: 'Biedronka', amount: 100 }
         ]});
-        globalThis.confirm = () => true;
-        deleteTransaction(0);
+        globalThis.deleteTransaction(0);
         expect(syncCalled).toBe(true);
     });
 
@@ -616,8 +614,7 @@ describe('deleteTransaction', () => {
         _setAppState({ ..._getAppState(), transactions: [
             { date: '2024-01-01', type: 'expense', mainCategory: 'Jedzenie', subCategory: 'Biedronka', amount: 100 }
         ]});
-        globalThis.confirm = () => true;
-        deleteTransaction(0);
+        globalThis.deleteTransaction(0);
         expect(syncCalled).toBe(true);
     });
 });

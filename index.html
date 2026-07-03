@@ -203,6 +203,25 @@
                         <span class="settings-nav-row-chevron" aria-hidden="true">›</span>
                     </button>
                 </div>
+                <div class="settings-section">
+                    <div class="section-label">Reguły auto-kategoryzacji</div>
+                    <p class="settings-hint">Gdy notatka zawiera wzorzec, przypisz kategorię automatycznie (także przy podziale transakcji).</p>
+                    <div id="category-rules-list" class="category-rules-list"></div>
+                    <div class="category-rule-form">
+                        <label class="section-label" for="category-rule-pattern">Wzorzec w notatce</label>
+                        <input type="text" id="category-rule-pattern" class="settings-api-key-input" placeholder="np. biedronka">
+                        <label class="section-label" for="category-rule-type">Typ</label>
+                        <select id="category-rule-type" class="settings-api-key-input">
+                            <option value="expense">Wydatek</option>
+                            <option value="income">Wpływ</option>
+                        </select>
+                        <label class="section-label" for="category-rule-main">Kategoria</label>
+                        <select id="category-rule-main" class="settings-api-key-input"></select>
+                        <label class="section-label" for="category-rule-sub">Podkategoria</label>
+                        <select id="category-rule-sub" class="settings-api-key-input"></select>
+                        <button type="button" class="btn-submit category-editor-save" onclick="saveCategoryRuleFromForm()">Dodaj regułę</button>
+                    </div>
+                </div>
             </div>
 
             <div id="settings-section-budgets" class="settings-section-panel hidden">
@@ -697,8 +716,63 @@
             <div id="panel-header-reports-pdf"></div>
             <div id="reports-pdf-content" class="reports-pdf-content"></div>
             <div class="reports-pdf-footer">
-                <button type="button" class="btn-cancel btn-cancel--form" onclick="closeReportsPdfPreview()">Wróć</button>
-                <button type="button" class="btn-submit btn-submit--form" onclick="printReportsPdfPreview()">Drukuj / PDF</button>
+                <button type="button" class="btn-cancel btn-cancel--form" onclick="closePrintPreview()">Wróć</button>
+                <button type="button" class="btn-submit btn-submit--form" onclick="printPrintPreview()">Drukuj / PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="assets-pdf-date-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeAssetsPdfDatePicker()">
+        <div class="calendar-day-panel" onclick="event.stopPropagation()">
+            <div class="settings-header">
+                <h2 class="overlay-title">Majątek — wybierz dzień</h2>
+                <button type="button" class="btn-icon" aria-label="Zamknij" onclick="closeAssetsPdfDatePicker()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+            <p class="settings-hint">Raport na wybrany dzień. Wartości historyczne pochodzą z zapisanej historii aktywów.</p>
+            <div class="assets-pdf-date-presets">
+                <button type="button" class="toggle-btn" onclick="setAssetsPdfDatePreset(0)">Dziś</button>
+                <button type="button" class="toggle-btn" onclick="setAssetsPdfDatePreset(1)">Wczoraj</button>
+            </div>
+            <label class="section-label" for="assets-pdf-date-input">Inna data</label>
+            <input type="date" id="assets-pdf-date-input" class="settings-api-key-input">
+            <button type="button" class="btn-submit btn-submit--form" onclick="exportAssetsPdfForSelectedDate()">Pokaż raport</button>
+        </div>
+    </div>
+
+    <div id="debts-pdf-date-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeDebtsPdfDatePicker()">
+        <div class="calendar-day-panel" onclick="event.stopPropagation()">
+            <div class="settings-header">
+                <h2 class="overlay-title">Długi — wybierz dzień</h2>
+                <button type="button" class="btn-icon" aria-label="Zamknij" onclick="closeDebtsPdfDatePicker()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+            <p class="settings-hint">Raport zadłużenia na wybrany dzień. Sumy miesięczne pochodzą ze snapshotów majątku.</p>
+            <div class="assets-pdf-date-presets">
+                <button type="button" class="toggle-btn" onclick="setDebtsPdfDatePreset(0)">Dziś</button>
+                <button type="button" class="toggle-btn" onclick="setDebtsPdfDatePreset(1)">Wczoraj</button>
+            </div>
+            <label class="section-label" for="debts-pdf-date-input">Inna data</label>
+            <input type="date" id="debts-pdf-date-input" class="settings-api-key-input">
+            <button type="button" class="btn-submit btn-submit--form" onclick="exportDebtsPdfForSelectedDate()">Pokaż raport</button>
+        </div>
+    </div>
+
+    <div id="recurring-confirm-overlay" class="calendar-day-overlay hidden">
+        <div class="calendar-day-panel recurring-confirm-panel" onclick="event.stopPropagation()">
+            <div class="settings-header">
+                <h2 class="overlay-title">Transakcje cykliczne</h2>
+                <button type="button" class="btn-icon" aria-label="Zamknij" onclick="closeRecurringConfirmOverlay()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+            <p class="settings-hint">Do dodania w tym miesiącu — potwierdź lub pomiń.</p>
+            <div id="recurring-confirm-list" class="recurring-confirm-list"></div>
+            <div class="recurring-confirm-bulk">
+                <button type="button" class="btn-submit btn-submit--form" onclick="confirmAllPendingRecurring()">Dodaj wszystkie</button>
+                <button type="button" class="btn-cancel btn-cancel--form" onclick="skipAllPendingRecurring()">Pomiń wszystkie</button>
             </div>
         </div>
     </div>
@@ -1662,7 +1736,12 @@
 
         <div id="view-investments" class="app-view">
             <div id="assets-total-hero" class="card hero-card assets-hero-card hidden">
-                <div class="hero-label">Majątek łącznie</div>
+                <div class="analysis-period-hero-head">
+                    <div class="hero-label">Majątek łącznie</div>
+                    <div id="assets-export-actions" class="analysis-period-export hidden">
+                        <button type="button" class="hero-summary-action" onclick="openAssetsPdfDatePicker()">PDF</button>
+                    </div>
+                </div>
                 <div id="assets-total-value" class="hero-balance assets-capital-hero">—</div>
                 <p id="assets-total-meta" class="hero-forecast-hint hidden"></p>
                 <p id="assets-market-refresh-row" class="assets-market-refresh-row hidden">
@@ -1719,7 +1798,12 @@
 
         <div id="view-loans" class="app-view">
             <div id="loans-total-hero" class="card hero-card loans-hero-card hidden">
-                <div class="hero-label">Łącznie do spłaty</div>
+                <div class="analysis-period-hero-head">
+                    <div class="hero-label">Łącznie do spłaty</div>
+                    <div id="loans-export-actions" class="analysis-period-export hidden">
+                        <button type="button" class="hero-summary-action" onclick="openDebtsPdfDatePicker()">PDF</button>
+                    </div>
+                </div>
                 <div id="loans-total-capital" class="hero-balance loan-capital-hero">—</div>
                 <p id="loans-total-meta" class="hero-forecast-hint hidden"></p>
                 <div id="loans-summary-block" class="loans-hero-summary hidden">
@@ -1815,6 +1899,7 @@
     <script src="js/search-utils.js"></script>
     <script src="js/theme.js"></script>
     <script src="js/categories.js"></script>
+    <script src="js/category-rules.js"></script>
     <script src="js/loan-details.js"></script>
     <script src="js/credit-cards.js"></script>
     <script src="js/portfolio.js"></script>
@@ -1825,6 +1910,8 @@
     <script src="js/ui.js"></script>
     <script src="js/add-form-ui.js"></script>
     <script src="js/transactions.js"></script>
+    <script src="js/transaction-split.js"></script>
+    <script src="js/recurring-confirm.js"></script>
     <script src="js/app-shortcuts.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/reports-core.js"></script>

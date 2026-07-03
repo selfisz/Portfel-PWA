@@ -118,6 +118,8 @@ function renderLoans() {
     const archiveCount = document.getElementById('loans-archive-count');
 
     if (totalHero) totalHero.classList.toggle('hidden', !hasDebtSummary);
+    const exportActions = document.getElementById('loans-export-actions');
+    if (exportActions) exportActions.classList.toggle('hidden', !hasDebtSummary);
     if (totalCapitalEl && hasDebtSummary) setPlnAmountElement(totalCapitalEl, summaryTotal);
     if (totalMetaEl) {
         if (!hasDebtSummary) {
@@ -831,4 +833,82 @@ function renderLoanDetailsHtml(loan) {
     html += loanDetailSection('Wcześniejsza spłata i nadpłaty', repaymentRows, d.overpaymentNotes ? escapeHtml(d.overpaymentNotes) : '');
 
     return html;
+}
+
+function buildDebtsPrintBody(asOfDate) {
+    const label = typeof formatAssetPdfDateLabel === 'function'
+        ? formatAssetPdfDateLabel(asOfDate)
+        : asOfDate;
+    const today = localIsoDate(new Date());
+    const isCurrent = asOfDate >= today;
+    const loans = getActiveLoans();
+    const cards = typeof getActiveCreditCards === 'function' ? getActiveCreditCards() : [];
+
+    let loanTotal = 0;
+    let cardTotal = 0;
+    const loanRows = loans.map((loan) => {
+        const capital = loan.currentCapitalLeft || 0;
+        loanTotal += capital;
+        const name = typeof getLoanDisplayName === 'function' ? getLoanDisplayName(loan) : (loan.name || 'Kredyt');
+        const source = isCurrent ? 'bieżąca' : 'szacunek';
+        return `<tr><td>${escapeHtml(name)}</td><td>Kredyt</td><td>${formatPlnAmount(capital)}</td><td>${escapeHtml(source)}</td></tr>`;
+    }).join('');
+    const cardRows = cards.map((card) => {
+        const balance = card.currentBalance || 0;
+        cardTotal += balance;
+        const source = isCurrent ? 'bieżąca' : 'szacunek';
+        return `<tr><td>${escapeHtml(card.name || 'Karta')}</td><td>Karta</td><td>${formatPlnAmount(balance)}</td><td>${escapeHtml(source)}</td></tr>`;
+    }).join('');
+
+    const monthKey = asOfDate.slice(0, 7);
+    const snap = typeof getSnapshotForMonthKey === 'function' ? getSnapshotForMonthKey(monthKey) : null;
+    const snapNote = snap && !isCurrent
+        ? `<p class="reports-pdf-summary">Snapshot ${monthKey}: kredyty ${formatPlnAmount(snap.loanDebt)} | karty ${formatPlnAmount(snap.cardDebt)} | łącznie ${formatPlnAmount(snap.totalDebt)}</p>`
+        : '';
+    const total = loanTotal + cardTotal;
+    const disclaimer = isCurrent
+        ? '<p class="reports-pdf-summary reports-pdf-disclaimer">Stan bieżący kredytów i kart kredytowych.</p>'
+        : '<p class="reports-pdf-summary reports-pdf-disclaimer">Dla dat wstecznych pozycje to szacunek bieżący; sumy miesięczne ze snapshotów majątku (jeśli dostępne).</p>';
+
+    return `<h1 class="reports-pdf-title">Zadłużenie na dzień ${escapeHtml(label)}</h1>
+        <p class="reports-pdf-summary">Suma (pozycje): ${formatPlnAmount(total)} · Kredyty: ${formatPlnAmount(loanTotal)} · Karty: ${formatPlnAmount(cardTotal)}</p>
+        ${snapNote}
+        ${disclaimer}
+        <table class="reports-pdf-table"><thead><tr><th>Pozycja</th><th>Typ</th><th>Kwota</th><th>Źródło</th></tr></thead><tbody>${loanRows}${cardRows}</tbody></table>`;
+}
+
+function openDebtsPdfDatePicker() {
+    const overlay = document.getElementById('debts-pdf-date-overlay');
+    if (!overlay) return;
+    const input = document.getElementById('debts-pdf-date-input');
+    if (input) input.value = localIsoDate(new Date());
+    overlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeDebtsPdfDatePicker() {
+    document.getElementById('debts-pdf-date-overlay')?.classList.add('hidden');
+    if (document.getElementById('reports-pdf-overlay')?.classList.contains('hidden')
+        && document.getElementById('recurring-confirm-overlay')?.classList.contains('hidden')
+        && document.getElementById('assets-pdf-date-overlay')?.classList.contains('hidden')) {
+        document.body.style.overflow = '';
+    }
+}
+
+function setDebtsPdfDatePreset(offsetDays) {
+    const d = new Date();
+    d.setDate(d.getDate() - offsetDays);
+    exportDebtsPdfForDate(localIsoDate(d));
+}
+
+function exportDebtsPdfForSelectedDate() {
+    const input = document.getElementById('debts-pdf-date-input');
+    exportDebtsPdfForDate(input?.value || localIsoDate(new Date()));
+}
+
+function exportDebtsPdfForDate(dateIso) {
+    if (!dateIso) return;
+    closeDebtsPdfDatePicker();
+    if (typeof buildDebtsPrintBody !== 'function' || typeof openPrintPreview !== 'function') return;
+    openPrintPreview(buildDebtsPrintBody(dateIso), 'Zadłużenie PDF');
 }

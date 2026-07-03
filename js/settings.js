@@ -240,6 +240,7 @@ function setSettingsSection(section) {
         document.getElementById(`btn-settings-${id}`)?.classList.toggle('active', id === section);
     });
     if (section === 'budgets') renderBudgetEditor();
+    if (section === 'categories' && typeof renderCategoryRulesEditor === 'function') renderCategoryRulesEditor();
     if (section === 'account' && typeof refreshAccountSettingsUI === 'function') refreshAccountSettingsUI();
     if (section === 'backup') {
         syncAutoCloudBackupToggleUI();

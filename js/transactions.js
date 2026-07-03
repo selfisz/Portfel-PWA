@@ -264,11 +264,14 @@ function formatTransactionSavedToast(tx, isEdit = false) {
 }
 
 function commitTransactionData(txData, options = {}) {
-    const normalized = typeof normalizeTransaction === 'function'
+    let normalized = typeof normalizeTransaction === 'function'
         ? normalizeTransaction(txData)
         : null;
     if (!normalized) {
         return { ok: false, error: 'Nieprawidłowa transakcja.' };
+    }
+    if (typeof applyCategoryRulesToTransaction === 'function') {
+        normalized = applyCategoryRulesToTransaction(normalized);
     }
     if (!options.skipBudgetConfirm && typeof confirmTransactionBudgetIfNeeded === 'function'
         && !confirmTransactionBudgetIfNeeded(normalized, null)) {
@@ -346,12 +349,44 @@ function saveTransaction() {
         return;
     }
 
+    if (typeof applyCategoryRulesToTransaction === 'function') {
+        const ruled = applyCategoryRulesToTransaction(txData);
+        txData.mainCategory = ruled.mainCategory;
+        txData.subCategory = ruled.subCategory;
+    }
+
     if (paidWithCard && formState.currentType === 'expense') {
         if (!creditCardId) {
             showAddFormError('Wybierz kartę kredytową.');
             return;
         }
         txData.creditCardId = creditCardId;
+    }
+
+    const split = typeof shouldOfferTransactionSplit === 'function'
+        ? shouldOfferTransactionSplit(note, amount, editingTxIndex)
+        : null;
+    if (split) {
+        if (typeof confirmTransactionBudgetIfNeeded === 'function' && !confirmTransactionBudgetIfNeeded(txData, null)) {
+            return;
+        }
+        const parts = typeof buildSplitTransactions === 'function'
+            ? buildSplitTransactions(txData, split)
+            : [];
+        const result = typeof commitMultipleTransactions === 'function'
+            ? commitMultipleTransactions(parts, { skipBudgetConfirm: true })
+            : { ok: false, error: 'Brak obsługi podziału.' };
+        if (!result.ok) {
+            if (result.error && result.error !== 'cancelled') {
+                showAppToast(result.error, 'error');
+            }
+            return;
+        }
+        hapticFeedback();
+        showAppToast(`Zapisano ${result.txs.length} transakcje`, 'success');
+        if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
+        resetStandardFormAfterSave();
+        return;
     }
 
     const previousTx = editingTxIndex !== null ? { ...appState.transactions[editingTxIndex] } : null;
@@ -550,17 +585,59 @@ function editTransaction(index) {
     focusAmountField();
 }
 
+function removeCommittedTransaction(txRef) {
+    const idx = appState.transactions.findIndex((item) => item === txRef);
+    if (idx < 0) return;
+    const tx = appState.transactions[idx];
+    syncCreditCardOnTransactionDelete(tx);
+    syncCashOnTransactionDelete(tx);
+    syncAssetOnTransactionDelete(tx);
+    appState.transactions.splice(idx, 1);
+}
+
+function undoDeleteTransaction(snapshot) {
+    if (!snapshot?.tx) return;
+    const restored = { ...snapshot.tx };
+    delete restored.cashMovementId;
+
+    const insertAt = Math.min(Math.max(0, snapshot.index), appState.transactions.length);
+    appState.transactions.splice(insertAt, 0, restored);
+
+    if (!syncCreditCardOnTransactionSave(restored, null)
+        || !syncCashOnTransactionSave(restored, null)
+        || !syncAssetOnTransactionSave(restored, null)) {
+        appState.transactions.splice(insertAt, 1);
+        if (typeof showAppToast === 'function') showAppToast('Nie udało się przywrócić transakcji.', 'error');
+        return;
+    }
+
+    appState.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+    saveState();
+    renderDashboard();
+    if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
+    if (typeof showAppToast === 'function') showAppToast('Przywrócono transakcję');
+}
+
 function deleteTransaction(index) {
-    if (confirm('Na pewno usunąć?')) {
-        if (activeTransactionDetailsIndex === index) closeTransactionDetails();
-        const tx = appState.transactions[index];
-        syncCreditCardOnTransactionDelete(tx);
-        syncCashOnTransactionDelete(tx);
-        syncAssetOnTransactionDelete(tx);
-        appState.transactions.splice(index, 1);
-        saveState();
-        renderDashboard();
-        if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
+    const tx = appState.transactions[index];
+    if (!tx) return;
+
+    const snapshot = {
+        index,
+        tx: JSON.parse(JSON.stringify(tx))
+    };
+
+    if (activeTransactionDetailsIndex === index) closeTransactionDetails();
+    syncCreditCardOnTransactionDelete(tx);
+    syncCashOnTransactionDelete(tx);
+    syncAssetOnTransactionDelete(tx);
+    appState.transactions.splice(index, 1);
+    saveState();
+    renderDashboard();
+    if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
+
+    if (typeof showUndoToast === 'function') {
+        showUndoToast('Usunięto transakcję', () => undoDeleteTransaction(snapshot));
     }
 }
 

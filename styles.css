@@ -1213,6 +1213,38 @@ body.settings-open {
     color: var(--bg);
 }
 
+.settings-toast--undo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: left;
+    padding: 12px 14px;
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.settings-toast-text {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+}
+
+.settings-toast-undo {
+    flex-shrink: 0;
+    border: none;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: inherit;
+}
+
 .add-form-error {
     margin: 0 0 12px;
     padding: 10px 12px;
@@ -7322,6 +7354,123 @@ body.auth-locked > #settings-overlay {
     .reports-pdf-table th {
         background: #f5f5f5 !important;
     }
+}
+
+.assets-export-row {
+    margin: 4px 0 0;
+}
+
+.assets-hero-card .analysis-period-hero-head,
+.loans-hero-card .analysis-period-hero-head {
+    margin-bottom: 2px;
+}
+
+.assets-pdf-date-presets {
+    display: flex;
+    gap: 8px;
+    margin: 12px 0;
+}
+
+.assets-pdf-date-presets .toggle-btn {
+    flex: 1;
+}
+
+.recurring-confirm-panel {
+    max-height: min(82vh, 680px);
+}
+
+.recurring-confirm-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 12px 0;
+}
+
+.recurring-confirm-item {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    background: var(--input-bg);
+}
+
+.recurring-confirm-item-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.recurring-confirm-item-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.recurring-confirm-item-actions .btn-submit--form,
+.recurring-confirm-item-actions .btn-cancel--form {
+    flex: 1;
+    margin: 0;
+}
+
+.recurring-confirm-bulk {
+    display: flex;
+    gap: 10px;
+}
+
+.recurring-confirm-bulk .btn-submit--form,
+.recurring-confirm-bulk .btn-cancel--form {
+    flex: 1;
+    margin: 0;
+}
+
+.category-rules-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.category-rule-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--input-bg);
+}
+
+.category-rule-item-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.category-rule-item-meta {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+
+.category-rule-item-delete {
+    border: none;
+    background: transparent;
+    color: var(--danger);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 8px;
+}
+
+.category-rule-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.reports-pdf-disclaimer {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
 }
 
 .compare-stack {

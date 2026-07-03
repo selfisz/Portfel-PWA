@@ -204,6 +204,7 @@ beforeEach(() => {
   globalThis.syncCreditCardOnTransactionSave = () => {};
   globalThis.alert = () => {};
   globalThis.confirm = () => true;
+  globalThis.showUndoToast = () => {};
   localStorage.clear();
 });
 
@@ -486,8 +487,7 @@ describe('deleteTransaction', () => {
     expect(_getAppState().transactions[0].mainCategory).toBe('Zakupy');
   });
 
-  it('nie usuwa transakcji gdy confirm = false', () => {
-    globalThis.confirm = () => false;
+  it('nie usuwa transakcji gdy brak indeksu', () => {
     _setAppState({
       ..._getAppState(),
       transactions: [
@@ -495,7 +495,7 @@ describe('deleteTransaction', () => {
       ]
     });
     buildFormDom();
-    deleteTransaction(0);
+    deleteTransaction(5);
     expect(_getAppState().transactions).toHaveLength(1);
   });
 

@@ -3,23 +3,99 @@ function hapticFeedback() {
 }
 
 let appToastTimeout = null;
+let undoToastCleanup = null;
+
+function clearAppToastTimer() {
+    if (appToastTimeout) {
+        clearTimeout(appToastTimeout);
+        appToastTimeout = null;
+    }
+}
+
+function resetUndoToast() {
+    if (undoToastCleanup) {
+        undoToastCleanup();
+        undoToastCleanup = null;
+    }
+}
 
 function showAppToast(message, variant = 'success') {
+    resetUndoToast();
     const toast = document.getElementById('settings-toast');
     if (!toast) return;
     toast.textContent = message;
-    toast.classList.remove('hidden', 'settings-toast--success', 'settings-toast--error', 'settings-toast--default');
+    toast.classList.remove('hidden', 'settings-toast--success', 'settings-toast--error', 'settings-toast--default', 'settings-toast--undo');
     const variantClass = variant === 'error'
         ? 'settings-toast--error'
         : variant === 'default'
             ? 'settings-toast--default'
             : 'settings-toast--success';
     toast.classList.add(variantClass);
-    if (appToastTimeout) clearTimeout(appToastTimeout);
+    clearAppToastTimer();
     appToastTimeout = setTimeout(() => {
         toast.classList.add('hidden');
         appToastTimeout = null;
     }, variant === 'error' ? 3600 : 2800);
+}
+
+function showUndoToast(message, onUndo, durationMs = 5000) {
+    resetUndoToast();
+    clearAppToastTimer();
+    const toast = document.getElementById('settings-toast');
+    if (!toast || typeof onUndo !== 'function') return;
+
+    toast.classList.remove('hidden', 'settings-toast--success', 'settings-toast--error', 'settings-toast--default');
+    toast.classList.add('settings-toast--undo');
+    toast.replaceChildren();
+
+    const text = document.createElement('span');
+    text.className = 'settings-toast-text';
+    text.textContent = message;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'settings-toast-undo';
+    btn.textContent = 'Cofnij';
+
+    const hide = () => {
+        toast.classList.add('hidden');
+        toast.replaceChildren();
+        toast.classList.remove('settings-toast--undo');
+        undoToastCleanup = null;
+        clearAppToastTimer();
+    };
+
+    btn.addEventListener('click', () => {
+        hide();
+        onUndo();
+    });
+
+    toast.append(text, btn);
+    undoToastCleanup = hide;
+    appToastTimeout = setTimeout(hide, durationMs);
+}
+
+function openPrintPreview(bodyHtml, title = 'Podgląd') {
+    const overlay = document.getElementById('reports-pdf-overlay');
+    const content = document.getElementById('reports-pdf-content');
+    const titleEl = document.getElementById('reports-pdf-title');
+    if (!overlay || !content) return;
+    if (titleEl) titleEl.textContent = title;
+    content.innerHTML = bodyHtml;
+    overlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    content.scrollTop = 0;
+}
+
+function closePrintPreview() {
+    const overlay = document.getElementById('reports-pdf-overlay');
+    if (!overlay) return;
+    overlay.classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+function printPrintPreview() {
+    window.print();
 }
 
 function clearAddFormError() {
@@ -129,9 +205,9 @@ function initPanelHeaders() {
         titleId: 'month-drill-title',
         onClose: closeMonthDrill,
     }));
-    mountPanelHeader('panel-header-reports-pdf', createPanelHeader('Raport PDF', {
+    mountPanelHeader('panel-header-reports-pdf', createPanelHeader('Podgląd', {
         titleId: 'reports-pdf-title',
-        onClose: closeReportsPdfPreview,
+        onClose: closePrintPreview,
         closeLabel: 'Wróć',
     }));
 

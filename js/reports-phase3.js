@@ -2353,32 +2353,13 @@ function invalidateAnalysisRenderCache(ctx) {
 }
 
 
-function closeReportsPdfPreview() {
-    const overlay = document.getElementById('reports-pdf-overlay');
-    if (!overlay) return;
-    overlay.classList.add('hidden');
-    document.body.style.overflow = '';
-}
-
-function printReportsPdfPreview() {
-    window.print();
-}
-
-function openReportsPdfPreview(ctx, savingsRate) {
-    const overlay = document.getElementById('reports-pdf-overlay');
-    const content = document.getElementById('reports-pdf-content');
-    if (!overlay || !content || typeof buildReportsPrintBody !== 'function') return;
-    content.innerHTML = buildReportsPrintBody(ctx, savingsRate);
-    overlay.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-    content.scrollTop = 0;
-}
-
 function exportReportsPdf() {
     const ctx = getReportsPeriodContext();
     const savingsRate = summarizePeriod(ctx.periodTx).savings;
     renderAllAnalysisSectionsForExport(ctx, savingsRate);
-    openReportsPdfPreview(ctx, savingsRate);
+    if (typeof openPrintPreview === 'function' && typeof buildReportsPrintBody === 'function') {
+        openPrintPreview(buildReportsPrintBody(ctx, savingsRate), 'Raport PDF');
+    }
 }
 
 function renderPhase3Reports(ctx, savingsRate) {

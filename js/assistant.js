@@ -599,7 +599,19 @@ function confirmSkrybaPendingAction() {
     if (!skrybaPendingAction) return;
     const action = skrybaPendingAction;
     skrybaPendingAction = null;
-    const result = executeSkrybaAction(action.tool, action.params);
+    let result;
+    if (action.tool === 'add_transaction_split' && Array.isArray(action.params?.transactions)) {
+        result = typeof commitMultipleTransactions === 'function'
+            ? commitMultipleTransactions(action.params.transactions, { skipBudgetConfirm: true })
+            : { ok: false, error: 'Brak obsługi podziału.' };
+        if (result.ok) {
+            result = { ok: true, message: `Zapisano ${result.txs.length} transakcje.` };
+        } else {
+            result = { ok: false, error: result.error || 'Nie udało się zapisać.' };
+        }
+    } else {
+        result = executeSkrybaAction(action.tool, action.params);
+    }
     const msg = result.ok
         ? result.message
         : (result.error || 'Operacja nie powiodła się.');
@@ -927,6 +939,34 @@ async function handleSkrybaPendingCorrectionResult(routed) {
 function tryParseLocalAddTransaction(text) {
     const t = String(text || '').trim();
     if (!t || t.length < 4) return null;
+
+    if (typeof tryParseTransactionSplit === 'function') {
+        const split = tryParseTransactionSplit(t);
+        if (split) {
+            const today = typeof localIsoDate === 'function'
+                ? localIsoDate(new Date())
+                : new Date().toISOString().slice(0, 10);
+            const parts = typeof buildSplitTransactions === 'function'
+                ? buildSplitTransactions({
+                    amount: split.total,
+                    type: 'expense',
+                    mainCategory: 'Różne',
+                    subCategory: '[Bez podkategorii]',
+                    date: today,
+                    note: '',
+                    affectsCash: true
+                }, split)
+                : [];
+            if (parts.length >= 2) {
+                return {
+                    intent: 'add_transaction_split',
+                    reply: `Podzielę zakup na ${parts.length} pozycje (${split.total.toFixed(2)} zł).`,
+                    transactions: parts
+                };
+            }
+        }
+    }
+
     let amount = null;
     let desc = '';
     const m1 = t.match(/^(\d+(?:[.,]\d{1,2})?)\s*(?:zł|zl|pln)?\s+(.+)$/i);
@@ -1116,6 +1156,36 @@ async function handleAssistantIntent(parsed, userMessage = '') {
     }
 
     const intent = parsed?.intent || (parsed?.mode === 'action' ? parsed.intent : 'reply');
+
+    if (intent === 'add_transaction_split' && Array.isArray(parsed.transactions) && parsed.transactions.length > 1) {
+        const normalizedList = parsed.transactions
+            .map((tx) => (typeof normalizeAssistantTransaction === 'function' ? normalizeAssistantTransaction(tx) : null))
+            .filter(Boolean);
+        if (!normalizedList.length) {
+            const msg = reply || 'Nie udało się zbudować podzielonej transakcji.';
+            appendSkrybaMessage('assistant', msg);
+            return msg;
+        }
+        const preview = normalizedList.map((tx) => formatAssistantTransactionPreview(tx)).join('\n');
+        if (isAssistantConfirmTxEnabled()) {
+            appendSkrybaPendingAction({
+                tool: 'add_transaction_split',
+                params: { transactions: normalizedList },
+                reply: reply || 'Potwierdź podział transakcji:',
+                summary: preview
+            });
+            return reply || 'Potwierdź podział transakcji:';
+        }
+        const result = typeof commitMultipleTransactions === 'function'
+            ? commitMultipleTransactions(normalizedList, { skipBudgetConfirm: true })
+            : { ok: false };
+        const msg = result.ok
+            ? `Zapisano ${result.txs.length} transakcje:\n${preview}`
+            : (result.error || 'Nie udało się zapisać.');
+        appendSkrybaMessage('assistant', msg);
+        if (result.ok && typeof hapticFeedback === 'function') hapticFeedback();
+        return msg;
+    }
 
     if (intent === 'add_transaction' && (parsed.transaction || parsed?.action?.params)) {
         const raw = parsed.transaction || parsed.action.params;
