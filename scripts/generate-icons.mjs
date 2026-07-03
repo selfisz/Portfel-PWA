@@ -59,3 +59,26 @@ await sharp({
     .png({ compressionLevel: 9 })
     .toFile(maskableDest);
 console.log(`Wrote icon-512-maskable.png (${maskableSize}x${maskableSize}, safe zone)`);
+
+const headerSize = 64;
+const headerInner = Math.round(headerSize * 0.88);
+const headerWallet = await sharp(source)
+    .resize(headerInner, headerInner, { fit: 'cover', position: 'centre' })
+    .png()
+    .toBuffer();
+await sharp({
+    create: {
+        width: headerSize,
+        height: headerSize,
+        channels: 4,
+        background: { r: 38, g: 36, b: 34, alpha: 1 },
+    },
+})
+    .composite([{
+        input: headerWallet,
+        left: Math.round((headerSize - headerInner) / 2),
+        top: Math.round((headerSize - headerInner) / 2),
+    }])
+    .png({ compressionLevel: 9 })
+    .toFile(path.join(outDir, 'header-logo.png'));
+console.log(`Wrote header-logo.png (${headerSize}x${headerSize})`);

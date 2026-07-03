@@ -2,6 +2,21 @@
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
+    <script>
+    (function () {
+        var parts = location.pathname.split('/').filter(Boolean);
+        var idx = parts.indexOf('Portfel-PWA');
+        if (idx < 0) return;
+        var base = '/' + parts.slice(0, idx + 1).join('/') + '/';
+        if (location.pathname === base.slice(0, -1)) {
+            location.replace(base + 'index.html' + location.search + location.hash);
+            return;
+        }
+        var baseEl = document.createElement('base');
+        baseEl.href = base;
+        document.head.appendChild(baseEl);
+    })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
     <title>Finanse</title>
     <meta name="theme-color" content="#e4eaf4">
@@ -64,7 +79,7 @@
 
     <header>
         <div class="header-brand">
-            <img class="header-logo" src="icons/icon-192.png" alt="">
+            <img class="header-logo" src="icons/header-logo.png" alt="">
             <h1 id="view-title">Pulpit</h1>
         </div>
         <div class="header-actions">

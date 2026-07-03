@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanse-pwa-v276';
+const CACHE_NAME = 'finanse-pwa-v277';
 
 const FIREBASE_CDN = [
   'https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js',
@@ -68,7 +68,8 @@ const ASSETS = [
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-512-maskable.png',
-  'icons/apple-touch-icon.png'
+  'icons/apple-touch-icon.png',
+  'icons/header-logo.png'
 ];
 
 function isFirebaseCdnRequest(url) {
@@ -83,6 +84,7 @@ function isAppShellRequest(url) {
   return path.endsWith('.js')
     || path.endsWith('.css')
     || path.endsWith('.html')
+    || path.endsWith('.png')
     || path.endsWith('/')
     || path.endsWith('manifest.json');
 }
@@ -157,11 +159,12 @@ self.addEventListener('message', (event) => {
   const data = event.data;
   if (!data || data.type !== 'SHOW_NOTIFICATION' || !data.notification) return;
   const n = data.notification;
+  const iconUrl = new URL('icons/icon-192.png', self.registration.scope).href;
   event.waitUntil(
     self.registration.showNotification(n.title || 'Finanse', {
       body: n.body || '',
-      icon: 'icons/icon-192.png',
-      badge: 'icons/icon-192.png',
+      icon: iconUrl,
+      badge: iconUrl,
       tag: n.id,
       data: { id: n.id },
       actions: [

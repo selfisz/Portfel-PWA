@@ -232,6 +232,8 @@ header {
     height: 28px;
     border-radius: var(--radius-xs);
     object-fit: cover;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 65%, transparent);
+    background: #1c1c1c;
 }
 
 #sync-status {
