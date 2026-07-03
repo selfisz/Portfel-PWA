@@ -442,10 +442,15 @@ function renderRecentCategoryChips() {
         const chip = document.createElement('button');
         chip.type = 'button';
         chip.className = 'recent-chip';
-        const label = recent.subCategory === '[Bez podkategorii]'
+        const fullLabel = recent.subCategory === '[Bez podkategorii]'
             ? recent.mainCategory
             : `${recent.mainCategory} · ${recent.subCategory}`;
-        chip.innerHTML = `${renderCategoryIcon(recent.mainCategory, 'chip', recent.subCategory === '[Bez podkategorii]' ? null : recent.subCategory, recent.type)}<span>${label}</span>`;
+        const shortLabel = recent.subCategory === '[Bez podkategorii]'
+            ? recent.mainCategory
+            : recent.subCategory;
+        chip.title = fullLabel;
+        chip.setAttribute('aria-label', fullLabel);
+        chip.innerHTML = `${renderCategoryIcon(recent.mainCategory, 'chip', recent.subCategory === '[Bez podkategorii]' ? null : recent.subCategory, recent.type)}<span class="recent-chip-label">${shortLabel}</span>`;
         if (formState.selectedMainCategory === recent.mainCategory && formState.selectedSubCategory === recent.subCategory) {
             chip.classList.add('selected');
         }
