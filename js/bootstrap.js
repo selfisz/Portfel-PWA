@@ -5,6 +5,7 @@ function bootstrapApp() {
     const txDate = document.getElementById('tx-date');
     if (txDate) txDate.value = localIsoDate(new Date());
     renderMainCategoriesForm();
+    if (typeof initAddFormUi === 'function') initAddFormUi();
     initOnboarding();
     initPanelHeaders();
     initOverlayCloseIcons();

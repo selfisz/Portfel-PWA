@@ -44,8 +44,12 @@ function switchView(viewId, title, element) {
         document.getElementById('btn-card-payment')?.classList.remove('hidden');
         const moreOpts = document.getElementById('add-form-more-options');
         if (moreOpts) moreOpts.open = false;
+        const catPicker = document.getElementById('add-category-picker');
+        if (catPicker) catPicker.open = false;
         setFormMode('expense');
         focusAmountField();
+        if (typeof updateAddDateChipLabel === 'function') updateAddDateChipLabel();
+        if (typeof initAddFormUi === 'function') initAddFormUi();
     }
 }
 
@@ -60,6 +64,7 @@ function setAddFormPanels(mode) {
     document.getElementById('add-sticky-standard')?.classList.toggle('hidden', !isStandard);
     document.getElementById('add-sticky-loan')?.classList.toggle('hidden', !isLoan);
     document.getElementById('add-sticky-card')?.classList.toggle('hidden', !isCard);
+    if (typeof syncAddFormPanelsUi === 'function') syncAddFormPanelsUi(mode);
 }
 
 function setFormMode(mode) {
@@ -83,7 +88,7 @@ function setFormMode(mode) {
         recurringWrapper.style.display = !isStandard || editingTxIndex !== null ? 'none' : 'flex';
     }
     if (creditCardWrapper) {
-        creditCardWrapper.style.display = !isStandard || editingTxIndex !== null || formState.currentType !== 'expense' ? 'none' : 'block';
+        creditCardWrapper.style.display = !isStandard || editingTxIndex !== null || formState.currentType !== 'expense' ? 'none' : '';
     }
 
     if (isStandard) {
@@ -120,7 +125,7 @@ function setTransactionType(type, keepSelection = false) {
     setAddFormPanels(type);
     const creditCardWrapper = document.getElementById('credit-card-purchase-wrapper');
     if (creditCardWrapper) {
-        creditCardWrapper.style.display = type === 'expense' && editingTxIndex === null ? 'block' : 'none';
+        creditCardWrapper.style.display = type === 'expense' && editingTxIndex === null ? '' : 'none';
     }
     if (type === 'expense') {
         const ccCheckbox = document.getElementById('tx-credit-card');
@@ -138,6 +143,7 @@ function setTransactionType(type, keepSelection = false) {
     renderMainCategoriesForm();
     updateAddFormAmountStyle();
     if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();
+    if (typeof syncAddFormPanelsUi === 'function') syncAddFormPanelsUi(type);
 }
 
 function updateAddFormAmountStyle() {
@@ -163,23 +169,25 @@ function resetStandardFormAfterSave() {
     if (typeof updateTransactionAssetHints === 'function') updateTransactionAssetHints();
     const moreOpts = document.getElementById('add-form-more-options');
     if (moreOpts) moreOpts.open = false;
+    const catPicker = document.getElementById('add-category-picker');
+    if (catPicker) catPicker.open = false;
     clearAddFormError();
     updateAddFormCashHints();
     updateAddFormAmountStyle();
     if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();
+    if (typeof updateAddCategorySummary === 'function') updateAddCategorySummary();
+    if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();
     focusAmountField();
     renderDashboard();
 }
 
 function updateAddFormCashHints() {
     const incomeHint = document.getElementById('tx-income-cash-hint');
-    const affectsWrap = document.getElementById('tx-affects-cash-wrapper');
     const isIncome = formState.currentType === 'income';
-    const paidWithCard = document.getElementById('tx-credit-card')?.checked;
 
     if (incomeHint) incomeHint.classList.toggle('hidden', !isIncome);
-    if (affectsWrap) affectsWrap.classList.toggle('hidden', isIncome || !!paidWithCard);
     updateTransactionAssetHints();
+    if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();
 }
 
 function renderMainCategoriesForm() {
@@ -194,6 +202,8 @@ function renderMainCategoriesForm() {
     populateTransactionAssetSelect();
     updateAddFormCashHints();
     if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();
+    if (typeof updateAddCategorySummary === 'function') updateAddCategorySummary();
+    if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();
 }
 
 function selectMainCategoryForm(cat, element) {
@@ -205,6 +215,8 @@ function selectMainCategoryForm(cat, element) {
     renderSubCategoriesForm(cat);
     renderRecentCategories();
     if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();
+    if (typeof updateAddCategorySummary === 'function') updateAddCategorySummary();
+    if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();
 }
 
 function renderSubCategoriesForm(cat) {
@@ -223,6 +235,8 @@ function renderSubCategoriesForm(cat) {
         }
     }
     renderRecentCategories();
+    if (typeof updateAddCategorySummary === 'function') updateAddCategorySummary();
+    if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();
 }
 
 function formatTransactionCategoryLabel(tx) {
@@ -297,6 +311,9 @@ function saveTransaction() {
 
     if (!Number.isFinite(amount) || amount <= 0 || !formState.selectedMainCategory || !formState.selectedSubCategory || !date) {
         showAddFormError('Uzupełnij kwotę, kategorię i datę.');
+        if (!formState.selectedMainCategory || !formState.selectedSubCategory) {
+            if (typeof focusAddCategorySearch === 'function') focusAddCategorySearch();
+        }
         return;
     }
 
@@ -489,7 +506,7 @@ function editTransaction(index) {
     document.getElementById('form-header').innerText = 'Edytuj transakcję';
     document.getElementById('btn-cancel-edit').style.display = 'block';
     document.getElementById('recurring-wrapper').style.display = 'none';
-    document.getElementById('credit-card-purchase-wrapper').style.display = tx.type === 'expense' ? 'block' : 'none';
+    document.getElementById('credit-card-purchase-wrapper').style.display = tx.type === 'expense' ? '' : 'none';
     document.getElementById('btn-loan-payment')?.classList.add('hidden');
     document.getElementById('btn-card-payment')?.classList.add('hidden');
     document.getElementById('tx-amount').value = tx.amount;
@@ -519,12 +536,17 @@ function editTransaction(index) {
     if (linkedAsset) linkedAsset.checked = !!tx.linkedAssetId;
     if (linkedSelect && tx.linkedAssetId) linkedSelect.value = tx.linkedAssetId;
     updateAddFormCashHints();
+    if (typeof syncAddPaymentMethodUi === 'function') syncAddPaymentMethodUi();
     const moreOpts = document.getElementById('add-form-more-options');
-    if (moreOpts) moreOpts.open = !!(tx.creditCardId || tx.linkedAssetId);
+    if (moreOpts) moreOpts.open = !!tx.linkedAssetId;
     formState.selectedMainCategory = tx.mainCategory;
     formState.selectedSubCategory = tx.subCategory;
     setFormMode(tx.type);
     switchView('add', 'Edytuj', document.querySelectorAll('.nav-item')[1]);
+    if (typeof updateAddDateChipLabel === 'function') updateAddDateChipLabel();
+    if (typeof syncAddPaymentMethodUi === 'function') syncAddPaymentMethodUi();
+    if (typeof updateAddCategorySummary === 'function') updateAddCategorySummary();
+    if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();
     focusAmountField();
 }
 

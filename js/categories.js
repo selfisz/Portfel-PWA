@@ -418,6 +418,8 @@ function createSubCategoryItem(sub) {
         formState.selectedSubCategory = sub;
         renderRecentCategories();
         if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();
+        if (typeof updateAddCategorySummary === 'function') updateAddCategorySummary();
+        if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();
     };
     return item;
 }
@@ -549,4 +551,5 @@ function renderRecentCategories() {
         return;
     }
     renderRecentCategoryChips();
+    if (typeof updateAddCategoryBrowseUi === 'function') updateAddCategoryBrowseUi();
 }

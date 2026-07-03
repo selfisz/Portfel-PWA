@@ -802,69 +802,126 @@
         <div id="view-add" class="app-view">
             <div class="add-view-layout">
                 <div class="card add-form-card">
-                    <h2 id="form-header" class="form-header">Nowa transakcja</h2>
-                    <div class="flex-toggle flex-toggle--4">
-                        <button id="btn-expense" type="button" class="toggle-btn active expense" onclick="setFormMode('expense')">Wydatek</button>
-                        <button id="btn-income" type="button" class="toggle-btn income" onclick="setFormMode('income')">Wpływ</button>
-                        <button id="btn-loan-payment" type="button" class="toggle-btn loan" onclick="setFormMode('loan')">Kredyt</button>
-                        <button id="btn-card-payment" type="button" class="toggle-btn toggle-card" onclick="setFormMode('card')">Karta</button>
+                    <h2 id="form-header" class="form-header add-form-header">Nowa transakcja</h2>
+                    <div id="add-hero-standard" class="add-hero">
+                        <div class="add-amount-hero">
+                            <input type="text" id="tx-amount" class="add-amount-input" inputmode="decimal" placeholder="0,00" autocomplete="off" enterkeyhint="done" aria-label="Kwota w PLN" oninput="clearAddFormError(); if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview(); if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();">
+                            <span class="add-amount-suffix" aria-hidden="true">zł</span>
+                        </div>
+                        <div class="flex-toggle flex-toggle--2 add-type-primary">
+                            <button id="btn-expense" type="button" class="toggle-btn active expense" onclick="setFormMode('expense')">Wydatek</button>
+                            <button id="btn-income" type="button" class="toggle-btn income" onclick="setFormMode('income')">Wpływ</button>
+                        </div>
+                        <div class="add-type-secondary">
+                            <button id="btn-loan-payment" type="button" class="add-alt-mode-btn" onclick="setFormMode('loan')">Spłata kredytu</button>
+                            <span class="add-type-secondary-sep" aria-hidden="true">·</span>
+                            <button id="btn-card-payment" type="button" class="add-alt-mode-btn" onclick="setFormMode('card')">Operacja na karcie</button>
+                        </div>
                     </div>
                     <p id="add-form-error" class="add-form-error hidden" role="alert" aria-live="polite"></p>
                     <div id="add-form-standard">
-                        <div class="form-group form-group--amount">
-                            <label for="tx-amount">Kwota (PLN)</label>
-                            <input type="text" id="tx-amount" inputmode="decimal" placeholder="0,00" autocomplete="off" enterkeyhint="done" oninput="clearAddFormError(); if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();">
+                        <div class="add-recent-section" id="recent-categories-wrapper" style="display:none;">
+                            <span class="add-section-label">Ostatnio</span>
+                            <div id="recent-categories-row" class="recent-categories add-recent-scroll"></div>
                         </div>
-                        <div class="form-group" id="recent-categories-wrapper" style="display:none;">
-                            <label>Ostatnio używane</label>
-                            <div id="recent-categories-row" class="recent-categories"></div>
+                        <div class="add-payment-row" id="add-payment-row">
+                            <div id="credit-card-purchase-wrapper" class="add-payment-toggle-wrap">
+                                <div class="flex-toggle flex-toggle--2 add-payment-toggle" role="group" aria-label="Sposób płatności">
+                                    <button type="button" id="btn-payment-cash" class="toggle-btn payment-cash active" onclick="setAddPaymentMethod('cash')">Z salda</button>
+                                    <button type="button" id="btn-payment-card" class="toggle-btn payment-card" onclick="setAddPaymentMethod('card')">Kartą</button>
+                                </div>
+                                <input type="checkbox" id="tx-affects-cash" class="visually-hidden" checked tabindex="-1" aria-hidden="true">
+                                <input type="checkbox" id="tx-credit-card" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                                <div class="form-group credit-card-select-group hidden" id="credit-card-select-wrapper">
+                                    <label class="section-label" for="tx-credit-card-select">Karta</label>
+                                    <select id="tx-credit-card-select" onchange="if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();"></select>
+                                </div>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>Kategoria główna</label>
-                            <div id="main-category-grid" class="grid-selector"></div>
+                        <p class="reports-hint tx-income-cash-hint hidden" id="tx-income-cash-hint">Wpływ zwiększy saldo gotówki.</p>
+                        <section class="add-category-section" id="add-category-section" aria-label="Kategoria">
+                            <button type="button" class="add-category-selected-btn" id="add-category-selected-btn" onclick="focusAddCategorySearch()">
+                                <span class="add-section-label">Kategoria</span>
+                                <span id="add-category-summary" class="add-category-summary-text">Wybierz kategorię</span>
+                            </button>
+                            <div class="add-category-search-wrap">
+                                <label class="visually-hidden" for="add-category-search">Szukaj kategorii</label>
+                                <input type="search" id="add-category-search" class="add-category-search" placeholder="Szukaj np. czynsz…" autocomplete="off" enterkeyhint="search" oninput="if (typeof renderAddCategorySearchResults === 'function') renderAddCategorySearchResults(this.value);" onfocus="clearAddFormError();">
+                            </div>
+                            <div id="add-category-search-results" class="add-category-search-results hidden" aria-live="polite"></div>
+                            <button type="button" id="add-category-browse-btn" class="add-category-browse-btn hidden" onclick="openAddCategoryBrowse()">Inna kategoria — pełna lista</button>
+                            <details id="add-category-picker" class="add-category-picker add-category-picker--grids-only">
+                                <summary class="visually-hidden">Pełna lista kategorii</summary>
+                                <div class="add-category-picker-body">
+                                    <div id="add-category-grids-wrap" class="add-category-grids-wrap">
+                                        <div class="form-group add-category-main-group">
+                                            <label class="add-section-label">Kategoria główna</label>
+                                            <div id="main-category-grid" class="grid-selector"></div>
+                                        </div>
+                                        <div class="form-group add-subcategory-group" id="sub-category-wrapper" style="display:none;">
+                                            <label class="add-section-label">Podkategoria</label>
+                                            <div id="sub-category-grid" class="grid-selector grid-selector--subs"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
+                        </section>
+                        <div id="tx-budget-preview" class="tx-budget-preview tx-budget-preview--add hidden" aria-live="polite"></div>
+                        <div class="add-details-row">
+                            <div class="add-date-chip-wrap">
+                                <label class="add-date-chip-label" id="add-date-chip-label" for="tx-date">Dziś</label>
+                                <input type="date" id="tx-date" class="add-date-input" onchange="clearAddFormError(); if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview(); if (typeof updateAddDateChipLabel === 'function') updateAddDateChipLabel(); if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();">
+                            </div>
+                            <input type="text" id="tx-note" class="add-note-input" placeholder="Notatka (opcjonalnie)" oninput="if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();">
                         </div>
-                        <div class="form-group" id="sub-category-wrapper" style="display:none;">
-                            <label>Podkategoria</label>
-                            <div id="sub-category-grid" class="grid-selector"></div>
-                        </div>
-                        <div id="tx-budget-preview" class="tx-budget-preview hidden" aria-live="polite"></div>
-                        <div class="form-group">
-                            <label>Data</label>
-                            <input type="date" id="tx-date" onchange="clearAddFormError(); if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();">
-                        </div>
-                        <div class="form-group">
-                            <label>Notatka</label>
-                            <input type="text" id="tx-note" placeholder="Opcjonalny opis">
-                        </div>
+                        <details id="add-form-more-options" class="add-form-more-options add-form-more-options--inline">
+                            <summary class="add-form-more-options-summary">Więcej opcji</summary>
+                            <div class="add-form-more-options-body">
+                                <div class="checkbox-wrapper hidden" id="tx-linked-asset-wrapper">
+                                    <input type="checkbox" id="tx-linked-asset" onchange="updateTransactionAssetHints()">
+                                    <label for="tx-linked-asset">Powiąż z aktywem</label>
+                                </div>
+                                <div class="form-group hidden" id="tx-linked-asset-select-wrapper">
+                                    <label class="section-label" for="tx-linked-asset-select">Aktywo</label>
+                                    <select id="tx-linked-asset-select"></select>
+                                    <p class="reports-hint">Wydatek → przelew na aktywo. Wpływ → wpłata bezpośrednio na aktywo.</p>
+                                </div>
+                                <div class="checkbox-wrapper" id="recurring-wrapper">
+                                    <input type="checkbox" id="tx-recurring">
+                                    <label for="tx-recurring">Cykliczna (co miesiąc)</label>
+                                </div>
+                            </div>
+                        </details>
                     </div>
-                    <div id="add-form-loan" class="hidden">
+                    <div id="add-form-loan" class="hidden add-alt-form">
+                        <button type="button" class="add-back-to-standard" onclick="setFormMode('expense')">← Wydatek / wpływ</button>
                         <p class="reports-hint add-loan-hint">Zmniejsza kapitał kredytu, dodaje wydatek w Długach i odejmuje z gotówki.</p>
-                        <div class="form-group" id="recent-loans-wrapper" style="display:none;">
-                            <label>Ostatnio używane</label>
-                            <div id="recent-loans-row" class="recent-categories"></div>
+                        <div class="add-recent-section" id="recent-loans-wrapper" style="display:none;">
+                            <span class="add-section-label">Ostatnio</span>
+                            <div id="recent-loans-row" class="recent-categories add-recent-scroll"></div>
                         </div>
                         <div class="form-group">
                             <label class="section-label" for="add-loan-payment-select">Kredyt</label>
                             <select id="add-loan-payment-select"></select>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group form-group--amount add-alt-amount">
                             <label class="section-label" for="add-loan-payment-amount">Kwota (PLN)</label>
                             <input type="number" id="add-loan-payment-amount" step="0.01" placeholder="0,00" inputmode="decimal" autocomplete="off">
                         </div>
-                        <div class="form-group">
-                            <label class="section-label" for="add-loan-payment-date">Data</label>
-                            <input type="date" id="add-loan-payment-date">
-                        </div>
-                        <div class="form-group form-group--last">
-                            <label class="section-label" for="add-loan-payment-note">Notatka</label>
-                            <input type="text" id="add-loan-payment-note" placeholder="Spłata kapitału" maxlength="80">
+                        <div class="add-details-row">
+                            <div class="add-date-chip-wrap">
+                                <label class="section-label add-date-chip-label" for="add-loan-payment-date">Data</label>
+                                <input type="date" id="add-loan-payment-date" class="add-date-input">
+                            </div>
+                            <input type="text" id="add-loan-payment-note" class="add-note-input" placeholder="Notatka" maxlength="80">
                         </div>
                     </div>
-                    <div id="add-form-card" class="hidden">
+                    <div id="add-form-card" class="hidden add-alt-form">
+                        <button type="button" class="add-back-to-standard" onclick="setFormMode('expense')">← Wydatek / wpływ</button>
                         <p class="reports-hint add-loan-hint" id="add-credit-card-hint">Zmniejsza zadłużenie — bez wpływu na wydatki w analizie.</p>
-                        <div class="form-group" id="recent-cards-wrapper" style="display:none;">
-                            <label>Ostatnio używane</label>
-                            <div id="recent-cards-row" class="recent-categories"></div>
+                        <div class="add-recent-section" id="recent-cards-wrapper" style="display:none;">
+                            <span class="add-section-label">Ostatnio</span>
+                            <div id="recent-cards-row" class="recent-categories add-recent-scroll"></div>
                         </div>
                         <div class="form-group">
                             <label class="section-label" for="add-credit-card-type">Operacja</label>
@@ -877,64 +934,33 @@
                             <label class="section-label" for="add-credit-card-select">Karta</label>
                             <select id="add-credit-card-select"></select>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group form-group--amount add-alt-amount">
                             <label class="section-label" for="add-credit-card-amount">Kwota (PLN)</label>
                             <input type="number" id="add-credit-card-amount" step="0.01" placeholder="0,00" inputmode="decimal" autocomplete="off">
                         </div>
-                        <div class="form-group">
-                            <label class="section-label" for="add-credit-card-date">Data</label>
-                            <input type="date" id="add-credit-card-date">
-                        </div>
-                        <div class="form-group form-group--last">
-                            <label class="section-label" for="add-credit-card-note">Notatka</label>
-                            <input type="text" id="add-credit-card-note" placeholder="Opcjonalny opis" maxlength="80">
-                        </div>
-                    </div>
-                    <div class="add-form-options" id="add-form-sticky-bar">
-                        <div id="add-sticky-standard" class="add-sticky-panel">
-                            <p class="reports-hint tx-income-cash-hint hidden" id="tx-income-cash-hint">Wpływ zwiększy saldo gotówki.</p>
-                            <div class="checkbox-wrapper" id="tx-affects-cash-wrapper">
-                                <input type="checkbox" id="tx-affects-cash" checked onchange="updateAddFormCashHints()">
-                                <label for="tx-affects-cash">Z salda (gotówka)</label>
+                        <div class="add-details-row">
+                            <div class="add-date-chip-wrap">
+                                <label class="section-label add-date-chip-label" for="add-credit-card-date">Data</label>
+                                <input type="date" id="add-credit-card-date" class="add-date-input">
                             </div>
-                            <details id="add-form-more-options" class="add-form-more-options">
-                                <summary class="add-form-more-options-summary">Więcej opcji</summary>
-                                <div class="add-form-more-options-body">
-                                    <div class="checkbox-wrapper hidden" id="tx-linked-asset-wrapper">
-                                        <input type="checkbox" id="tx-linked-asset" onchange="updateTransactionAssetHints()">
-                                        <label for="tx-linked-asset">Powiąż z aktywem</label>
-                                    </div>
-                                    <div class="form-group hidden" id="tx-linked-asset-select-wrapper">
-                                        <label class="section-label" for="tx-linked-asset-select">Aktywo</label>
-                                        <select id="tx-linked-asset-select"></select>
-                                        <p class="reports-hint">Wydatek → przelew na aktywo. Wpływ → wpłata bezpośrednio na aktywo.</p>
-                                    </div>
-                                    <div class="checkbox-wrapper" id="recurring-wrapper">
-                                        <input type="checkbox" id="tx-recurring">
-                                        <label for="tx-recurring">Cykliczna (co miesiąc)</label>
-                                    </div>
-                                    <div id="credit-card-purchase-wrapper">
-                                        <div class="checkbox-wrapper" id="credit-card-checkbox-wrapper">
-                                            <input type="checkbox" id="tx-credit-card" onchange="onCreditCardPurchaseToggle()">
-                                            <label for="tx-credit-card">Płatność kartą kredytową</label>
-                                        </div>
-                                        <div class="form-group credit-card-select-group hidden" id="credit-card-select-wrapper">
-                                            <label class="section-label" for="tx-credit-card-select">Karta</label>
-                                            <select id="tx-credit-card-select"></select>
-                                        </div>
-                                    </div>
-                                </div>
-                            </details>
-                            <button type="button" class="btn-submit btn-submit--form" onclick="saveTransaction()">Zapisz</button>
+                            <input type="text" id="add-credit-card-note" class="add-note-input" placeholder="Notatka" maxlength="80">
                         </div>
-                        <div id="add-sticky-loan" class="add-sticky-panel hidden">
-                            <button type="button" class="btn-submit btn-submit--form" onclick="saveLoanPaymentFromAdd()">Zapisz spłatę</button>
-                        </div>
-                        <div id="add-sticky-card" class="add-sticky-panel hidden">
-                            <button type="button" class="btn-submit btn-submit--form" onclick="saveCreditCardMovementFromAdd()">Zapisz</button>
-                        </div>
-                        <button type="button" class="btn-cancel btn-cancel--form" id="btn-cancel-edit" onclick="cancelEdit()">Anuluj edycję</button>
                     </div>
+                </div>
+            </div>
+            <div class="add-form-footer" id="add-form-footer">
+                <p class="add-footer-summary" id="add-footer-summary" aria-live="polite"></p>
+                <div class="add-form-options" id="add-form-sticky-bar">
+                    <div id="add-sticky-standard" class="add-sticky-panel">
+                        <button type="button" class="btn-submit btn-submit--form" onclick="saveTransaction()">Zapisz</button>
+                    </div>
+                    <div id="add-sticky-loan" class="add-sticky-panel hidden">
+                        <button type="button" class="btn-submit btn-submit--form" onclick="saveLoanPaymentFromAdd()">Zapisz spłatę</button>
+                    </div>
+                    <div id="add-sticky-card" class="add-sticky-panel hidden">
+                        <button type="button" class="btn-submit btn-submit--form" onclick="saveCreditCardMovementFromAdd()">Zapisz</button>
+                    </div>
+                    <button type="button" class="btn-cancel btn-cancel--form" id="btn-cancel-edit" onclick="cancelEdit()">Anuluj edycję</button>
                 </div>
             </div>
         </div>
@@ -1785,6 +1811,7 @@
     <script src="js/sync-queue.js"></script>
     <script src="js/offline.js"></script>
     <script src="js/ui.js"></script>
+    <script src="js/add-form-ui.js"></script>
     <script src="js/transactions.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/reports-core.js"></script>

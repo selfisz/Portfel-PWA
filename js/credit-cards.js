@@ -585,10 +585,11 @@ function populateCreditCardSelectors() {
 function onCreditCardPurchaseToggle() {
     const checked = document.getElementById('tx-credit-card')?.checked;
     const selectWrap = document.getElementById('credit-card-select-wrapper');
-    const cashWrap = document.getElementById('tx-affects-cash-wrapper');
+    const cashCb = document.getElementById('tx-affects-cash');
     if (selectWrap) selectWrap.classList.toggle('hidden', !checked);
-    if (cashWrap) cashWrap.classList.toggle('hidden', !!checked);
+    if (cashCb) cashCb.checked = !checked;
     if (checked) populateCreditCardSelectors();
+    if (typeof syncAddPaymentMethodUi === 'function') syncAddPaymentMethodUi();
     if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview();
 }
 
