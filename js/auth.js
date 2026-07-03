@@ -354,6 +354,11 @@ async function handleAuthenticatedUser(user) {
         if (typeof bootstrapApp === 'function') bootstrapApp();
         refreshAccountSettingsUI();
         registerServiceWorker();
+        if (typeof flushOfflineChangesAfterOnline === 'function') {
+            flushOfflineChangesAfterOnline().catch((err) => {
+                console.warn('flushOfflineChangesAfterOnline', err);
+            });
+        }
     } finally {
         authHandlerInFlight = false;
     }

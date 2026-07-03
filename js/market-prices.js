@@ -146,6 +146,9 @@ function applyInvestmentPriceUpdates(priceByTicker, eurPln) {
 }
 
 async function refreshInvestmentPrices(options = {}) {
+    if (typeof isAppOffline === 'function' && isAppOffline()) {
+        return { skipped: true, updated: 0, quoted: 0, offline: true };
+    }
     if (typeof getActiveAssets !== 'function') {
         return { skipped: true, updated: 0, quoted: 0 };
     }
@@ -210,6 +213,12 @@ async function refreshInvestmentPrices(options = {}) {
 }
 
 async function refreshInvestmentPricesManual() {
+    if (typeof isAppOffline === 'function' && isAppOffline()) {
+        if (typeof showSettingsToast === 'function') {
+            showSettingsToast('Kursy wymagają internetu — używane są ostatnie zapisane wartości', 'default');
+        }
+        return;
+    }
     if (marketPriceRefreshInFlight) return;
     marketPriceRefreshInFlight = true;
 

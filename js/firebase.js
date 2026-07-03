@@ -12,6 +12,18 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 
+if (typeof db.enablePersistence === 'function') {
+    db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
+        if (err?.code === 'failed-precondition') {
+            console.warn('Firestore persistence: wiele kart — tylko jedna ma cache offline');
+        } else if (err?.code === 'unimplemented') {
+            console.warn('Firestore persistence niedostępne w tej przeglądarce');
+        } else {
+            console.warn('Firestore persistence', err);
+        }
+    });
+}
+
 let stateRef = null;
 let cloudBackupRef = null;
 let cloudBackupSnapshotsRef = null;

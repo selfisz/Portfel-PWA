@@ -100,6 +100,19 @@ function clearOfflineSession() {
     hideOfflineBanner();
 }
 
+async function flushOfflineChangesAfterOnline() {
+    if (isAppOffline()) return;
+    if (typeof isUserSignedIn !== 'function' || !isUserSignedIn()) return;
+
+    if (typeof resumePendingCloudSync === 'function') {
+        await resumePendingCloudSync({ force: true, silent: true });
+    }
+
+    if (typeof hasPendingCloudSync === 'function' && hasPendingCloudSync() && typeof saveState === 'function') {
+        saveState({ forceCloud: true, silentLimits: true });
+    }
+}
+
 function initOfflineListeners() {
     if (typeof window === 'undefined' || initOfflineListeners._done) return;
     initOfflineListeners._done = true;
@@ -131,8 +144,8 @@ function initOfflineListeners() {
             }
             return;
         }
-        if (typeof resumePendingCloudSync === 'function') {
-            resumePendingCloudSync({ silent: true });
-        }
+        flushOfflineChangesAfterOnline().catch((err) => {
+            console.warn('flushOfflineChangesAfterOnline', err);
+        });
     });
 }

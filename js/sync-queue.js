@@ -109,7 +109,17 @@ function runCloudSync(payload, options = {}) {
 
 function queueCloudSync(options = {}) {
     const payload = options.payload || (typeof getPersistedState === 'function' ? getPersistedState(appState) : null);
-    if (!canPushPayloadToCloud(payload, options)) return null;
+    if (!canPushPayloadToCloud(payload, options)) {
+        if (payload && (
+            (typeof isAppOffline === 'function' && isAppOffline())
+            || (typeof isUserSignedIn === 'function' && !isUserSignedIn())
+        )) {
+            markPendingCloudSync({
+                reason: typeof isAppOffline === 'function' && isAppOffline() ? 'offline' : 'awaiting-auth'
+            });
+        }
+        return null;
+    }
     return runCloudSync(payload, options);
 }
 
