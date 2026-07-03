@@ -5,8 +5,8 @@
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f5f3ef",
-  "theme_color": "#0f0f0f",
+  "background_color": "#0f0f0f",
+  "theme_color": "#e4eaf4",
   "orientation": "portrait",
   "icons": [
     {
@@ -19,7 +19,13 @@
       "src": "icons/icon-512.png",
       "type": "image/png",
       "sizes": "512x512",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512-maskable.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [

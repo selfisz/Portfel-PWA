@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanse-pwa-v275';
+const CACHE_NAME = 'finanse-pwa-v276';
 
 const FIREBASE_CDN = [
   'https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js',
@@ -67,6 +67,7 @@ const ASSETS = [
   'js/month-close.js',
   'icons/icon-192.png',
   'icons/icon-512.png',
+  'icons/icon-512-maskable.png',
   'icons/apple-touch-icon.png'
 ];
 
