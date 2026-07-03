@@ -2473,24 +2473,16 @@ input:focus, select:focus {
 
 #view-add .add-recent-scroll {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: stretch;
-    overflow-x: auto;
     gap: 6px;
-    padding-bottom: 4px;
-    margin: 0 -2px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-}
-
-#view-add .add-recent-scroll::-webkit-scrollbar {
-    display: none;
+    margin: 0;
 }
 
 #view-add .add-recent-scroll .recent-chip {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     min-height: 36px;
-    max-width: none;
+    max-width: 100%;
     padding: 6px 10px 6px 6px;
     gap: 6px;
     border-radius: var(--radius-sm);
@@ -2512,7 +2504,7 @@ input:focus, select:focus {
 }
 
 #view-add .add-recent-scroll .recent-chip-label {
-    max-width: 6.5rem;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2976,30 +2968,38 @@ input:focus, select:focus {
 
 #view-add .grid-selector--subs {
     display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    gap: 8px;
+    flex-wrap: wrap;
+    gap: 6px;
     grid-template-columns: unset;
-    padding-bottom: 2px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-}
-
-#view-add .grid-selector--subs::-webkit-scrollbar {
-    display: none;
 }
 
 #view-add .grid-selector--subs .grid-item {
-    flex: 0 0 auto;
-    min-width: 88px;
-    max-width: 120px;
-    min-height: 52px;
-    padding: 8px 10px;
+    flex: 0 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 36px;
+    padding: 6px 10px 6px 6px;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 6px;
 }
 
 #view-add .grid-selector--subs .grid-item-sub .cat-icon-wrap {
     width: 24px;
     height: 24px;
+}
+
+#view-add .grid-selector--subs .grid-item-sub .cat-icon-wrap svg {
+    width: 13px;
+    height: 13px;
+}
+
+#view-add .grid-selector--subs .grid-item-label {
+    font-size: var(--text-xs);
+    -webkit-line-clamp: 1;
+    white-space: nowrap;
+    text-align: left;
 }
 
 #view-add .grid-item-label {
