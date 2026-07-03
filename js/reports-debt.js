@@ -784,6 +784,123 @@ function renderReportsLoanSummary(ctx, targetId = 'reports-loan-summary') {
     }).join('');
 }
 
+function buildYearReviewData(year) {
+    const yearTx = (appState.transactions || []).filter((t) => t.date.startsWith(String(year)));
+    if (!yearTx.length) return null;
+
+    const s = summarizePeriod(yearTx);
+    const expenses = yearTx.filter((t) => t.type === 'expense');
+    const incomes = yearTx.filter((t) => t.type === 'income');
+    const biggest = [...expenses].sort((a, b) => b.amount - a.amount)[0];
+    const byDay = {};
+    expenses.forEach((t) => { byDay[t.date] = (byDay[t.date] || 0) + t.amount; });
+    const costliestDay = Object.entries(byDay).sort((a, b) => b[1] - a[1])[0];
+
+    const byMonth = {};
+    expenses.forEach((t) => {
+        const mk = t.date.slice(0, 7);
+        byMonth[mk] = (byMonth[mk] || 0) + t.amount;
+    });
+    const monthEntries = Object.entries(byMonth).sort((a, b) => b[1] - a[1]);
+    const costliestMonth = monthEntries[0];
+    const cheapestMonth = monthEntries[monthEntries.length - 1];
+
+    const catSums = {};
+    expenses.forEach((t) => { catSums[t.mainCategory] = (catSums[t.mainCategory] || 0) + t.amount; });
+    const topCats = Object.entries(catSums).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    const snapStart = typeof getSnapshotForMonthKey === 'function'
+        ? getSnapshotForMonthKey(`${year}-01`)
+        : null;
+    const snapEnd = typeof getSnapshotForMonthKey === 'function'
+        ? getSnapshotForMonthKey(`${year}-12`)
+        : null;
+    const wealthDelta = snapStart && snapEnd ? snapEnd.netWorth - snapStart.netWorth : null;
+    const debtDelta = snapStart && snapEnd ? snapEnd.totalDebt - snapStart.totalDebt : null;
+
+    const debtPayments = expenses
+        .filter((t) => t.mainCategory === 'Długi')
+        .reduce((sum, t) => sum + t.amount, 0);
+
+    let subscriptionTotal = 0;
+    if (typeof getAllRecurringEntries === 'function') {
+        subscriptionTotal = getAllRecurringEntries('sub')
+            .filter((e) => e.mainCategory === 'Subskrypcje' || /subskrypc/i.test(`${e.mainCategory} ${e.subCategory}`))
+            .reduce((sum, e) => sum + (e.amount || 0) * 12, 0);
+    }
+
+    const ikzeUsed = typeof getIkzeContributionsFromTransactions === 'function'
+        ? getIkzeContributionsFromTransactions(year)
+        : 0;
+
+    return {
+        year,
+        yearTx,
+        s,
+        biggest,
+        costliestDay,
+        costliestMonth,
+        cheapestMonth,
+        topCats,
+        wealthDelta,
+        debtDelta,
+        debtPayments,
+        subscriptionTotal,
+        ikzeUsed,
+        txCount: yearTx.length,
+        incomeCount: incomes.length
+    };
+}
+
+function buildYearReviewHtml(data) {
+    if (!data) return '<div class="empty-state"><p>Brak danych za rok</p></div>';
+    const {
+        year, s, biggest, costliestDay, costliestMonth, cheapestMonth,
+        topCats, wealthDelta, debtDelta, debtPayments, subscriptionTotal, ikzeUsed, txCount
+    } = data;
+
+    const formatMonthKey = (mk) => {
+        if (!mk) return '—';
+        const [y, m] = String(mk).split('-').map(Number);
+        return new Date(y, m - 1, 1).toLocaleDateString('pl-PL', { month: 'long' });
+    };
+
+    const wealthBlock = wealthDelta !== null
+        ? `<div class="year-review-section"><h3 class="analysis-subsection-label">Majątek</h3>
+            <p class="year-review-wealth-delta ${wealthDelta >= 0 ? 'snapshot-delta-positive' : 'snapshot-delta-negative'}">
+                ${NET_WORTH_LABEL}: ${wealthDelta >= 0 ? '+' : ''}${formatPlnAmount(wealthDelta)} w roku
+                ${debtDelta !== null ? ` · Dług: ${debtDelta <= 0 ? '' : '+'}${formatPlnAmount(debtDelta)}` : ''}
+            </p></div>`
+        : '';
+
+    const topCatsHtml = topCats.length
+        ? `<div class="year-review-section"><h3 class="analysis-subsection-label">Top kategorie wydatków</h3>
+            <ol class="year-review-top-cats">${topCats.map(([cat, amt]) =>
+                `<li>${escapeHtml(cat)} — ${formatPlnAmount(amt)}</li>`).join('')}</ol></div>`
+        : '';
+
+    return `
+        <div class="year-review-hero">${year} — podsumowanie roku</div>
+        <div class="year-review-grid">
+            <div><span>Wydatki</span><strong>${formatPlnAmount(s.expense)}</strong></div>
+            <div><span>Wpływy</span><strong>${formatPlnAmount(s.income)}</strong></div>
+            <div><span>Oszczędności</span><strong>${s.savings}%</strong></div>
+            <div><span>Transakcje</span><strong>${txCount}</strong></div>
+            <div><span>Najdroższy dzień</span><strong>${costliestDay ? formatTxDate(costliestDay[0]) : '—'}</strong></div>
+            <div><span>Największy wydatek</span><strong>${biggest ? formatPlnAmount(biggest.amount) : '—'}</strong></div>
+            <div><span>Najdroższy miesiąc</span><strong>${costliestMonth ? formatMonthKey(costliestMonth[0]) : '—'}</strong></div>
+            <div><span>Najtańszy miesiąc</span><strong>${cheapestMonth ? formatMonthKey(cheapestMonth[0]) : '—'}</strong></div>
+            <div><span>Spłaty długów</span><strong>${formatPlnAmount(debtPayments)}</strong></div>
+            ${subscriptionTotal > 0 ? `<div><span>Subskrypcje (szac./rok)</span><strong>${formatPlnAmount(subscriptionTotal)}</strong></div>` : ''}
+            ${ikzeUsed > 0 ? `<div><span>IKZE wpłaty</span><strong>${formatPlnAmount(ikzeUsed)}</strong></div>` : ''}
+        </div>
+        ${wealthBlock}
+        ${topCatsHtml}
+        <div class="year-review-actions">
+            <button type="button" class="btn-outline" onclick="exportYearReviewPdf(${year})">PDF podsumowania roku</button>
+        </div>`;
+}
+
 function renderReportsYearReview(ctx) {
     const el = document.getElementById('reports-year-review');
     if (!el) return;
@@ -791,34 +908,16 @@ function renderReportsYearReview(ctx) {
     let year = new Date().getFullYear();
     if (ctx.mode === 'year' && ctx.period !== 'all') year = parseInt(ctx.period, 10);
     else if (ctx.rangeStart) year = parseInt(ctx.rangeStart.slice(0, 4), 10);
+    else if (ctx.mode === 'month' && ctx.rangeStart) year = parseInt(ctx.rangeStart.slice(0, 4), 10);
 
-    const yearTx = appState.transactions.filter((t) => t.date.startsWith(String(year)));
-    if (!yearTx.length) {
-        el.innerHTML = '<div class="empty-state"><p>Brak danych za rok</p></div>';
-        return;
-    }
+    const data = buildYearReviewData(year);
+    el.innerHTML = buildYearReviewHtml(data);
+}
 
-    const s = summarizePeriod(yearTx);
-    const expenses = yearTx.filter((t) => t.type === 'expense');
-    const biggest = [...expenses].sort((a, b) => b.amount - a.amount)[0];
-    const byDay = {};
-    expenses.forEach((t) => { byDay[t.date] = (byDay[t.date] || 0) + t.amount; });
-    const costliestDay = Object.entries(byDay).sort((a, b) => b[1] - a[1])[0];
-
-    const catSums = {};
-    expenses.forEach((t) => { catSums[t.mainCategory] = (catSums[t.mainCategory] || 0) + t.amount; });
-    const topCat = Object.entries(catSums).sort((a, b) => b[1] - a[1])[0];
-
-    el.innerHTML = `
-        <div class="year-review-hero">${year} — podsumowanie roku</div>
-        <div class="year-review-grid">
-            <div><span>Wydatki</span><strong>${formatPlnAmount(s.expense)}</strong></div>
-            <div><span>Wpływy</span><strong>${formatPlnAmount(s.income)}</strong></div>
-            <div><span>Oszczędności</span><strong>${s.savings}%</strong></div>
-            <div><span>Top kategoria</span><strong>${topCat ? escapeHtml(topCat[0]) : '—'}</strong></div>
-            <div><span>Najdroższy dzień</span><strong>${costliestDay ? formatTxDate(costliestDay[0]) : '—'}</strong></div>
-            <div><span>Największy wydatek</span><strong>${biggest ? formatPlnAmount(biggest.amount) : '—'}</strong></div>
-        </div>`;
+function exportYearReviewPdf(year) {
+    const data = buildYearReviewData(year);
+    if (!data || typeof openPrintPreview !== 'function') return;
+    openPrintPreview(buildYearReviewHtml(data), `Rok ${year}`);
 }
 
 function buildTransactionRowsHtml(periodTx) {

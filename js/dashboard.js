@@ -1024,6 +1024,10 @@ function renderDashboardWealth() {
     const net = assets - debt;
     const monthChange = typeof getSnapshotMonthChange === 'function' ? getSnapshotMonthChange() : null;
     const operational = typeof getOperationalCashPln === 'function' ? getOperationalCashPln() : 0;
+    const changeClass = monthChange?.netWorth >= 0 ? 'snapshot-delta-positive' : 'snapshot-delta-negative';
+    const changePctHtml = monthChange?.pctNet != null
+        ? `<p class="dashboard-wealth-hint dashboard-wealth-change-pct ${changeClass}">${formatSnapshotDelta(monthChange.netWorth, monthChange.pctNet)} ${NET_WORTH_LABEL.toLowerCase()} m/m</p>`
+        : (monthChange ? `<p class="dashboard-wealth-hint dashboard-wealth-change-pct ${changeClass}">${formatSnapshotDelta(monthChange.netWorth)} ${NET_WORTH_LABEL.toLowerCase()} m/m</p>` : '');
 
     el.innerHTML = `
         <div class="dashboard-wealth-grid">
@@ -1032,13 +1036,14 @@ function renderDashboardWealth() {
             <div><span class="label">Gotówka oper.</span><strong>${formatPlnAmount(operational)}</strong></div>
             <div><span class="label">Zobowiązania</span><strong class="expense">${formatPlnAmount(debt)}</strong></div>
         </div>
-        ${monthChange ? `<p class="dashboard-wealth-hint reports-hint">${monthChange.netWorth >= 0 ? '+' : ''}${formatPlnAmount(monthChange.netWorth)} ${NET_WORTH_LABEL.toLowerCase()} vs poprz. miesiąc</p>` : ''}`;
+        ${changePctHtml}`;
 }
 
 function renderDashboard() {
     renderUpcomingLoanInstallments();
     renderDashboardCreditCards();
     renderDashboardWealth();
+    if (typeof renderMonthCloseBanners === 'function') renderMonthCloseBanners();
     updateDashboardPeriodResetVisibility();
     const forecastMode = isDashboardForecastPeriod();
     const { startDate, endDate } = getDashboardDates();

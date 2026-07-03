@@ -312,8 +312,12 @@ function renderReportsNetWorth() {
 
     if (changeEl) {
         if (monthChange) {
-            const sign = monthChange.netWorth >= 0 ? '+' : '';
-            changeEl.textContent = `Zmiana ${NET_WORTH_LABEL.toLowerCase()} vs poprzedni miesiąc: ${sign}${formatPlnAmount(monthChange.netWorth)}`;
+            const cls = monthChange.netWorth >= 0 ? 'snapshot-delta-positive' : 'snapshot-delta-negative';
+            const text = typeof formatSnapshotDelta === 'function'
+                ? formatSnapshotDelta(monthChange.netWorth, monthChange.pctNet)
+                : formatPlnAmount(monthChange.netWorth);
+            changeEl.textContent = `Zmiana ${NET_WORTH_LABEL.toLowerCase()} vs poprzedni miesiąc: ${text}`;
+            changeEl.className = `reports-networth-hero-delta ${cls}`;
             changeEl.classList.remove('hidden');
         } else {
             changeEl.classList.add('hidden');
@@ -551,17 +555,26 @@ function renderReportsAssetsSnapshotsList() {
         el.innerHTML = '<p class="reports-hint">Brak snapshotów — zapiszą się automatycznie lub użyj przycisku powyżej.</p>';
         return;
     }
-    el.innerHTML = [...snapshots].reverse().slice(0, 12).map((snap) => {
+    el.innerHTML = [...snapshots].reverse().slice(0, 12).map((snap, revIdx, arr) => {
         const [y, m] = snap.monthKey.split('-').map(Number);
         const label = new Date(y, m - 1, 1).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+        const prev = arr[revIdx + 1];
+        let deltaHtml = '';
+        if (prev) {
+            const dNet = snap.netWorth - prev.netWorth;
+            const cls = dNet >= 0 ? 'snapshot-delta-positive' : 'snapshot-delta-negative';
+            const pct = prev.netWorth !== 0 ? (dNet / Math.abs(prev.netWorth)) * 100 : null;
+            deltaHtml = `<p class="assets-snapshot-delta ${cls}">${typeof formatSnapshotDelta === 'function' ? formatSnapshotDelta(dNet, pct) : formatPlnAmount(dNet)} m/m</p>`;
+        }
         return `<div class="assets-snapshot-row">
             <strong>${escapeHtml(label.charAt(0).toUpperCase() + label.slice(1))}</strong>
-            <span class="reports-hint">${snap.source === 'manual' ? 'ręcznie' : 'auto'}</span>
+            <span class="reports-hint">${snap.source === 'manual' ? 'ręcznie' : snap.source === 'month-close' ? 'rozliczenie' : 'auto'}</span>
+            ${deltaHtml}
             <div class="loan-report-grid">
                 <div><span class="label">Majątek</span><strong>${formatPlnAmount(snap.totalAssets)}</strong></div>
                 <div><span class="label">${NET_WORTH_LABEL}</span><strong>${formatPlnAmount(snap.netWorth)}</strong></div>
+                <div><span class="label">Długi</span><strong class="expense">${formatPlnAmount(snap.totalDebt)}</strong></div>
                 <div><span class="label">Krótko</span><strong>${formatPlnAmount(snap.shortAssets)}</strong></div>
-                <div><span class="label">Długo</span><strong>${formatPlnAmount(snap.longAssets)}</strong></div>
             </div>
         </div>`;
     }).join('');
@@ -571,6 +584,30 @@ function renderReportsNetWorthTrendChart() {
     const canvas = document.getElementById('reportsNetWorthTrendChart');
     const emptyEl = document.getElementById('reports-networth-trend-empty');
     const wrapEl = document.getElementById('reports-networth-trend-wrap');
+    const card = canvas?.closest('.card');
+    let changeEl = document.getElementById('reports-net-worth-change');
+    if (!changeEl && card) {
+        changeEl = document.createElement('p');
+        changeEl.id = 'reports-net-worth-change';
+        changeEl.className = 'reports-networth-hero-delta hidden';
+        const anchor = emptyEl || wrapEl || card.querySelector('h2')?.nextSibling;
+        if (anchor) card.insertBefore(changeEl, anchor);
+        else card.appendChild(changeEl);
+    }
+    const monthChange = typeof getSnapshotMonthChange === 'function' ? getSnapshotMonthChange() : null;
+    if (changeEl) {
+        if (monthChange) {
+            const cls = monthChange.netWorth >= 0 ? 'snapshot-delta-positive' : 'snapshot-delta-negative';
+            const text = typeof formatSnapshotDelta === 'function'
+                ? formatSnapshotDelta(monthChange.netWorth, monthChange.pctNet)
+                : formatPlnAmount(monthChange.netWorth);
+            changeEl.textContent = `Zmiana ${NET_WORTH_LABEL.toLowerCase()} vs poprzedni miesiąc: ${text}`;
+            changeEl.className = `reports-networth-hero-delta ${cls}`;
+            changeEl.classList.remove('hidden');
+        } else {
+            changeEl.classList.add('hidden');
+        }
+    }
     if (!canvas || typeof buildNetWorthTrendData !== 'function') return;
     const snapshots = typeof getAssetSnapshots === 'function' ? getAssetSnapshots() : [];
     const { monthLabels, assetsData, debtData, netData } = buildNetWorthTrendData();

@@ -201,12 +201,28 @@ function getSnapshotMonthChange() {
     if (snapshots.length < 2) return null;
     const current = snapshots[snapshots.length - 1];
     const prev = snapshots[snapshots.length - 2];
+    const netWorth = current.netWorth - prev.netWorth;
+    const totalAssets = current.totalAssets - prev.totalAssets;
+    const totalDebt = current.totalDebt - prev.totalDebt;
+    const pctNet = prev.netWorth !== 0 ? (netWorth / Math.abs(prev.netWorth)) * 100 : null;
     return {
-        netWorth: current.netWorth - prev.netWorth,
-        totalAssets: current.totalAssets - prev.totalAssets,
+        netWorth,
+        totalAssets,
+        totalDebt,
+        pctNet,
         prevMonthKey: prev.monthKey,
-        currentMonthKey: current.monthKey
+        currentMonthKey: current.monthKey,
+        prevNetWorth: prev.netWorth,
+        currentNetWorth: current.netWorth
     };
+}
+
+function formatSnapshotDelta(value, pct = null) {
+    const sign = value >= 0 ? '+' : '';
+    const amount = `${sign}${formatPlnAmount(value)}`;
+    if (pct === null || Number.isNaN(pct)) return amount;
+    const pctSign = pct >= 0 ? '+' : '';
+    return `${amount} (${pctSign}${pct.toFixed(1)}%)`;
 }
 
 function recordAssetValueHistory(asset, source = 'manual', note = '', dateIso = null) {
