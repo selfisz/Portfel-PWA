@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanse-pwa-v269';
+const CACHE_NAME = 'finanse-pwa-v270';
 
 const FIREBASE_CDN = [
   'https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js',
@@ -30,6 +30,7 @@ const ASSETS = [
   'js/ui.js',
   'js/add-form-ui.js',
   'js/transactions.js',
+  'js/transaction-duplicates.js',
   'js/transaction-split.js',
   'js/recurring-confirm.js',
   'js/app-shortcuts.js',
@@ -48,6 +49,7 @@ const ASSETS = [
   'js/skryba-actions.js',
   'js/skryba-prompts.js',
   'js/skryba-router.js',
+  'js/skryba-voice.js',
   'js/assistant.js',
   'js/notifications.js',
   'js/budget-ui.js',
@@ -62,6 +64,7 @@ const ASSETS = [
   'js/reports-assets.js',
   'js/reports-analysis-chart.js',
   'js/reports-phase3.js',
+  'js/month-close.js',
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/apple-touch-icon.png'

@@ -11659,3 +11659,114 @@ button.reports-debt-split-item strong {
     padding: 4px 0 0;
     border-radius: var(--radius-md);
 }
+
+/* Duplikaty transakcji */
+.duplicate-tx-overlay,
+.month-close-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.45);
+}
+.duplicate-tx-panel,
+.month-close-panel {
+    width: min(100%, 480px);
+    max-height: min(90vh, 640px);
+    overflow: auto;
+    padding: 20px;
+}
+.duplicate-tx-body { margin: 12px 0 16px; }
+.duplicate-tx-list { margin: 8px 0 0; padding-left: 18px; }
+.duplicate-tx-new { margin: 8px 0; }
+.duplicate-tx-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* Rozliczenie miesiąca */
+.month-close-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+.month-close-steps {
+    display: flex;
+    gap: 6px;
+    margin: 12px 0;
+}
+.month-close-step-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+}
+.month-close-step-dot.active { background: var(--accent); }
+.month-close-step-dot.done { background: var(--success); opacity: 0.6; }
+.month-close-body { min-height: 120px; }
+.month-close-step-title { margin: 0 0 12px; font-size: 1rem; }
+.month-close-list { list-style: none; margin: 0; padding: 0; }
+.month-close-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+.month-close-item--stack { flex-direction: column; align-items: stretch; }
+.month-close-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+.month-close-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 16px;
+}
+.month-close-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+}
+.month-close-banner-text { display: flex; flex-direction: column; gap: 4px; }
+.btn-sm { padding: 6px 12px; font-size: 0.85rem; }
+
+/* Skryba — głos */
+.skryba-composer { display: flex; align-items: flex-end; gap: 8px; }
+.skryba-voice-btn {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.skryba-voice-btn svg { width: 20px; height: 20px; fill: currentColor; }
+.skryba-voice-btn--active {
+    background: var(--danger);
+    color: #fff;
+    border-color: var(--danger);
+}
+.notif-test-btn { margin-top: 8px; }
+
+/* Year review rozszerzony */
+.year-review-section { margin-top: 16px; }
+.year-review-top-cats { margin: 8px 0 0; padding-left: 18px; }
+.year-review-wealth-delta { margin-top: 8px; }
+.snapshot-delta-positive { color: var(--success); }
+.snapshot-delta-negative { color: var(--danger); }
+.assets-snapshot-delta { font-size: 0.85rem; margin-top: 4px; }
+.dashboard-wealth-change-pct { margin-top: 4px; font-size: 0.9rem; }
+.reports-networth-hero-delta { margin-bottom: 8px; font-weight: 600; }
+.year-review-actions { margin-top: 16px; }

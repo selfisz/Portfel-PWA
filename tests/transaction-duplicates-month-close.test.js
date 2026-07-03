@@ -1,0 +1,76 @@
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { loadScript } from './helpers/load.js';
+
+beforeAll(() => {
+    const store = {};
+    globalThis.localStorage = {
+        getItem: (k) => store[k] ?? null,
+        setItem: (k, v) => { store[k] = String(v); },
+        removeItem: (k) => { delete store[k]; },
+        clear: () => { Object.keys(store).forEach((key) => delete store[key]); }
+    };
+    globalThis.document = {
+        getElementById: () => ({ classList: { add: () => {}, remove: () => {}, toggle: () => {} }, replaceChildren: () => {} }),
+        querySelector: () => null,
+        querySelectorAll: () => ({ forEach: () => {} })
+    };
+    globalThis.formatPlnAmount = (n) => `${n} zł`;
+    globalThis.formatTxDate = (d) => d;
+    globalThis.escapeHtml = (s) => s;
+    globalThis.formatTransactionCategoryLabel = (t) => t.mainCategory;
+    globalThis.localIsoDate = (d) => d.toISOString().slice(0, 10);
+    globalThis.saveState = () => {};
+    globalThis.summarizePeriod = () => ({ income: 0, expense: 10, balance: -10, savings: 0 });
+    loadScript('js/transaction-duplicates.js');
+    loadScript('js/month-close.js');
+});
+
+describe('transaction duplicates', () => {
+    beforeEach(() => {
+        globalThis.appState = {
+            transactions: [
+                { date: '2025-06-10', type: 'expense', amount: 50, mainCategory: 'Zakupy', subCategory: 'Zakupy', note: 'Biedronka' },
+                { date: '2025-06-10', type: 'expense', amount: 50, mainCategory: 'Jedzenie na mieście', subCategory: 'Restauracje', note: '' },
+                { date: '2025-06-11', type: 'income', amount: 5000, mainCategory: 'Wynagrodzenie', subCategory: 'Podstawa', note: '' }
+            ]
+        };
+    });
+
+    it('finds duplicate candidates by date amount and type', () => {
+        const tx = { date: '2025-06-10', type: 'expense', amount: 50, mainCategory: 'Zakupy', subCategory: 'Inne', note: '' };
+        const found = findDuplicateCandidates(tx);
+        expect(found.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('finds duplicate pairs in range', () => {
+        const pairs = findDuplicatePairsInRange('2025-06-01', '2025-06-30');
+        expect(pairs.length).toBe(1);
+    });
+
+    it('does not match different amounts', () => {
+        const tx = { date: '2025-06-10', type: 'expense', amount: 99, mainCategory: 'Zakupy', subCategory: 'Zakupy', note: '' };
+        expect(findDuplicateCandidates(tx)).toHaveLength(0);
+    });
+});
+
+describe('month close state', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        globalThis.appState = {
+            transactions: [
+                { date: '2025-05-12', type: 'expense', amount: 10, mainCategory: 'Zakupy', subCategory: 'Zakupy' }
+            ]
+        };
+    });
+
+    it('tracks closed months', () => {
+        markMonthClosed('2025-05');
+        expect(isMonthClosed('2025-05')).toBe(true);
+        expect(isMonthClosed('2025-06')).toBe(false);
+    });
+
+    it('lists unclosed months with data', () => {
+        const unclosed = getUnclosedMonthsWithData();
+        expect(unclosed).toContain('2025-05');
+    });
+});

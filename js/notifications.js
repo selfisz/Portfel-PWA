@@ -299,6 +299,15 @@ function navigateFromNotification(item) {
         if (typeof switchView === 'function') switchView('reports', 'Raporty', reportsNav);
         return;
     }
+    if (item.type === 'month_close') {
+        const reportsNav = document.querySelector('.nav-item[onclick*="\'reports\'"]');
+        if (typeof switchView === 'function') switchView('reports', 'Raporty', reportsNav);
+        if (typeof openMonthCloseWizard === 'function') {
+            const unclosed = typeof getUnclosedMonthsWithData === 'function' ? getUnclosedMonthsWithData() : [];
+            openMonthCloseWizard(unclosed[unclosed.length - 1] || null);
+        }
+        return;
+    }
     if (item.type === 'card_monthly_check') {
         if (typeof switchView === 'function') switchView('loans', 'Długi', loansNav);
         const cardId = payload.cardId || payload.cardIds?.[0];
@@ -312,9 +321,14 @@ function maybeShowSystemNotifications(newItems) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     if (document.visibilityState === 'visible') return;
 
+    postSystemNotifications(newItems.filter((item) => !item.read));
+}
+
+function postSystemNotifications(items) {
+    if (!items?.length) return;
     const reg = navigator.serviceWorker?.controller;
     if (!reg) return;
-    newItems.filter((item) => !item.read).forEach((item) => {
+    items.forEach((item) => {
         reg.postMessage({
             type: 'SHOW_NOTIFICATION',
             notification: {
@@ -324,6 +338,59 @@ function maybeShowSystemNotifications(newItems) {
             }
         });
     });
+}
+
+function showTestSystemNotification() {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    postSystemNotifications([{
+        id: 'notif-test|welcome',
+        title: 'Powiadomienia włączone',
+        body: 'Będziesz dostawać alerty o budżecie, ratach i rozliczeniu miesiąca — gdy aplikacja jest w tle.',
+        read: false
+    }]);
+}
+
+function runDailyNotificationDigest() {
+    const prefs = getNotificationPrefs();
+    if (!prefs.enabled) return;
+    const today = localIsoDate(new Date());
+    const last = localStorage.getItem(NOTIFICATION_DAILY_DIGEST_DATE_KEY);
+    if (last === today) return;
+    const hour = new Date().getHours();
+    if (hour < 8) return;
+
+    const created = evaluateAllNotifications();
+    localStorage.setItem(NOTIFICATION_DAILY_DIGEST_DATE_KEY, today);
+
+    const unread = getNotificationInbox().filter((item) => isNotificationVisible(item) && !item.read);
+    if (!unread.length) return;
+
+    const monthCloseHint = typeof getUnclosedMonthsWithData === 'function'
+        ? getUnclosedMonthsWithData().length
+        : 0;
+    if (monthCloseHint > 0 && typeof upsertNotification === 'function') {
+        upsertNotification({
+            id: `month-close-reminder|${today.slice(0, 7)}`,
+            type: 'month_close',
+            title: 'Nierozliczone miesiące',
+            body: `Masz ${monthCloseHint} mies. do rozliczenia — możesz to zrobić w dowolnym momencie.`,
+            payload: {}
+        });
+    }
+
+    if (document.visibilityState !== 'visible' && created.length) {
+        maybeShowSystemNotifications(created);
+    }
+}
+
+let notificationScheduleTimer = null;
+
+function scheduleNotificationChecks() {
+    if (notificationScheduleTimer) clearInterval(notificationScheduleTimer);
+    notificationScheduleTimer = setInterval(() => {
+        runDailyNotificationDigest();
+    }, 60 * 1000);
+    runDailyNotificationDigest();
 }
 
 function evaluateAllNotifications() {
@@ -373,8 +440,20 @@ async function setNotificationsEnabled(enabled) {
         await Notification.requestPermission();
     }
     saveNotificationPrefs(prefs);
-    if (prefs.enabled) evaluateAllNotifications();
-    else updateNotificationsBadge();
+    if (prefs.enabled) {
+        evaluateAllNotifications();
+        scheduleNotificationChecks();
+        if (Notification.permission === 'granted' && !localStorage.getItem(NOTIFICATION_TEST_SHOWN_KEY)) {
+            showTestSystemNotification();
+            localStorage.setItem(NOTIFICATION_TEST_SHOWN_KEY, '1');
+        }
+    } else {
+        updateNotificationsBadge();
+        if (notificationScheduleTimer) {
+            clearInterval(notificationScheduleTimer);
+            notificationScheduleTimer = null;
+        }
+    }
     return prefs;
 }
 
@@ -432,7 +511,12 @@ function initNotifications() {
         navigator.serviceWorker.addEventListener('message', handleServiceWorkerNotificationMessage);
     }
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') evaluateAllNotifications();
+        if (document.visibilityState === 'visible') {
+            evaluateAllNotifications();
+        } else if (getNotificationPrefs().enabled) {
+            const created = evaluateAllNotifications();
+            maybeShowSystemNotifications(created);
+        }
     });
     bindNotificationPrefToggle('notif-pref-budget', 'budgetAlerts');
     bindNotificationPrefToggle('notif-pref-loan', 'loanReminders');
@@ -443,6 +527,7 @@ function initNotifications() {
     syncNotificationSettingsUI();
     updateNotificationsBadge();
     evaluateAllNotifications();
+    if (getNotificationPrefs().enabled) scheduleNotificationChecks();
 }
 
 function notifyAfterFinanceChange() {

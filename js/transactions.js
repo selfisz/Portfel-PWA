@@ -303,7 +303,7 @@ function commitTransactionData(txData, options = {}) {
     return { ok: true, tx: normalized };
 }
 
-function saveTransaction() {
+async function saveTransaction() {
     const amount = parsePlnInput(document.getElementById('tx-amount').value);
     const date = document.getElementById('tx-date').value;
     const note = document.getElementById('tx-note').value;
@@ -402,6 +402,10 @@ function saveTransaction() {
         appState.transactions[editingTxIndex] = txData;
         editingTxIndex = null;
     } else {
+        if (typeof confirmNoDuplicateBeforeSave === 'function') {
+            const allowDuplicate = await confirmNoDuplicateBeforeSave(txData, null);
+            if (!allowDuplicate) return;
+        }
         if (isRecurring) txData.recurringId = 'rec_' + Date.now();
         appState.transactions.unshift(txData);
     }

@@ -14,6 +14,8 @@ function bootstrapApp() {
     initCloudSyncListeners();
     scheduleMarketPriceRefresh();
     initNotifications();
+    if (typeof initSkrybaVoice === 'function') initSkrybaVoice();
+    if (typeof initMonthClose === 'function') initMonthClose();
     checkModuleSplitThreshold();
     if (typeof applyAppLaunchShortcut === 'function') applyAppLaunchShortcut();
 }

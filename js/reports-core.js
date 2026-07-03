@@ -1021,4 +1021,5 @@ function renderReports() {
     savingsEl.style.color = savingsRate >= 0 ? 'var(--success)' : 'var(--danger)';
 
     if (typeof renderPhase3Reports === 'function') renderPhase3Reports(ctx, savingsRate);
+    if (typeof renderMonthCloseBanners === 'function') renderMonthCloseBanners();
 }
