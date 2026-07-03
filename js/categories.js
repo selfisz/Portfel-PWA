@@ -389,6 +389,21 @@ function addRecentCard(cardId, cardOperation = 'repayment') {
     pushRecentFormEntry({ scope: 'card', cardId, cardOperation });
 }
 
+function hasRecentSubCategory(subCategory) {
+    return !!(subCategory && subCategory !== '[Bez podkategorii]');
+}
+
+/** Etykieta chipa Ostatnio: podkategoria, a gdy brak — kategoria główna. */
+function formatRecentCategoryChipLabel(mainCategory, subCategory) {
+    return hasRecentSubCategory(subCategory) ? subCategory : mainCategory;
+}
+
+function formatRecentCategoryChipFullLabel(mainCategory, subCategory) {
+    return hasRecentSubCategory(subCategory)
+        ? `${mainCategory} · ${subCategory}`
+        : mainCategory;
+}
+
 function focusAmountField() {
     requestAnimationFrame(() => {
         const input = document.getElementById('tx-amount');
@@ -442,15 +457,11 @@ function renderRecentCategoryChips() {
         const chip = document.createElement('button');
         chip.type = 'button';
         chip.className = 'recent-chip';
-        const fullLabel = recent.subCategory === '[Bez podkategorii]'
-            ? recent.mainCategory
-            : `${recent.mainCategory} · ${recent.subCategory}`;
-        const shortLabel = recent.subCategory === '[Bez podkategorii]'
-            ? recent.mainCategory
-            : recent.subCategory;
+        const fullLabel = formatRecentCategoryChipFullLabel(recent.mainCategory, recent.subCategory);
+        const shortLabel = formatRecentCategoryChipLabel(recent.mainCategory, recent.subCategory);
         chip.title = fullLabel;
         chip.setAttribute('aria-label', fullLabel);
-        chip.innerHTML = `${renderCategoryIcon(recent.mainCategory, 'chip', recent.subCategory === '[Bez podkategorii]' ? null : recent.subCategory, recent.type)}<span class="recent-chip-label">${shortLabel}</span>`;
+        chip.innerHTML = `${renderCategoryIcon(recent.mainCategory, 'chip', hasRecentSubCategory(recent.subCategory) ? recent.subCategory : null, recent.type)}<span class="recent-chip-label">${shortLabel}</span>`;
         if (formState.selectedMainCategory === recent.mainCategory && formState.selectedSubCategory === recent.subCategory) {
             chip.classList.add('selected');
         }

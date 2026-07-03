@@ -2512,7 +2512,7 @@ input:focus, select:focus {
 }
 
 #view-add .add-recent-scroll .recent-chip-label {
-    max-width: 7.5rem;
+    max-width: 6.5rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
