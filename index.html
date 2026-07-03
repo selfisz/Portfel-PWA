@@ -1026,9 +1026,17 @@
                                     </div>
                                 </div>
                                 <div id="compare-preset-same-month-wrap" class="compare-preset-panel hidden">
-                                    <span class="analysis-period-sub-label">Miesiąc (okres B)</span>
-                                    <input type="month" id="reports-compare-same-month" class="analysis-period-month-input" aria-label="Miesiąc do porównania" onchange="updateSameMonthCompareHint()">
-                                    <p id="reports-compare-same-month-hint" class="reports-hint compare-same-month-hint"></p>
+                                    <div class="compare-mom-flex-row compare-mom-labels-row">
+                                        <span class="analysis-period-sub-label compare-mom-side">Okres A</span>
+                                        <span class="compare-mom-vs compare-mom-vs--spacer" aria-hidden="true">vs</span>
+                                        <span class="analysis-period-sub-label compare-mom-side">Okres B</span>
+                                    </div>
+                                    <div class="compare-mom-flex-row compare-mom-controls-row">
+                                        <span id="reports-compare-same-month-a-display" class="compare-same-month-display compare-mom-side" aria-label="Okres A">—</span>
+                                        <span class="compare-mom-vs" aria-hidden="true">vs</span>
+                                        <span id="reports-compare-same-month-b-display" class="compare-same-month-display compare-mom-side" aria-label="Okres B">—</span>
+                                    </div>
+                                    <input type="month" id="reports-compare-same-month" class="hidden" tabindex="-1" aria-hidden="true">
                                 </div>
                                 <div id="compare-preset-custom-wrap" class="compare-preset-panel hidden">
                                     <div class="compare-pickers">

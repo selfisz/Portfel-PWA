@@ -347,14 +347,20 @@ function selectComparePreset(preset) {
 }
 
 function updateSameMonthCompareHint() {
-    const hint = document.getElementById('reports-compare-same-month-hint');
-    const monthVal = document.getElementById('reports-compare-same-month')?.value;
-    if (!hint || !monthVal) return;
+    const hidden = document.getElementById('reports-compare-same-month');
+    const aDisplay = document.getElementById('reports-compare-same-month-a-display');
+    const bDisplay = document.getElementById('reports-compare-same-month-b-display');
+    if (!hidden) return;
+
+    const monthVal = getReportsMonthValue();
+    if (!monthVal) return;
+
+    hidden.value = monthVal;
     const [year, month] = monthVal.split('-').map(Number);
     const prevMonthVal = `${year - 1}-${String(month).padStart(2, '0')}`;
-    const a = getMonthBoundsFromValue(prevMonthVal);
-    const b = getMonthBoundsFromValue(monthVal);
-    hint.textContent = `${formatComparePeriodLabel(a.start, a.end)} vs ${formatComparePeriodLabel(b.start, b.end)}`;
+
+    if (aDisplay) aDisplay.textContent = formatMonthLabel(prevMonthVal);
+    if (bDisplay) bDisplay.textContent = formatMonthLabel(monthVal);
 }
 
 function populateCompareYearSelects() {
