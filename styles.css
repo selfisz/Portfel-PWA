@@ -7337,7 +7337,7 @@ body.auth-locked > #settings-overlay {
 }
 
 @media print {
-    body > *:not(#reports-pdf-overlay) {
+    body > *:not(#reports-pdf-overlay):not(#reports-pdf-print-frame) {
         display: none !important;
     }
 
@@ -7346,10 +7346,19 @@ body.auth-locked > #settings-overlay {
         display: block !important;
         overflow: visible !important;
         background: #fff !important;
+        height: auto !important;
     }
 
     #reports-pdf-overlay.hidden {
         display: block !important;
+    }
+
+    .reports-pdf-shell {
+        display: block !important;
+        flex: none !important;
+        min-height: auto !important;
+        max-width: none !important;
+        height: auto !important;
     }
 
     .reports-pdf-shell .settings-header,
@@ -7358,8 +7367,12 @@ body.auth-locked > #settings-overlay {
     }
 
     .reports-pdf-content {
+        display: block !important;
+        flex: none !important;
+        min-height: auto !important;
         overflow: visible !important;
         padding: 0 !important;
+        height: auto !important;
     }
 
     .reports-pdf-title,
@@ -11720,13 +11733,6 @@ button.reports-debt-split-item strong {
     display: block;
 }
 
-.month-close-banner-btn {
-    flex-shrink: 0;
-    width: auto;
-    min-width: 96px;
-    padding: 10px 16px;
-}
-
 /* Rozliczenie miesiąca */
 .month-close-header {
     display: flex;
@@ -11766,16 +11772,24 @@ button.reports-debt-split-item strong {
 }
 
 .month-close-banner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 14px 16px;
+    padding: 0;
     margin-bottom: 12px;
+    overflow: hidden;
 }
-.month-close-banner-text { display: flex; flex-direction: column; gap: 4px; }
+.month-close-banner .dashboard-action-row {
+    padding: 12px 14px;
+    margin: 0;
+}
 #reports-month-close-banner:not(.hidden) { margin-bottom: 12px; }
 #dashboard-month-close-banner:not(.hidden) { display: flex; flex-direction: column; gap: 8px; }
+.month-close-tx-list { margin-top: 8px; }
+.month-close-dupe-group {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+.month-close-dupe-group:last-child { border-bottom: none; }
+.month-close-dupe-label { margin: 0 0 4px; }
+#transaction-details-overlay[data-month-close-context]:not(.hidden) { z-index: 1300; }
 .btn-sm { padding: 6px 12px; font-size: 0.85rem; }
 
 /* Skryba — głos */
@@ -11802,7 +11816,39 @@ button.reports-debt-split-item strong {
 
 /* Year review rozszerzony */
 .year-review-section { margin-top: 16px; }
-.year-review-top-cats { margin: 8px 0 0; padding-left: 18px; }
+.year-review-top-cats {
+    display: flex;
+    flex-direction: column;
+    margin-top: 8px;
+}
+.year-review-top-cat-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 0;
+    border-top: 1px solid var(--border);
+    font-family: inherit;
+    font-size: var(--text-sm);
+}
+.year-review-top-cat-row:first-child { border-top: none; }
+.year-review-top-cat-rank {
+    flex-shrink: 0;
+    width: 22px;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--text-muted);
+}
+.year-review-top-cat-name {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    line-height: 1.25;
+}
+.year-review-top-cat-amount {
+    flex-shrink: 0;
+    font-weight: 600;
+    font-size: var(--text-sm);
+}
 .year-review-wealth-delta { margin-top: 8px; }
 .snapshot-delta-positive { color: var(--success); }
 .snapshot-delta-negative { color: var(--danger); }

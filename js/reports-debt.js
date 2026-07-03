@@ -875,8 +875,12 @@ function buildYearReviewHtml(data) {
 
     const topCatsHtml = topCats.length
         ? `<div class="year-review-section"><h3 class="analysis-subsection-label">Top kategorie wydatków</h3>
-            <ol class="year-review-top-cats">${topCats.map(([cat, amt]) =>
-                `<li>${escapeHtml(cat)} — ${formatPlnAmount(amt)}</li>`).join('')}</ol></div>`
+            <div class="year-review-top-cats">${topCats.map(([cat, amt], i) =>
+                `<div class="year-review-top-cat-row">
+                    <span class="year-review-top-cat-rank">${i + 1}</span>
+                    <span class="year-review-top-cat-name">${escapeHtml(cat)}</span>
+                    <span class="year-review-top-cat-amount expense">${formatPlnAmount(amt)}</span>
+                </div>`).join('')}</div></div>`
         : '';
 
     return `

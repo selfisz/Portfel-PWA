@@ -50,6 +50,35 @@ function getUnclosedMonthsWithData() {
     return getMonthsWithTransactions().filter((mk) => !isMonthClosed(mk) && mk <= currentKey);
 }
 
+function isMonthCloseAvailable(monthKey) {
+    const { end } = getMonthBoundsFromKey(monthKey);
+    return localIsoDate(new Date()) >= end;
+}
+
+function renderMonthCloseTxRowHtml(tx, globalIndex) {
+    if (globalIndex < 0) return '';
+    const title = tx.subCategory === '[Bez podkategorii]' ? tx.mainCategory : tx.subCategory;
+    const amountClass = tx.type === 'expense' ? 'expense' : 'income';
+    const sign = tx.type === 'expense' ? '−' : '+';
+    const iconHtml = typeof renderCategoryIcon === 'function'
+        ? renderCategoryIcon(tx.mainCategory, 'list', tx.subCategory !== '[Bez podkategorii]' ? tx.subCategory : null, tx.type)
+        : '';
+    return `<button type="button" class="reports-tx-row" onclick="monthCloseOpenTransactionDetails(${globalIndex})">
+        ${iconHtml}
+        <span class="reports-tx-row-text">
+            <span class="reports-tx-row-title">${escapeHtml(title)}</span>
+            <span class="reports-tx-row-meta">${formatTxDate(tx.date)} · ${escapeHtml(tx.mainCategory)}</span>
+        </span>
+        <span class="reports-tx-row-amount ${amountClass}">${sign}${formatPlnAmount(tx.amount)}</span>
+    </button>`;
+}
+
+function monthCloseOpenTransactionDetails(index) {
+    const overlay = document.getElementById('transaction-details-overlay');
+    if (overlay) overlay.dataset.monthCloseContext = '1';
+    if (typeof openTransactionDetails === 'function') openTransactionDetails(index);
+}
+
 function formatMonthKeyLabel(monthKey) {
     const [y, m] = monthKey.split('-').map(Number);
     const label = new Date(y, m - 1, 1).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
@@ -165,12 +194,12 @@ function buildMonthCloseSteps(monthKey) {
             title: 'Możliwe duplikaty',
             empty: !duplicates.length,
             html: duplicates.length
-                ? `<ul class="month-close-list">${duplicates.slice(0, 8).map((pair, i) => `
-                    <li class="month-close-item month-close-item--stack">
-                        <div>${escapeHtml(formatDuplicateTransactionLine(pair.a.tx))}</div>
-                        <div>${escapeHtml(formatDuplicateTransactionLine(pair.b.tx))}</div>
-                        <button type="button" class="btn-outline btn-sm" onclick="monthCloseDeleteDuplicate(${pair.b.index})">Usuń drugi</button>
-                    </li>`).join('')}</ul>`
+                ? `<div class="month-close-tx-list">${duplicates.slice(0, 8).map((pair) => `
+                    <div class="month-close-dupe-group">
+                        <p class="reports-hint month-close-dupe-label">Podejrzany duplikat — kliknij transakcję, aby edytować lub usunąć</p>
+                        ${renderMonthCloseTxRowHtml(pair.a.tx, pair.a.index)}
+                        ${renderMonthCloseTxRowHtml(pair.b.tx, pair.b.index)}
+                    </div>`).join('')}</div>`
                 : '<p class="reports-hint">Nie znaleziono podejrzanych duplikatów.</p>'
         },
         {
@@ -189,8 +218,11 @@ function buildMonthCloseSteps(monthKey) {
             title: 'Słaba kategoryzacja',
             empty: !uncategorized.length,
             html: uncategorized.length
-                ? `<p class="reports-hint">${uncategorized.length} transakcji bez podkategorii lub w „Różne”.</p>
-                   <button type="button" class="btn-outline" onclick="monthCloseOpenTransactions('${escapeHtml(monthKey)}')">Pokaż na pulpicie</button>`
+                ? `<p class="reports-hint">${uncategorized.length} transakcji bez podkategorii lub w „Różne”. Kliknij wiersz, aby poprawić kategorię.</p>
+                   <div class="month-close-tx-list">${uncategorized.slice(0, 30).map((t) => {
+                       const idx = appState.transactions.indexOf(t);
+                       return renderMonthCloseTxRowHtml(t, idx);
+                   }).join('')}</div>`
                 : '<p class="reports-hint">Kategoryzacja wygląda w porządku.</p>'
         },
         {
@@ -253,6 +285,12 @@ function monthCloseOpenTransactions(monthKey) {
 function openMonthCloseWizard(monthKey = null) {
     const target = monthKey || getActiveMonthCloseKey();
     if (!target) return;
+    if (!isMonthCloseAvailable(target)) {
+        if (typeof showAppToast === 'function') {
+            showAppToast('Rozliczenie dostępne od ostatniego dnia miesiąca', 'default');
+        }
+        return;
+    }
     monthCloseWizardMonthKey = target;
     monthCloseWizardStep = 0;
     const overlay = document.getElementById('month-close-overlay');
@@ -272,12 +310,14 @@ function getActiveMonthCloseKey() {
         const mk = getReportsMonthValue();
         if (mk && !isMonthClosed(mk)) return mk;
     }
-    const unclosed = getUnclosedMonthsWithData();
+    const unclosed = getUnclosedMonthsWithData().filter(isMonthCloseAvailable);
     return unclosed[unclosed.length - 1] || null;
 }
 
 function getMonthCloseBannerMonths() {
-    return getUnclosedMonthsWithData().slice(-MONTH_CLOSE_BANNER_LIMIT);
+    return getUnclosedMonthsWithData()
+        .filter(isMonthCloseAvailable)
+        .slice(-MONTH_CLOSE_BANNER_LIMIT);
 }
 
 function renderMonthCloseWizard() {
@@ -329,13 +369,15 @@ function finishMonthCloseWizard() {
 
 function renderMonthCloseBannerHtml(monthKey) {
     const closed = isMonthClosed(monthKey);
-    if (closed) return '';
+    if (closed || !isMonthCloseAvailable(monthKey)) return '';
     return `<div class="month-close-banner card dashboard-panel" data-month-key="${escapeHtml(monthKey)}">
-        <div class="month-close-banner-text">
-            <strong>Rozlicz ${escapeHtml(formatMonthKeyLabel(monthKey))}</strong>
-            <span class="reports-hint">Sprawdź cykliczne, duplikaty i budżet przed zamknięciem miesiąca.</span>
+        <div class="dashboard-action-row">
+            <div class="dashboard-action-info">
+                <strong class="dashboard-action-name">Rozlicz ${escapeHtml(formatMonthKeyLabel(monthKey))}</strong>
+                <span class="dashboard-action-meta">Sprawdź cykliczne, duplikaty i budżet przed zamknięciem miesiąca.</span>
+            </div>
+            <button type="button" class="dashboard-quick-action-btn" onclick="openMonthCloseWizard('${escapeHtml(monthKey)}')">Rozlicz</button>
         </div>
-        <button type="button" class="btn-submit btn-submit--form month-close-banner-btn" onclick="openMonthCloseWizard('${escapeHtml(monthKey)}')">Rozlicz</button>
     </div>`;
 }
 
@@ -355,7 +397,7 @@ function renderMonthCloseBanners() {
         if (typeof getReportsMonthValue === 'function' && typeof reportsPeriodMode !== 'undefined' && reportsPeriodMode === 'month') {
             monthKey = getReportsMonthValue();
         }
-        if (monthKey && !isMonthClosed(monthKey)) {
+        if (monthKey && !isMonthClosed(monthKey) && isMonthCloseAvailable(monthKey)) {
             reportsHost.innerHTML = renderMonthCloseBannerHtml(monthKey);
             reportsHost.classList.remove('hidden');
         } else {

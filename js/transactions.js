@@ -528,9 +528,21 @@ function openTransactionDetails(index) {
 }
 
 function closeTransactionDetails() {
-    document.getElementById('transaction-details-overlay')?.classList.add('hidden');
-    document.body.style.overflow = '';
+    const overlay = document.getElementById('transaction-details-overlay');
+    overlay?.classList.add('hidden');
+    if (overlay) delete overlay.dataset.monthCloseContext;
     activeTransactionDetailsIndex = null;
+    const scrollLocked = [
+        'month-close-overlay',
+        'reports-pdf-overlay',
+        'duplicate-tx-overlay',
+        'assets-pdf-date-overlay',
+        'debts-pdf-date-overlay'
+    ].some((id) => !document.getElementById(id)?.classList.contains('hidden'));
+    if (!scrollLocked) document.body.style.overflow = '';
+    if (typeof monthCloseWizardMonthKey !== 'undefined' && monthCloseWizardMonthKey && typeof renderMonthCloseWizard === 'function') {
+        renderMonthCloseWizard();
+    }
 }
 
 function editTransactionFromDetails() {

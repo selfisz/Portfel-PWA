@@ -95,7 +95,57 @@ function closePrintPreview() {
 }
 
 function printPrintPreview() {
-    window.print();
+    const content = document.getElementById('reports-pdf-content');
+    if (!content || !content.innerHTML.trim()) {
+        showAppToast('Brak treści do druku', 'error');
+        return;
+    }
+
+    let frame = document.getElementById('reports-pdf-print-frame');
+    if (!frame) {
+        frame = document.createElement('iframe');
+        frame.id = 'reports-pdf-print-frame';
+        frame.setAttribute('aria-hidden', 'true');
+        frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+        document.body.appendChild(frame);
+    }
+
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument || win?.document;
+    if (!doc || !win) {
+        window.print();
+        return;
+    }
+
+    const title = document.getElementById('reports-pdf-title')?.textContent || 'Raport';
+    const stylesHref = new URL('styles.css', window.location.href).href;
+    doc.open();
+    doc.write(`<!DOCTYPE html><html lang="pl"><head><meta charset="UTF-8"><title>${title.replace(/[<>&"]/g, '')}</title>`);
+    doc.write(`<link rel="stylesheet" href="${stylesHref}">`);
+    doc.write(`<style>
+        body { margin: 16px; background: #fff; color: #111; font-family: system-ui, -apple-system, sans-serif; }
+        .reports-pdf-title, .reports-pdf-summary, .reports-pdf-table th, .reports-pdf-table td { color: #111 !important; }
+        .reports-pdf-table th, .reports-pdf-table td { border-color: #ddd !important; }
+        @page { margin: 12mm; }
+    </style></head><body>`);
+    doc.write(content.innerHTML);
+    doc.write('</body></html>');
+    doc.close();
+
+    const triggerPrint = () => {
+        try {
+            win.focus();
+            win.print();
+        } catch {
+            window.print();
+        }
+    };
+
+    if (doc.readyState === 'complete') {
+        setTimeout(triggerPrint, 150);
+    } else {
+        frame.onload = () => setTimeout(triggerPrint, 150);
+    }
 }
 
 function clearAddFormError() {

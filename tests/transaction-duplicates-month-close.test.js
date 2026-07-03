@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { loadScript } from './helpers/load.js';
 
 beforeAll(() => {
@@ -18,7 +18,12 @@ beforeAll(() => {
     globalThis.formatTxDate = (d) => d;
     globalThis.escapeHtml = (s) => s;
     globalThis.formatTransactionCategoryLabel = (t) => t.mainCategory;
-    globalThis.localIsoDate = (d) => d.toISOString().slice(0, 10);
+    globalThis.localIsoDate = (d) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    };
     globalThis.saveState = () => {};
     globalThis.summarizePeriod = () => ({ income: 0, expense: 10, balance: -10, savings: 0 });
     loadScript('js/transaction-duplicates.js');
@@ -90,5 +95,15 @@ describe('month close state', () => {
             { date: '2024-05-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' }
         ];
         expect(getMonthCloseBannerMonths()).toEqual(['2024-03', '2024-04', '2024-05']);
+    });
+
+    it('blocks month close until the last day of the month', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2025, 5, 29));
+        expect(isMonthCloseAvailable('2025-06')).toBe(false);
+        vi.setSystemTime(new Date(2025, 5, 30));
+        expect(isMonthCloseAvailable('2025-06')).toBe(true);
+        expect(isMonthCloseAvailable('2025-05')).toBe(true);
+        vi.useRealTimers();
     });
 });
