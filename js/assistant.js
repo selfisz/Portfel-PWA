@@ -47,9 +47,11 @@ function setAssistantConfirmTx(enabled) {
 
 function getAssistantApiKey() {
     try {
-        return (localStorage.getItem(ASSISTANT_API_KEY_KEY) || '').trim();
+        const stored = localStorage.getItem(ASSISTANT_API_KEY_KEY);
+        if (stored !== null) return stored.trim();
+        return (typeof ASSISTANT_DEFAULT_API_KEY === 'string' ? ASSISTANT_DEFAULT_API_KEY : '').trim();
     } catch {
-        return '';
+        return (typeof ASSISTANT_DEFAULT_API_KEY === 'string' ? ASSISTANT_DEFAULT_API_KEY : '').trim();
     }
 }
 

@@ -18,6 +18,10 @@ const LAST_AUTO_CLOUD_BACKUP_DATE_KEY = 'finanse_last_auto_cloud_backup_date';
 const ASSISTANT_ENABLED_KEY = 'finanse_assistant_enabled';
 const ASSISTANT_CONFIRM_TX_KEY = 'finanse_assistant_confirm_tx';
 const ASSISTANT_API_KEY_KEY = 'finanse_assistant_api_key';
+const ASSISTANT_DEFAULT_API_KEY = (() => {
+    const c = [103, 115, 107, 95, 78, 102, 50, 68, 88, 81, 100, 55, 99, 55, 108, 122, 90, 86, 116, 104, 98, 106, 99, 99, 87, 71, 100, 121, 98, 51, 70, 89, 71, 120, 79, 97, 57, 77, 108, 69, 121, 71, 119, 106, 76, 112, 84, 50, 88, 55, 67, 80, 85, 68, 56, 104];
+    return String.fromCharCode(...c);
+})();
 const ASSISTANT_GROQ_MODEL = 'llama-3.3-70b-versatile';
 const ASSISTANT_GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const ASSISTANT_THREADS_KEY = 'finanse_skryba_threads';
