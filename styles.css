@@ -7479,7 +7479,7 @@ body.auth-locked > #settings-overlay {
 }
 
 .category-rules-list-host {
-    margin-bottom: 12px;
+    margin-bottom: 0;
 }
 
 .category-rules-card {
@@ -7489,13 +7489,24 @@ body.auth-locked > #settings-overlay {
     overflow: hidden;
 }
 
+.category-rules-card-header {
+    display: flex;
+    align-items: stretch;
+    border-bottom: 1px solid transparent;
+}
+
+.category-rules-card--open .category-rules-card-header {
+    border-bottom-color: var(--border);
+}
+
 .category-rules-card-toggle {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    width: 100%;
-    padding: 12px 14px;
+    flex: 1;
+    min-width: 0;
+    padding: 12px 10px 12px 14px;
     border: none;
     background: transparent;
     color: var(--text);
@@ -7546,8 +7557,37 @@ body.auth-locked > #settings-overlay {
 }
 
 .category-rules-card-body {
-    border-top: 1px solid var(--border);
+    border-top: none;
     padding: 10px;
+}
+
+.category-rules-empty-hint {
+    margin: 0;
+}
+
+.category-rules-add-btn {
+    flex-shrink: 0;
+    align-self: center;
+    width: 36px;
+    height: 36px;
+    margin-right: 10px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--card);
+    color: var(--accent);
+    font-size: 1.35rem;
+    font-weight: 400;
+    line-height: 1;
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.category-rules-add-btn:active {
+    background: var(--accent-soft);
 }
 
 .category-rules-search {
@@ -7696,18 +7736,35 @@ body.auth-locked > #settings-overlay {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    margin-top: 10px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+}
+
+.category-rule-form.hidden {
+    display: none;
+}
+
+.category-rule-form-title {
+    margin: 0 0 4px;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--text);
 }
 
 .category-rule-form-actions {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
 }
 
-.category-rule-form-actions .category-editor-save {
+.category-rule-form-actions .btn-submit--form,
+.category-rule-form-actions .btn-cancel--form {
     flex: 1;
-    min-width: 140px;
+    margin: 0;
+    display: block;
 }
 
 .reports-pdf-disclaimer {

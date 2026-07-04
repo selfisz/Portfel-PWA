@@ -56,7 +56,7 @@ function suggestCategoryFromRules(type, text) {
 }
 
 let categoryRuleEditingId = null;
-let categoryRulesPanelOpen = false;
+let categoryRulesPanelOpen = true;
 let categoryRulesShowAll = false;
 const CATEGORY_RULES_PREVIEW = 8;
 
@@ -84,7 +84,7 @@ function updateCategoryRule(ruleId, patch) {
 
 function removeCategoryRule(ruleId) {
     if (!Array.isArray(appState.categoryRules)) return;
-    if (ruleId === categoryRuleEditingId) cancelCategoryRuleEdit();
+    if (ruleId === categoryRuleEditingId) closeCategoryRuleForm();
     appState.categoryRules = appState.categoryRules.filter((rule) => rule.id !== ruleId);
     saveState();
     renderCategoryRulesEditor();
@@ -92,20 +92,40 @@ function removeCategoryRule(ruleId) {
 
 function updateCategoryRuleFormUi() {
     const submit = document.getElementById('category-rule-submit-btn');
-    const cancel = document.getElementById('category-rule-cancel-edit-btn');
+    const title = document.getElementById('category-rule-form-title');
     const editing = !!categoryRuleEditingId;
     if (submit) submit.textContent = editing ? 'Zapisz zmiany' : 'Dodaj regułę';
-    if (cancel) cancel.classList.toggle('hidden', !editing);
+    if (title) title.textContent = editing ? 'Edytuj regułę' : 'Nowa reguła';
 }
 
-function clearCategoryRuleForm() {
+function clearCategoryRuleFormFields() {
     const patternInput = document.getElementById('category-rule-pattern');
+    const typeSelect = document.getElementById('category-rule-type');
     if (patternInput) patternInput.value = '';
+    if (typeSelect) typeSelect.value = 'expense';
+    populateCategoryRuleMainSelect();
 }
 
-function cancelCategoryRuleEdit() {
+function openCategoryRuleForm() {
     categoryRuleEditingId = null;
-    clearCategoryRuleForm();
+    clearCategoryRuleFormFields();
+    updateCategoryRuleFormUi();
+    const form = document.getElementById('category-rule-form');
+    if (form) {
+        form.classList.remove('hidden');
+        form.setAttribute('aria-hidden', 'false');
+    }
+    document.getElementById('category-rule-pattern')?.focus();
+}
+
+function closeCategoryRuleForm() {
+    categoryRuleEditingId = null;
+    const form = document.getElementById('category-rule-form');
+    if (form) {
+        form.classList.add('hidden');
+        form.setAttribute('aria-hidden', 'true');
+    }
+    clearCategoryRuleFormFields();
     updateCategoryRuleFormUi();
     renderCategoryRulesEditor();
 }
@@ -125,14 +145,27 @@ function editCategoryRule(ruleId) {
     populateCategoryRuleSubSelect();
     if (subSelect) subSelect.value = rule.subCategory;
     updateCategoryRuleFormUi();
+    const form = document.getElementById('category-rule-form');
+    if (form) {
+        form.classList.remove('hidden');
+        form.setAttribute('aria-hidden', 'false');
+    }
     categoryRulesPanelOpen = true;
     renderCategoryRulesEditor();
-    document.getElementById('category-rule-form')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    form?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function applyCategoryRulesPanelState() {
+    const card = document.querySelector('#category-rules-list .category-rules-card');
+    if (!card) return;
+    card.classList.toggle('category-rules-card--open', categoryRulesPanelOpen);
+    const toggle = card.querySelector('.category-rules-card-toggle');
+    if (toggle) toggle.setAttribute('aria-expanded', categoryRulesPanelOpen ? 'true' : 'false');
 }
 
 function toggleCategoryRulesPanel() {
     categoryRulesPanelOpen = !categoryRulesPanelOpen;
-    renderCategoryRulesEditor();
+    applyCategoryRulesPanelState();
 }
 
 function toggleCategoryRulesShowAll() {
@@ -186,18 +219,37 @@ function renderCategoryRulesGroupHtml(title, rules, previewState) {
     </details>`;
 }
 
+function renderCategoryRulesCardHeader(count) {
+    return `<div class="category-rules-card-header">
+        <button type="button" class="category-rules-card-toggle" aria-expanded="${categoryRulesPanelOpen ? 'true' : 'false'}" onclick="toggleCategoryRulesPanel()">
+            <span class="category-rules-card-toggle-main">
+                <span class="category-rules-card-title">Twoje reguły</span>
+                <span class="category-rules-card-count">${count}</span>
+            </span>
+            <svg class="category-rules-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+        </button>
+        <button type="button" class="category-rules-add-btn" onclick="openCategoryRuleForm()" aria-label="Dodaj regułę">+</button>
+    </div>`;
+}
+
 function renderCategoryRulesEditor() {
     const host = document.getElementById('category-rules-list');
     if (!host) return;
     const rules = getCategoryRules();
+    const header = renderCategoryRulesCardHeader(rules.length);
+
     if (!rules.length) {
-        categoryRulesPanelOpen = false;
         categoryRulesShowAll = false;
-        host.innerHTML = '<p class="settings-hint">Brak reguł — dodaj wzorzec z notatki (np. „biedronka”) i przypisz kategorię.</p>';
+        host.innerHTML = `<div class="category-rules-card${categoryRulesPanelOpen ? ' category-rules-card--open' : ''}">
+            ${header}
+            <div class="category-rules-card-body">
+                <p class="settings-hint category-rules-empty-hint">Brak reguł — kliknij +, aby dodać wzorzec z notatki (np. „biedronka”).</p>
+            </div>
+        </div>`;
         updateCategoryRuleFormUi();
         return;
     }
-    if (rules.length <= 4) categoryRulesPanelOpen = true;
+
     const expenseRules = rules.filter((rule) => rule.type === 'expense');
     const incomeRules = rules.filter((rule) => rule.type === 'income');
     const hiddenCount = Math.max(0, rules.length - CATEGORY_RULES_PREVIEW);
@@ -210,14 +262,9 @@ function renderCategoryRulesEditor() {
         renderCategoryRulesGroupHtml('Wydatki', expenseRules, previewState),
         renderCategoryRulesGroupHtml('Wpływy', incomeRules, previewState)
     ].filter(Boolean).join('');
+
     host.innerHTML = `<div class="category-rules-card${categoryRulesPanelOpen ? ' category-rules-card--open' : ''}">
-        <button type="button" class="category-rules-card-toggle" aria-expanded="${categoryRulesPanelOpen ? 'true' : 'false'}" onclick="toggleCategoryRulesPanel()">
-            <span class="category-rules-card-toggle-main">
-                <span class="category-rules-card-title">Twoje reguły</span>
-                <span class="category-rules-card-count">${rules.length}</span>
-            </span>
-            <svg class="category-rules-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-        </button>
+        ${header}
         <div class="category-rules-card-body">
             <input type="search" class="category-rules-search" placeholder="Szukaj wzorca lub kategorii…" oninput="filterCategoryRulesList(this.value)" aria-label="Szukaj reguł">
             <div class="category-rules-scroll">
@@ -244,15 +291,12 @@ function saveCategoryRuleFromForm() {
     }
     if (categoryRuleEditingId) {
         updateCategoryRule(categoryRuleEditingId, { pattern, type, mainCategory, subCategory });
-        categoryRuleEditingId = null;
-        clearCategoryRuleForm();
-        updateCategoryRuleFormUi();
         if (typeof showSettingsToast === 'function') showSettingsToast('Zapisano regułę');
-        return;
+    } else {
+        addCategoryRule({ pattern, type, mainCategory, subCategory });
+        if (typeof showSettingsToast === 'function') showSettingsToast('Dodano regułę');
     }
-    addCategoryRule({ pattern, type, mainCategory, subCategory });
-    clearCategoryRuleForm();
-    if (typeof showSettingsToast === 'function') showSettingsToast('Dodano regułę');
+    closeCategoryRuleForm();
 }
 
 function populateCategoryRuleMainSelect() {

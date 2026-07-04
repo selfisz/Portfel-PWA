@@ -225,7 +225,8 @@
                     <div class="section-label">Reguły auto-kategoryzacji</div>
                     <p class="settings-hint">Gdy notatka zawiera wzorzec, przypisz kategorię automatycznie (także przy podziale transakcji).</p>
                     <div id="category-rules-list" class="category-rules-list-host"></div>
-                    <div id="category-rule-form" class="category-rule-form">
+                    <div id="category-rule-form" class="category-rule-form hidden" aria-hidden="true">
+                        <div class="category-rule-form-title" id="category-rule-form-title">Nowa reguła</div>
                         <label class="section-label" for="category-rule-pattern">Wzorzec w notatce</label>
                         <input type="text" id="category-rule-pattern" class="settings-api-key-input" placeholder="np. biedronka">
                         <label class="section-label" for="category-rule-type">Typ</label>
@@ -238,8 +239,8 @@
                         <label class="section-label" for="category-rule-sub">Podkategoria</label>
                         <select id="category-rule-sub" class="settings-api-key-input"></select>
                         <div class="category-rule-form-actions">
-                            <button type="button" id="category-rule-submit-btn" class="btn-submit category-editor-save" onclick="saveCategoryRuleFromForm()">Dodaj regułę</button>
-                            <button type="button" id="category-rule-cancel-edit-btn" class="btn-outline btn-outline--compact hidden" onclick="cancelCategoryRuleEdit()">Anuluj edycję</button>
+                            <button type="button" id="category-rule-submit-btn" class="btn-submit btn-submit--form" onclick="saveCategoryRuleFromForm()">Dodaj regułę</button>
+                            <button type="button" id="category-rule-cancel-btn" class="btn-cancel btn-cancel--form" onclick="closeCategoryRuleForm()">Zrezygnuj</button>
                         </div>
                     </div>
                 </div>
