@@ -31,6 +31,12 @@ describe('buildSkrybaCategorySchemaBlock', () => {
         expect(buildSkrybaActionSystemPrompt()).toContain('DOZWOLONE_KATEGORIE');
         expect(buildSkrybaAdvisorSystemPrompt('{}')).toContain('DOZWOLONE_KATEGORIE');
     });
+
+    it('buduje unified prompt z kontekstem', () => {
+        const prompt = buildSkrybaUnifiedPrompt('{"month_summary":{"expensePln":100}}');
+        expect(prompt).toContain('KONTEKST_BIEŻĄCY');
+        expect(prompt).toContain('set_budget');
+    });
 });
 
 describe('buildSkrybaPendingCorrectionPrompt', () => {

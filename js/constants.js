@@ -56,6 +56,7 @@ const NOTIFICATION_ALERT_STATE_KEY = 'finanse_budget_alert_state';
 const NOTIFICATION_INSIGHT_STATE_KEY = 'finanse_insight_alert_state';
 const NOTIFICATION_DAILY_DIGEST_DATE_KEY = 'finanse_notif_daily_digest_date';
 const NOTIFICATION_TEST_SHOWN_KEY = 'finanse_notif_test_shown';
+const SKRYBA_WEEKLY_BRIEFING_KEY = 'finanse_skryba_weekly_briefing_key';
 const CARD_REPAYMENT_REMINDER_DAYS = 50;
 const MAX_ACTIVE_TRANSACTIONS = 3500;
 const MAX_CASH_MOVEMENTS = 1500;

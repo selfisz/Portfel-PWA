@@ -6,7 +6,8 @@ function getDefaultNotificationPrefs() {
         cardReminders: true,
         spendingPaceAlerts: true,
         recurringMissingAlerts: true,
-        insightAlerts: true
+        insightAlerts: true,
+        weeklyBriefing: true
     };
 }
 
@@ -312,6 +313,18 @@ function navigateFromNotification(item) {
         if (typeof switchView === 'function') switchView('loans', 'Długi', loansNav);
         const cardId = payload.cardId || payload.cardIds?.[0];
         if (cardId && typeof openCreditCardDetails === 'function') openCreditCardDetails(cardId);
+        return;
+    }
+    if (item.type === 'skryba_weekly') {
+        if (typeof openSkrybaPanel === 'function') {
+            openSkrybaPanel();
+            const query = payload.query || 'Briefing tygodnia';
+            window.setTimeout(() => {
+                const input = document.getElementById('skryba-input');
+                if (input) input.value = query;
+                if (typeof sendSkrybaMessage === 'function') sendSkrybaMessage();
+            }, 120);
+        }
     }
 }
 
@@ -348,6 +361,36 @@ function showTestSystemNotification() {
         body: 'Będziesz dostawać alerty o budżecie, ratach i rozliczeniu miesiąca — gdy aplikacja jest w tle.',
         read: false
     }]);
+}
+
+function evaluateSkrybaWeeklyBriefing() {
+    if (typeof skrybaToolWeeklyBriefing !== 'function' || typeof upsertNotification !== 'function') {
+        return [];
+    }
+    const now = new Date();
+    if (now.getDay() !== 1) return [];
+
+    const weekKey = typeof getSkrybaIsoWeekKey === 'function'
+        ? getSkrybaIsoWeekKey(now)
+        : `${now.getFullYear()}-W${String(Math.ceil(now.getDate() / 7)).padStart(2, '0')}`;
+    const storageKey = typeof SKRYBA_WEEKLY_BRIEFING_KEY !== 'undefined'
+        ? SKRYBA_WEEKLY_BRIEFING_KEY
+        : 'finanse_skryba_weekly_briefing_key';
+    if (localStorage.getItem(storageKey) === weekKey) return [];
+
+    const briefing = skrybaToolWeeklyBriefing();
+    if (!briefing?.shortBody) return [];
+
+    localStorage.setItem(storageKey, weekKey);
+
+    const result = upsertNotification({
+        id: `skryba-weekly|${weekKey}`,
+        type: 'skryba_weekly',
+        title: 'Briefing tygodnia — Skryba',
+        body: briefing.shortBody,
+        payload: { query: 'Briefing tygodnia', weekKey }
+    });
+    return result?.isNew ? [result.item] : [];
 }
 
 function runDailyNotificationDigest() {
@@ -417,6 +460,9 @@ function evaluateAllNotifications() {
     }
     if (prefs.insightAlerts && typeof evaluateSpendingInsightAlerts === 'function') {
         created.push(...evaluateSpendingInsightAlerts());
+    }
+    if (prefs.weeklyBriefing && typeof evaluateSkrybaWeeklyBriefing === 'function') {
+        created.push(...evaluateSkrybaWeeklyBriefing());
     }
     updateNotificationsBadge();
     const panel = document.getElementById('notifications-overlay');

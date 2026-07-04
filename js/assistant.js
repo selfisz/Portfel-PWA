@@ -367,10 +367,20 @@ function renderSkrybaWelcomeIfEmpty() {
     const briefing = typeof buildSkrybaDailyBriefing === 'function'
         ? buildSkrybaDailyBriefing(3)
         : null;
+    const isMonday = new Date().getDay() === 1;
+    const weekly = isMonday && typeof skrybaToolWeeklyBriefing === 'function'
+        ? skrybaToolWeeklyBriefing()
+        : null;
     const intro = 'Cześć! Jestem Skrybą — analitykiem i asystentem Twoich finansów.';
-    const body = briefing?.text
-        ? `${intro}\n\n${briefing.text}\n\nZapytaj o cokolwiek albo wybierz podpowiedź poniżej.`
-        : `${intro} Mogę dodać wydatek, przeanalizować miesiąc, sprawdzić budżet, DSR lub spłacić ratę.`;
+    let body = intro;
+    if (weekly?.text) {
+        body += `\n\nBriefing tygodnia:\n${weekly.text}`;
+    } else if (briefing?.text) {
+        body += `\n\n${briefing.text}`;
+    } else {
+        body += ' Mogę dodać wydatek, przeanalizować miesiąc, ustawić limit budżetu lub spłacić ratę.';
+    }
+    body += '\n\nZapytaj o cokolwiek albo wybierz podpowiedź poniżej.';
     const chipsHtml = buildSkrybaWelcomeChipsHtml();
     appendSkrybaMessage('assistant', body, chipsHtml, { skipPersist: true });
 }
@@ -378,10 +388,10 @@ function renderSkrybaWelcomeIfEmpty() {
 function buildSkrybaWelcomeChipsHtml() {
     const chips = [
         'Podsumowanie miesiąca',
+        'Briefing tygodnia',
         'Top kategorie',
         'Co z budżetem?',
-        'DSR',
-        'Brakujące cykliczne'
+        'Ustaw limit zakupy 800'
     ];
     return `<div class="skryba-chip-row">${chips.map((chip) => (
         `<button type="button" class="skryba-chip" onclick="skrybaSendSuggestion(this.dataset.text)" data-text="${escapeHtml(chip)}">${escapeHtml(chip)}</button>`
@@ -435,6 +445,47 @@ function appendSkrybaMessage(role, text, extraHtml = '', options = {}) {
 
     list.appendChild(row);
     if (!options.skipScroll) scrollSkrybaToBottom();
+    return messageId;
+}
+
+function appendSkrybaTypewriterMessage(text, options = {}) {
+    const list = document.getElementById('skryba-messages');
+    if (!list) return null;
+    const messageId = options.messageId || `skryba-msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const row = document.createElement('div');
+    row.className = 'skryba-msg skryba-msg--assistant';
+    row.dataset.messageId = messageId;
+
+    const body = document.createElement('div');
+    body.className = 'skryba-msg-body';
+    const bubble = document.createElement('div');
+    bubble.className = 'skryba-msg-bubble';
+    bubble.textContent = '';
+    body.appendChild(bubble);
+
+    const avatar = createSkrybaAvatar('assistant');
+    row.appendChild(avatar);
+    row.appendChild(body);
+    list.appendChild(row);
+    if (!options.skipScroll) scrollSkrybaToBottom();
+
+    const fullText = String(text || '');
+    if (!fullText || options.instant) {
+        bubble.textContent = fullText;
+        return messageId;
+    }
+
+    let index = 0;
+    const step = Math.max(1, Math.ceil(fullText.length / 36));
+    const tick = () => {
+        index = Math.min(fullText.length, index + step);
+        bubble.textContent = fullText.slice(0, index);
+        scrollSkrybaToBottom();
+        if (index < fullText.length) {
+            window.requestAnimationFrame(tick);
+        }
+    };
+    window.requestAnimationFrame(tick);
     return messageId;
 }
 
@@ -1242,7 +1293,7 @@ async function handleAssistantIntent(parsed, userMessage = '') {
     const reply = String(parsed?.reply || '').trim();
 
     if (parsed?.mode === 'advisor' && reply) {
-        appendSkrybaMessage('assistant', reply);
+        appendSkrybaTypewriterMessage(reply);
         return reply;
     }
 

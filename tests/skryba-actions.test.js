@@ -23,6 +23,17 @@ beforeAll(() => {
     globalThis.getCreditCardAvailable = (c) => (c.limit || 0) - (c.currentBalance || 0);
     globalThis.getLoanById = (id) => globalThis.getActiveLoans().find((l) => l.id === id) || null;
     globalThis.getCreditCardById = (id) => globalThis.getActiveCreditCards().find((c) => c.id === id) || null;
+    globalThis.appState = { categoryBudgets: {}, subCategoryBudgets: {}, transactions: [] };
+    globalThis.saveState = () => {};
+    globalThis.isAssistantCategoryPairValid = () => true;
+    globalThis.resolveCategoryFromUserPhrase = (phrase) => ({
+        mainCategory: 'Zakupy',
+        subCategory: '[Bez podkategorii]'
+    });
+    globalThis.makeSubCategoryBudgetKey = (main, sub) => `${main}\u0001${sub}`;
+    globalThis.notifyAfterFinanceChange = () => {};
+    globalThis.renderDashboard = () => {};
+    globalThis.refreshCurrentView = () => {};
 
     loadScript('js/search-utils.js');
     loadScript('js/skryba-entities.js');
@@ -40,6 +51,13 @@ describe('tryParseLocalSkrybaAction', () => {
         const action = tryParseLocalSkrybaAction('spłać kartę 500 zł');
         expect(action?.tool).toBe('repay_card');
         expect(action?.params.amount).toBe(500);
+    });
+
+    it('parsuje ustawienie limitu budżetu', () => {
+        const action = tryParseLocalSkrybaAction('ustaw limit zakupy 800');
+        expect(action?.tool).toBe('set_budget');
+        expect(action?.params.limitPln).toBe(800);
+        expect(action?.params.mainCategory).toBe('Zakupy');
     });
 });
 
@@ -61,5 +79,15 @@ describe('buildSkrybaActionPreview', () => {
         const preview = buildSkrybaActionPreview('pay_installment', { loanId: 'loan-alior' });
         expect(preview.ok).toBe(true);
         expect(preview.resolvedParams.loanId).toBe('loan-alior');
+    });
+
+    it('buduje podgląd ustawienia limitu', () => {
+        const preview = buildSkrybaActionPreview('set_budget', {
+            mainCategory: 'Zakupy',
+            subCategory: '[Bez podkategorii]',
+            limitPln: 800
+        });
+        expect(preview.ok).toBe(true);
+        expect(preview.summary).toContain('800');
     });
 });

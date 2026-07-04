@@ -57,6 +57,16 @@ function buildSkrybaHistoryMessages(limit = 10) {
     }));
 }
 
+async function callGroqSkrybaUnified(userMessage, lightContext = {}) {
+    const lightJson = JSON.stringify(lightContext, null, 0);
+    const messages = [
+        { role: 'system', content: buildSkrybaUnifiedPrompt(lightJson) },
+        ...buildSkrybaHistoryMessages(8),
+        { role: 'user', content: userMessage }
+    ];
+    return callGroqSkrybaRaw(messages);
+}
+
 async function callGroqSkrybaPlanner(userMessage) {
     const messages = [
         { role: 'system', content: buildSkrybaPlannerPrompt() },
@@ -183,7 +193,9 @@ async function processSkrybaUserMessage(text) {
         }
     }
 
-    const plan = await callGroqSkrybaPlanner(text);
+    const plan = await callGroqSkrybaUnified(text, typeof buildSkrybaLightContext === 'function'
+        ? buildSkrybaLightContext()
+        : {});
     if (plan?.mode === 'action' && plan?.action?.tool) {
         return {
             kind: 'action',
@@ -196,7 +208,13 @@ async function processSkrybaUserMessage(text) {
     }
 
     if (plan?.tools?.length) {
-        const context = buildSkrybaContextBundle(plan.tools, plan.toolParams || {});
+        const lightContext = typeof buildSkrybaLightContext === 'function'
+            ? buildSkrybaLightContext()
+            : {};
+        const context = {
+            ...lightContext,
+            ...buildSkrybaContextBundle(plan.tools, plan.toolParams || {})
+        };
         const advisor = await callGroqSkrybaAdvisor(text, context);
         if (advisor) {
             return {
@@ -208,20 +226,16 @@ async function processSkrybaUserMessage(text) {
         }
     }
 
-    const actionParsed = await callGroqSkrybaActionParser(text);
-    if (actionParsed?.mode === 'action' && actionParsed?.action?.tool) {
+    if (plan?.mode === 'advisor' && plan.reply) {
+        const lightContext = typeof buildSkrybaLightContext === 'function'
+            ? buildSkrybaLightContext()
+            : {};
         return {
-            kind: 'action',
-            action: {
-                tool: actionParsed.action.tool,
-                params: actionParsed.action.params || {},
-                reply: actionParsed.reply || ''
-            }
+            kind: 'parsed',
+            parsed: plan,
+            advisorContext: lightContext,
+            advisorToolParams: {}
         };
-    }
-
-    if (actionParsed?.mode === 'advisor' && actionParsed.reply) {
-        return { kind: 'parsed', parsed: actionParsed };
     }
 
     return {

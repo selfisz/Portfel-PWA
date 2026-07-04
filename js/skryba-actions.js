@@ -1,6 +1,49 @@
+function tryParseLocalSetBudget(text) {
+    const t = String(text || '').trim();
+    if (!t) return null;
+
+    const patterns = [
+        /(?:ustaw|ustawiaj|zmie[nń])\s+(?:budżet|budzet|limit)\s+(?:na\s+)?(.+?)\s+(?:na\s+)?(\d+(?:[.,]\d{1,2})?)\s*(?:zł|zl|pln)?$/i,
+        /(?:limit|budżet|budzet)\s+(.+?)\s+(?:na\s+)?(\d+(?:[.,]\d{1,2})?)\s*(?:zł|zl|pln)?$/i
+    ];
+    let match = null;
+    patterns.forEach((pattern) => {
+        if (!match) match = t.match(pattern);
+    });
+    if (!match) return null;
+
+    const amount = typeof parseSkrybaAmountFromText === 'function'
+        ? parseSkrybaAmountFromText(match[2])
+        : parseFloat(String(match[2]).replace(',', '.'));
+    if (!amount || amount <= 0) return null;
+
+    const phrase = String(match[1] || '').trim();
+    const resolved = typeof resolveCategoryFromUserPhrase === 'function'
+        ? resolveCategoryFromUserPhrase(phrase, 'expense')
+        : { mainCategory: phrase, subCategory: '[Bez podkategorii]' };
+    if (!resolved?.mainCategory) return null;
+
+    const label = resolved.subCategory && resolved.subCategory !== '[Bez podkategorii]'
+        ? `${resolved.mainCategory} › ${resolved.subCategory}`
+        : resolved.mainCategory;
+
+    return {
+        tool: 'set_budget',
+        params: {
+            mainCategory: resolved.mainCategory,
+            subCategory: resolved.subCategory || '[Bez podkategorii]',
+            limitPln: amount
+        },
+        reply: `Ustawię limit ${label} na ${amount.toFixed(2)} zł/mies.`
+    };
+}
+
 function tryParseLocalSkrybaAction(text) {
     const t = String(text || '').trim();
     if (!t) return null;
+
+    const budgetAction = tryParseLocalSetBudget(t);
+    if (budgetAction) return budgetAction;
 
     const cardRepay = t.match(/sp[lł]a[cć]\s+kart[ęe]\s+(\d+(?:[.,]\d{1,2})?)\s*(?:zł|zl|pln)?(?:\s+(.+))?$/i);
     if (cardRepay) {
@@ -39,6 +82,48 @@ function tryParseLocalSkrybaAction(text) {
     }
 
     return null;
+}
+
+function validateSkrybaBudgetParams(params = {}) {
+    const limitPln = Number(params.limitPln);
+    if (!Number.isFinite(limitPln) || limitPln <= 0) {
+        return { ok: false, error: 'Podaj dodatnią kwotę limitu budżetu.' };
+    }
+
+    let mainCategory = String(params.mainCategory || '').trim();
+    let subCategory = String(params.subCategory || '').trim() || '[Bez podkategorii]';
+    if (!mainCategory && params.categoryQuery) {
+        const resolved = typeof resolveCategoryFromUserPhrase === 'function'
+            ? resolveCategoryFromUserPhrase(params.categoryQuery, 'expense')
+            : null;
+        if (resolved?.mainCategory) {
+            mainCategory = resolved.mainCategory;
+            subCategory = resolved.subCategory || '[Bez podkategorii]';
+        }
+    }
+
+    if (!mainCategory) {
+        return { ok: false, error: 'Podaj kategorię budżetu z listy aplikacji.' };
+    }
+
+    const valid = typeof isAssistantCategoryPairValid === 'function'
+        ? isAssistantCategoryPairValid('expense', mainCategory, subCategory)
+        : true;
+    if (!valid) {
+        return { ok: false, error: `Nieprawidłowa kategoria: ${mainCategory}.` };
+    }
+
+    const label = subCategory && subCategory !== '[Bez podkategorii]'
+        ? `${mainCategory} › ${subCategory}`
+        : mainCategory;
+
+    return {
+        ok: true,
+        mainCategory,
+        subCategory,
+        limitPln: Math.round(limitPln * 100) / 100,
+        label
+    };
 }
 
 function buildSkrybaActionPreview(tool, params = {}) {
@@ -139,6 +224,20 @@ function buildSkrybaActionPreview(tool, params = {}) {
         };
     }
 
+    if (tool === 'set_budget') {
+        const validated = validateSkrybaBudgetParams(params);
+        if (!validated.ok) return validated;
+        return {
+            ok: true,
+            summary: `Limit ${validated.label}: ${fmt(validated.limitPln)}/mies.`,
+            resolvedParams: {
+                mainCategory: validated.mainCategory,
+                subCategory: validated.subCategory,
+                limitPln: validated.limitPln
+            }
+        };
+    }
+
     return { ok: false, error: 'Nieobsługiwana akcja.' };
 }
 
@@ -194,6 +293,25 @@ function executeSkrybaAction(tool, params = {}) {
         if (!updated) return { ok: false, error: 'Nie udało się zarejestrować spłaty (sprawdź gotówkę).' };
         refreshAfterSkrybaAction();
         return { ok: true, message: `Spłacono ${name}: ${fmt(amount)}.` };
+    }
+
+    if (tool === 'set_budget') {
+        const validated = validateSkrybaBudgetParams(preview.resolvedParams || params);
+        if (!validated.ok) return { ok: false, error: validated.error };
+        if (!appState.categoryBudgets) appState.categoryBudgets = {};
+        if (!appState.subCategoryBudgets) appState.subCategoryBudgets = {};
+        if (validated.subCategory && validated.subCategory !== '[Bez podkategorii]') {
+            const key = typeof makeSubCategoryBudgetKey === 'function'
+                ? makeSubCategoryBudgetKey(validated.mainCategory, validated.subCategory)
+                : `${validated.mainCategory}\u0001${validated.subCategory}`;
+            appState.subCategoryBudgets[key] = validated.limitPln;
+        } else {
+            appState.categoryBudgets[validated.mainCategory] = validated.limitPln;
+        }
+        if (typeof saveState === 'function') saveState();
+        refreshAfterSkrybaAction();
+        if (typeof renderBudgetEditor === 'function') renderBudgetEditor();
+        return { ok: true, message: `Ustawiono limit ${validated.label}: ${fmt(validated.limitPln)}/mies.` };
     }
 
     return { ok: false, error: 'Nieobsługiwana akcja.' };

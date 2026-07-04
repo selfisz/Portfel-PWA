@@ -48,6 +48,14 @@ beforeAll(() => {
             state: 'warn'
         }
     ]);
+    globalThis.suggestCategoryBudget = () => 750;
+    globalThis.getCategoryBudgetLimit = () => 500;
+    globalThis.getCategorySpentInMonth = () => 320;
+    globalThis.addDaysToIsoDate = (iso, days) => {
+        const d = new Date(`${iso}T12:00:00`);
+        d.setDate(d.getDate() + days);
+        return d.toISOString().slice(0, 10);
+    };
 
     loadScript('js/search-utils.js');
     loadScript('js/skryba-dates.js');
@@ -204,5 +212,30 @@ describe('buildSkrybaDailyBriefing', () => {
         const briefing = buildSkrybaDailyBriefing(3);
         expect(briefing.text).toBeTruthy();
         expect(briefing.items.length).toBeGreaterThan(0);
+    });
+});
+
+describe('skrybaToolWeeklyBriefing', () => {
+    it('porównuje ostatnie 7 dni', () => {
+        const week = skrybaToolWeeklyBriefing();
+        expect(week.text).toContain('Wydatki');
+        expect(week.weekKey).toMatch(/^\d{4}-W\d{2}$/);
+    });
+});
+
+describe('skrybaToolSuggestBudget', () => {
+    it('proponuje limit z historii', () => {
+        const result = skrybaToolSuggestBudget({ mainCategory: 'Samochód' });
+        expect(result.suggestedLimitPln).toBe(750);
+        expect(result.currentLimitPln).toBe(500);
+    });
+});
+
+describe('buildSkrybaLightContext', () => {
+    it('zawiera podstawowe metryki', () => {
+        const ctx = buildSkrybaLightContext();
+        expect(ctx.month_summary).toBeTruthy();
+        expect(ctx.budget_status).toBeTruthy();
+        expect(ctx.snapshot_wealth).toBeTruthy();
     });
 });

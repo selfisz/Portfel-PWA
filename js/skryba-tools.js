@@ -9,14 +9,17 @@ const SKRYBA_READ_TOOLS = [
     'top_categories',
     'debt_dsr',
     'spending_insights',
-    'recurring_gaps'
+    'recurring_gaps',
+    'suggest_budget',
+    'weekly_briefing'
 ];
 
 const SKRYBA_ACTION_TOOLS = [
     'pay_installment',
     'repay_loan',
     'repay_card',
-    'add_transaction'
+    'add_transaction',
+    'set_budget'
 ];
 
 function getSkrybaTransactionsSource() {
@@ -618,6 +621,130 @@ function buildSkrybaDailyBriefing(limit = 3) {
     };
 }
 
+function getSkrybaIsoWeekKey(date = new Date()) {
+    const d = new Date(date);
+    d.setHours(12, 0, 0, 0);
+    d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    const week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+function skrybaToolSuggestBudget(params = {}) {
+    const hints = typeof detectSkrybaCategoryHints === 'function'
+        ? detectSkrybaCategoryHints(params.categoryQuery || params.mainCategory || '')
+        : {};
+    const mainCategory = params.mainCategory || hints.mainCategory;
+    const subCategory = params.subCategory || hints.subCategory || '[Bez podkategorii]';
+    if (!mainCategory) {
+        return { configured: false, error: 'Podaj kategorię wydatków.' };
+    }
+
+    const monthKey = typeof getCurrentMonthKey === 'function'
+        ? getCurrentMonthKey()
+        : new Date().toISOString().slice(0, 7);
+    const suggestedLimitPln = typeof suggestCategoryBudget === 'function'
+        ? skrybaRoundPln(suggestCategoryBudget(mainCategory, subCategory !== '[Bez podkategorii]' ? subCategory : null))
+        : 0;
+    const currentLimitPln = typeof getCategoryBudgetLimit === 'function'
+        ? skrybaRoundPln(getCategoryBudgetLimit(mainCategory))
+        : 0;
+    const spentThisMonthPln = typeof getCategorySpentInMonth === 'function'
+        ? skrybaRoundPln(getCategorySpentInMonth(mainCategory, monthKey))
+        : 0;
+
+    return {
+        mainCategory,
+        subCategory,
+        monthKey,
+        suggestedLimitPln,
+        currentLimitPln,
+        spentThisMonthPln,
+        hasHistory: suggestedLimitPln > 0
+    };
+}
+
+function skrybaToolWeeklyBriefing() {
+    const fmt = typeof formatPlnAmount === 'function' ? formatPlnAmount : (n) => `${Number(n).toFixed(2)} zł`;
+    const today = typeof localIsoDate === 'function'
+        ? localIsoDate(new Date())
+        : new Date().toISOString().slice(0, 10);
+    const addDays = typeof addDaysToIsoDate === 'function'
+        ? addDaysToIsoDate
+        : (iso, days) => {
+            const d = new Date(`${iso}T12:00:00`);
+            d.setDate(d.getDate() + days);
+            return d.toISOString().slice(0, 10);
+        };
+
+    const currentEnd = today;
+    const currentStart = addDays(today, -6);
+    const previousEnd = addDays(currentStart, -1);
+    const previousStart = addDays(previousEnd, -6);
+
+    const currentTx = getSkrybaTransactionsSource().filter((t) => (
+        t.date >= currentStart && t.date <= currentEnd
+    ));
+    const previousTx = getSkrybaTransactionsSource().filter((t) => (
+        t.date >= previousStart && t.date <= previousEnd
+    ));
+    const current = skrybaSummarizeTransactions(currentTx);
+    const previous = skrybaSummarizeTransactions(previousTx);
+    const expenseDelta = current.expensePln - previous.expensePln;
+    const expenseDeltaPct = previous.expensePln > 0
+        ? Math.round((expenseDelta / previous.expensePln) * 100)
+        : (current.expensePln > 0 ? 100 : 0);
+    const top = skrybaToolTopCategories({
+        startDate: currentStart,
+        endDate: currentEnd,
+        label: 'ostatnie 7 dni',
+        limit: 3
+    });
+    const dsr = skrybaToolDebtDsr({
+        startDate: currentStart,
+        endDate: currentEnd,
+        label: 'ostatnie 7 dni'
+    });
+
+    const lines = [
+        `Wydatki: ${fmt(current.expensePln)} (${expenseDelta >= 0 ? '+' : '−'}${fmt(Math.abs(expenseDelta))}, ${expenseDeltaPct >= 0 ? '+' : ''}${expenseDeltaPct}% vs poprz. tydzień)`,
+        `Bilans: ${fmt(current.balancePln)} (oszczędności ${current.savingsRatePct}%)`
+    ];
+    if (top.top.length) {
+        lines.push(`Top: ${top.top.map((row) => `${row.name} ${fmt(row.amountPln)}`).join(', ')}`);
+    }
+    if (dsr.dsrPct !== null) {
+        lines.push(`DSR: ${dsr.dsrPct}%`);
+    }
+
+    return {
+        weekKey: getSkrybaIsoWeekKey(),
+        period: `${currentStart} — ${currentEnd}`,
+        previousPeriod: `${previousStart} — ${previousEnd}`,
+        current,
+        previous,
+        expenseDeltaPln: skrybaRoundPln(expenseDelta),
+        expenseDeltaPct,
+        topCategories: top.top,
+        dsrPct: dsr.dsrPct,
+        text: lines.join('\n'),
+        shortBody: `Wydatki ${fmt(current.expensePln)} (${expenseDeltaPct >= 0 ? '+' : ''}${expenseDeltaPct}% vs poprz. tydzień). Bilans ${fmt(current.balancePln)}.`
+    };
+}
+
+function buildSkrybaLightContext() {
+    const briefing = buildSkrybaDailyBriefing(3);
+    return {
+        month_summary: skrybaToolMonthSummary({}),
+        budget_status: skrybaToolBudgetStatus({}),
+        snapshot_wealth: skrybaToolSnapshotWealth(),
+        debt_dsr: skrybaToolDebtDsr({}),
+        spending_insights: skrybaToolSpendingInsights(),
+        daily_briefing: briefing.items,
+        week_key: getSkrybaIsoWeekKey()
+    };
+}
+
 function skrybaToolDebtScheduleToday() {
     const today = typeof localIsoDate === 'function'
         ? localIsoDate(new Date())
@@ -645,6 +772,8 @@ function runSkrybaTool(toolId, params = {}) {
         case 'debt_dsr': return skrybaToolDebtDsr(params);
         case 'spending_insights': return skrybaToolSpendingInsights();
         case 'recurring_gaps': return skrybaToolRecurringGaps();
+        case 'suggest_budget': return skrybaToolSuggestBudget(params);
+        case 'weekly_briefing': return skrybaToolWeeklyBriefing();
         default: return null;
     }
 }
@@ -745,6 +874,22 @@ function detectSkrybaToolsFromText(text) {
 
     if (/cykliczn|brak wpisu|brak stałej|brak stalej|subskrypcj|co mi (brakuje|umknęło|umknelo)|powtarzające|powtarzajace/.test(t)) {
         tools.push('recurring_gaps');
+    }
+
+    if (/briefing tygodnia|podsumowanie tygodnia|ostatni tydzie[nń]|tydzie[nń] finansowo/.test(t)) {
+        tools.push('weekly_briefing');
+    }
+
+    if (/zaproponuj (limit|budżet|budzet)|jaki limit|jaki budżet|jaki budzet|ile ustawić na|ile ustawic na/.test(t)) {
+        tools.push('suggest_budget');
+        const categoryHintsForBudget = typeof detectSkrybaCategoryHints === 'function'
+            ? detectSkrybaCategoryHints(text)
+            : {};
+        toolParams.suggest_budget = {
+            mainCategory: categoryHintsForBudget.mainCategory,
+            subCategory: categoryHintsForBudget.subCategory,
+            categoryQuery: text
+        };
     }
 
     const categoryHints = typeof detectSkrybaCategoryHints === 'function'
@@ -862,6 +1007,26 @@ function formatSkrybaOfflineReply(tools, toolParams = {}) {
             gaps.missing.slice(0, 5).forEach((gap) => {
                 lines.push(`Brak: ${gap.label} — ${gap.detail}`);
             });
+        }
+    }
+
+    if (tools.includes('weekly_briefing')) {
+        const week = skrybaToolWeeklyBriefing();
+        lines.push(`Briefing tygodnia (${week.period}):`);
+        lines.push(week.text);
+    }
+
+    if (tools.includes('suggest_budget')) {
+        const suggestion = skrybaToolSuggestBudget(toolParams.suggest_budget || {});
+        if (!suggestion.mainCategory) {
+            lines.push('Podaj kategorię, np. „jaki limit na jedzenie?”.');
+        } else if (!suggestion.hasHistory) {
+            lines.push(`Brak historii dla ${suggestion.mainCategory} — trudno zaproponować limit.`);
+        } else {
+            lines.push(
+                `${suggestion.mainCategory}: propozycja ${fmt(suggestion.suggestedLimitPln)}/mies. `
+                + `(teraz ${fmt(suggestion.currentLimitPln || 0)}, wydano ${fmt(suggestion.spentThisMonthPln)}).`
+            );
         }
     }
 
