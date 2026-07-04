@@ -59,6 +59,18 @@ describe('transaction duplicates', () => {
         expect(pairs.length).toBe(1);
     });
 
+    it('keeps global appState indices when older months exist before range', () => {
+        globalThis.appState.transactions = [
+            { date: '2025-05-01', type: 'expense', amount: 2000, mainCategory: 'Dom', subCategory: 'Czynsz', note: '' },
+            { date: '2025-06-05', type: 'expense', amount: 30, mainCategory: 'Jedzenie', subCategory: 'Dowóz', note: 'A' },
+            { date: '2025-06-05', type: 'expense', amount: 30, mainCategory: 'Jedzenie', subCategory: 'Dowóz', note: 'B' }
+        ];
+        const pairs = findDuplicatePairsInRange('2025-06-01', '2025-06-30');
+        expect(pairs).toHaveLength(1);
+        expect(pairs[0].a.index).toBe(1);
+        expect(pairs[0].b.index).toBe(2);
+    });
+
     it('does not match different amounts', () => {
         const tx = { date: '2025-06-10', type: 'expense', amount: 99, mainCategory: 'Zakupy', subCategory: 'Zakupy', note: '' };
         expect(findDuplicateCandidates(tx)).toHaveLength(0);

@@ -30,8 +30,8 @@ function findDuplicateCandidates(tx, excludeIndex = null) {
 
 function findDuplicatePairsInRange(startDate, endDate) {
     const txs = (appState.transactions || [])
-        .filter((t) => t.date >= startDate && t.date <= endDate)
-        .map((tx, index) => ({ tx, index }));
+        .map((tx, index) => ({ tx, index }))
+        .filter(({ tx }) => tx.date >= startDate && tx.date <= endDate);
     const pairs = [];
     const seen = new Set();
 
