@@ -37,8 +37,9 @@ function getSkrybaVoiceRecognition() {
         skrybaVoiceActive = false;
         syncSkrybaVoiceButton();
         const input = document.getElementById('skryba-input');
-        if (input?.value.trim() && typeof sendSkrybaMessage === 'function') {
-            sendSkrybaMessage();
+        const text = input?.value.trim();
+        if (text && typeof showSkrybaVoicePreview === 'function') {
+            showSkrybaVoicePreview(text);
         }
     };
     skrybaVoiceRecognition = rec;

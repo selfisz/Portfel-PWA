@@ -56,6 +56,14 @@ beforeAll(() => {
         d.setDate(d.getDate() + days);
         return d.toISOString().slice(0, 10);
     };
+    globalThis.estimatePeriodMonthlySurplus = () => ({ surplus: 500, income: 3000, expense: 2500, label: 'ten miesiąc' });
+    globalThis.buildSurplusScenarios = (amount) => ([
+        { id: 'cushion', title: 'Poduszka', amount, headline: `${amount}`, detail: 'test' }
+    ]);
+    globalThis.getUnclosedMonthsWithData = () => ['2025-05'];
+    globalThis.formatMonthKeyLabel = (mk) => mk;
+    globalThis.buildMonthCloseSteps = () => ([{ id: 'budget', empty: false }, { id: 'summary', empty: false }]);
+    globalThis.loadSavingsGoal = () => 20;
 
     loadScript('js/search-utils.js');
     loadScript('js/skryba-dates.js');
@@ -237,5 +245,26 @@ describe('buildSkrybaLightContext', () => {
         expect(ctx.month_summary).toBeTruthy();
         expect(ctx.budget_status).toBeTruthy();
         expect(ctx.snapshot_wealth).toBeTruthy();
+        expect(ctx.savings_goal_status).toBeTruthy();
+        expect(ctx.month_close_status).toBeTruthy();
+    });
+});
+
+describe('skrybaToolSurplusHints', () => {
+    it('zwraca scenariusze alokacji', () => {
+        const result = skrybaToolSurplusHints({});
+        expect(result.estimatedSurplusPln).toBe(500);
+        expect(result.scenarios.length).toBeGreaterThan(0);
+    });
+});
+
+describe('buildSkrybaFollowUpChips', () => {
+    it('proponuje chipy na podstawie kontekstu', () => {
+        const chips = buildSkrybaFollowUpChips({
+            filter_transactions: { count: 3 },
+            month_close_status: { unclosedCount: 1 }
+        });
+        expect(chips).toContain('suma');
+        expect(chips).toContain('Rozlicz miesiąc');
     });
 });

@@ -385,13 +385,64 @@ function renderSkrybaWelcomeIfEmpty() {
     appendSkrybaMessage('assistant', body, chipsHtml, { skipPersist: true });
 }
 
+function appendSkrybaFollowUpChips(chips) {
+    if (!Array.isArray(chips) || !chips.length) return;
+    const extraHtml = `<div class="skryba-chip-row skryba-chip-row--followup">${chips.map((chip) => (
+        `<button type="button" class="skryba-chip" onclick="skrybaSendSuggestion(this.dataset.text)" data-text="${escapeHtml(chip)}">${escapeHtml(chip)}</button>`
+    )).join('')}</div>`;
+    const list = document.getElementById('skryba-messages');
+    const row = document.createElement('div');
+    row.className = 'skryba-msg skryba-msg--assistant skryba-msg--chips';
+    row.innerHTML = `<div class="skryba-msg-body"><div class="skryba-msg-extra">${extraHtml}</div></div>`;
+    list?.appendChild(row);
+    scrollSkrybaToBottom();
+}
+
+function autoResizeSkrybaInput() {
+    const input = document.getElementById('skryba-input');
+    if (!input) return;
+    input.style.height = 'auto';
+    input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
+}
+
+function showSkrybaVoicePreview(text) {
+    const preview = document.getElementById('skryba-voice-preview');
+    const label = document.getElementById('skryba-voice-preview-text');
+    if (!preview || !label) {
+        const input = document.getElementById('skryba-input');
+        if (input) input.value = text;
+        return;
+    }
+    label.textContent = text;
+    preview.classList.remove('hidden');
+}
+
+function hideSkrybaVoicePreview() {
+    document.getElementById('skryba-voice-preview')?.classList.add('hidden');
+}
+
+function confirmSkrybaVoicePreview() {
+    const label = document.getElementById('skryba-voice-preview-text');
+    const text = label?.textContent?.trim() || '';
+    const input = document.getElementById('skryba-input');
+    if (input) input.value = text;
+    hideSkrybaVoicePreview();
+    if (text) sendSkrybaMessage();
+}
+
+function cancelSkrybaVoicePreview() {
+    const input = document.getElementById('skryba-input');
+    if (input) input.value = '';
+    hideSkrybaVoicePreview();
+}
+
 function buildSkrybaWelcomeChipsHtml() {
     const chips = [
         'Podsumowanie miesiąca',
         'Briefing tygodnia',
-        'Top kategorie',
-        'Co z budżetem?',
-        'Ustaw limit zakupy 800'
+        'Co z nadwyżką?',
+        'Rozlicz miesiąc',
+        'Otwórz raporty'
     ];
     return `<div class="skryba-chip-row">${chips.map((chip) => (
         `<button type="button" class="skryba-chip" onclick="skrybaSendSuggestion(this.dataset.text)" data-text="${escapeHtml(chip)}">${escapeHtml(chip)}</button>`
@@ -750,6 +801,16 @@ async function dispatchSkrybaAction(action) {
     const tool = action?.tool;
     const params = action?.params || {};
     const reply = action?.reply || '';
+
+    if (tool === 'navigate') {
+        const result = executeSkrybaAction(tool, params);
+        const msg = result.ok ? result.message : (result.error || 'Nie udało się przejść.');
+        appendSkrybaMessage('assistant', msg);
+        if (result.ok && typeof closeSkrybaPanel === 'function') {
+            window.setTimeout(() => closeSkrybaPanel(), 180);
+        }
+        return msg;
+    }
 
     if (tool === 'add_transaction') {
         return handleAssistantIntent({
@@ -1216,7 +1277,7 @@ async function dispatchAssistantParsed(parsed, userMessage, advisorMeta = null) 
     if (advisorMeta?.context && typeof captureSkrybaAdvisorContext === 'function') {
         captureSkrybaAdvisorContext(advisorMeta.context, advisorMeta.toolParams || {});
     }
-    const displayText = await handleAssistantIntent(parsed, userMessage);
+    const displayText = await handleAssistantIntent(parsed, userMessage, advisorMeta);
     const pendingHandled = parsed?.intent === 'add_transaction'
         && isAssistantConfirmTxEnabled()
         && getSkrybaPendingTransactionState();
@@ -1248,6 +1309,15 @@ function tryHandleLocalSkrybaCommand(text) {
             skrybaPersistActiveThread();
             return true;
         }
+    }
+
+    const normalizedMore = String(text || '').toLowerCase().trim().replace(/[?!.…]+$/g, '');
+    if (/^poka[zż] wi[eę]cej$/.test(normalizedMore) && skrybaLastSearchResults.length) {
+        const body = formatAssistantSearchResults(skrybaLastSearchResults);
+        appendSkrybaMessage('assistant', body);
+        skrybaChatHistory.push({ role: 'assistant', text: body });
+        skrybaPersistActiveThread();
+        return true;
     }
 
     if (!isAssistantSummarizeCommand(text)) return false;
@@ -1289,11 +1359,17 @@ function runAssistantDebtToday() {
     return lines.join('\n');
 }
 
-async function handleAssistantIntent(parsed, userMessage = '') {
+async function handleAssistantIntent(parsed, userMessage = '', advisorMeta = null) {
     const reply = String(parsed?.reply || '').trim();
 
     if (parsed?.mode === 'advisor' && reply) {
         appendSkrybaTypewriterMessage(reply);
+        const chips = typeof buildSkrybaFollowUpChips === 'function'
+            ? buildSkrybaFollowUpChips(advisorMeta?.context || skrybaLastAdvisorContext?.context || {})
+            : [];
+        if (chips.length) {
+            appendSkrybaFollowUpChips(chips);
+        }
         return reply;
     }
 
@@ -1537,6 +1613,10 @@ function onSkrybaInputKeydown(event) {
         event.preventDefault();
         sendSkrybaMessage();
     }
+}
+
+function onSkrybaInputInput() {
+    autoResizeSkrybaInput();
 }
 
 function initSkrybaAssistant() {

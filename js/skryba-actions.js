@@ -1,3 +1,83 @@
+function tryParseLocalSkrybaNavigate(text) {
+    const t = String(text || '').toLowerCase().trim();
+    if (!t) return null;
+
+    const targets = [
+        { target: 'reports', pattern: /(?:otw[oó]rz|poka[zż]|id[zź] do)\s+raport/ },
+        { target: 'budgets', pattern: /(?:otw[oó]rz|poka[zż]|id[zź] do).*(?:budżet|budzet|limity)/ },
+        { target: 'month_close', pattern: /(?:otw[oó]rz|rozpocznij|zr[oó]b)\s+rozliczenie|rozlicz miesi[aą]c/ },
+        { target: 'debts', pattern: /(?:otw[oó]rz|poka[zż]|id[zź] do).*(?:dług|dlug|kredyt|rat)/ },
+        { target: 'categories', pattern: /(?:otw[oó]rz|poka[zż]).*(?:regu[lł]|kategor)/ },
+        { target: 'assistant', pattern: /(?:otw[oó]rz|poka[zż]).*asystent/ }
+    ];
+
+    const hit = targets.find((entry) => entry.pattern.test(t));
+    if (!hit) return null;
+
+    const labels = {
+        reports: 'raporty',
+        budgets: 'budżety',
+        month_close: 'rozliczenie miesiąca',
+        debts: 'długi',
+        categories: 'kategorie i reguły',
+        assistant: 'asystenta'
+    };
+
+    return {
+        tool: 'navigate',
+        params: { target: hit.target },
+        reply: `Otwieram ${labels[hit.target] || hit.target}.`
+    };
+}
+
+function tryParseLocalCategoryRule(text) {
+    const t = String(text || '').trim();
+    if (!t) return null;
+
+    const patterns = [
+        /regu[lł]a[:\s]+(.+?)\s*(?:→|->|na|jako)\s+(.+)$/i,
+        /kategoryzuj\s+(.+?)\s+jako\s+(.+)$/i,
+        /automatyczn[aie].+?["“']?(.+?)["”']?\s*(?:→|->|na|jako)\s+(.+)$/i
+    ];
+    let match = null;
+    patterns.forEach((pattern) => {
+        if (!match) match = t.match(pattern);
+    });
+    if (!match) return null;
+
+    const patternText = String(match[1] || '').trim();
+    const categoryPhrase = String(match[2] || '').trim();
+    if (!patternText || !categoryPhrase) return null;
+
+    const resolved = typeof resolveCategoryFromUserPhrase === 'function'
+        ? resolveCategoryFromUserPhrase(categoryPhrase, 'expense')
+        : { mainCategory: categoryPhrase, subCategory: '[Bez podkategorii]' };
+    if (!resolved?.mainCategory) return null;
+
+    return {
+        tool: 'add_category_rule',
+        params: {
+            pattern: patternText,
+            type: 'expense',
+            mainCategory: resolved.mainCategory,
+            subCategory: resolved.subCategory || '[Bez podkategorii]'
+        },
+        reply: `Dodam regułę: „${patternText}” → ${resolved.mainCategory}.`
+    };
+}
+
+function tryParseLocalSetSavingsGoal(text) {
+    const t = String(text || '').trim();
+    const match = t.match(/(?:cel oszcz[eę]dno[sś]ci|ustaw cel|osi[aą]gnij)\s+(\d{1,3})\s*%?$/i);
+    if (!match) return null;
+    const goalPct = Math.max(0, Math.min(100, parseInt(match[1], 10)));
+    return {
+        tool: 'set_savings_goal',
+        params: { goalPct },
+        reply: `Ustawię cel oszczędności na ${goalPct}% wpływów.`
+    };
+}
+
 function tryParseLocalSetBudget(text) {
     const t = String(text || '').trim();
     if (!t) return null;
@@ -41,6 +121,15 @@ function tryParseLocalSetBudget(text) {
 function tryParseLocalSkrybaAction(text) {
     const t = String(text || '').trim();
     if (!t) return null;
+
+    const navigateAction = tryParseLocalSkrybaNavigate(t);
+    if (navigateAction) return navigateAction;
+
+    const ruleAction = tryParseLocalCategoryRule(t);
+    if (ruleAction) return ruleAction;
+
+    const savingsGoalAction = tryParseLocalSetSavingsGoal(t);
+    if (savingsGoalAction) return savingsGoalAction;
 
     const budgetAction = tryParseLocalSetBudget(t);
     if (budgetAction) return budgetAction;
@@ -238,6 +327,53 @@ function buildSkrybaActionPreview(tool, params = {}) {
         };
     }
 
+    if (tool === 'add_category_rule') {
+        const pattern = String(params.pattern || '').trim();
+        const mainCategory = String(params.mainCategory || '').trim();
+        const subCategory = String(params.subCategory || '[Bez podkategorii]').trim() || '[Bez podkategorii]';
+        if (!pattern || !mainCategory) {
+            return { ok: false, error: 'Podaj wzorzec i kategorię reguły.' };
+        }
+        if (typeof isAssistantCategoryPairValid === 'function'
+            && !isAssistantCategoryPairValid('expense', mainCategory, subCategory)) {
+            return { ok: false, error: `Nieprawidłowa kategoria: ${mainCategory}.` };
+        }
+        if (typeof hasCategoryRulePattern === 'function' && hasCategoryRulePattern(pattern, 'expense')) {
+            return { ok: false, error: 'Taka reguła już istnieje.' };
+        }
+        return {
+            ok: true,
+            summary: `Reguła „${pattern}” → ${mainCategory}`,
+            resolvedParams: { pattern, type: 'expense', mainCategory, subCategory }
+        };
+    }
+
+    if (tool === 'set_savings_goal') {
+        const goalPct = Math.max(0, Math.min(100, parseInt(params.goalPct, 10)));
+        if (!Number.isFinite(goalPct)) {
+            return { ok: false, error: 'Podaj cel oszczędności w procentach (0–100).' };
+        }
+        return {
+            ok: true,
+            summary: `Cel oszczędności: ${goalPct}% wpływów`,
+            resolvedParams: { goalPct }
+        };
+    }
+
+    if (tool === 'navigate') {
+        const target = String(params.target || '').trim();
+        const allowed = ['reports', 'budgets', 'month_close', 'debts', 'categories', 'assistant'];
+        if (!allowed.includes(target)) {
+            return { ok: false, error: 'Nieznany cel nawigacji.' };
+        }
+        return {
+            ok: true,
+            instant: true,
+            summary: `Przejście: ${target}`,
+            resolvedParams: { target }
+        };
+    }
+
     return { ok: false, error: 'Nieobsługiwana akcja.' };
 }
 
@@ -247,7 +383,48 @@ function refreshAfterSkrybaAction() {
     if (typeof refreshCurrentView === 'function') refreshCurrentView();
 }
 
+function executeSkrybaNavigate(target) {
+    const loansNav = document.querySelector('.nav-item[onclick*="\'loans\'"]');
+    const reportsNav = document.querySelector('.nav-item[onclick*="\'reports\'"]');
+
+    if (target === 'reports' && typeof switchView === 'function') {
+        switchView('reports', 'Raporty', reportsNav);
+        return { ok: true, message: 'Otwarto raporty.' };
+    }
+    if (target === 'budgets' && typeof openSettings === 'function') {
+        openSettings('budgets');
+        return { ok: true, message: 'Otwarto budżety w ustawieniach.' };
+    }
+    if (target === 'month_close' && typeof openMonthCloseWizard === 'function') {
+        const monthKey = typeof skrybaToolMonthCloseStatus === 'function'
+            ? skrybaToolMonthCloseStatus().latestMonthKey
+            : null;
+        const fallback = typeof getUnclosedMonthsWithData === 'function'
+            ? getUnclosedMonthsWithData().slice(-1)[0]
+            : null;
+        openMonthCloseWizard(monthKey || fallback || null);
+        return { ok: true, message: 'Otwarto rozliczenie miesiąca.' };
+    }
+    if (target === 'debts' && typeof switchView === 'function') {
+        switchView('loans', 'Długi', loansNav);
+        return { ok: true, message: 'Otwarto długi.' };
+    }
+    if (target === 'categories' && typeof openSettings === 'function') {
+        openSettings('categories');
+        return { ok: true, message: 'Otwarto kategorie.' };
+    }
+    if (target === 'assistant' && typeof openSettings === 'function') {
+        openSettings('assistant');
+        return { ok: true, message: 'Otwarto ustawienia asystenta.' };
+    }
+    return { ok: false, error: 'Nie udało się przejść do wybranego widoku.' };
+}
+
 function executeSkrybaAction(tool, params = {}) {
+    if (tool === 'navigate') {
+        return executeSkrybaNavigate(params.target);
+    }
+
     const preview = buildSkrybaActionPreview(tool, params);
     if (!preview.ok) {
         return { ok: false, error: preview.error, clarify: preview.clarify };
@@ -312,6 +489,22 @@ function executeSkrybaAction(tool, params = {}) {
         refreshAfterSkrybaAction();
         if (typeof renderBudgetEditor === 'function') renderBudgetEditor();
         return { ok: true, message: `Ustawiono limit ${validated.label}: ${fmt(validated.limitPln)}/mies.` };
+    }
+
+    if (tool === 'add_category_rule') {
+        const { pattern, type, mainCategory, subCategory } = preview.resolvedParams;
+        const added = typeof addCategoryRule === 'function'
+            ? addCategoryRule({ pattern, type, mainCategory, subCategory })
+            : null;
+        if (!added) return { ok: false, error: 'Nie udało się dodać reguły.' };
+        return { ok: true, message: `Dodano regułę: „${pattern}” → ${mainCategory}.` };
+    }
+
+    if (tool === 'set_savings_goal') {
+        const goalPct = preview.resolvedParams.goalPct;
+        const key = typeof SAVINGS_GOAL_KEY !== 'undefined' ? SAVINGS_GOAL_KEY : 'reports_savings_goal_pct';
+        localStorage.setItem(key, String(goalPct));
+        return { ok: true, message: `Ustawiono cel oszczędności: ${goalPct}% wpływów.` };
     }
 
     return { ok: false, error: 'Nieobsługiwana akcja.' };

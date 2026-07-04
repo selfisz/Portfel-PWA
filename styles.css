@@ -669,6 +669,48 @@ body.skryba-open {
     background: var(--accent-soft);
 }
 
+.skryba-msg--chips .skryba-msg-extra {
+    margin-top: 0;
+}
+
+.skryba-chip-row--followup {
+    margin-top: 4px;
+}
+
+.skryba-voice-preview {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 12px 8px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+}
+
+.skryba-voice-preview.hidden {
+    display: none;
+}
+
+.skryba-voice-preview-text {
+    flex: 1;
+    font-size: var(--text-sm);
+    line-height: 1.35;
+    color: var(--text);
+}
+
+.skryba-voice-preview-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.skryba-voice-preview-actions .skryba-btn {
+    flex: 0 0 auto;
+    min-width: 72px;
+    padding: 8px 10px;
+}
+
 .skryba-composer {
     flex-shrink: 0;
     position: relative;

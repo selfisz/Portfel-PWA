@@ -30,10 +30,12 @@ beforeAll(() => {
         mainCategory: 'Zakupy',
         subCategory: '[Bez podkategorii]'
     });
-    globalThis.makeSubCategoryBudgetKey = (main, sub) => `${main}\u0001${sub}`;
-    globalThis.notifyAfterFinanceChange = () => {};
-    globalThis.renderDashboard = () => {};
-    globalThis.refreshCurrentView = () => {};
+    globalThis.hasCategoryRulePattern = () => false;
+    globalThis.addCategoryRule = (rule) => rule;
+    globalThis.openSettings = () => {};
+    globalThis.switchView = () => {};
+    globalThis.openMonthCloseWizard = () => {};
+    globalThis.SAVINGS_GOAL_KEY = 'reports_savings_goal_pct';
 
     loadScript('js/search-utils.js');
     loadScript('js/skryba-entities.js');
@@ -58,6 +60,24 @@ describe('tryParseLocalSkrybaAction', () => {
         expect(action?.tool).toBe('set_budget');
         expect(action?.params.limitPln).toBe(800);
         expect(action?.params.mainCategory).toBe('Zakupy');
+    });
+
+    it('parsuje nawigację do raportów', () => {
+        const action = tryParseLocalSkrybaAction('otwórz raporty');
+        expect(action?.tool).toBe('navigate');
+        expect(action?.params.target).toBe('reports');
+    });
+
+    it('parsuje regułę kategoryzacji', () => {
+        const action = tryParseLocalSkrybaAction('reguła biedronka → zakupy');
+        expect(action?.tool).toBe('add_category_rule');
+        expect(action?.params.pattern).toBe('biedronka');
+    });
+
+    it('parsuje cel oszczędności', () => {
+        const action = tryParseLocalSkrybaAction('cel oszczędności 25%');
+        expect(action?.tool).toBe('set_savings_goal');
+        expect(action?.params.goalPct).toBe(25);
     });
 });
 

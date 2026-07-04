@@ -11,7 +11,10 @@ const SKRYBA_READ_TOOLS = [
     'spending_insights',
     'recurring_gaps',
     'suggest_budget',
-    'weekly_briefing'
+    'weekly_briefing',
+    'surplus_hints',
+    'month_close_status',
+    'savings_goal_status'
 ];
 
 const SKRYBA_ACTION_TOOLS = [
@@ -19,7 +22,10 @@ const SKRYBA_ACTION_TOOLS = [
     'repay_loan',
     'repay_card',
     'add_transaction',
-    'set_budget'
+    'set_budget',
+    'add_category_rule',
+    'set_savings_goal',
+    'navigate'
 ];
 
 function getSkrybaTransactionsSource() {
@@ -732,6 +738,115 @@ function skrybaToolWeeklyBriefing() {
     };
 }
 
+function skrybaToolSurplusHints(params = {}) {
+    const monthKey = typeof getCurrentMonthKey === 'function'
+        ? getCurrentMonthKey()
+        : new Date().toISOString().slice(0, 7);
+    const period = skrybaResolvePeriodParams({ monthKey, label: 'ten miesiąc' });
+    const periodTx = getSkrybaTransactionsSource().filter((t) => (
+        t.date >= period.startDate && t.date <= period.endDate
+    ));
+    const ctx = {
+        mode: 'month',
+        period: monthKey,
+        periodTx,
+        rangeStart: period.startDate,
+        rangeEnd: period.endDate
+    };
+    const base = typeof estimatePeriodMonthlySurplus === 'function'
+        ? estimatePeriodMonthlySurplus(ctx)
+        : { surplus: 0, income: 0, expense: 0, label: 'ten miesiąc' };
+    const requested = Number(params.amountPln);
+    const allocationAmountPln = Number.isFinite(requested) && requested > 0
+        ? skrybaRoundPln(requested)
+        : skrybaRoundPln(base.surplus);
+    const scenarios = typeof buildSurplusScenarios === 'function'
+        ? buildSurplusScenarios(allocationAmountPln, ctx)
+        : [];
+
+    return {
+        period: base.label,
+        estimatedSurplusPln: skrybaRoundPln(base.surplus),
+        allocationAmountPln,
+        operationalCashPln: typeof getOperationalCashBalance === 'function'
+            ? skrybaRoundPln(getOperationalCashBalance())
+            : null,
+        scenarios: scenarios.slice(0, 6).map((s) => ({
+            id: s.id,
+            title: s.title,
+            amountPln: skrybaRoundPln(s.amount),
+            headline: s.headline,
+            detail: s.detail
+        }))
+    };
+}
+
+function skrybaToolMonthCloseStatus() {
+    const unclosed = typeof getUnclosedMonthsWithData === 'function'
+        ? getUnclosedMonthsWithData()
+        : [];
+    const months = unclosed.map((monthKey) => {
+        const label = typeof formatMonthKeyLabel === 'function'
+            ? formatMonthKeyLabel(monthKey)
+            : monthKey;
+        let openIssues = 0;
+        if (typeof buildMonthCloseSteps === 'function') {
+            openIssues = buildMonthCloseSteps(monthKey)
+                .filter((step) => !step.empty && step.id !== 'summary')
+                .length;
+        }
+        return { monthKey, label, openIssues };
+    });
+
+    return {
+        unclosedCount: months.length,
+        months: months.slice(0, 8),
+        latestMonthKey: months.length ? months[months.length - 1].monthKey : null
+    };
+}
+
+function skrybaToolSavingsGoalStatus() {
+    const goalPct = typeof loadSavingsGoal === 'function' ? loadSavingsGoal() : 20;
+    const month = skrybaToolMonthSummary({});
+    const gapPct = month.savingsRatePct - goalPct;
+    return {
+        goalPct,
+        currentRatePct: month.savingsRatePct,
+        onTrack: month.savingsRatePct >= goalPct,
+        gapPct,
+        incomePln: month.incomePln,
+        expensePln: month.expensePln,
+        balancePln: month.balancePln,
+        period: month.period
+    };
+}
+
+function buildSkrybaFollowUpChips(context = {}) {
+    const chips = [];
+    const add = (label) => {
+        if (!chips.includes(label)) chips.push(label);
+    };
+
+    if (context?.filter_transactions) {
+        add('suma');
+        add('pokaż więcej');
+    }
+    if (context?.month_summary) add('porównaj z poprzednim');
+    if (context?.budget_status?.overCount > 0 || context?.budget_status?.warnCount > 0) {
+        add('Co z budżetem?');
+    }
+    if (context?.month_close_status?.unclosedCount > 0) add('Rozlicz miesiąc');
+    if (context?.surplus_hints?.estimatedSurplusPln > 0 || context?.month_summary?.balancePln > 0) {
+        add('Co z nadwyżką?');
+    }
+    if (context?.recurring_gaps?.count > 0) add('Brakujące cykliczne');
+    if (context?.savings_goal_status && !context.savings_goal_status.onTrack) {
+        add('Cel oszczędności');
+    }
+
+    return chips.slice(0, 4);
+}
+
 function buildSkrybaLightContext() {
     const briefing = buildSkrybaDailyBriefing(3);
     return {
@@ -740,6 +855,8 @@ function buildSkrybaLightContext() {
         snapshot_wealth: skrybaToolSnapshotWealth(),
         debt_dsr: skrybaToolDebtDsr({}),
         spending_insights: skrybaToolSpendingInsights(),
+        savings_goal_status: skrybaToolSavingsGoalStatus(),
+        month_close_status: skrybaToolMonthCloseStatus(),
         daily_briefing: briefing.items,
         week_key: getSkrybaIsoWeekKey()
     };
@@ -774,6 +891,9 @@ function runSkrybaTool(toolId, params = {}) {
         case 'recurring_gaps': return skrybaToolRecurringGaps();
         case 'suggest_budget': return skrybaToolSuggestBudget(params);
         case 'weekly_briefing': return skrybaToolWeeklyBriefing();
+        case 'surplus_hints': return skrybaToolSurplusHints(params);
+        case 'month_close_status': return skrybaToolMonthCloseStatus();
+        case 'savings_goal_status': return skrybaToolSavingsGoalStatus();
         default: return null;
     }
 }
@@ -890,6 +1010,22 @@ function detectSkrybaToolsFromText(text) {
             subCategory: categoryHintsForBudget.subCategory,
             categoryQuery: text
         };
+    }
+
+    if (/nadwyżk|nadwyzk|co zrobić z|co zrobic z|alokacj|gdzie ulokować|gdzie ulokowac|co z nadwyżk|co z nadwyzk/.test(t)) {
+        tools.push('surplus_hints');
+        const amountMatch = t.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:zł|zl|pln)?/);
+        toolParams.surplus_hints = amountMatch
+            ? { amountPln: parseFloat(amountMatch[1].replace(',', '.')) }
+            : {};
+    }
+
+    if (/rozlicz|nierozliczon|zamknij miesiąc|zamknij miesiac|status rozliczenia|co do rozliczenia/.test(t)) {
+        tools.push('month_close_status');
+    }
+
+    if (/cel oszczędności|cel oszczednosci|stopa oszczędności|stopa oszczednosci|osiągam cel|osiagam cel/.test(t)) {
+        tools.push('savings_goal_status');
     }
 
     const categoryHints = typeof detectSkrybaCategoryHints === 'function'
@@ -1028,6 +1164,34 @@ function formatSkrybaOfflineReply(tools, toolParams = {}) {
                 + `(teraz ${fmt(suggestion.currentLimitPln || 0)}, wydano ${fmt(suggestion.spentThisMonthPln)}).`
             );
         }
+    }
+
+    if (tools.includes('surplus_hints')) {
+        const surplus = skrybaToolSurplusHints(toolParams.surplus_hints || {});
+        lines.push(`Nadwyżka (${surplus.period}): ${fmt(surplus.estimatedSurplusPln)}.`);
+        surplus.scenarios.slice(0, 3).forEach((s) => {
+            lines.push(`· ${s.title}: ${s.headline} — ${s.detail}`);
+        });
+    }
+
+    if (tools.includes('month_close_status')) {
+        const close = skrybaToolMonthCloseStatus();
+        if (!close.unclosedCount) {
+            lines.push('Wszystkie miesiące z danymi są rozliczone.');
+        } else {
+            close.months.forEach((m) => {
+                lines.push(`${m.label}: ${m.openIssues} otwartych kroków rozliczenia.`);
+            });
+        }
+    }
+
+    if (tools.includes('savings_goal_status')) {
+        const goal = skrybaToolSavingsGoalStatus();
+        const status = goal.onTrack ? 'OK' : 'Poniżej celu';
+        lines.push(
+            `Cel oszczędności: ${goal.goalPct}% — teraz ${goal.currentRatePct}% (${status}). `
+            + `Bilans miesiąca: ${fmt(goal.balancePln)}.`
+        );
     }
 
     if (tools.includes('filter_transactions')) {

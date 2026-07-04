@@ -59,6 +59,9 @@ Dostępne narzędzia odczytu (tools):
 - recurring_gaps — brakujące cykliczne wpisy w bieżącym miesiącu
 - suggest_budget — propozycja limitu z historii (params: mainCategory, subCategory, categoryQuery)
 - weekly_briefing — podsumowanie ostatnich 7 dni vs poprzedni tydzień
+- surplus_hints — alokacja nadwyżki (params: amountPln opcjonalnie)
+- month_close_status — nierozliczone miesiące i otwarte kroki
+- savings_goal_status — cel oszczędności vs bieżąca stopa
 
 Akcje (action.tool):
 - pay_installment — spłać ratę kredytu (params: loanQuery)
@@ -66,6 +69,9 @@ Akcje (action.tool):
 - repay_card — spłata karty (params: cardQuery, amount)
 - add_transaction — nowa transakcja (params jak transaction; kategorie tylko z DOZWOLONE_KATEGORIE)
 - set_budget — ustaw limit miesięczny (params: mainCategory, subCategory opcjonalnie, limitPln)
+- add_category_rule — reguła auto-kategoryzacji (params: pattern, mainCategory, subCategory)
+- set_savings_goal — cel oszczędności % (params: goalPct)
+- navigate — przejście w aplikacji (params: target: reports|budgets|month_close|debts|categories|assistant)
 
 Schemat planu doradczego:
 {"mode":"plan","tools":["filter_transactions"],"toolParams":{"filter_transactions":{"startDate":"2025-05-01","endDate":"2025-05-31","mainCategory":"Samochód","subCategory":"Paliwo","type":"expense"}},"action":null}
@@ -135,6 +141,15 @@ Spłata karty:
 Ustawienie limitu budżetu:
 {"mode":"action","intent":"set_budget","reply":"...","action":{"tool":"set_budget","params":{"mainCategory":"Zakupy","subCategory":"[Bez podkategorii]","limitPln":800}}}
 
+Reguła kategoryzacji:
+{"mode":"action","intent":"add_category_rule","reply":"...","action":{"tool":"add_category_rule","params":{"pattern":"biedronka","mainCategory":"Zakupy","subCategory":"[Bez podkategorii]"}}}
+
+Cel oszczędności:
+{"mode":"action","intent":"set_savings_goal","reply":"...","action":{"tool":"set_savings_goal","params":{"goalPct":25}}}
+
+Nawigacja:
+{"mode":"action","intent":"navigate","reply":"...","action":{"tool":"navigate","params":{"target":"reports"}}}
+
 Dzisiejsza data: ${today}.
 
 ${categoryBlock}`;
@@ -191,9 +206,9 @@ Warianty odpowiedzi:
 3) Akcja do wykonania:
 {"mode":"action","intent":"add_transaction","reply":"krótko","action":{"tool":"add_transaction","params":{...}}}
 
-Tools: snapshot_wealth, list_debts, debt_overpay_hints, filter_transactions, debt_schedule_today, budget_status, month_summary, top_categories, debt_dsr, spending_insights, recurring_gaps, suggest_budget, weekly_briefing
+Tools: snapshot_wealth, list_debts, debt_overpay_hints, filter_transactions, debt_schedule_today, budget_status, month_summary, top_categories, debt_dsr, spending_insights, recurring_gaps, suggest_budget, weekly_briefing, surplus_hints, month_close_status, savings_goal_status
 
-Akcje: pay_installment, repay_loan, repay_card, add_transaction, set_budget
+Akcje: pay_installment, repay_loan, repay_card, add_transaction, set_budget, add_category_rule, set_savings_goal, navigate
 
 Zasady:
 - Jeśli pytanie da się odpowiedzieć z KONTEKST_BIEŻĄCY — użyj advisor bez plan.
