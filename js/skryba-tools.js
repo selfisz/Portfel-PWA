@@ -6,7 +6,10 @@ const SKRYBA_READ_TOOLS = [
     'debt_schedule_today',
     'budget_status',
     'month_summary',
-    'top_categories'
+    'top_categories',
+    'debt_dsr',
+    'spending_insights',
+    'recurring_gaps'
 ];
 
 const SKRYBA_ACTION_TOOLS = [
@@ -338,6 +341,283 @@ function skrybaToolTopCategories(params = {}) {
     };
 }
 
+function skrybaToolDebtDsr(params = {}) {
+    const period = skrybaResolvePeriodParams(params);
+    const periodTx = getSkrybaTransactionsSource().filter((t) => (
+        t.date >= period.startDate && t.date <= period.endDate
+    ));
+    const incomePln = skrybaRoundPln(
+        periodTx.filter((t) => t.type === 'income').reduce((s, t) => s + (Number(t.amount) || 0), 0)
+    );
+
+    let loanPaymentsPln = 0;
+    let cardRepaymentsPln = 0;
+    if (typeof getDebtPaymentsInPeriod === 'function') {
+        const payments = getDebtPaymentsInPeriod({
+            periodTx,
+            rangeStart: period.startDate,
+            rangeEnd: period.endDate
+        });
+        loanPaymentsPln = skrybaRoundPln(payments.loanPayments);
+        cardRepaymentsPln = skrybaRoundPln(payments.cardRepayments);
+    } else {
+        if (typeof sumLoanDebtPaymentsInRange === 'function') {
+            loanPaymentsPln = skrybaRoundPln(sumLoanDebtPaymentsInRange(period.startDate, period.endDate));
+        }
+        if (typeof sumCardRepaymentsInRange === 'function') {
+            cardRepaymentsPln = skrybaRoundPln(sumCardRepaymentsInRange(period.startDate, period.endDate));
+        }
+    }
+
+    const totalDebtPaymentsPln = skrybaRoundPln(loanPaymentsPln + cardRepaymentsPln);
+    const dsrPct = incomePln > 0 ? Math.round((totalDebtPaymentsPln / incomePln) * 100) : null;
+    let riskLevel = 'unknown';
+    if (dsrPct !== null) {
+        riskLevel = dsrPct > 40 ? 'high' : dsrPct > 25 ? 'medium' : 'low';
+    }
+
+    return {
+        period: period.label,
+        startDate: period.startDate,
+        endDate: period.endDate,
+        incomePln,
+        loanPaymentsPln,
+        cardRepaymentsPln,
+        totalDebtPaymentsPln,
+        dsrPct,
+        riskLevel
+    };
+}
+
+function skrybaToolRecurringGaps() {
+    const monthKey = typeof getCurrentMonthKey === 'function'
+        ? getCurrentMonthKey()
+        : new Date().toISOString().slice(0, 7);
+    const dayOfMonth = new Date().getDate();
+    const fmt = typeof formatPlnAmount === 'function' ? formatPlnAmount : (n) => `${n} zł`;
+    const missing = [];
+    const seen = new Set();
+
+    const recurringTxs = getSkrybaTransactionsSource().filter((t) => t.recurringId && t.type === 'expense');
+    const recurringIds = [...new Set(recurringTxs.map((t) => t.recurringId))];
+
+    recurringIds.forEach((recId) => {
+        const history = recurringTxs.filter((t) => t.recurringId === recId);
+        const hasThisMonth = history.some((t) => t.date.startsWith(monthKey));
+        if (hasThisMonth) return;
+
+        const latest = history.reduce((best, t) => (t.date > best.date ? t : best), history[0]);
+        const typicalDay = typeof getTypicalDayFromTransactions === 'function'
+            ? getTypicalDayFromTransactions(history)
+            : 15;
+        if (dayOfMonth < typicalDay + 3) return;
+
+        const label = latest.subCategory && latest.subCategory !== '[Bez podkategorii]'
+            ? `${latest.mainCategory} › ${latest.subCategory}`
+            : latest.mainCategory;
+        const key = `manual|${recId}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+
+        missing.push({
+            label,
+            mainCategory: latest.mainCategory,
+            subCategory: latest.subCategory,
+            amountPln: skrybaRoundPln(latest.amount),
+            typicalDay,
+            lastDate: latest.date,
+            detail: `Zwykle ok. ${typicalDay}. dnia (~${fmt(latest.amount)}). Ostatnio: ${latest.date}.`
+        });
+    });
+
+    if (typeof getAllRecurringEntries === 'function') {
+        getAllRecurringEntries('sub')
+            .filter((entry) => entry.source === 'detected')
+            .forEach((entry) => {
+                const hasExpense = typeof hasExpenseInCurrentMonth === 'function'
+                    ? hasExpenseInCurrentMonth(entry.mainCategory, entry.subCategory, monthKey)
+                    : getSkrybaTransactionsSource().some((t) => (
+                        t.type === 'expense'
+                        && t.mainCategory === entry.mainCategory
+                        && t.date.startsWith(monthKey)
+                    ));
+                if (hasExpense) return;
+
+                const typicalDay = entry.lastDate
+                    ? parseInt(entry.lastDate.split('-')[2], 10)
+                    : 15;
+                if (Number.isNaN(typicalDay) || dayOfMonth < typicalDay + 3) return;
+
+                const label = entry.subCategory && entry.subCategory !== '[Bez podkategorii]'
+                    ? `${entry.mainCategory} › ${entry.subCategory}`
+                    : entry.mainCategory;
+                const key = `detected|${entry.key}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+
+                missing.push({
+                    label,
+                    mainCategory: entry.mainCategory,
+                    subCategory: entry.subCategory,
+                    amountPln: skrybaRoundPln(entry.amount),
+                    typicalDay,
+                    lastDate: entry.lastDate || null,
+                    detail: `Wykryto cykliczny wydatek ~${fmt(entry.amount)}/mies.`
+                });
+            });
+    }
+
+    return { monthKey, missing: missing.slice(0, 12), count: missing.length };
+}
+
+function skrybaToolSpendingInsights() {
+    const monthKey = typeof getCurrentMonthKey === 'function'
+        ? getCurrentMonthKey()
+        : new Date().toISOString().slice(0, 7);
+    const now = new Date();
+    const dayOfMonth = now.getDate();
+    const todayStr = typeof localIsoDate === 'function'
+        ? localIsoDate(now)
+        : now.toISOString().slice(0, 10);
+    const fmt = typeof formatPlnAmount === 'function' ? formatPlnAmount : (n) => `${n} zł`;
+    const insights = [];
+
+    if (dayOfMonth >= 4 && typeof getAllCategoryBudgetStatuses === 'function') {
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        getAllCategoryBudgetStatuses(monthKey).forEach((status) => {
+            if (status.pct >= 80) return;
+            const dailyAvg = status.spent / dayOfMonth;
+            if (dailyAvg <= 0) return;
+            const forecast = dailyAvg * daysInMonth;
+            if (forecast <= status.limit) return;
+            const daysUntilLimit = Math.ceil((status.limit - status.spent) / dailyAvg);
+            const hitDate = typeof addDaysToIsoDate === 'function'
+                ? addDaysToIsoDate(todayStr, Math.max(1, daysUntilLimit))
+                : todayStr;
+            insights.push({
+                kind: 'budget_pace',
+                severity: 'warn',
+                title: `Szybkie tempo: ${status.label}`,
+                detail: `Przy ${fmt(dailyAvg)}/dzień limit ${fmt(status.limit)} skończy się ok. ${hitDate}.`
+            });
+        });
+    }
+
+    if (dayOfMonth >= 8 && typeof suggestCategoryBudget === 'function' && typeof getCategorySpentInMonth === 'function') {
+        const categories = [...new Set(
+            getSkrybaTransactionsSource()
+                .filter((t) => t.type === 'expense')
+                .map((t) => t.mainCategory)
+        )];
+        categories.forEach((category) => {
+            const avg = suggestCategoryBudget(category);
+            if (avg < 100) return;
+            const spent = getCategorySpentInMonth(category, monthKey);
+            if (spent < 200 || spent < avg * 1.8) return;
+            const ratio = (spent / avg).toFixed(1).replace('.0', '');
+            insights.push({
+                kind: 'anomaly',
+                severity: 'warn',
+                title: `Nietypowo dużo: ${category}`,
+                detail: `${fmt(spent)} w tym miesiącu — ${ratio}× więcej niż średnia 6m (${fmt(avg)}).`
+            });
+        });
+    }
+
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    if (dayOfMonth >= Math.ceil(daysInMonth / 2) && typeof loadSavingsGoal === 'function') {
+        const goal = loadSavingsGoal();
+        const start = `${monthKey}-01`;
+        const periodTx = getSkrybaTransactionsSource().filter((t) => t.date >= start && t.date <= todayStr);
+        const income = periodTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+        const expense = periodTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+        if (income >= 500) {
+            const rate = Math.round(((income - expense) / income) * 100);
+            if (rate < goal) {
+                insights.push({
+                    kind: 'savings_goal',
+                    severity: 'problem',
+                    title: 'Cel oszczędności zagrożony',
+                    detail: `Oszczędzasz ${rate}% wpływów (cel ${goal}%).`
+                });
+            }
+        }
+    }
+
+    if (now.getMonth() + 1 >= 9
+        && typeof getIkzeContributionsInYear === 'function'
+        && typeof getIkzeAnnualLimitPln === 'function') {
+        const year = now.getFullYear();
+        const used = getIkzeContributionsInYear(year);
+        const limit = getIkzeAnnualLimitPln();
+        if (limit > 0) {
+            const pct = Math.round((used / limit) * 100);
+            if (pct < 50) {
+                const daysLeft = Math.max(0, Math.round((new Date(year, 11, 31) - now) / 86400000));
+                insights.push({
+                    kind: 'ikze',
+                    severity: 'warn',
+                    title: `Limit IKZE ${year}`,
+                    detail: `Wykorzystano ${fmt(used)} z ${fmt(limit)} (${pct}%). Do końca roku ${daysLeft} dni.`
+                });
+            }
+        }
+    }
+
+    return { monthKey, insights: insights.slice(0, 8), count: insights.length };
+}
+
+function buildSkrybaDailyBriefing(limit = 3) {
+    const fmt = typeof formatPlnAmount === 'function' ? formatPlnAmount : (n) => `${Number(n).toFixed(2)} zł`;
+    const items = [];
+    const push = (priority, text) => items.push({ priority, text });
+
+    const schedule = skrybaToolDebtScheduleToday();
+    if (schedule.scheduled?.length) {
+        const total = schedule.scheduled.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+        push(1, `Raty na dziś: ${schedule.scheduled.length} pozycji (${fmt(total)})`);
+    }
+
+    const budget = skrybaToolBudgetStatus({});
+    if (budget.configured && budget.overCount > 0) {
+        const over = budget.budgets.filter((b) => b.state === 'over').slice(0, 2);
+        push(2, `Przekroczone budżety: ${over.map((b) => b.label).join(', ')}`);
+    } else if (budget.configured && budget.warnCount > 0) {
+        const warn = budget.budgets.filter((b) => b.state === 'warn').slice(0, 2);
+        push(2, `Blisko limitu: ${warn.map((b) => `${b.label} (${b.pct}%)`).join(', ')}`);
+    }
+
+    const gaps = skrybaToolRecurringGaps();
+    if (gaps.count > 0) {
+        push(3, `Brak cyklicznych wpisów: ${gaps.missing.slice(0, 2).map((g) => g.label).join(', ')}`);
+    }
+
+    const insightData = skrybaToolSpendingInsights();
+    insightData.insights.slice(0, 2).forEach((ins) => {
+        push(ins.severity === 'problem' ? 2 : 4, `${ins.title}`);
+    });
+
+    const dsr = skrybaToolDebtDsr({});
+    if (dsr.dsrPct !== null && dsr.riskLevel === 'high') {
+        push(3, `DSR ${dsr.dsrPct}% — wysokie obciążenie dochodem`);
+    }
+
+    const month = skrybaToolMonthSummary({});
+    if (month.balancePln < 0) {
+        push(4, `Ujemny bilans miesiąca: ${fmt(month.balancePln)}`);
+    }
+
+    items.sort((a, b) => a.priority - b.priority);
+    const selected = items.slice(0, limit);
+    if (!selected.length) return { items: [], text: null };
+
+    return {
+        items: selected,
+        text: `Oto ${selected.length} ${selected.length === 1 ? 'rzecz' : 'rzeczy'} na dziś:\n`
+            + `${selected.map((item, i) => `${i + 1}. ${item.text}`).join('\n')}`
+    };
+}
+
 function skrybaToolDebtScheduleToday() {
     const today = typeof localIsoDate === 'function'
         ? localIsoDate(new Date())
@@ -362,6 +642,9 @@ function runSkrybaTool(toolId, params = {}) {
         case 'budget_status': return skrybaToolBudgetStatus(params);
         case 'month_summary': return skrybaToolMonthSummary(params);
         case 'top_categories': return skrybaToolTopCategories(params);
+        case 'debt_dsr': return skrybaToolDebtDsr(params);
+        case 'spending_insights': return skrybaToolSpendingInsights();
+        case 'recurring_gaps': return skrybaToolRecurringGaps();
         default: return null;
     }
 }
@@ -447,6 +730,23 @@ function detectSkrybaToolsFromText(text) {
         };
     }
 
+    if (/dsr|obciążenie dochodem|obciazenie dochodem|ile (wpływ|wplyw).+na spłat|na splat/.test(t)) {
+        tools.push('debt_dsr');
+        toolParams.debt_dsr = {
+            startDate: defaultPeriod?.startDate,
+            endDate: defaultPeriod?.endDate,
+            label: defaultPeriod?.label
+        };
+    }
+
+    if (/insight|anomali|nietypow|zaskoczy|co (się|sie) zmieniło|co sie zmienilo|co warto wiedzieć|co warto wiedziec/.test(t)) {
+        tools.push('spending_insights');
+    }
+
+    if (/cykliczn|brak wpisu|brak stałej|brak stalej|subskrypcj|co mi (brakuje|umknęło|umknelo)|powtarzające|powtarzajace/.test(t)) {
+        tools.push('recurring_gaps');
+    }
+
     const categoryHints = typeof detectSkrybaCategoryHints === 'function'
         ? detectSkrybaCategoryHints(text)
         : {};
@@ -527,6 +827,41 @@ function formatSkrybaOfflineReply(tools, toolParams = {}) {
             } else {
                 lines.push(`Budżety (${b.monthKey}): wszystkie kategorie w limicie.`);
             }
+        }
+    }
+
+    if (tools.includes('debt_dsr')) {
+        const d = skrybaToolDebtDsr(toolParams.debt_dsr || {});
+        if (d.dsrPct === null) {
+            lines.push(`DSR (${d.period}): brak wpływów w okresie.`);
+        } else {
+            const risk = d.riskLevel === 'high' ? 'wysokie' : d.riskLevel === 'medium' ? 'umiarkowane' : 'niskie';
+            lines.push(
+                `DSR ${d.period}: ${d.dsrPct}% (${risk}). Spłaty ${fmt(d.totalDebtPaymentsPln)} `
+                + `przy wpływach ${fmt(d.incomePln)}.`
+            );
+        }
+    }
+
+    if (tools.includes('spending_insights')) {
+        const data = skrybaToolSpendingInsights();
+        if (!data.count) {
+            lines.push('Brak aktywnych insightów w tym miesiącu.');
+        } else {
+            data.insights.slice(0, 4).forEach((ins) => {
+                lines.push(`${ins.severity === 'problem' ? '⚠' : '·'} ${ins.title}: ${ins.detail}`);
+            });
+        }
+    }
+
+    if (tools.includes('recurring_gaps')) {
+        const gaps = skrybaToolRecurringGaps();
+        if (!gaps.count) {
+            lines.push('Wszystkie wykryte cykliczne wpisy są na bieżąco.');
+        } else {
+            gaps.missing.slice(0, 5).forEach((gap) => {
+                lines.push(`Brak: ${gap.label} — ${gap.detail}`);
+            });
         }
     }
 

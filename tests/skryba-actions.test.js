@@ -56,4 +56,10 @@ describe('buildSkrybaActionPreview', () => {
         expect(preview.summary).toContain('500');
         expect(preview.summary).toContain('2500');
     });
+
+    it('rozwiązuje kredyt po loanId', () => {
+        const preview = buildSkrybaActionPreview('pay_installment', { loanId: 'loan-alior' });
+        expect(preview.ok).toBe(true);
+        expect(preview.resolvedParams.loanId).toBe('loan-alior');
+    });
 });

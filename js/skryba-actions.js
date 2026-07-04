@@ -48,58 +48,94 @@ function buildSkrybaActionPreview(tool, params = {}) {
         : new Date().toISOString().slice(0, 10);
 
     if (tool === 'pay_installment') {
-        const resolved = resolveSkrybaLoan(params.loanQuery);
+        const loan = params.loanId && typeof getLoanById === 'function'
+            ? getLoanById(params.loanId)
+            : null;
+        const resolved = loan
+            ? { loan, ambiguous: false }
+            : resolveSkrybaLoan(params.loanQuery);
         if (resolved.ambiguous) {
             return {
                 ok: false,
-                clarify: resolved.matches.map((m) => m.label)
+                clarify: resolved.matches.map((m) => m.label),
+                clarifyMatches: resolved.matches.map((m) => ({
+                    label: m.label,
+                    loanId: m.loan?.id || null,
+                    cardId: m.card?.id || null
+                }))
             };
         }
         if (!resolved.loan) return { ok: false, error: resolved.error };
-        const loan = resolved.loan;
-        if (!(loan.nextInstallmentAmount > 0)) {
-            return { ok: false, error: `Brak zaplanowanej raty dla ${getLoanDisplayName(loan)}.` };
+        const resolvedLoan = resolved.loan;
+        if (!(resolvedLoan.nextInstallmentAmount > 0)) {
+            return { ok: false, error: `Brak zaplanowanej raty dla ${getLoanDisplayName(resolvedLoan)}.` };
         }
-        const name = typeof getLoanDisplayName === 'function' ? getLoanDisplayName(loan) : loan.name;
+        const name = typeof getLoanDisplayName === 'function' ? getLoanDisplayName(resolvedLoan) : resolvedLoan.name;
         return {
             ok: true,
-            summary: `Rata ${name}: ${fmt(loan.nextInstallmentAmount)} · gotówka −${fmt(loan.nextInstallmentAmount)}`,
-            resolvedParams: { loanId: loan.id }
+            summary: `Rata ${name}: ${fmt(resolvedLoan.nextInstallmentAmount)} · gotówka −${fmt(resolvedLoan.nextInstallmentAmount)}`,
+            resolvedParams: { loanId: resolvedLoan.id }
         };
     }
 
     if (tool === 'repay_card') {
-        const resolved = resolveSkrybaCard(params.cardQuery);
+        const card = params.cardId && typeof getCreditCardById === 'function'
+            ? getCreditCardById(params.cardId)
+            : null;
+        const resolved = card
+            ? { card, ambiguous: false }
+            : resolveSkrybaCard(params.cardQuery);
         if (resolved.ambiguous) {
-            return { ok: false, clarify: resolved.matches.map((m) => m.label) };
+            return {
+                ok: false,
+                clarify: resolved.matches.map((m) => m.label),
+                clarifyMatches: resolved.matches.map((m) => ({
+                    label: m.label,
+                    loanId: null,
+                    cardId: m.card?.id || null
+                }))
+            };
         }
         if (!resolved.card) return { ok: false, error: resolved.error };
         const amount = Number(params.amount) || 0;
         if (amount <= 0) return { ok: false, error: 'Podaj kwotę spłaty karty.' };
-        const card = resolved.card;
-        const nextBalance = Math.max(0, (card.currentBalance || 0) - amount);
+        const resolvedCard = resolved.card;
+        const nextBalance = Math.max(0, (resolvedCard.currentBalance || 0) - amount);
         return {
             ok: true,
-            summary: `Spłata ${card.name}: ${fmt(amount)} · saldo ${fmt(card.currentBalance)} → ${fmt(nextBalance)} · gotówka −${fmt(amount)}`,
-            resolvedParams: { cardId: card.id, amount, date: params.date || today }
+            summary: `Spłata ${resolvedCard.name}: ${fmt(amount)} · saldo ${fmt(resolvedCard.currentBalance)} → ${fmt(nextBalance)} · gotówka −${fmt(amount)}`,
+            resolvedParams: { cardId: resolvedCard.id, amount, date: params.date || today }
         };
     }
 
     if (tool === 'repay_loan') {
-        const resolved = resolveSkrybaLoan(params.loanQuery);
+        const loan = params.loanId && typeof getLoanById === 'function'
+            ? getLoanById(params.loanId)
+            : null;
+        const resolved = loan
+            ? { loan, ambiguous: false }
+            : resolveSkrybaLoan(params.loanQuery);
         if (resolved.ambiguous) {
-            return { ok: false, clarify: resolved.matches.map((m) => m.label) };
+            return {
+                ok: false,
+                clarify: resolved.matches.map((m) => m.label),
+                clarifyMatches: resolved.matches.map((m) => ({
+                    label: m.label,
+                    loanId: m.loan?.id || null,
+                    cardId: null
+                }))
+            };
         }
         if (!resolved.loan) return { ok: false, error: resolved.error };
         const amount = Number(params.amount) || 0;
         if (amount <= 0) return { ok: false, error: 'Podaj kwotę spłaty.' };
-        const loan = resolved.loan;
-        const name = typeof getLoanDisplayName === 'function' ? getLoanDisplayName(loan) : loan.name;
-        const nextCapital = Math.max(0, (loan.currentCapitalLeft || 0) - amount);
+        const resolvedLoan = resolved.loan;
+        const name = typeof getLoanDisplayName === 'function' ? getLoanDisplayName(resolvedLoan) : resolvedLoan.name;
+        const nextCapital = Math.max(0, (resolvedLoan.currentCapitalLeft || 0) - amount);
         return {
             ok: true,
-            summary: `Spłata ${name}: ${fmt(amount)} · kapitał ${fmt(loan.currentCapitalLeft)} → ${fmt(nextCapital)} · gotówka −${fmt(amount)}`,
-            resolvedParams: { loanId: loan.id, amount, date: params.date || today }
+            summary: `Spłata ${name}: ${fmt(amount)} · kapitał ${fmt(resolvedLoan.currentCapitalLeft)} → ${fmt(nextCapital)} · gotówka −${fmt(amount)}`,
+            resolvedParams: { loanId: resolvedLoan.id, amount, date: params.date || today }
         };
     }
 

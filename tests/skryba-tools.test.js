@@ -181,4 +181,28 @@ describe('detectSkrybaToolsFromText — analityka', () => {
         expect(d.tools).toContain('top_categories');
         expect(d.toolParams.top_categories.startDate).toMatch(/-05-01$/);
     });
+
+    it('wykrywa DSR', () => {
+        const d = detectSkrybaToolsFromText('Jakie mam obciążenie dochodem?');
+        expect(d.tools).toContain('debt_dsr');
+    });
+
+    it('wykrywa insighty', () => {
+        const d = detectSkrybaToolsFromText('Co mnie zaskoczyło w tym miesiącu?');
+        expect(d.tools).toContain('spending_insights');
+    });
+
+    it('wykrywa braki cykliczne', () => {
+        const d = detectSkrybaToolsFromText('Czego brakuje w cyklicznych?');
+        expect(d.tools).toContain('recurring_gaps');
+    });
+});
+
+describe('buildSkrybaDailyBriefing', () => {
+    it('zwraca tekst briefingu gdy są dane', () => {
+        globalThis.appState.categoryBudgets = { Samochód: 1000 };
+        const briefing = buildSkrybaDailyBriefing(3);
+        expect(briefing.text).toBeTruthy();
+        expect(briefing.items.length).toBeGreaterThan(0);
+    });
 });

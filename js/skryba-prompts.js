@@ -54,6 +54,9 @@ Dostępne narzędzia odczytu (tools):
 - budget_status — limity kategorii w miesiącu (params: monthKey YYYY-MM)
 - month_summary — wpływy, wydatki, bilans, stopa oszczędności (params: startDate, endDate, label, comparePrevious: true/false)
 - top_categories — ranking kategorii wydatków (params: startDate, endDate, label, limit)
+- debt_dsr — obciążenie dochodem DSR (params: startDate, endDate, label)
+- spending_insights — anomalie, tempo budżetu, cel oszczędności, IKZE
+- recurring_gaps — brakujące cykliczne wpisy w bieżącym miesiącu
 
 Akcje (action.tool):
 - pay_installment — spłać ratę kredytu (params: loanQuery)
@@ -95,6 +98,9 @@ Mapowanie narzędzi:
 - month_summary → incomePln, expensePln, balancePln, savingsRatePct; przy comparePrevious użyj deltas i previous
 - budget_status → budgets ze state (ok/warn/over), overCount, warnCount
 - top_categories → top[] z amountPln i pctOfTotal
+- debt_dsr → dsrPct, riskLevel (low/medium/high), totalDebtPaymentsPln, incomePln
+- spending_insights → insights[] z kind, severity, title, detail
+- recurring_gaps → missing[] z label, amountPln, detail
 - snapshot_wealth → netWorthPln, operationalCashPln, totalDebtPln
 
 Przy wymienianiu kategorii używaj wyłącznie nazw z DOZWOLONE_KATEGORIE.

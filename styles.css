@@ -639,6 +639,36 @@ body.skryba-open {
     color: #fff;
 }
 
+.skryba-choice-row,
+.skryba-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.skryba-choice-btn {
+    flex: 1 1 auto;
+    min-width: 120px;
+}
+
+.skryba-chip {
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.skryba-chip:hover,
+.skryba-chip:focus-visible {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
 .skryba-composer {
     flex-shrink: 0;
     position: relative;

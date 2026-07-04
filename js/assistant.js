@@ -1,6 +1,7 @@
 let skrybaChatHistory = [];
 let skrybaPendingTransaction = null;
 let skrybaPendingAction = null;
+let skrybaPendingClarify = null;
 let skrybaLastSearchResults = [];
 let skrybaLastAdvisorContext = null;
 let skrybaThreads = [];
@@ -362,7 +363,36 @@ function closeSkrybaPanel() {
 function renderSkrybaWelcomeIfEmpty() {
     const list = document.getElementById('skryba-messages');
     if (!list || list.children.length) return;
-    appendSkrybaMessage('assistant', 'Cześć! Mogę dodać wydatek, odpowiedzieć na pytania o majątek i wydatki (np. „ile na paliwo w maju?”), spłacić ratę lub kartę — tak jak z pulpitu.', '', { skipPersist: true });
+
+    const briefing = typeof buildSkrybaDailyBriefing === 'function'
+        ? buildSkrybaDailyBriefing(3)
+        : null;
+    const intro = 'Cześć! Jestem Skrybą — analitykiem i asystentem Twoich finansów.';
+    const body = briefing?.text
+        ? `${intro}\n\n${briefing.text}\n\nZapytaj o cokolwiek albo wybierz podpowiedź poniżej.`
+        : `${intro} Mogę dodać wydatek, przeanalizować miesiąc, sprawdzić budżet, DSR lub spłacić ratę.`;
+    const chipsHtml = buildSkrybaWelcomeChipsHtml();
+    appendSkrybaMessage('assistant', body, chipsHtml, { skipPersist: true });
+}
+
+function buildSkrybaWelcomeChipsHtml() {
+    const chips = [
+        'Podsumowanie miesiąca',
+        'Top kategorie',
+        'Co z budżetem?',
+        'DSR',
+        'Brakujące cykliczne'
+    ];
+    return `<div class="skryba-chip-row">${chips.map((chip) => (
+        `<button type="button" class="skryba-chip" onclick="skrybaSendSuggestion(this.dataset.text)" data-text="${escapeHtml(chip)}">${escapeHtml(chip)}</button>`
+    )).join('')}</div>`;
+}
+
+function skrybaSendSuggestion(text) {
+    const input = document.getElementById('skryba-input');
+    if (!input) return;
+    input.value = String(text || '');
+    sendSkrybaMessage();
 }
 
 function createSkrybaAvatar(role) {
@@ -633,6 +663,38 @@ function cancelSkrybaPendingAction() {
     skrybaPersistActiveThread();
 }
 
+function appendSkrybaClarifyChoices(action, preview) {
+    const matches = preview.clarifyMatches || preview.clarify.map((label) => ({ label }));
+    skrybaPendingClarify = {
+        tool: action.tool,
+        params: { ...(action.params || {}) },
+        reply: action.reply || '',
+        clarifyMatches: matches
+    };
+    const buttons = matches.map((match, idx) => (
+        `<button type="button" class="skryba-btn skryba-choice-btn" onclick="onSkrybaClarifyChoice(${idx})">${escapeHtml(match.label)}</button>`
+    )).join('');
+    const extraHtml = `<div class="skryba-choice-row">${buttons}</div>`;
+    const msg = 'Którą opcję masz na myśli?';
+    appendSkrybaMessage('assistant', msg, extraHtml);
+    skrybaChatHistory.push({ role: 'assistant', text: msg });
+    skrybaPersistActiveThread();
+}
+
+function onSkrybaClarifyChoice(idx) {
+    const pending = skrybaPendingClarify;
+    if (!pending) return;
+    const match = pending.clarifyMatches?.[idx];
+    if (!match) return;
+    skrybaPendingClarify = null;
+    const params = { ...pending.params };
+    if (match.loanId) params.loanId = match.loanId;
+    if (match.cardId) params.cardId = match.cardId;
+    if (pending.tool === 'repay_card') params.cardQuery = match.label;
+    else params.loanQuery = match.label;
+    dispatchSkrybaAction({ tool: pending.tool, params, reply: pending.reply });
+}
+
 async function dispatchSkrybaAction(action) {
     const tool = action?.tool;
     const params = action?.params || {};
@@ -649,9 +711,8 @@ async function dispatchSkrybaAction(action) {
     const preview = buildSkrybaActionPreview(tool, params);
     if (!preview.ok) {
         if (preview.clarify?.length) {
-            const msg = `Mam kilka pasujących opcji:\n${preview.clarify.map((l) => `· ${l}`).join('\n')}\nDoprecyzuj nazwę.`;
-            appendSkrybaMessage('assistant', msg);
-            return msg;
+            appendSkrybaClarifyChoices(action, preview);
+            return preview.clarify.join(', ');
         }
         const msg = preview.error || 'Nie udało się przygotować operacji.';
         appendSkrybaMessage('assistant', msg);
