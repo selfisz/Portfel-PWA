@@ -56,9 +56,125 @@ function suggestCategoryFromRules(type, text) {
 }
 
 let categoryRuleEditingId = null;
+let categoryRuleFormMode = 'new';
 let categoryRulesPanelOpen = true;
 let categoryRulesShowAll = false;
 const CATEGORY_RULES_PREVIEW = 8;
+
+const STARTER_CATEGORY_RULES = [
+    { pattern: 'biedronka', type: 'expense', mainCategory: 'Zakupy', subCategory: 'Zakupy' },
+    { pattern: 'lidl', type: 'expense', mainCategory: 'Zakupy', subCategory: 'Zakupy' },
+    { pattern: 'żabka', type: 'expense', mainCategory: 'Zakupy', subCategory: 'Zakupy' },
+    { pattern: 'carrefour', type: 'expense', mainCategory: 'Zakupy', subCategory: 'Zakupy' },
+    { pattern: 'auchan', type: 'expense', mainCategory: 'Zakupy', subCategory: 'Zakupy' },
+    { pattern: 'kaufland', type: 'expense', mainCategory: 'Zakupy', subCategory: 'Zakupy' },
+    { pattern: 'bolt food', type: 'expense', mainCategory: 'Jedzenie na mieście', subCategory: 'Dowóz' },
+    { pattern: 'pyszne', type: 'expense', mainCategory: 'Jedzenie na mieście', subCategory: 'Dowóz' },
+    { pattern: 'glovo', type: 'expense', mainCategory: 'Jedzenie na mieście', subCategory: 'Dowóz' },
+    { pattern: 'wolt', type: 'expense', mainCategory: 'Jedzenie na mieście', subCategory: 'Dowóz' },
+    { pattern: 'uber eats', type: 'expense', mainCategory: 'Jedzenie na mieście', subCategory: 'Dowóz' },
+    { pattern: 'netflix', type: 'expense', mainCategory: 'Subskrypcje', subCategory: 'Filmy' },
+    { pattern: 'hbo max', type: 'expense', mainCategory: 'Subskrypcje', subCategory: 'Filmy' },
+    { pattern: 'disney', type: 'expense', mainCategory: 'Subskrypcje', subCategory: 'Filmy' },
+    { pattern: 'spotify', type: 'expense', mainCategory: 'Subskrypcje', subCategory: 'Muzyka' },
+    { pattern: 'youtube premium', type: 'expense', mainCategory: 'Subskrypcje', subCategory: 'YouTube' },
+    { pattern: 'orlen', type: 'expense', mainCategory: 'Samochód', subCategory: 'Paliwo' },
+    { pattern: 'circle k', type: 'expense', mainCategory: 'Samochód', subCategory: 'Paliwo' },
+    { pattern: 'shell', type: 'expense', mainCategory: 'Samochód', subCategory: 'Paliwo' },
+    { pattern: 'allegro', type: 'expense', mainCategory: 'Zakupy', subCategory: 'Zakupy' },
+    { pattern: 'amazon', type: 'expense', mainCategory: 'Zakupy', subCategory: 'Zakupy' },
+    { pattern: 'play pl', type: 'expense', mainCategory: 'Rachunki/opłaty', subCategory: 'Telefon komórkowy' },
+    { pattern: 'orange pl', type: 'expense', mainCategory: 'Rachunki/opłaty', subCategory: 'Telefon komórkowy' },
+    { pattern: 'plus pl', type: 'expense', mainCategory: 'Rachunki/opłaty', subCategory: 'Telefon komórkowy' },
+    { pattern: 'pge', type: 'expense', mainCategory: 'Rachunki/opłaty', subCategory: 'Elektryczność' },
+    { pattern: 'tauron', type: 'expense', mainCategory: 'Rachunki/opłaty', subCategory: 'Elektryczność' },
+    { pattern: 'wynagrodzenie', type: 'income', mainCategory: 'Wynagrodzenie', subCategory: 'Podstawa' },
+    { pattern: 'pensja', type: 'income', mainCategory: 'Wynagrodzenie', subCategory: 'Podstawa' }
+];
+
+function getValidStarterCategoryRules() {
+    return STARTER_CATEGORY_RULES.filter((rule) => {
+        const normalized = normalizeCategoryRule(rule);
+        return normalized && isAssistantCategoryPairValid(normalized.type, normalized.mainCategory, normalized.subCategory);
+    });
+}
+
+function hasCategoryRulePattern(pattern, type) {
+    const needle = String(pattern || '').trim().toLowerCase();
+    if (!needle) return false;
+    return getCategoryRules().some((rule) => rule.type === type && rule.pattern.toLowerCase() === needle);
+}
+
+function addStarterCategoryRule(starter) {
+    if (!starter || hasCategoryRulePattern(starter.pattern, starter.type)) return false;
+    if (!isAssistantCategoryPairValid(starter.type, starter.mainCategory, starter.subCategory)) return false;
+    const normalized = normalizeCategoryRule(starter);
+    if (!normalized) return false;
+    if (!Array.isArray(appState.categoryRules)) appState.categoryRules = [];
+    appState.categoryRules.push(normalized);
+    saveState();
+    renderCategoryRulesEditor();
+    return true;
+}
+
+function addAllStarterCategoryRules() {
+    const available = getValidStarterCategoryRules().filter((rule) => !hasCategoryRulePattern(rule.pattern, rule.type));
+    if (!available.length) {
+        if (typeof showSettingsToast === 'function') showSettingsToast('Wszystkie propozycje są już na liście');
+        renderCategoryRuleProposals();
+        return;
+    }
+    if (!Array.isArray(appState.categoryRules)) appState.categoryRules = [];
+    available.forEach((rule) => {
+        const normalized = normalizeCategoryRule(rule);
+        if (normalized) appState.categoryRules.push(normalized);
+    });
+    saveState();
+    renderCategoryRulesEditor();
+    renderCategoryRuleProposals();
+    if (typeof showSettingsToast === 'function') {
+        showSettingsToast(`Dodano ${available.length} propozycji`);
+    }
+}
+
+function setCategoryRuleFormMode(mode) {
+    if (categoryRuleEditingId) return;
+    categoryRuleFormMode = mode === 'proposals' ? 'proposals' : 'new';
+    updateCategoryRuleFormUi();
+    if (categoryRuleFormMode === 'proposals') renderCategoryRuleProposals();
+}
+
+function renderCategoryRuleProposals() {
+    const list = document.getElementById('category-rule-proposals-list');
+    if (!list) return;
+    const starters = getValidStarterCategoryRules();
+    if (!starters.length) {
+        list.innerHTML = '<p class="settings-hint">Brak propozycji pasujących do Twoich kategorii.</p>';
+        return;
+    }
+    list.innerHTML = starters.map((rule, index) => {
+        const exists = hasCategoryRulePattern(rule.pattern, rule.type);
+        const sub = rule.subCategory !== '[Bez podkategorii]' ? ` / ${escapeHtml(rule.subCategory)}` : '';
+        const typeLabel = rule.type === 'income' ? 'Wpływ' : 'Wydatek';
+        const action = exists
+            ? '<span class="category-rule-proposal-badge">Masz już</span>'
+            : `<button type="button" class="btn-text-link category-rule-proposal-add" onclick="addStarterCategoryRuleAt(${index})">Dodaj</button>`;
+        return `<div class="category-rule-proposal-row${exists ? ' category-rule-proposal-row--added' : ''}">
+            <div class="category-rule-proposal-body">
+                <strong>„${escapeHtml(rule.pattern)}”</strong>
+                <span class="category-rule-item-meta">${typeLabel} → ${escapeHtml(rule.mainCategory)}${sub}</span>
+            </div>
+            ${action}
+        </div>`;
+    }).join('');
+}
+
+function addStarterCategoryRuleAt(index) {
+    const starter = getValidStarterCategoryRules()[index];
+    if (!starter || !addStarterCategoryRule(starter)) return;
+    renderCategoryRuleProposals();
+    if (typeof showSettingsToast === 'function') showSettingsToast('Dodano regułę');
+}
 
 function addCategoryRule(rule) {
     const normalized = normalizeCategoryRule(rule);
@@ -93,9 +209,19 @@ function removeCategoryRule(ruleId) {
 function updateCategoryRuleFormUi() {
     const submit = document.getElementById('category-rule-submit-btn');
     const title = document.getElementById('category-rule-form-title');
+    const modeWrap = document.getElementById('category-rule-form-mode');
+    const manual = document.getElementById('category-rule-form-manual');
+    const proposals = document.getElementById('category-rule-form-proposals');
+    const modeNew = document.getElementById('category-rule-mode-new');
+    const modeProposals = document.getElementById('category-rule-mode-proposals');
     const editing = !!categoryRuleEditingId;
     if (submit) submit.textContent = editing ? 'Zapisz zmiany' : 'Dodaj regułę';
-    if (title) title.textContent = editing ? 'Edytuj regułę' : 'Nowa reguła';
+    if (title) title.classList.toggle('hidden', !editing);
+    if (modeWrap) modeWrap.classList.toggle('hidden', editing);
+    if (modeNew) modeNew.classList.toggle('active', !editing && categoryRuleFormMode === 'new');
+    if (modeProposals) modeProposals.classList.toggle('active', !editing && categoryRuleFormMode === 'proposals');
+    if (manual) manual.classList.toggle('hidden', !editing && categoryRuleFormMode === 'proposals');
+    if (proposals) proposals.classList.toggle('hidden', editing || categoryRuleFormMode !== 'proposals');
 }
 
 function clearCategoryRuleFormFields() {
@@ -108,6 +234,7 @@ function clearCategoryRuleFormFields() {
 
 function openCategoryRuleForm() {
     categoryRuleEditingId = null;
+    categoryRuleFormMode = 'new';
     clearCategoryRuleFormFields();
     updateCategoryRuleFormUi();
     const form = document.getElementById('category-rule-form');
@@ -120,6 +247,7 @@ function openCategoryRuleForm() {
 
 function closeCategoryRuleForm() {
     categoryRuleEditingId = null;
+    categoryRuleFormMode = 'new';
     const form = document.getElementById('category-rule-form');
     if (form) {
         form.classList.add('hidden');
@@ -144,6 +272,7 @@ function editCategoryRule(ruleId) {
     if (mainSelect) mainSelect.value = rule.mainCategory;
     populateCategoryRuleSubSelect();
     if (subSelect) subSelect.value = rule.subCategory;
+    categoryRuleFormMode = 'new';
     updateCategoryRuleFormUi();
     const form = document.getElementById('category-rule-form');
     if (form) {

@@ -226,21 +226,35 @@
                     <p class="settings-hint">Gdy notatka zawiera wzorzec, przypisz kategorię automatycznie (także przy podziale transakcji).</p>
                     <div id="category-rules-list" class="category-rules-list-host"></div>
                     <div id="category-rule-form" class="category-rule-form hidden" aria-hidden="true">
-                        <div class="category-rule-form-title" id="category-rule-form-title">Nowa reguła</div>
-                        <label class="section-label" for="category-rule-pattern">Wzorzec w notatce</label>
-                        <input type="text" id="category-rule-pattern" class="settings-api-key-input" placeholder="np. biedronka">
-                        <label class="section-label" for="category-rule-type">Typ</label>
-                        <select id="category-rule-type" class="settings-api-key-input">
-                            <option value="expense">Wydatek</option>
-                            <option value="income">Wpływ</option>
-                        </select>
-                        <label class="section-label" for="category-rule-main">Kategoria</label>
-                        <select id="category-rule-main" class="settings-api-key-input"></select>
-                        <label class="section-label" for="category-rule-sub">Podkategoria</label>
-                        <select id="category-rule-sub" class="settings-api-key-input"></select>
-                        <div class="category-rule-form-actions">
-                            <button type="button" id="category-rule-submit-btn" class="btn-submit btn-submit--form" onclick="saveCategoryRuleFromForm()">Dodaj regułę</button>
-                            <button type="button" id="category-rule-cancel-btn" class="btn-cancel btn-cancel--form" onclick="closeCategoryRuleForm()">Zrezygnuj</button>
+                        <div id="category-rule-form-mode" class="flex-toggle flex-toggle--2 category-rule-form-mode">
+                            <button type="button" id="category-rule-mode-new" class="toggle-btn active" onclick="setCategoryRuleFormMode('new')">Nowa reguła</button>
+                            <button type="button" id="category-rule-mode-proposals" class="toggle-btn" onclick="setCategoryRuleFormMode('proposals')">Propozycje</button>
+                        </div>
+                        <div id="category-rule-form-title" class="category-rule-form-title hidden">Edytuj regułę</div>
+                        <div id="category-rule-form-manual" class="category-rule-form-manual">
+                            <label class="section-label" for="category-rule-pattern">Wzorzec w notatce</label>
+                            <input type="text" id="category-rule-pattern" class="settings-api-key-input" placeholder="np. biedronka">
+                            <label class="section-label" for="category-rule-type">Typ</label>
+                            <select id="category-rule-type" class="settings-api-key-input">
+                                <option value="expense">Wydatek</option>
+                                <option value="income">Wpływ</option>
+                            </select>
+                            <label class="section-label" for="category-rule-main">Kategoria</label>
+                            <select id="category-rule-main" class="settings-api-key-input"></select>
+                            <label class="section-label" for="category-rule-sub">Podkategoria</label>
+                            <select id="category-rule-sub" class="settings-api-key-input"></select>
+                            <div class="category-rule-form-actions">
+                                <button type="button" id="category-rule-submit-btn" class="btn-submit btn-submit--form" onclick="saveCategoryRuleFromForm()">Dodaj regułę</button>
+                                <button type="button" id="category-rule-cancel-btn" class="btn-cancel btn-cancel--form" onclick="closeCategoryRuleForm()">Zrezygnuj</button>
+                            </div>
+                        </div>
+                        <div id="category-rule-form-proposals" class="category-rule-form-proposals hidden">
+                            <p class="settings-hint category-rule-proposals-hint">Gotowe wzorce pod polskie sklepy i usługi. Po dodaniu możesz je edytować lub usunąć jak każdą regułę.</p>
+                            <div id="category-rule-proposals-list" class="category-rule-proposals-list"></div>
+                            <div class="category-rule-form-actions">
+                                <button type="button" class="btn-submit btn-submit--form" onclick="addAllStarterCategoryRules()">Dodaj wszystkie dostępne</button>
+                                <button type="button" class="btn-cancel btn-cancel--form" onclick="closeCategoryRuleForm()">Zrezygnuj</button>
+                            </div>
                         </div>
                     </div>
                 </div>
