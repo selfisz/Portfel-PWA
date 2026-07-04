@@ -534,7 +534,10 @@ function openTransactionDetails(index) {
 function closeTransactionDetails() {
     const overlay = document.getElementById('transaction-details-overlay');
     overlay?.classList.add('hidden');
-    if (overlay) delete overlay.dataset.monthCloseContext;
+    if (overlay) {
+        delete overlay.dataset.monthCloseContext;
+        delete overlay.dataset.skrybaContext;
+    }
     activeTransactionDetailsIndex = null;
     const scrollLocked = [
         'month-close-overlay',

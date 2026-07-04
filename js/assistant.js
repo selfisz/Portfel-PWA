@@ -504,6 +504,22 @@ function appendSkrybaMessage(role, text, extraHtml = '', options = {}) {
     return messageId;
 }
 
+function attachSkrybaMessageExtra(messageId, extraHtml) {
+    if (!messageId || !extraHtml) return;
+    const row = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!row) return;
+    const body = row.querySelector('.skryba-msg-body');
+    if (!body) return;
+    let extra = body.querySelector('.skryba-msg-extra');
+    if (!extra) {
+        extra = document.createElement('div');
+        extra.className = 'skryba-msg-extra';
+        body.appendChild(extra);
+    }
+    extra.innerHTML = extraHtml;
+    scrollSkrybaToBottom();
+}
+
 function appendSkrybaTypewriterMessage(text, options = {}) {
     const list = document.getElementById('skryba-messages');
     if (!list) return null;
@@ -526,8 +542,13 @@ function appendSkrybaTypewriterMessage(text, options = {}) {
     if (!options.skipScroll) scrollSkrybaToBottom();
 
     const fullText = polishSkrybaText(String(text || ''));
+    const extraHtml = options.extraHtml || '';
+    const attachExtra = () => {
+        if (extraHtml) attachSkrybaMessageExtra(messageId, extraHtml);
+    };
     if (!fullText || options.instant) {
         bubble.textContent = fullText;
+        attachExtra();
         return messageId;
     }
 
@@ -539,6 +560,8 @@ function appendSkrybaTypewriterMessage(text, options = {}) {
         scrollSkrybaToBottom();
         if (index < fullText.length) {
             window.requestAnimationFrame(tick);
+        } else {
+            attachExtra();
         }
     };
     window.requestAnimationFrame(tick);
@@ -1241,13 +1264,42 @@ function findAssistantTransactionIndex(tx) {
     const txs = typeof appState !== 'undefined' ? appState.transactions || [] : [];
     let idx = txs.indexOf(tx);
     if (idx >= 0) return idx;
+    if (typeof transactionFingerprint === 'function') {
+        const fp = transactionFingerprint(tx);
+        if (fp) {
+            idx = txs.findIndex((t) => transactionFingerprint(t) === fp);
+            if (idx >= 0) return idx;
+        }
+    }
     return txs.findIndex((t) => (
         t.date === tx.date
         && Number(t.amount) === Number(tx.amount)
+        && (t.type || 'expense') === (tx.type || 'expense')
         && t.mainCategory === tx.mainCategory
         && t.subCategory === tx.subCategory
         && (t.note || '') === (tx.note || '')
     ));
+}
+
+function skrybaOpenTransactionDetails(index) {
+    if (!Number.isFinite(index) || index < 0) return;
+    const overlay = document.getElementById('transaction-details-overlay');
+    if (overlay) overlay.dataset.skrybaContext = '1';
+    if (typeof openTransactionDetails === 'function') openTransactionDetails(index);
+}
+
+function bindSkrybaTransactionListClicks() {
+    const list = document.getElementById('skryba-messages');
+    if (!list || list.dataset.txClickBound === '1') return;
+    list.dataset.txClickBound = '1';
+    list.addEventListener('click', (e) => {
+        const row = e.target.closest('.skryba-tx-row[data-tx-index]');
+        if (!row || row.disabled) return;
+        const idx = Number(row.dataset.txIndex);
+        if (!Number.isFinite(idx) || idx < 0) return;
+        e.preventDefault();
+        skrybaOpenTransactionDetails(idx);
+    });
 }
 
 function buildSkrybaTransactionListHtml(items, limit = 12) {
@@ -1264,10 +1316,9 @@ function buildSkrybaTransactionListHtml(items, limit = 12) {
         const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
         const amountClass = t.type === 'expense' ? 'expense' : 'income';
         const sign = t.type === 'expense' ? '−' : '+';
-        const onclick = globalIndex >= 0
-            ? `onclick="openTransactionDetails(${globalIndex})"`
-            : '';
-        return `<button type="button" class="reports-tx-row skryba-tx-row" ${onclick} ${globalIndex < 0 ? 'disabled' : ''}>
+        const disabled = globalIndex < 0 ? ' disabled' : '';
+        const indexAttr = globalIndex >= 0 ? ` data-tx-index="${globalIndex}"` : '';
+        return `<button type="button" class="reports-tx-row skryba-tx-row"${indexAttr}${disabled}>
             ${icon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
             <span class="reports-tx-row-text">
                 <span class="reports-tx-row-title">${escape(title)}</span>
@@ -1393,6 +1444,16 @@ function formatAssistantSummarize(items, operation = 'sum') {
     return `Łącznie (${items.length} transakcji): ${summary}.`;
 }
 
+function buildSkrybaTxListHistoryMeta() {
+    if (!skrybaLastSearchResults?.length || !skrybaLastTransactionFilter) return undefined;
+    return {
+        skrybaTxList: {
+            filter: { ...skrybaLastTransactionFilter },
+            count: skrybaLastSearchResults.length
+        }
+    };
+}
+
 async function dispatchAssistantParsed(parsed, userMessage, advisorMeta = null) {
     if (advisorMeta?.context && typeof captureSkrybaAdvisorContext === 'function') {
         captureSkrybaAdvisorContext(advisorMeta.context, advisorMeta.toolParams || {});
@@ -1402,7 +1463,12 @@ async function dispatchAssistantParsed(parsed, userMessage, advisorMeta = null) 
         && isAssistantConfirmTxEnabled()
         && getSkrybaPendingTransactionState();
     if (displayText && !pendingHandled) {
-        skrybaChatHistory.push({ role: 'assistant', text: displayText });
+        const meta = buildSkrybaTxListHistoryMeta();
+        skrybaChatHistory.push({
+            role: 'assistant',
+            text: displayText,
+            ...(meta ? { meta } : {})
+        });
     }
     skrybaPersistActiveThread();
 }
@@ -1524,7 +1590,9 @@ async function handleAssistantIntent(parsed, userMessage = '', advisorMeta = nul
 
     if (parsed?.mode === 'advisor' && reply) {
         const polished = polishSkrybaText(reply);
-        appendSkrybaTypewriterMessage(polished);
+        const { items } = resolveSkrybaTransactionsForDisplay();
+        const extraHtml = items.length ? buildSkrybaTransactionListExtraHtml(items) : '';
+        appendSkrybaTypewriterMessage(polished, { extraHtml });
         const chips = typeof buildSkrybaFollowUpChips === 'function'
             ? buildSkrybaFollowUpChips(advisorMeta?.context || skrybaLastAdvisorContext?.context || {})
             : [];
@@ -1802,6 +1870,7 @@ function onSkrybaInputInput() {
 function initSkrybaAssistant() {
     loadSkrybaThreadsFromStorage();
     syncSkrybaHeaderVisibility();
+    bindSkrybaTransactionListClicks();
 }
 
 if (document.readyState === 'loading') {

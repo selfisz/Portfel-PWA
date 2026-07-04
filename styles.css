@@ -12451,7 +12451,9 @@ button.reports-debt-split-item strong {
 }
 .month-close-dupe-group:last-child { border-bottom: none; }
 .month-close-dupe-label { margin: 0 0 4px; }
-#transaction-details-overlay[data-month-close-context]:not(.hidden) { z-index: 1300; }
+#transaction-details-overlay[data-month-close-context]:not(.hidden),
+body.skryba-open #transaction-details-overlay:not(.hidden),
+#transaction-details-overlay[data-skryba-context]:not(.hidden) { z-index: 1300; }
 .btn-sm { padding: 6px 12px; font-size: 0.85rem; }
 
 /* Skryba — głos */
