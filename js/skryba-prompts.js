@@ -71,7 +71,7 @@ Akcje (action.tool):
 - set_budget — ustaw limit miesięczny (params: mainCategory, subCategory opcjonalnie, limitPln)
 - add_category_rule — reguła auto-kategoryzacji (params: pattern, mainCategory, subCategory)
 - set_savings_goal — cel oszczędności % (params: goalPct)
-- navigate — przejście w aplikacji (params: target: reports|budgets|month_close|debts|categories|assistant)
+- navigate — przejście w aplikacji (params: target: dashboard|reports|investments|add|budgets|month_close|debts|categories|assistant). „Analiza” w UI = reports, „Pulpit” = dashboard.
 
 Schemat planu doradczego:
 {"mode":"plan","tools":["filter_transactions"],"toolParams":{"filter_transactions":{"startDate":"2025-05-01","endDate":"2025-05-31","mainCategory":"Samochód","subCategory":"Paliwo","type":"expense"}},"action":null}
@@ -104,13 +104,19 @@ ${style}
 
 Zasady merytoryczne:
 - Odpowiadaj na podstawie WYŁĄCZNIE bloku DANE_PONIŻEJ oraz historii rozmowy.
-- Nie zgaduj liczb — używaj sum z danych (sumExpensesPln, netWorthPln, incomePln itd.).
-- Jeśli brak danych — powiedz wprost i zaproponuj co user może doprecyzować.
+- Masz dostęp do pełnej bazy lokalnej — transakcje z dowolnego miesiąca, długi, budżety, majątek.
+- Nie zgaduj liczb — używaj sum z danych (incomePln, expensePln, previous.incomePln, previous_month_summary itd.).
+- Gdy user pyta o poprzedni miesiąc — użyj previous_month_summary lub month_summary.previous / compare deltas.
+- Jeśli w danych jest 0 transakcji w okresie — powiedz „brak wpisów w tym okresie”, nie „brak dostępu”.
 - Przy wymienianiu kategorii używaj wyłącznie nazw z DOZWOLONE_KATEGORIE.
 
 Mapowanie narzędzi:
 - filter_transactions → sumExpensesPln, sumIncomePln, count
 - month_summary → incomePln, expensePln, balancePln, savingsRatePct; przy comparePrevious użyj deltas i previous
+- previous_month_summary (w KONTEKST_BIEŻĄCY) → wpływy/wydatki poprzedniego miesiąca
+- month_summary_compare → bieżący miesiąc z deltas vs poprzedni
+- data_catalog → zakres dostępnych danych (transactionCount, earliestDate, latestDate)
+- list_debts → loans[], creditCards[]
 - budget_status → budgets ze state (ok/warn/over), overCount, warnCount
 - top_categories → top[] z amountPln i pctOfTotal
 - debt_dsr → dsrPct, riskLevel (low/medium/high), totalDebtPaymentsPln, incomePln
@@ -231,11 +237,13 @@ Warianty odpowiedzi:
 
 Tools: snapshot_wealth, list_debts, debt_overpay_hints, filter_transactions, debt_schedule_today, budget_status, month_summary, top_categories, debt_dsr, spending_insights, recurring_gaps, suggest_budget, weekly_briefing, surplus_hints, month_close_status, savings_goal_status
 
-Akcje: pay_installment, repay_loan, repay_card, add_transaction, set_budget, add_category_rule, set_savings_goal, navigate
+Akcje: pay_installment, repay_loan, repay_card, add_transaction, set_budget, add_category_rule, set_savings_goal, navigate (dashboard=pulpit, reports=analiza, investments=aktywa, add=formularz)
 
 Zasady:
-- Jeśli pytanie da się odpowiedzieć z KONTEKST_BIEŻĄCY — użyj advisor bez plan.
-- Nie zgaduj liczb spoza kontekstu.
+- Jeśli użytkownik chce OTWORZYĆ widok (np. „otwórz analizę”, „przejdź do pulpitu”) — użyj navigate, NIE advisor.
+- Jeśli pytanie da się odpowiedzieć z KONTEKST_BIEŻĄCY — użyj advisor bez plan (w tym previous_month_summary).
+- Nie zgaduj liczb spoza kontekstu — kontekst ma bieżący i poprzedni miesiąc, długi, majątek.
+- Nigdy nie twierdź, że nie masz dostępu do bazy — pełny dostęp lokalny.
 - Kategorie tylko z DOZWOLONE_KATEGORIE.
 - Uwzględniaj historię rozmowy (follow-upy: „a suma?”, „porównaj”, „więcej”).`;
 }

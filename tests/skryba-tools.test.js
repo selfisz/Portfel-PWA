@@ -77,6 +77,12 @@ describe('parseSkrybaPeriodFromText', () => {
         expect(period?.startDate).toBe('2025-05-01');
         expect(period?.endDate).toBe('2025-05-31');
     });
+
+    it('rozpoznaje „poprzedniego miesiąca”', () => {
+        const period = parseSkrybaPeriodFromText('Ile wpływów w poprzednim miesiącu?', new Date('2025-06-15'));
+        expect(period?.startDate).toBe('2025-05-01');
+        expect(period?.endDate).toBe('2025-05-31');
+    });
 });
 
 describe('skrybaToolFilterTransactions', () => {
@@ -105,6 +111,14 @@ describe('detectSkrybaToolsFromText', () => {
         expect(d.tools).toContain('filter_transactions');
         expect(d.toolParams.filter_transactions.startDate).toBe(`${year}-05-01`);
         expect(d.toolParams.filter_transactions.mainCategory).toBe('Samochód');
+    });
+
+    it('wykrywa wpływy z poprzedniego miesiąca', () => {
+        const ref = new Date('2025-06-15');
+        const d = detectSkrybaToolsFromText('Ile było wpływów w poprzednim miesiącu?', ref);
+        expect(d.tools).toContain('month_summary');
+        expect(d.toolParams.month_summary.startDate).toBe('2025-05-01');
+        expect(d.toolParams.month_summary.comparePrevious).toBe(false);
     });
 });
 
@@ -158,6 +172,7 @@ describe('captureSkrybaAdvisorContext', () => {
     it('zapisuje wyniki wyszukiwania do follow-upów', () => {
         globalThis.skrybaLastSearchResults = [];
         globalThis.skrybaLastAdvisorContext = null;
+        globalThis.skrybaLastTransactionFilter = null;
         const context = buildSkrybaContextBundle(['filter_transactions'], {
             filter_transactions: {
                 startDate: '2025-05-01',
@@ -178,6 +193,26 @@ describe('captureSkrybaAdvisorContext', () => {
         });
         expect(skrybaLastSearchResults).toHaveLength(2);
         expect(skrybaLastAdvisorContext.context.filter_transactions.count).toBe(2);
+    });
+
+    it('zapamiętuje filtr kategorii z budżetu', () => {
+        globalThis.skrybaLastSearchResults = [];
+        globalThis.skrybaLastTransactionFilter = null;
+        const context = {
+            budget_status: {
+                monthKey: '2025-06',
+                budgets: [{
+                    label: 'Dom › Czynsz',
+                    scope: 'sub',
+                    category: 'Dom',
+                    subCategory: 'Czynsz',
+                    state: 'over'
+                }]
+            }
+        };
+        captureSkrybaAdvisorContext(context, { budget_status: { monthKey: '2025-06' } });
+        expect(skrybaLastTransactionFilter.mainCategory).toBe('Dom');
+        expect(skrybaLastTransactionFilter.subCategory).toBe('Czynsz');
     });
 });
 
@@ -240,9 +275,13 @@ describe('skrybaToolSuggestBudget', () => {
 });
 
 describe('buildSkrybaLightContext', () => {
-    it('zawiera podstawowe metryki', () => {
+    it('zawiera podstawowe metryki i poprzedni miesiąc', () => {
         const ctx = buildSkrybaLightContext();
         expect(ctx.month_summary).toBeTruthy();
+        expect(ctx.previous_month_summary).toBeTruthy();
+        expect(ctx.month_summary_compare?.deltas).toBeTruthy();
+        expect(ctx.data_catalog?.transactionCount).toBeGreaterThan(0);
+        expect(ctx.list_debts).toBeTruthy();
         expect(ctx.budget_status).toBeTruthy();
         expect(ctx.snapshot_wealth).toBeTruthy();
         expect(ctx.savings_goal_status).toBeTruthy();

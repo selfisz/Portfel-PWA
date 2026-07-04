@@ -2,11 +2,18 @@ function tryParseLocalSkrybaNavigate(text) {
     const t = String(text || '').toLowerCase().trim();
     if (!t) return null;
 
+    const nav = '(?:otw[oó]rz|poka[zż]|id[zź] do|przejd[zź] do|wejd[zź] na)';
     const targets = [
-        { target: 'reports', pattern: /(?:otw[oó]rz|poka[zż]|id[zź] do)\s+raport/ },
-        { target: 'budgets', pattern: /(?:otw[oó]rz|poka[zż]|id[zź] do).*(?:budżet|budzet|limity)/ },
+        { target: 'reports', pattern: new RegExp(`${nav}\\s+(?:zakładk[eę]\\s+)?analiz`, 'i') },
+        { target: 'reports', pattern: new RegExp(`${nav}\\s+raport`, 'i') },
+        { target: 'reports', pattern: /^(?:analiza|raporty)$/ },
+        { target: 'dashboard', pattern: new RegExp(`${nav}\\s+pulpit`, 'i') },
+        { target: 'dashboard', pattern: /^(?:pulpit|dashboard|start)$/ },
+        { target: 'investments', pattern: new RegExp(`${nav}\\s+(?:aktywa|inwestycj)`, 'i') },
+        { target: 'add', pattern: new RegExp(`${nav}\\s+(?:dodaj|formularz)`, 'i') },
+        { target: 'budgets', pattern: /(?:otw[oó]rz|poka[zż]|id[zź] do|przejd[zź] do).*(?:budżet|budzet|limity)/ },
         { target: 'month_close', pattern: /(?:otw[oó]rz|rozpocznij|zr[oó]b)\s+rozliczenie|rozlicz miesi[aą]c/ },
-        { target: 'debts', pattern: /(?:otw[oó]rz|poka[zż]|id[zź] do).*(?:dług|dlug|kredyt|rat)/ },
+        { target: 'debts', pattern: /(?:otw[oó]rz|poka[zż]|id[zź] do|przejd[zź] do).*(?:dług|dlug|kredyt|rat)/ },
         { target: 'categories', pattern: /(?:otw[oó]rz|poka[zż]).*(?:regu[lł]|kategor)/ },
         { target: 'assistant', pattern: /(?:otw[oó]rz|poka[zż]).*asystent/ }
     ];
@@ -15,7 +22,10 @@ function tryParseLocalSkrybaNavigate(text) {
     if (!hit) return null;
 
     const labels = {
-        reports: 'raporty',
+        reports: 'analizę',
+        dashboard: 'pulpit',
+        investments: 'aktywa',
+        add: 'dodawanie transakcji',
         budgets: 'budżety',
         month_close: 'rozliczenie miesiąca',
         debts: 'długi',
@@ -362,7 +372,7 @@ function buildSkrybaActionPreview(tool, params = {}) {
 
     if (tool === 'navigate') {
         const target = String(params.target || '').trim();
-        const allowed = ['reports', 'budgets', 'month_close', 'debts', 'categories', 'assistant'];
+        const allowed = ['dashboard', 'reports', 'investments', 'add', 'budgets', 'month_close', 'debts', 'categories', 'assistant'];
         if (!allowed.includes(target)) {
             return { ok: false, error: 'Nieznany cel nawigacji.' };
         }
@@ -384,12 +394,25 @@ function refreshAfterSkrybaAction() {
 }
 
 function executeSkrybaNavigate(target) {
+    const navItems = document.querySelectorAll('.nav-item');
     const loansNav = document.querySelector('.nav-item[onclick*="\'loans\'"]');
     const reportsNav = document.querySelector('.nav-item[onclick*="\'reports\'"]');
 
+    if (target === 'dashboard' && typeof switchView === 'function') {
+        switchView('dashboard', 'Pulpit', navItems[0] || null);
+        return { ok: true, message: 'Otwarto pulpit.' };
+    }
     if (target === 'reports' && typeof switchView === 'function') {
-        switchView('reports', 'Raporty', reportsNav);
-        return { ok: true, message: 'Otwarto raporty.' };
+        switchView('reports', 'Analiza', reportsNav || navItems[2] || null);
+        return { ok: true, message: 'Otwarto analizę.' };
+    }
+    if (target === 'investments' && typeof switchView === 'function') {
+        switchView('investments', 'Aktywa', navItems[3] || null);
+        return { ok: true, message: 'Otwarto aktywa.' };
+    }
+    if (target === 'add' && typeof switchView === 'function') {
+        switchView('add', 'Dodaj', navItems[1] || null);
+        return { ok: true, message: 'Otwarto formularz dodawania.' };
     }
     if (target === 'budgets' && typeof openSettings === 'function') {
         openSettings('budgets');

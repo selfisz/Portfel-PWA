@@ -830,10 +830,15 @@ function buildSkrybaFollowUpChips(context = {}) {
     if (context?.filter_transactions) {
         add('suma');
         add('pokaż więcej');
+        add('Pokaż transakcje');
     }
     if (context?.month_summary) add('porównaj z poprzednim');
     if (context?.budget_status?.overCount > 0 || context?.budget_status?.warnCount > 0) {
+        add('Pokaż transakcje');
         add('Co z budżetem?');
+    }
+    if (context?.top_categories?.top?.length) {
+        add('Pokaż transakcje');
     }
     if (context?.month_close_status?.unclosedCount > 0) add('Rozlicz miesiąc');
     if (context?.surplus_hints?.estimatedSurplusPln > 0 || context?.month_summary?.balancePln > 0) {
@@ -847,16 +852,59 @@ function buildSkrybaFollowUpChips(context = {}) {
     return chips.slice(0, 4);
 }
 
+function skrybaPreviousMonthPeriod(referenceDate = new Date()) {
+    if (typeof skrybaMonthBounds !== 'function') return null;
+    const d = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - 1, 1);
+    const bounds = skrybaMonthBounds(d.getFullYear(), d.getMonth());
+    return { ...bounds, label: 'poprzedni miesiąc' };
+}
+
+function buildSkrybaDataCatalog() {
+    const txs = getSkrybaTransactionsSource();
+    const dates = txs.map((t) => t.date).filter(Boolean).sort();
+    const loans = typeof getActiveLoans === 'function' ? getActiveLoans() : [];
+    const cards = typeof getActiveCreditCards === 'function' ? getActiveCreditCards() : [];
+    return {
+        transactionCount: txs.length,
+        earliestDate: dates[0] || null,
+        latestDate: dates[dates.length - 1] || null,
+        loansCount: loans.length,
+        creditCardsCount: cards.length,
+        scopes: [
+            'transakcje (wszystkie okresy)',
+            'budżety i limity',
+            'kredyty i karty',
+            'majątek i aktywa',
+            'rozliczenia miesięcy',
+            'cele oszczędności'
+        ]
+    };
+}
+
 function buildSkrybaLightContext() {
     const briefing = buildSkrybaDailyBriefing(3);
+    const prevPeriod = skrybaPreviousMonthPeriod();
     return {
+        data_catalog: buildSkrybaDataCatalog(),
         month_summary: skrybaToolMonthSummary({}),
+        month_summary_compare: skrybaToolMonthSummary({ comparePrevious: true }),
+        previous_month_summary: prevPeriod
+            ? skrybaToolMonthSummary({
+                startDate: prevPeriod.startDate,
+                endDate: prevPeriod.endDate,
+                label: prevPeriod.label
+            })
+            : null,
+        list_debts: skrybaToolListDebts(),
         budget_status: skrybaToolBudgetStatus({}),
         snapshot_wealth: skrybaToolSnapshotWealth(),
         debt_dsr: skrybaToolDebtDsr({}),
         spending_insights: skrybaToolSpendingInsights(),
         savings_goal_status: skrybaToolSavingsGoalStatus(),
         month_close_status: skrybaToolMonthCloseStatus(),
+        weekly_briefing: typeof skrybaToolWeeklyBriefing === 'function'
+            ? skrybaToolWeeklyBriefing()
+            : null,
         daily_briefing: briefing.items,
         week_key: getSkrybaIsoWeekKey()
     };
@@ -907,32 +955,149 @@ function buildSkrybaContextBundle(toolIds, toolParams = {}) {
     return context;
 }
 
+function skrybaMonthBoundsFromMonthKey(monthKey) {
+    if (!monthKey || typeof skrybaMonthBounds !== 'function') return null;
+    const [year, month] = String(monthKey).split('-').map(Number);
+    if (!year || !month) return null;
+    return skrybaMonthBounds(year, month - 1);
+}
+
+function parseSkrybaCategoryLabel(label) {
+    const raw = String(label || '').trim();
+    if (!raw) return { mainCategory: null, subCategory: null };
+    const parts = raw.split(/\s*[›\-–]\s*/);
+    if (parts.length >= 2) {
+        return { mainCategory: parts[0].trim(), subCategory: parts[1].trim() };
+    }
+    return { mainCategory: raw, subCategory: null };
+}
+
+function deriveSkrybaTransactionFilterFromContext(context, toolParams = {}) {
+    if (!context || typeof context !== 'object') return null;
+
+    if (context.filter_transactions) {
+        const params = toolParams.filter_transactions || {};
+        return {
+            mainCategory: params.mainCategory || null,
+            subCategory: params.subCategory || null,
+            startDate: params.startDate || null,
+            endDate: params.endDate || null,
+            type: params.type === 'income' ? 'income' : 'expense',
+            label: params.label || null
+        };
+    }
+
+    const monthKey = context.budget_status?.monthKey
+        || toolParams.budget_status?.monthKey
+        || (typeof getCurrentMonthKey === 'function' ? getCurrentMonthKey() : null);
+    const monthBounds = skrybaMonthBoundsFromMonthKey(monthKey);
+
+    if (context.budget_status?.budgets?.length) {
+        const troubled = context.budget_status.budgets.filter((b) => b.state === 'over' || b.state === 'warn');
+        const focus = troubled[0] || context.budget_status.budgets[0];
+        if (focus) {
+            const filter = {
+                mainCategory: focus.category,
+                subCategory: focus.scope === 'sub' ? focus.subCategory : null,
+                startDate: monthBounds?.startDate || null,
+                endDate: monthBounds?.endDate || null,
+                type: 'expense',
+                label: focus.label
+            };
+            if (filter.subCategory === '[Bez podkategorii]') filter.subCategory = null;
+            return filter;
+        }
+    }
+
+    if (context.top_categories?.top?.length) {
+        const top = context.top_categories.top[0];
+        const periodParams = toolParams.top_categories || {};
+        return {
+            mainCategory: top.name,
+            subCategory: null,
+            startDate: periodParams.startDate || context.top_categories.startDate || null,
+            endDate: periodParams.endDate || context.top_categories.endDate || null,
+            type: 'expense',
+            label: top.name
+        };
+    }
+
+    return null;
+}
+
+function inferSkrybaFilterFromAssistantText(text, monthKey = null) {
+    const raw = String(text || '');
+    if (!raw) return null;
+
+    const labelPatterns = [
+        /(?:PRZEKROCZONY|UWAGA|przekrocz\w*|limit)\s+([^:\n]+)/i,
+        /kategorii\s+([^:\n.]+)/i,
+        /([^\n:.,]+?)\s*[›\-–]\s*([^\n:.,]+)/i
+    ];
+    let label = null;
+    labelPatterns.forEach((pattern) => {
+        if (label) return;
+        const match = raw.match(pattern);
+        if (!match) return;
+        label = match[2] ? `${match[1].trim()} › ${match[2].trim()}` : match[1].trim();
+    });
+    if (!label) return null;
+
+    const { mainCategory, subCategory } = parseSkrybaCategoryLabel(label);
+    if (!mainCategory) return null;
+    const bounds = skrybaMonthBoundsFromMonthKey(
+        monthKey || (typeof getCurrentMonthKey === 'function' ? getCurrentMonthKey() : null)
+    );
+    return {
+        mainCategory,
+        subCategory: subCategory && subCategory !== '[Bez podkategorii]' ? subCategory : null,
+        startDate: bounds?.startDate || null,
+        endDate: bounds?.endDate || null,
+        type: 'expense',
+        label
+    };
+}
+
 function captureSkrybaAdvisorContext(context, toolParams = {}) {
     if (typeof skrybaLastAdvisorContext !== 'undefined') {
         skrybaLastAdvisorContext = { context, toolParams };
     }
-    if (!context?.filter_transactions) return;
-    const params = toolParams.filter_transactions || {};
-    const items = skrybaGetFilteredTransactionItems(params);
-    if (typeof skrybaLastSearchResults !== 'undefined') {
-        skrybaLastSearchResults = items;
+
+    const filter = deriveSkrybaTransactionFilterFromContext(context, toolParams);
+    if (filter && typeof skrybaLastTransactionFilter !== 'undefined') {
+        skrybaLastTransactionFilter = filter;
+    }
+
+    if (context?.filter_transactions) {
+        const params = toolParams.filter_transactions || {};
+        const items = skrybaGetFilteredTransactionItems(params);
+        if (typeof skrybaLastSearchResults !== 'undefined') {
+            skrybaLastSearchResults = items;
+        }
+        return;
+    }
+
+    if (filter && typeof skrybaLastSearchResults !== 'undefined') {
+        skrybaLastSearchResults = skrybaGetFilteredTransactionItems(filter);
     }
 }
 
-function detectSkrybaToolsFromText(text) {
+function detectSkrybaToolsFromText(text, referenceDate = new Date()) {
     const t = String(text || '').toLowerCase();
     const tools = [];
     const toolParams = {};
     const period = typeof parseSkrybaPeriodFromText === 'function'
-        ? parseSkrybaPeriodFromText(text)
+        ? parseSkrybaPeriodFromText(text, referenceDate)
         : null;
     const currentMonthBounds = typeof skrybaMonthBounds === 'function'
-        ? skrybaMonthBounds(new Date().getFullYear(), new Date().getMonth())
+        ? skrybaMonthBounds(referenceDate.getFullYear(), referenceDate.getMonth())
         : null;
     const defaultPeriod = period || (currentMonthBounds
         ? { ...currentMonthBounds, label: 'ten miesiąc' }
         : null);
-    const comparePrevious = /porównaj|porownaj|vs\b|w porównaniu|w porownaniu|różnic|roznica|poprzedni\s+miesi[aą]c/.test(t);
+    const asksCompare = /porównaj|porownaj|vs\b|w porównaniu|w porownaniu|różnic|roznica|a poprzedni/.test(t);
+    const wantsFinancialSummary = /wpływ|wplyw|zarobi[lł]|przychód|przychod|wydatk|bilans|oszczędno|oszczedn|podsumowanie|ile (wpad|dosz|zarobi|wyda)|miesi[aą]c finansowo|jak wygl[aą]da[lł]/.test(t);
+    const comparePrevious = asksCompare && !period;
 
     if (/majątek|majetek|net worth|wartość portfel|wartosc portfel|ile mam (na koncie|łącznie)|bogactwo|aktywa razem/.test(t)) {
         tools.push('snapshot_wealth');
@@ -958,13 +1123,15 @@ function detectSkrybaToolsFromText(text) {
     }
 
     if (/podsumowanie|wpływy i wydatki|wplywy i wydatki|bilans (miesi[aą]ca|miesiaca)|stopa oszczędności|stopa oszczednosci|jak wygl[aą]da[lł]|ile zarobi[lł]em i wyda[lł]em|miesi[aą]c finansowo/.test(t)
-        || (comparePrevious && defaultPeriod)) {
+        || wantsFinancialSummary
+        || (asksCompare && defaultPeriod)
+        || (period && wantsFinancialSummary)) {
         tools.push('month_summary');
         toolParams.month_summary = {
-            startDate: defaultPeriod?.startDate,
-            endDate: defaultPeriod?.endDate,
-            label: defaultPeriod?.label,
-            comparePrevious
+            startDate: (period || defaultPeriod)?.startDate,
+            endDate: (period || defaultPeriod)?.endDate,
+            label: (period || defaultPeriod)?.label,
+            comparePrevious: asksCompare && !period
         };
     }
 

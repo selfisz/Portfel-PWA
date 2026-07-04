@@ -601,7 +601,26 @@ body.skryba-open {
     width: 100%;
 }
 
-.skryba-tx-preview {
+.skryba-tx-list {
+    margin-top: 4px;
+    width: 100%;
+}
+
+.skryba-tx-list .reports-tx-row {
+    border-radius: 10px;
+    padding: 9px 8px;
+}
+
+.skryba-tx-list .reports-tx-row:hover {
+    background: var(--bg);
+}
+
+.skryba-tx-list-more {
+    margin: 8px 4px 0;
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+}
+
     padding: 10px 12px;
     border-radius: var(--radius-sm);
     background: var(--accent-soft);

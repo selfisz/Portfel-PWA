@@ -4,6 +4,7 @@ let skrybaPendingAction = null;
 let skrybaPendingClarify = null;
 let skrybaLastSearchResults = [];
 let skrybaLastAdvisorContext = null;
+let skrybaLastTransactionFilter = null;
 let skrybaThreads = [];
 let skrybaActiveThreadId = null;
 let skrybaViewportBound = false;
@@ -135,7 +136,8 @@ function createSkrybaThread(title = 'Nowa rozmowa') {
         updatedAt: Date.now(),
         messages: [],
         lastSearchResults: [],
-        lastAdvisorContext: null
+        lastAdvisorContext: null,
+        lastTransactionFilter: null
     };
 }
 
@@ -150,6 +152,7 @@ function skrybaPersistActiveThread() {
     });
     thread.lastSearchResults = skrybaLastSearchResults;
     thread.lastAdvisorContext = skrybaLastAdvisorContext;
+    thread.lastTransactionFilter = skrybaLastTransactionFilter;
     thread.updatedAt = Date.now();
     const firstUser = thread.messages.find((m) => m.role === 'user');
     if (firstUser?.text) {
@@ -174,6 +177,7 @@ function skrybaLoadActiveThreadIntoUi() {
         ? thread.lastSearchResults
         : [];
     skrybaLastAdvisorContext = thread?.lastAdvisorContext || null;
+    skrybaLastTransactionFilter = thread?.lastTransactionFilter || null;
     skrybaPendingTransaction = null;
     const list = document.getElementById('skryba-messages');
     if (list) list.innerHTML = '';
@@ -188,6 +192,14 @@ function skrybaLoadActiveThreadIntoUi() {
             if (entry.role !== 'assistant') return;
             if (entry.meta?.pending?.transaction) {
                 restoreSkrybaPendingFromHistoryEntry(entry);
+                return;
+            }
+            if (entry.meta?.skrybaTxList?.filter) {
+                const items = typeof skrybaGetFilteredTransactionItems === 'function'
+                    ? skrybaGetFilteredTransactionItems(entry.meta.skrybaTxList.filter)
+                    : [];
+                const extraHtml = buildSkrybaTransactionListExtraHtml(items);
+                appendSkrybaMessage('assistant', entry.text, extraHtml, { skipPersist: true, skipScroll: true });
                 return;
             }
             appendSkrybaMessage('assistant', entry.text, '', { skipPersist: true, skipScroll: true });
@@ -435,7 +447,7 @@ function buildSkrybaWelcomeChipsHtml() {
         'Briefing tygodnia',
         'Co z nadwyżką?',
         'Rozlicz miesiąc',
-        'Otwórz raporty'
+        'Otwórz analizę'
     ];
     return `<div class="skryba-chip-row">${chips.map((chip) => (
         `<button type="button" class="skryba-chip" onclick="skrybaSendSuggestion(this.dataset.text)" data-text="${escapeHtml(chip)}">${escapeHtml(chip)}</button>`
@@ -1224,6 +1236,108 @@ function runAssistantSearch(search) {
     return items.slice(0, 100);
 }
 
+function findAssistantTransactionIndex(tx) {
+    if (!tx) return -1;
+    const txs = typeof appState !== 'undefined' ? appState.transactions || [] : [];
+    let idx = txs.indexOf(tx);
+    if (idx >= 0) return idx;
+    return txs.findIndex((t) => (
+        t.date === tx.date
+        && Number(t.amount) === Number(tx.amount)
+        && t.mainCategory === tx.mainCategory
+        && t.subCategory === tx.subCategory
+        && (t.note || '') === (tx.note || '')
+    ));
+}
+
+function buildSkrybaTransactionListHtml(items, limit = 12) {
+    if (!items.length) return '';
+    const escape = typeof escapeHtml === 'function' ? escapeHtml : (s) => String(s ?? '');
+    const fmtDate = typeof formatTxDate === 'function' ? formatTxDate : (d) => d;
+    const fmtAmount = typeof formatPlnAmount === 'function' ? formatPlnAmount : (n) => `${Number(n).toFixed(2)} zł`;
+    const icon = typeof renderCategoryIcon === 'function'
+        ? renderCategoryIcon
+        : () => '';
+
+    return items.slice(0, limit).map((t) => {
+        const globalIndex = findAssistantTransactionIndex(t);
+        const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
+        const amountClass = t.type === 'expense' ? 'expense' : 'income';
+        const sign = t.type === 'expense' ? '−' : '+';
+        const onclick = globalIndex >= 0
+            ? `onclick="openTransactionDetails(${globalIndex})"`
+            : '';
+        return `<button type="button" class="reports-tx-row skryba-tx-row" ${onclick} ${globalIndex < 0 ? 'disabled' : ''}>
+            ${icon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
+            <span class="reports-tx-row-text">
+                <span class="reports-tx-row-title">${escape(title)}</span>
+                <span class="reports-tx-row-meta">${fmtDate(t.date)} · ${escape(t.mainCategory)}</span>
+            </span>
+            <span class="reports-tx-row-amount ${amountClass}">${sign}${fmtAmount(t.amount)}</span>
+        </button>`;
+    }).join('');
+}
+
+function buildSkrybaTransactionListExtraHtml(items, limit = 12) {
+    const listHtml = buildSkrybaTransactionListHtml(items, limit);
+    if (!listHtml) return '';
+    const more = items.length > limit
+        ? `<p class="skryba-tx-list-more">… i ${items.length - limit} więcej (zapytaj o sumę).</p>`
+        : '';
+    return `<div class="skryba-tx-list">${listHtml}${more}</div>`;
+}
+
+function resolveSkrybaShowTransactionsFilter() {
+    if (skrybaLastTransactionFilter) return skrybaLastTransactionFilter;
+    if (typeof deriveSkrybaTransactionFilterFromContext === 'function' && skrybaLastAdvisorContext?.context) {
+        const fromCtx = deriveSkrybaTransactionFilterFromContext(
+            skrybaLastAdvisorContext.context,
+            skrybaLastAdvisorContext.toolParams || {}
+        );
+        if (fromCtx) return fromCtx;
+    }
+    const history = skrybaChatHistory || [];
+    for (let i = history.length - 1; i >= 0; i -= 1) {
+        if (history[i].role !== 'assistant') continue;
+        if (typeof inferSkrybaFilterFromAssistantText === 'function') {
+            const fromText = inferSkrybaFilterFromAssistantText(history[i].text);
+            if (fromText) return fromText;
+        }
+        break;
+    }
+    return null;
+}
+
+function resolveSkrybaTransactionsForDisplay() {
+    const filter = resolveSkrybaShowTransactionsFilter();
+    if (filter && typeof skrybaGetFilteredTransactionItems === 'function') {
+        skrybaLastTransactionFilter = filter;
+        const items = skrybaGetFilteredTransactionItems(filter);
+        skrybaLastSearchResults = items;
+        return { items, filter };
+    }
+    return { items: skrybaLastSearchResults || [], filter: null };
+}
+
+function pushSkrybaTransactionListMessage(intro, items, filter = null) {
+    const extraHtml = buildSkrybaTransactionListExtraHtml(items);
+    appendSkrybaMessage('assistant', intro, extraHtml);
+    const meta = filter
+        ? { skrybaTxList: { filter: { ...filter }, count: items.length } }
+        : undefined;
+    skrybaChatHistory.push({ role: 'assistant', text: intro, ...(meta ? { meta } : {}) });
+    skrybaPersistActiveThread();
+}
+
+function isSkrybaShowTransactionsCommand(text) {
+    const normalized = String(text || '').toLowerCase().trim().replace(/[?!.…]+$/g, '');
+    if (!normalized) return false;
+    if (/^poka[zż]\s*(wi[eę]cej|transakcj\w*|pozycj\w*|wpis\w*|je|mi|to)?$/.test(normalized)) return true;
+    if (/^(poka[zż]|wyświetl|wyswietl|lista)\s+(te\s+)?transakcj/.test(normalized)) return true;
+    if (/^(te|tych)\s+transakcj/.test(normalized)) return true;
+    return /transakcj\w*\s+(z\s+)?(tej|tego)\s+kategor/.test(normalized);
+}
+
 function formatAssistantSearchResults(items) {
     if (!items.length) return 'Nie znalazłem pasujących transakcji.';
     const shown = items.slice(0, 12);
@@ -1301,7 +1415,56 @@ function isSkrybaCompareFollowUpCommand(text) {
         || /^a (poprzedni|zeszły|zeszly)\s+miesi[aą]c/.test(normalized);
 }
 
+function tryHandleLocalSkrybaShowTransactions(text) {
+    if (!isSkrybaShowTransactionsCommand(text)) return false;
+
+    const { items, filter } = resolveSkrybaTransactionsForDisplay();
+    if (!items.length) {
+        const msg = filter?.label
+            ? `Nie znalazłem transakcji dla „${filter.label}” w tym okresie.`
+            : 'Nie mam jeszcze kontekstu — najpierw zapytaj o budżet lub kategorię, potem poproś o transakcje.';
+        appendSkrybaMessage('assistant', msg);
+        skrybaChatHistory.push({ role: 'assistant', text: msg });
+        skrybaPersistActiveThread();
+        return true;
+    }
+
+    const intro = filter?.label
+        ? `Transakcje (${filter.label}, ${items.length}):`
+        : `Transakcje (${items.length}):`;
+    pushSkrybaTransactionListMessage(intro, items, filter || skrybaLastTransactionFilter);
+    return true;
+}
+
+function tryHandleLocalSkrybaFinancialQuery(text) {
+    if (typeof detectSkrybaToolsFromText !== 'function'
+        || typeof formatSkrybaOfflineReply !== 'function') {
+        return false;
+    }
+    const t = String(text || '').toLowerCase();
+    const detection = detectSkrybaToolsFromText(text);
+    if (!detection.tools.includes('month_summary')) return false;
+    if (!/wpływ|wplyw|zarobi|przychód|przychod|wydatk|bilans|oszczędno|oszczedn|poprzedni|zeszł|zeszl|ostatni\s+miesi|podsumowanie/.test(t)) {
+        return false;
+    }
+    const offlineMsg = formatSkrybaOfflineReply(detection.tools, detection.toolParams);
+    if (!offlineMsg) return false;
+    if (typeof captureSkrybaAdvisorContext === 'function') {
+        const context = typeof buildSkrybaContextBundle === 'function'
+            ? buildSkrybaContextBundle(detection.tools, detection.toolParams)
+            : null;
+        if (context) captureSkrybaAdvisorContext(context, detection.toolParams);
+    }
+    appendSkrybaTypewriterMessage(offlineMsg);
+    skrybaChatHistory.push({ role: 'assistant', text: offlineMsg });
+    skrybaPersistActiveThread();
+    return true;
+}
+
 function tryHandleLocalSkrybaCommand(text) {
+    if (tryHandleLocalSkrybaShowTransactions(text)) return true;
+    if (tryHandleLocalSkrybaFinancialQuery(text)) return true;
+
     if (isSkrybaCompareFollowUpCommand(text)
         && typeof formatSkrybaCompareFollowUp === 'function'
         && skrybaLastAdvisorContext?.context) {
@@ -1315,15 +1478,6 @@ function tryHandleLocalSkrybaCommand(text) {
             skrybaPersistActiveThread();
             return true;
         }
-    }
-
-    const normalizedMore = String(text || '').toLowerCase().trim().replace(/[?!.…]+$/g, '');
-    if (/^poka[zż] wi[eę]cej$/.test(normalizedMore) && skrybaLastSearchResults.length) {
-        const body = formatAssistantSearchResults(skrybaLastSearchResults);
-        appendSkrybaMessage('assistant', body);
-        skrybaChatHistory.push({ role: 'assistant', text: body });
-        skrybaPersistActiveThread();
-        return true;
     }
 
     if (!isAssistantSummarizeCommand(text)) return false;
@@ -1450,10 +1604,17 @@ async function handleAssistantIntent(parsed, userMessage = '', advisorMeta = nul
     if (intent === 'search') {
         const items = runAssistantSearch(parsed.search || {});
         skrybaLastSearchResults = items;
-        const body = formatAssistantSearchResults(items);
-        const msg = reply ? `${reply}\n${body}` : body;
-        appendSkrybaMessage('assistant', msg);
-        return msg;
+        const searchFilter = {
+            mainCategory: parsed.search?.mainCategory || null,
+            subCategory: parsed.search?.subCategory || null,
+            type: parsed.search?.type || 'expense',
+            query: parsed.search?.query || null
+        };
+        skrybaLastTransactionFilter = searchFilter;
+        const intro = reply || `Transakcje (${items.length}):`;
+        const extraHtml = buildSkrybaTransactionListExtraHtml(items);
+        appendSkrybaMessage('assistant', intro, extraHtml);
+        return intro;
     }
 
     if (intent === 'summarize') {

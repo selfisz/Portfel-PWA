@@ -44,10 +44,10 @@ function parseSkrybaPeriodFromText(text, referenceDate = new Date()) {
         }
     }
 
-    if (/zeszł[yą]\s+miesi[aą]c|poprzedni\s+miesi[aą]c|ostatni\s+miesi[aą]c/.test(t)) {
+    if (/zeszł\w*\s+miesi[aą]c|poprzedni\w*\s+miesi[aą]c|ostatni\w*\s+miesi[aą]c/.test(t)) {
         const d = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - 1, 1);
         const bounds = skrybaMonthBounds(d.getFullYear(), d.getMonth());
-        return { ...bounds, label: 'zeszły miesiąc' };
+        return { ...bounds, label: 'poprzedni miesiąc' };
     }
 
     if (/ten\s+miesi[aą]c|bież[aą]cy\s+miesi[aą]c|w\s+tym\s+miesi[aą]cu/.test(t)) {

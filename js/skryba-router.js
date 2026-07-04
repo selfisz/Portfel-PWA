@@ -230,6 +230,26 @@ async function processSkrybaUserMessage(text) {
         const lightContext = typeof buildSkrybaLightContext === 'function'
             ? buildSkrybaLightContext()
             : {};
+        const redetect = typeof detectSkrybaToolsFromText === 'function'
+            ? detectSkrybaToolsFromText(text)
+            : { tools: [], toolParams: {} };
+        if (redetect.tools.length
+            && typeof isSkrybaAdvisorQuery === 'function'
+            && isSkrybaAdvisorQuery(redetect)) {
+            const enriched = {
+                ...lightContext,
+                ...buildSkrybaContextBundle(redetect.tools, redetect.toolParams || {})
+            };
+            const advisor = await callGroqSkrybaAdvisor(text, enriched);
+            if (advisor) {
+                return {
+                    kind: 'parsed',
+                    parsed: advisor,
+                    advisorContext: enriched,
+                    advisorToolParams: redetect.toolParams || {}
+                };
+            }
+        }
         return {
             kind: 'parsed',
             parsed: plan,

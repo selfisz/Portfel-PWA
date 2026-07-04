@@ -62,6 +62,18 @@ describe('tryParseLocalSkrybaAction', () => {
         expect(action?.params.mainCategory).toBe('Zakupy');
     });
 
+    it('parsuje nawigację do analizy', () => {
+        const action = tryParseLocalSkrybaAction('otwórz analizę');
+        expect(action?.tool).toBe('navigate');
+        expect(action?.params.target).toBe('reports');
+    });
+
+    it('parsuje nawigację do pulpitu', () => {
+        const action = tryParseLocalSkrybaAction('przejdź do pulpitu');
+        expect(action?.tool).toBe('navigate');
+        expect(action?.params.target).toBe('dashboard');
+    });
+
     it('parsuje nawigację do raportów', () => {
         const action = tryParseLocalSkrybaAction('otwórz raporty');
         expect(action?.tool).toBe('navigate');
