@@ -86,7 +86,7 @@ describe('month close state', () => {
         expect(unclosed).toContain('2025-05');
     });
 
-    it('limits dashboard banners to last three months', () => {
+    it('limits dashboard banners to three newest unclosed in window', () => {
         globalThis.appState.transactions = [
             { date: '2024-01-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' },
             { date: '2024-02-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' },
@@ -94,7 +94,53 @@ describe('month close state', () => {
             { date: '2024-04-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' },
             { date: '2024-05-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' }
         ];
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2024, 4, 31));
         expect(getMonthCloseBannerMonths()).toEqual(['2024-03', '2024-04', '2024-05']);
+        expect(isMonthAutoClosed('2024-01')).toBe(true);
+        expect(isMonthAutoClosed('2024-02')).toBe(true);
+        vi.useRealTimers();
+    });
+
+    it('po zamknięciu lipca nie wskakuje starszy kwiecień — tylko maj i czerwiec', () => {
+        globalThis.appState.transactions = [
+            { date: '2025-04-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' },
+            { date: '2025-05-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' },
+            { date: '2025-06-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' },
+            { date: '2025-07-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' }
+        ];
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2025, 6, 31));
+        getMonthCloseBannerMonths();
+        expect(isMonthAutoClosed('2025-04')).toBe(true);
+        expect(getMonthCloseBannerMonths()).toEqual(['2025-05', '2025-06', '2025-07']);
+        markMonthClosed('2025-07');
+        expect(getMonthCloseBannerMonths()).toEqual(['2025-05', '2025-06']);
+        vi.useRealTimers();
+    });
+
+    it('auto-zamyka miesiące starsze niż okno 3 ostatnich', () => {
+        globalThis.appState.transactions = [
+            { date: '2025-01-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' },
+            { date: '2025-07-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' }
+        ];
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2025, 7, 15));
+        autoCloseStaleMonths();
+        expect(isMonthAutoClosed('2025-01')).toBe(true);
+        expect(isMonthClosed('2025-07')).toBe(false);
+        vi.useRealTimers();
+    });
+
+    it('lists closed months for settings reopen', () => {
+        markMonthClosed('2025-05');
+        globalThis.appState.transactions.push(
+            { date: '2025-06-10', type: 'expense', amount: 1, mainCategory: 'A', subCategory: 'B' }
+        );
+        markMonthClosed('2025-06');
+        expect(getClosedMonthsWithData()).toEqual(['2025-06', '2025-05']);
+        reopenMonthClose('2025-06');
+        expect(getClosedMonthsWithData()).toEqual(['2025-05']);
     });
 
     it('blocks month close until the last day of the month', () => {

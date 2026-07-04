@@ -55,6 +55,11 @@ function suggestCategoryFromRules(type, text) {
     };
 }
 
+let categoryRuleEditingId = null;
+let categoryRulesPanelOpen = false;
+let categoryRulesShowAll = false;
+const CATEGORY_RULES_PREVIEW = 8;
+
 function addCategoryRule(rule) {
     const normalized = normalizeCategoryRule(rule);
     if (!normalized) return null;
@@ -65,32 +70,163 @@ function addCategoryRule(rule) {
     return normalized;
 }
 
+function updateCategoryRule(ruleId, patch) {
+    if (!ruleId || !Array.isArray(appState.categoryRules)) return null;
+    const idx = appState.categoryRules.findIndex((rule) => rule.id === ruleId);
+    if (idx < 0) return null;
+    const merged = normalizeCategoryRule({ ...appState.categoryRules[idx], ...patch, id: ruleId });
+    if (!merged) return null;
+    appState.categoryRules[idx] = merged;
+    saveState();
+    renderCategoryRulesEditor();
+    return merged;
+}
+
 function removeCategoryRule(ruleId) {
     if (!Array.isArray(appState.categoryRules)) return;
+    if (ruleId === categoryRuleEditingId) cancelCategoryRuleEdit();
     appState.categoryRules = appState.categoryRules.filter((rule) => rule.id !== ruleId);
     saveState();
     renderCategoryRulesEditor();
 }
 
+function updateCategoryRuleFormUi() {
+    const submit = document.getElementById('category-rule-submit-btn');
+    const cancel = document.getElementById('category-rule-cancel-edit-btn');
+    const editing = !!categoryRuleEditingId;
+    if (submit) submit.textContent = editing ? 'Zapisz zmiany' : 'Dodaj regułę';
+    if (cancel) cancel.classList.toggle('hidden', !editing);
+}
+
+function clearCategoryRuleForm() {
+    const patternInput = document.getElementById('category-rule-pattern');
+    if (patternInput) patternInput.value = '';
+}
+
+function cancelCategoryRuleEdit() {
+    categoryRuleEditingId = null;
+    clearCategoryRuleForm();
+    updateCategoryRuleFormUi();
+    renderCategoryRulesEditor();
+}
+
+function editCategoryRule(ruleId) {
+    const rule = getCategoryRules().find((item) => item.id === ruleId);
+    if (!rule) return;
+    categoryRuleEditingId = ruleId;
+    const patternInput = document.getElementById('category-rule-pattern');
+    const typeSelect = document.getElementById('category-rule-type');
+    const mainSelect = document.getElementById('category-rule-main');
+    const subSelect = document.getElementById('category-rule-sub');
+    if (patternInput) patternInput.value = rule.pattern;
+    if (typeSelect) typeSelect.value = rule.type;
+    populateCategoryRuleMainSelect();
+    if (mainSelect) mainSelect.value = rule.mainCategory;
+    populateCategoryRuleSubSelect();
+    if (subSelect) subSelect.value = rule.subCategory;
+    updateCategoryRuleFormUi();
+    categoryRulesPanelOpen = true;
+    renderCategoryRulesEditor();
+    document.getElementById('category-rule-form')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function toggleCategoryRulesPanel() {
+    categoryRulesPanelOpen = !categoryRulesPanelOpen;
+    renderCategoryRulesEditor();
+}
+
+function toggleCategoryRulesShowAll() {
+    categoryRulesShowAll = !categoryRulesShowAll;
+    renderCategoryRulesEditor();
+}
+
+function filterCategoryRulesList(query) {
+    const q = String(query || '').trim().toLowerCase();
+    document.querySelectorAll('#category-rules-list .category-rule-item').forEach((item) => {
+        const hay = (item.dataset.search || '').toLowerCase();
+        const match = !q.length || hay.includes(q);
+        item.classList.toggle('hidden', !match);
+        item.classList.toggle('category-rule-item--filter-match', q.length > 0 && match);
+    });
+    document.querySelectorAll('#category-rules-list .category-rules-group').forEach((group) => {
+        const visible = group.querySelectorAll('.category-rule-item:not(.hidden)').length;
+        group.classList.toggle('hidden', q.length > 0 && visible === 0);
+        if (q.length > 0 && visible > 0) group.open = true;
+    });
+}
+
+function renderCategoryRuleItemHtml(rule, { extra = false } = {}) {
+    const sub = rule.subCategory !== '[Bez podkategorii]' ? ` / ${escapeHtml(rule.subCategory)}` : '';
+    const editingClass = rule.id === categoryRuleEditingId ? ' category-rule-item--editing' : '';
+    const extraClass = extra ? ' category-rule-item--extra' : '';
+    const searchBlob = `${rule.pattern} ${rule.mainCategory} ${rule.subCategory} ${rule.type}`;
+    return `<div class="category-rule-item${editingClass}${extraClass}" data-search="${escapeHtml(searchBlob)}">
+        <div class="category-rule-item-body">
+            <strong>„${escapeHtml(rule.pattern)}”</strong>
+            <span class="category-rule-item-meta">${escapeHtml(rule.mainCategory)}${sub}</span>
+        </div>
+        <div class="category-rule-item-actions">
+            <button type="button" class="btn-text-link category-rule-item-edit" onclick="editCategoryRule('${escapeHtml(rule.id)}')">Edytuj</button>
+            <button type="button" class="category-rule-item-delete" onclick="removeCategoryRule('${escapeHtml(rule.id)}')" aria-label="Usuń regułę">×</button>
+        </div>
+    </div>`;
+}
+
+function renderCategoryRulesGroupHtml(title, rules, previewState) {
+    if (!rules.length) return '';
+    const rows = rules.map((rule) => {
+        const extra = previewState.shown >= previewState.max;
+        if (!extra) previewState.shown += 1;
+        return renderCategoryRuleItemHtml(rule, { extra });
+    }).join('');
+    const openAttr = rules.length <= 4 ? ' open' : '';
+    return `<details class="category-rules-group"${openAttr}>
+        <summary class="category-rules-group-summary">${escapeHtml(title)} <span class="category-rules-group-count">${rules.length}</span></summary>
+        <div class="category-rules-group-list">${rows}</div>
+    </details>`;
+}
+
 function renderCategoryRulesEditor() {
-    const list = document.getElementById('category-rules-list');
-    if (!list) return;
+    const host = document.getElementById('category-rules-list');
+    if (!host) return;
     const rules = getCategoryRules();
     if (!rules.length) {
-        list.innerHTML = '<p class="settings-hint">Brak reguł — dodaj wzorzec z notatki (np. „biedronka”) i przypisz kategorię.</p>';
+        categoryRulesPanelOpen = false;
+        categoryRulesShowAll = false;
+        host.innerHTML = '<p class="settings-hint">Brak reguł — dodaj wzorzec z notatki (np. „biedronka”) i przypisz kategorię.</p>';
+        updateCategoryRuleFormUi();
         return;
     }
-    list.innerHTML = rules.map((rule) => {
-        const sub = rule.subCategory !== '[Bez podkategorii]' ? ` / ${escapeHtml(rule.subCategory)}` : '';
-        const typeLabel = rule.type === 'income' ? 'Wpływ' : 'Wydatek';
-        return `<div class="category-rule-item">
-            <div class="category-rule-item-body">
-                <strong>„${escapeHtml(rule.pattern)}”</strong>
-                <span class="category-rule-item-meta">${typeLabel} → ${escapeHtml(rule.mainCategory)}${sub}</span>
+    if (rules.length <= 4) categoryRulesPanelOpen = true;
+    const expenseRules = rules.filter((rule) => rule.type === 'expense');
+    const incomeRules = rules.filter((rule) => rule.type === 'income');
+    const hiddenCount = Math.max(0, rules.length - CATEGORY_RULES_PREVIEW);
+    const showAll = categoryRulesShowAll || hiddenCount === 0;
+    const previewState = { shown: 0, max: showAll ? Number.POSITIVE_INFINITY : CATEGORY_RULES_PREVIEW };
+    const showAllBtn = hiddenCount > 0
+        ? `<button type="button" class="btn-text-link category-rules-show-all" onclick="toggleCategoryRulesShowAll()">${showAll ? 'Pokaż mniej' : `Pokaż wszystkie (${rules.length})`}</button>`
+        : '';
+    const groups = [
+        renderCategoryRulesGroupHtml('Wydatki', expenseRules, previewState),
+        renderCategoryRulesGroupHtml('Wpływy', incomeRules, previewState)
+    ].filter(Boolean).join('');
+    host.innerHTML = `<div class="category-rules-card${categoryRulesPanelOpen ? ' category-rules-card--open' : ''}">
+        <button type="button" class="category-rules-card-toggle" aria-expanded="${categoryRulesPanelOpen ? 'true' : 'false'}" onclick="toggleCategoryRulesPanel()">
+            <span class="category-rules-card-toggle-main">
+                <span class="category-rules-card-title">Twoje reguły</span>
+                <span class="category-rules-card-count">${rules.length}</span>
+            </span>
+            <svg class="category-rules-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+        </button>
+        <div class="category-rules-card-body">
+            <input type="search" class="category-rules-search" placeholder="Szukaj wzorca lub kategorii…" oninput="filterCategoryRulesList(this.value)" aria-label="Szukaj reguł">
+            <div class="category-rules-scroll">
+                ${groups}
             </div>
-            <button type="button" class="category-rule-item-delete" onclick="removeCategoryRule('${escapeHtml(rule.id)}')" aria-label="Usuń regułę">×</button>
-        </div>`;
-    }).join('');
+            ${showAllBtn}
+        </div>
+    </div>`;
+    updateCategoryRuleFormUi();
 }
 
 function saveCategoryRuleFromForm() {
@@ -106,9 +242,16 @@ function saveCategoryRuleFromForm() {
         if (typeof showSettingsToast === 'function') showSettingsToast('Nieprawidłowa para kategorii');
         return;
     }
+    if (categoryRuleEditingId) {
+        updateCategoryRule(categoryRuleEditingId, { pattern, type, mainCategory, subCategory });
+        categoryRuleEditingId = null;
+        clearCategoryRuleForm();
+        updateCategoryRuleFormUi();
+        if (typeof showSettingsToast === 'function') showSettingsToast('Zapisano regułę');
+        return;
+    }
     addCategoryRule({ pattern, type, mainCategory, subCategory });
-    const patternInput = document.getElementById('category-rule-pattern');
-    if (patternInput) patternInput.value = '';
+    clearCategoryRuleForm();
     if (typeof showSettingsToast === 'function') showSettingsToast('Dodano regułę');
 }
 
@@ -119,9 +262,13 @@ function populateCategoryRuleMainSelect() {
     const tree = type === 'income'
         ? (categoryTree?.income || DEFAULT_CATEGORY_TREE.income)
         : (categoryTree?.expense || DEFAULT_CATEGORY_TREE.expense);
+    const prev = select.value;
     select.innerHTML = Object.keys(tree).map((main) =>
         `<option value="${escapeHtml(main)}">${escapeHtml(main)}</option>`
     ).join('');
+    if (prev && [...select.options].some((opt) => opt.value === prev)) {
+        select.value = prev;
+    }
     populateCategoryRuleSubSelect();
 }
 
@@ -134,9 +281,13 @@ function populateCategoryRuleSubSelect() {
         ? (categoryTree?.income || DEFAULT_CATEGORY_TREE.income)
         : (categoryTree?.expense || DEFAULT_CATEGORY_TREE.expense);
     const subs = tree[mainSelect.value] || [];
+    const prev = subSelect.value;
     subSelect.innerHTML = ['[Bez podkategorii]', ...subs].map((sub) =>
         `<option value="${escapeHtml(sub)}">${escapeHtml(sub)}</option>`
     ).join('');
+    if (prev && [...subSelect.options].some((opt) => opt.value === prev)) {
+        subSelect.value = prev;
+    }
 }
 
 function initCategoryRulesEditor() {

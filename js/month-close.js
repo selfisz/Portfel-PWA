@@ -22,6 +22,29 @@ function isMonthClosed(monthKey) {
     return !!readMonthCloseState()[monthKey]?.closedAt;
 }
 
+function isMonthAutoClosed(monthKey) {
+    return !!readMonthCloseState()[monthKey]?.auto;
+}
+
+/** Najstarszy miesiąc jeszcze w oknie 3 ostatnich (bieżący + 2 wstecz). Starsze → auto-zamknięcie. */
+function getMonthCloseWindowStartKey() {
+    const now = new Date();
+    const d = new Date(now.getFullYear(), now.getMonth() - (MONTH_CLOSE_BANNER_LIMIT - 1), 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function autoCloseStaleMonths() {
+    const startKey = getMonthCloseWindowStartKey();
+    const state = readMonthCloseState();
+    let changed = false;
+    getMonthsWithTransactions().forEach((mk) => {
+        if (mk >= startKey || state[mk]?.closedAt) return;
+        state[mk] = { closedAt: new Date().toISOString(), auto: true };
+        changed = true;
+    });
+    if (changed) writeMonthCloseState(state);
+}
+
 function markMonthClosed(monthKey) {
     const state = readMonthCloseState();
     state[monthKey] = { closedAt: new Date().toISOString() };
@@ -34,6 +57,87 @@ function reopenMonthClose(monthKey) {
     const state = readMonthCloseState();
     delete state[monthKey];
     writeMonthCloseState(state);
+}
+
+function getClosedMonthsWithData() {
+    const state = readMonthCloseState();
+    return getMonthsWithTransactions()
+        .filter((mk) => state[mk]?.closedAt)
+        .sort((a, b) => b.localeCompare(a));
+}
+
+const MONTH_CLOSE_REOPEN_PREVIEW = 8;
+let monthCloseReopenPanelOpen = false;
+let monthCloseReopenShowAll = false;
+
+function toggleMonthCloseReopenPanel() {
+    monthCloseReopenPanelOpen = !monthCloseReopenPanelOpen;
+    renderMonthCloseReopenSettings();
+}
+
+function toggleMonthCloseReopenShowAll() {
+    monthCloseReopenShowAll = !monthCloseReopenShowAll;
+    renderMonthCloseReopenSettings();
+}
+
+function renderMonthCloseReopenRow(mk, state, { extra = false } = {}) {
+    const autoLabel = state[mk]?.auto ? ' · auto' : '';
+    const extraClass = extra ? ' month-close-reopen-row--extra' : '';
+    return `<div class="month-close-reopen-row${extraClass}">
+        <div class="month-close-reopen-row-main">
+            <strong>${escapeHtml(formatMonthKeyLabel(mk))}</strong>
+            <span class="reports-hint">Zamknięty${autoLabel}</span>
+        </div>
+        <button type="button" class="dashboard-quick-action-btn month-close-reopen-open-btn" onclick="reopenMonthCloseFromSettings('${escapeHtml(mk)}')">Otwórz</button>
+    </div>`;
+}
+
+function renderMonthCloseReopenSettings() {
+    const host = document.getElementById('settings-month-close-reopen-list');
+    if (!host) return;
+    const closed = getClosedMonthsWithData();
+    if (!closed.length) {
+        monthCloseReopenPanelOpen = false;
+        monthCloseReopenShowAll = false;
+        host.innerHTML = '<p class="settings-hint">Brak zamkniętych miesięcy z transakcjami.</p>';
+        return;
+    }
+    if (closed.length <= 3) monthCloseReopenPanelOpen = true;
+    const state = readMonthCloseState();
+    const hiddenCount = Math.max(0, closed.length - MONTH_CLOSE_REOPEN_PREVIEW);
+    const showAll = monthCloseReopenShowAll || hiddenCount === 0;
+    const rows = closed.map((mk, index) => renderMonthCloseReopenRow(mk, state, {
+        extra: !showAll && index >= MONTH_CLOSE_REOPEN_PREVIEW
+    })).join('');
+    const showAllBtn = hiddenCount > 0
+        ? `<button type="button" class="btn-text-link month-close-reopen-show-all" onclick="toggleMonthCloseReopenShowAll()">${showAll ? 'Pokaż mniej' : `Pokaż wszystkie (${closed.length})`}</button>`
+        : '';
+    host.innerHTML = `<div class="month-close-reopen-card${monthCloseReopenPanelOpen ? ' month-close-reopen-card--open' : ''}">
+        <button type="button" class="month-close-reopen-card-toggle" aria-expanded="${monthCloseReopenPanelOpen ? 'true' : 'false'}" onclick="toggleMonthCloseReopenPanel()">
+            <span class="month-close-reopen-card-toggle-main">
+                <span class="month-close-reopen-card-title">Zamknięte miesiące</span>
+                <span class="month-close-reopen-card-count">${closed.length}</span>
+            </span>
+            <svg class="month-close-reopen-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+        </button>
+        <div class="month-close-reopen-card-body">
+            <div class="month-close-reopen-list-scroll">
+                <div class="month-close-reopen-list">${rows}</div>
+            </div>
+            ${showAllBtn}
+        </div>
+    </div>`;
+}
+
+function reopenMonthCloseFromSettings(monthKey) {
+    if (!monthKey || !isMonthClosed(monthKey)) return;
+    reopenMonthClose(monthKey);
+    if (typeof showAppToast === 'function') {
+        showAppToast(`Otwarto ${formatMonthKeyLabel(monthKey)} do rozliczenia`, 'success');
+    }
+    renderMonthCloseReopenSettings();
+    renderMonthCloseBanners();
+    if (typeof renderReports === 'function') renderReports();
 }
 
 function getMonthsWithTransactions() {
@@ -315,6 +419,7 @@ function getActiveMonthCloseKey() {
 }
 
 function getMonthCloseBannerMonths() {
+    autoCloseStaleMonths();
     return getUnclosedMonthsWithData()
         .filter(isMonthCloseAvailable)
         .slice(-MONTH_CLOSE_BANNER_LIMIT);
@@ -408,5 +513,6 @@ function renderMonthCloseBanners() {
 }
 
 function initMonthClose() {
+    autoCloseStaleMonths();
     renderMonthCloseBanners();
 }

@@ -3,11 +3,15 @@ function getExportPayload() {
     const archivedTransactions = typeof getArchivedTransactions === 'function'
         ? getArchivedTransactions()
         : [];
+    const monthCloseState = typeof readMonthCloseState === 'function'
+        ? readMonthCloseState()
+        : {};
     return {
         version: 2,
         exportedAt: new Date().toISOString(),
         transactionCount: data.transactions.length + archivedTransactions.length,
         archivedTransactions,
+        monthCloseState,
         data
     };
 }
@@ -21,6 +25,10 @@ function applyBackupPayload(payload) {
         restoreArchivedTransactionsFromBackup(archivedTransactions);
     }
     normalizeAppState(data);
+    if (payload.monthCloseState && typeof payload.monthCloseState === 'object'
+        && typeof writeMonthCloseState === 'function') {
+        writeMonthCloseState(payload.monthCloseState);
+    }
     cloudSyncUnlocked = true;
     try {
         localStorage.setItem(getFinanceStorageKey(), JSON.stringify(getPersistedState(appState)));
@@ -239,7 +247,10 @@ function setSettingsSection(section) {
         document.getElementById(`settings-section-${id}`)?.classList.toggle('hidden', id !== section);
         document.getElementById(`btn-settings-${id}`)?.classList.toggle('active', id === section);
     });
-    if (section === 'budgets') renderBudgetEditor();
+    if (section === 'budgets') {
+        renderBudgetEditor();
+        if (typeof renderMonthCloseReopenSettings === 'function') renderMonthCloseReopenSettings();
+    }
     if (section === 'categories' && typeof renderCategoryRulesEditor === 'function') renderCategoryRulesEditor();
     if (section === 'account' && typeof refreshAccountSettingsUI === 'function') refreshAccountSettingsUI();
     if (section === 'backup') {
@@ -896,11 +907,69 @@ function toggleBudgetLimitSubs(btn) {
     btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
 }
 
+function toggleBudgetLimitGroup(btn) {
+    const group = btn?.closest('.budget-limit-group');
+    if (!group) return;
+    const expanded = group.classList.toggle('budget-limit-group--open');
+    btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+}
+
+function shouldBudgetLimitGroupOpen(cat) {
+    const mainBudget = (appState.categoryBudgets || {})[cat] || 0;
+    const subs = (categoryTree.expense || {})[cat] || [];
+    const subBudgets = appState.subCategoryBudgets || {};
+    const hasSubBudget = subs.some((sub) => {
+        const key = typeof makeSubCategoryBudgetKey === 'function'
+            ? makeSubCategoryBudgetKey(cat, sub)
+            : `${cat}\u0001${sub}`;
+        return (subBudgets[key] || 0) > 0;
+    });
+    if (mainBudget > 0 || hasSubBudget) return true;
+    if (typeof getCategoryBudgetStatus === 'function' && typeof getCurrentMonthKey === 'function') {
+        const status = getCategoryBudgetStatus(cat, getCurrentMonthKey());
+        if (status && (status.state === 'warn' || status.state === 'over')) return true;
+    }
+    return false;
+}
+
+function renderBudgetLimitCollapsedSummary(cat, mainBudget, hasSubBudget) {
+    const parts = [];
+    if (mainBudget > 0) {
+        parts.push(`<span class="budget-limit-summary-limit">${formatPlnAmount(mainBudget)}</span>`);
+    }
+    if (typeof getCategoryBudgetStatus === 'function' && typeof getCurrentMonthKey === 'function') {
+        const status = getCategoryBudgetStatus(cat, getCurrentMonthKey());
+        if (status && status.limit > 0) {
+            const stateClass = status.state === 'over'
+                ? 'budget-limit-summary-pct--over'
+                : (status.state === 'warn' ? 'budget-limit-summary-pct--warn' : '');
+            parts.push(`<span class="budget-limit-summary-pct ${stateClass}">${status.pct}%</span>`);
+        }
+    }
+    if (!mainBudget && !parts.length) {
+        parts.push('<span class="budget-limit-summary-muted">Bez limitu</span>');
+    }
+    if (hasSubBudget) {
+        parts.push('<span class="budget-limit-summary-badge">Podkat.</span>');
+    }
+    return `<span class="budget-limit-summary">${parts.join('')}</span>`;
+}
+
 function filterBudgetEditorList(query) {
     const q = String(query || '').trim().toLowerCase();
     document.querySelectorAll('#settings-budget-list .budget-limit-group').forEach((group) => {
         const hay = (group.dataset.search || '').toLowerCase();
-        group.classList.toggle('hidden', q.length > 0 && !hay.includes(q));
+        const match = !q.length || hay.includes(q);
+        group.classList.toggle('hidden', !match);
+        if (match && q.length > 0) group.classList.add('budget-limit-group--open');
+    });
+}
+
+function setAllBudgetLimitGroupsOpen(open) {
+    document.querySelectorAll('#settings-budget-list .budget-limit-group').forEach((group) => {
+        group.classList.toggle('budget-limit-group--open', open);
+        const toggle = group.querySelector('.budget-limit-head--toggle');
+        if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
 }
 
@@ -947,27 +1016,33 @@ function renderBudgetLimitGroup(cat) {
             : `${cat}\u0001${sub}`;
         return (subBudgets[key] || 0) > 0;
     });
+    const groupOpen = shouldBudgetLimitGroupOpen(cat);
     const subsOpen = mainBudget > 0 || hasSubBudget;
     const suggested = suggestCategoryBudget(cat);
     const usage = renderBudgetLimitUsageBlock(cat, null, suggested);
     const subRows = subs.map((sub) => renderBudgetLimitSubRow(cat, sub)).join('');
     const searchBlob = [cat, ...subs].join(' ');
+    const summary = renderBudgetLimitCollapsedSummary(cat, mainBudget, hasSubBudget);
     const subsToggle = subs.length
         ? `<button type="button" class="budget-limit-subs-toggle" aria-expanded="${subsOpen ? 'true' : 'false'}" aria-label="Pokaż podkategorie" onclick="toggleBudgetLimitSubs(this)">
             <span class="budget-limit-subs-label">Podkategorie (${subs.length})</span>
             <svg class="budget-limit-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
         </button>`
         : '';
-    return `<div class="budget-status-group budget-limit-group${subsOpen ? ' budget-limit-group--subs-open' : ''}" data-search="${escapeHtml(searchBlob)}">
-        <div class="budget-limit-head">
+    return `<div class="budget-status-group budget-limit-group${groupOpen ? ' budget-limit-group--open' : ''}${subsOpen ? ' budget-limit-group--subs-open' : ''}" data-search="${escapeHtml(searchBlob)}">
+        <button type="button" class="budget-limit-head budget-limit-head--toggle" aria-expanded="${groupOpen ? 'true' : 'false'}" onclick="toggleBudgetLimitGroup(this)">
             ${renderCategoryIcon(cat, 'list', null, 'expense')}
             <span class="budget-limit-title">${escapeHtml(cat)}</span>
+            ${summary}
+            <svg class="budget-limit-chevron budget-limit-head-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+        </button>
+        <div class="budget-limit-body">
+            <div class="budget-limit-panel">
+                ${renderBudgetLimitField('main', cat, null, { kind: 'main', cat }, suggested)}
+                ${usage}
+            </div>
+            ${subs.length ? `${subsToggle}<div class="budget-limit-subs">${subRows}</div>` : ''}
         </div>
-        <div class="budget-limit-panel">
-            ${renderBudgetLimitField('main', cat, null, { kind: 'main', cat }, suggested)}
-            ${usage}
-        </div>
-        ${subs.length ? `${subsToggle}<div class="budget-limit-subs">${subRows}</div>` : ''}
     </div>`;
 }
 
@@ -978,6 +1053,11 @@ function renderBudgetEditor() {
     const toolbar = `<div class="budget-editor-toolbar">
         <input type="search" class="budget-editor-search" placeholder="Szukaj kategorii…" oninput="filterBudgetEditorList(this.value)" aria-label="Szukaj kategorii">
         <button type="button" class="btn-outline btn-outline--compact budget-editor-fill-all" onclick="applyAllBudgetSuggestions()">Średnia 6m</button>
+    </div>
+    <div class="budget-editor-bulk-actions">
+        <button type="button" class="btn-text-link" onclick="setAllBudgetLimitGroupsOpen(true)">Rozwiń wszystkie</button>
+        <span class="budget-editor-bulk-sep" aria-hidden="true">·</span>
+        <button type="button" class="btn-text-link" onclick="setAllBudgetLimitGroupsOpen(false)">Zwiń wszystkie</button>
     </div>`;
     list.innerHTML = toolbar + categories.map((cat) => renderBudgetLimitGroup(cat)).join('');
 }

@@ -114,8 +114,11 @@ describe('checklist: rozliczenie miesiąca', () => {
         };
     });
 
-    it('banery max 3 ostatnie miesiące', () => {
+    it('banery max 3 najnowsze nierozliczone w oknie', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2024, 4, 31));
         expect(getMonthCloseBannerMonths()).toEqual(['2024-03', '2024-04', '2024-05']);
+        vi.useRealTimers();
     });
 
     it('nierozliczony miesiąc pozostaje dostępny', () => {

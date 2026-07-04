@@ -224,8 +224,8 @@
                 <div class="settings-section">
                     <div class="section-label">Reguły auto-kategoryzacji</div>
                     <p class="settings-hint">Gdy notatka zawiera wzorzec, przypisz kategorię automatycznie (także przy podziale transakcji).</p>
-                    <div id="category-rules-list" class="category-rules-list"></div>
-                    <div class="category-rule-form">
+                    <div id="category-rules-list" class="category-rules-list-host"></div>
+                    <div id="category-rule-form" class="category-rule-form">
                         <label class="section-label" for="category-rule-pattern">Wzorzec w notatce</label>
                         <input type="text" id="category-rule-pattern" class="settings-api-key-input" placeholder="np. biedronka">
                         <label class="section-label" for="category-rule-type">Typ</label>
@@ -237,12 +237,20 @@
                         <select id="category-rule-main" class="settings-api-key-input"></select>
                         <label class="section-label" for="category-rule-sub">Podkategoria</label>
                         <select id="category-rule-sub" class="settings-api-key-input"></select>
-                        <button type="button" class="btn-submit category-editor-save" onclick="saveCategoryRuleFromForm()">Dodaj regułę</button>
+                        <div class="category-rule-form-actions">
+                            <button type="button" id="category-rule-submit-btn" class="btn-submit category-editor-save" onclick="saveCategoryRuleFromForm()">Dodaj regułę</button>
+                            <button type="button" id="category-rule-cancel-edit-btn" class="btn-outline btn-outline--compact hidden" onclick="cancelCategoryRuleEdit()">Anuluj edycję</button>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div id="settings-section-budgets" class="settings-section-panel hidden">
+                <div class="settings-section settings-section--month-close">
+                    <div class="section-label">Rozliczenie miesiąca</div>
+                    <p class="settings-hint">Otwórz ponownie zamknięty miesiąc, aby przejść kreator rozliczenia (np. po auto-zamknięciu starszych okresów).</p>
+                    <div id="settings-month-close-reopen-list" class="month-close-reopen-list"></div>
+                </div>
                 <div class="settings-section settings-section--budget-editor">
                     <div class="section-label">Limity miesięczne</div>
                     <p class="settings-hint">Ustaw limit dla kategorii lub podkategorii. Puste pole = brak limitu. Zużycie bieżącego miesiąca widać pod polem.</p>
