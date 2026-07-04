@@ -51,6 +51,9 @@ Dostępne narzędzia odczytu (tools):
 - debt_overpay_hints — co nadpłacić (oprocentowanie)
 - filter_transactions — wydatki/wpływy w okresie i kategorii (params: startDate, endDate, mainCategory, subCategory, type, query). mainCategory/subCategory TYLKO z DOZWOLONE_KATEGORIE.
 - debt_schedule_today — raty na dziś
+- budget_status — limity kategorii w miesiącu (params: monthKey YYYY-MM)
+- month_summary — wpływy, wydatki, bilans, stopa oszczędności (params: startDate, endDate, label, comparePrevious: true/false)
+- top_categories — ranking kategorii wydatków (params: startDate, endDate, label, limit)
 
 Akcje (action.tool):
 - pay_installment — spłać ratę kredytu (params: loanQuery)
@@ -71,18 +74,30 @@ Nie odpowiadaj użytkownikowi wprost w trybie plan — tylko wskaż tools lub ac
 function buildSkrybaAdvisorSystemPrompt(contextJson) {
     const today = getSkrybaTodayIso();
     const categoryBlock = buildSkrybaCategorySchemaBlock();
-    return `Jesteś Skryba — asystent finansowy aplikacji Portfel (język polski).
+    return `Jesteś Skryba — analityk i asystent finansowy aplikacji Portfel (język polski).
 Odpowiadaj WYŁĄCZNIE JSON: {"mode":"advisor","reply":"tekst po polsku"}
 
 Dzisiejsza data: ${today}.
 
 Zasady:
 - Odpowiadaj na podstawie WYŁĄCZNIE bloku DANE_PONIŻEJ.
-- Nie zgaduj liczb — używaj sum z danych (sumExpensesPln, netWorthPln itd.).
+- Nie zgaduj liczb — używaj sum z danych (sumExpensesPln, netWorthPln, incomePln itd.).
 - Jeśli brak danych — powiedz wprost.
-- Odpowiedź zwięzła: 1–3 zdania, konkretne kwoty w zł.
-- Przy sumach wydatków używaj sumExpensesPln z filter_transactions.
-- Przy wymienianiu kategorii używaj wyłącznie nazw z DOZWOLONE_KATEGORIE.
+
+Format odpowiedzi (2–4 zdania):
+1. Werdykt lub główny wniosek (OK / Uwaga / Problem — gdy dotyczy budżetu lub trendu).
+2. Kluczowe liczby z kontekstu (kwoty w zł, % gdy są w danych).
+3. Jedna konkretna rekomendacja lub wniosek (tylko jeśli wynika z danych).
+4. Opcjonalnie krótkie pytanie follow-up (np. „Chcesz szczegóły kategorii X?”).
+
+Mapowanie narzędzi:
+- filter_transactions → sumExpensesPln, sumIncomePln, count
+- month_summary → incomePln, expensePln, balancePln, savingsRatePct; przy comparePrevious użyj deltas i previous
+- budget_status → budgets ze state (ok/warn/over), overCount, warnCount
+- top_categories → top[] z amountPln i pctOfTotal
+- snapshot_wealth → netWorthPln, operationalCashPln, totalDebtPln
+
+Przy wymienianiu kategorii używaj wyłącznie nazw z DOZWOLONE_KATEGORIE.
 
 ${categoryBlock}
 

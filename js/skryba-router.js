@@ -21,7 +21,13 @@ async function callGroqSkrybaRaw(messages, { retry = true } = {}) {
 
     if (!response.ok) {
         const errText = await response.text();
-        throw new Error(`Groq HTTP ${response.status}: ${errText.slice(0, 200)}`);
+        if (response.status === 401) {
+            throw new Error('Nieprawidłowy klucz API Groq — sprawdź Ustawienia → Asystent AI.');
+        }
+        if (response.status === 429) {
+            throw new Error('Limit zapytań Groq — spróbuj za chwilę.');
+        }
+        throw new Error(`Błąd Groq (${response.status}). Spróbuj ponownie.`);
     }
 
     const data = await response.json();
@@ -167,7 +173,14 @@ async function processSkrybaUserMessage(text) {
     if (typeof isSkrybaAdvisorQuery === 'function' && isSkrybaAdvisorQuery(detection) && detection.tools.length) {
         const context = buildSkrybaContextBundle(detection.tools, detection.toolParams);
         const advisor = await callGroqSkrybaAdvisor(text, context);
-        if (advisor) return { kind: 'parsed', parsed: advisor };
+        if (advisor) {
+            return {
+                kind: 'parsed',
+                parsed: advisor,
+                advisorContext: context,
+                advisorToolParams: detection.toolParams
+            };
+        }
     }
 
     const plan = await callGroqSkrybaPlanner(text);
@@ -185,7 +198,14 @@ async function processSkrybaUserMessage(text) {
     if (plan?.tools?.length) {
         const context = buildSkrybaContextBundle(plan.tools, plan.toolParams || {});
         const advisor = await callGroqSkrybaAdvisor(text, context);
-        if (advisor) return { kind: 'parsed', parsed: advisor };
+        if (advisor) {
+            return {
+                kind: 'parsed',
+                parsed: advisor,
+                advisorContext: context,
+                advisorToolParams: plan.toolParams || {}
+            };
+        }
     }
 
     const actionParsed = await callGroqSkrybaActionParser(text);

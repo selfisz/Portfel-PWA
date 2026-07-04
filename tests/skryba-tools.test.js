@@ -27,6 +27,27 @@ beforeAll(() => {
     globalThis.calcNetWorthPln = () => 80000;
     globalThis.getActiveLoans = () => [];
     globalThis.getActiveCreditCards = () => [];
+    globalThis.getCurrentMonthKey = () => '2025-06';
+    globalThis.summarizePeriod = (tx) => {
+        const income = tx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+        const expense = tx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+        const balance = income - expense;
+        return { income, expense, balance, savings: income > 0 ? Math.round((balance / income) * 100) : 0 };
+    };
+    globalThis.hasConfiguredCategoryBudgets = () => true;
+    globalThis.getAllCategoryBudgetStatuses = () => ([
+        {
+            scope: 'main',
+            label: 'Samochód',
+            category: 'Samochód',
+            subCategory: null,
+            limit: 1000,
+            spent: 900,
+            remaining: 100,
+            pct: 90,
+            state: 'warn'
+        }
+    ]);
 
     loadScript('js/search-utils.js');
     loadScript('js/skryba-dates.js');
@@ -76,5 +97,88 @@ describe('formatSkrybaOfflineReply', () => {
         const text = formatSkrybaOfflineReply(['snapshot_wealth'], {});
         expect(text).toContain('100');
         expect(text).toContain('80');
+    });
+});
+
+describe('skrybaToolMonthSummary', () => {
+    it('sumuje maj i porównuje z kwietniem', () => {
+        globalThis.appState.transactions.push(
+            { date: '2025-04-10', type: 'expense', amount: 100, mainCategory: 'Zakupy', subCategory: '[Bez podkategorii]', note: '' }
+        );
+        const result = skrybaToolMonthSummary({
+            startDate: '2025-05-01',
+            endDate: '2025-05-31',
+            label: 'maj',
+            comparePrevious: true
+        });
+        expect(result.expensePln).toBe(430);
+        expect(result.previous.expensePln).toBe(100);
+        expect(result.deltas.expenseDeltaPln).toBe(330);
+    });
+});
+
+describe('skrybaToolTopCategories', () => {
+    it('zwraca ranking kategorii', () => {
+        const result = skrybaToolTopCategories({
+            startDate: '2025-05-01',
+            endDate: '2025-05-31',
+            limit: 3
+        });
+        expect(result.top[0].name).toBe('Samochód');
+        expect(result.top[0].amountPln).toBe(430);
+    });
+});
+
+describe('skrybaToolBudgetStatus', () => {
+    it('zwraca status budżetu', () => {
+        const result = skrybaToolBudgetStatus({ monthKey: '2025-06' });
+        expect(result.configured).toBe(true);
+        expect(result.warnCount).toBe(1);
+        expect(result.budgets[0].state).toBe('warn');
+    });
+});
+
+describe('captureSkrybaAdvisorContext', () => {
+    it('zapisuje wyniki wyszukiwania do follow-upów', () => {
+        globalThis.skrybaLastSearchResults = [];
+        globalThis.skrybaLastAdvisorContext = null;
+        const context = buildSkrybaContextBundle(['filter_transactions'], {
+            filter_transactions: {
+                startDate: '2025-05-01',
+                endDate: '2025-05-31',
+                mainCategory: 'Samochód',
+                subCategory: 'Paliwo',
+                type: 'expense'
+            }
+        });
+        captureSkrybaAdvisorContext(context, {
+            filter_transactions: {
+                startDate: '2025-05-01',
+                endDate: '2025-05-31',
+                mainCategory: 'Samochód',
+                subCategory: 'Paliwo',
+                type: 'expense'
+            }
+        });
+        expect(skrybaLastSearchResults).toHaveLength(2);
+        expect(skrybaLastAdvisorContext.context.filter_transactions.count).toBe(2);
+    });
+});
+
+describe('detectSkrybaToolsFromText — analityka', () => {
+    it('wykrywa podsumowanie miesiąca', () => {
+        const d = detectSkrybaToolsFromText('Jak wyglądał ten miesiąc finansowo?');
+        expect(d.tools).toContain('month_summary');
+    });
+
+    it('wykrywa budżet', () => {
+        const d = detectSkrybaToolsFromText('Czy przekroczę budżet na jedzenie?');
+        expect(d.tools).toContain('budget_status');
+    });
+
+    it('wykrywa top kategorie', () => {
+        const d = detectSkrybaToolsFromText('Gdzie najwięcej wydałem w maju?');
+        expect(d.tools).toContain('top_categories');
+        expect(d.toolParams.top_categories.startDate).toMatch(/-05-01$/);
     });
 });

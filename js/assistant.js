@@ -2,6 +2,7 @@ let skrybaChatHistory = [];
 let skrybaPendingTransaction = null;
 let skrybaPendingAction = null;
 let skrybaLastSearchResults = [];
+let skrybaLastAdvisorContext = null;
 let skrybaThreads = [];
 let skrybaActiveThreadId = null;
 let skrybaViewportBound = false;
@@ -130,7 +131,8 @@ function createSkrybaThread(title = 'Nowa rozmowa') {
         title,
         updatedAt: Date.now(),
         messages: [],
-        lastSearchResults: []
+        lastSearchResults: [],
+        lastAdvisorContext: null
     };
 }
 
@@ -144,6 +146,7 @@ function skrybaPersistActiveThread() {
         return copy;
     });
     thread.lastSearchResults = skrybaLastSearchResults;
+    thread.lastAdvisorContext = skrybaLastAdvisorContext;
     thread.updatedAt = Date.now();
     const firstUser = thread.messages.find((m) => m.role === 'user');
     if (firstUser?.text) {
@@ -167,6 +170,7 @@ function skrybaLoadActiveThreadIntoUi() {
     skrybaLastSearchResults = Array.isArray(thread?.lastSearchResults)
         ? thread.lastSearchResults
         : [];
+    skrybaLastAdvisorContext = thread?.lastAdvisorContext || null;
     skrybaPendingTransaction = null;
     const list = document.getElementById('skryba-messages');
     if (list) list.innerHTML = '';
@@ -1096,7 +1100,10 @@ function formatAssistantSummarize(items, operation = 'sum') {
     return `Łącznie (${items.length} transakcji): ${summary}.`;
 }
 
-async function dispatchAssistantParsed(parsed, userMessage) {
+async function dispatchAssistantParsed(parsed, userMessage, advisorMeta = null) {
+    if (advisorMeta?.context && typeof captureSkrybaAdvisorContext === 'function') {
+        captureSkrybaAdvisorContext(advisorMeta.context, advisorMeta.toolParams || {});
+    }
     const displayText = await handleAssistantIntent(parsed, userMessage);
     const pendingHandled = parsed?.intent === 'add_transaction'
         && isAssistantConfirmTxEnabled()
@@ -1107,7 +1114,30 @@ async function dispatchAssistantParsed(parsed, userMessage) {
     skrybaPersistActiveThread();
 }
 
+function isSkrybaCompareFollowUpCommand(text) {
+    const normalized = String(text || '').toLowerCase().trim().replace(/[?!.…]+$/g, '');
+    if (!normalized) return false;
+    if (/^(porównaj|porownaj|a poprzedni|vs poprzedni|różnica|roznica)/.test(normalized)) return true;
+    return /^porównaj z (poprzednim|zeszłym|zeszlym)/.test(normalized)
+        || /^a (poprzedni|zeszły|zeszly)\s+miesi[aą]c/.test(normalized);
+}
+
 function tryHandleLocalSkrybaCommand(text) {
+    if (isSkrybaCompareFollowUpCommand(text)
+        && typeof formatSkrybaCompareFollowUp === 'function'
+        && skrybaLastAdvisorContext?.context) {
+        const compareReply = formatSkrybaCompareFollowUp(
+            skrybaLastAdvisorContext.context,
+            skrybaLastAdvisorContext.toolParams || {}
+        );
+        if (compareReply) {
+            appendSkrybaMessage('assistant', compareReply);
+            skrybaChatHistory.push({ role: 'assistant', text: compareReply });
+            skrybaPersistActiveThread();
+            return true;
+        }
+    }
+
     if (!isAssistantSummarizeCommand(text)) return false;
     const operation = getAssistantSummarizeOperation(text);
     const reply = formatAssistantSummarize(skrybaLastSearchResults, operation);
@@ -1326,6 +1356,12 @@ async function sendSkrybaMessage() {
         && typeof formatSkrybaOfflineReply === 'function') {
         const offlineMsg = formatSkrybaOfflineReply(detection.tools, detection.toolParams);
         if (offlineMsg) {
+            const offlineContext = typeof buildSkrybaContextBundle === 'function'
+                ? buildSkrybaContextBundle(detection.tools, detection.toolParams)
+                : null;
+            if (offlineContext && typeof captureSkrybaAdvisorContext === 'function') {
+                captureSkrybaAdvisorContext(offlineContext, detection.toolParams);
+            }
             appendSkrybaMessage('assistant', offlineMsg);
             skrybaChatHistory.push({ role: 'assistant', text: offlineMsg });
             skrybaPersistActiveThread();
@@ -1367,7 +1403,10 @@ async function sendSkrybaMessage() {
             skrybaPersistActiveThread();
             return;
         }
-        await dispatchAssistantParsed(routed.parsed, text);
+        await dispatchAssistantParsed(routed.parsed, text, {
+            context: routed.advisorContext,
+            toolParams: routed.advisorToolParams
+        });
     } catch (err) {
         typingBubble?.remove();
         const msg = err.message || 'Błąd połączenia z Groq.';
