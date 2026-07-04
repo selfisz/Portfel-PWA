@@ -83,24 +83,30 @@ Jeśli pytanie wymaga danych z aplikacji — wybierz tools. Jeśli użytkownik c
 Nie odpowiadaj użytkownikowi wprost w trybie plan — tylko wskaż tools lub action.`;
 }
 
+function getSkrybaCommunicationBlocks() {
+    const persona = typeof buildSkrybaPersonaBlock === 'function' ? buildSkrybaPersonaBlock() : '';
+    const style = typeof buildSkrybaReplyStyleBlock === 'function' ? buildSkrybaReplyStyleBlock() : '';
+    return { persona, style };
+}
+
 function buildSkrybaAdvisorSystemPrompt(contextJson) {
     const today = getSkrybaTodayIso();
     const categoryBlock = buildSkrybaCategorySchemaBlock();
-    return `Jesteś Skryba — analityk i asystent finansowy aplikacji Portfel (język polski).
+    const { persona, style } = getSkrybaCommunicationBlocks();
+    return `Jesteś Skryba — asystent finansowy aplikacji Portfel.
 Odpowiadaj WYŁĄCZNIE JSON: {"mode":"advisor","reply":"tekst po polsku"}
 
 Dzisiejsza data: ${today}.
 
-Zasady:
-- Odpowiadaj na podstawie WYŁĄCZNIE bloku DANE_PONIŻEJ.
-- Nie zgaduj liczb — używaj sum z danych (sumExpensesPln, netWorthPln, incomePln itd.).
-- Jeśli brak danych — powiedz wprost.
+${persona}
 
-Format odpowiedzi (2–4 zdania):
-1. Werdykt lub główny wniosek (OK / Uwaga / Problem — gdy dotyczy budżetu lub trendu).
-2. Kluczowe liczby z kontekstu (kwoty w zł, % gdy są w danych).
-3. Jedna konkretna rekomendacja lub wniosek (tylko jeśli wynika z danych).
-4. Opcjonalnie krótkie pytanie follow-up (np. „Chcesz szczegóły kategorii X?”).
+${style}
+
+Zasady merytoryczne:
+- Odpowiadaj na podstawie WYŁĄCZNIE bloku DANE_PONIŻEJ oraz historii rozmowy.
+- Nie zgaduj liczb — używaj sum z danych (sumExpensesPln, netWorthPln, incomePln itd.).
+- Jeśli brak danych — powiedz wprost i zaproponuj co user może doprecyzować.
+- Przy wymienianiu kategorii używaj wyłącznie nazw z DOZWOLONE_KATEGORIE.
 
 Mapowanie narzędzi:
 - filter_transactions → sumExpensesPln, sumIncomePln, count
@@ -112,9 +118,10 @@ Mapowanie narzędzi:
 - recurring_gaps → missing[] z label, amountPln, detail
 - suggest_budget → suggestedLimitPln, currentLimitPln, spentThisMonthPln
 - weekly_briefing → current, previous, expenseDeltaPct, topCategories, dsrPct
+- surplus_hints → estimatedSurplusPln, scenarios[]
+- month_close_status → unclosedCount, months[]
+- savings_goal_status → goalPct, currentRatePct, onTrack
 - snapshot_wealth → netWorthPln, operationalCashPln, totalDebtPln
-
-Przy wymienianiu kategorii używaj wyłącznie nazw z DOZWOLONE_KATEGORIE.
 
 ${categoryBlock}
 
@@ -126,8 +133,14 @@ ${contextJson}
 function buildSkrybaActionSystemPrompt() {
     const today = getSkrybaTodayIso();
     const categoryBlock = buildSkrybaCategorySchemaBlock();
+    const { persona, style } = getSkrybaCommunicationBlocks();
     return `Jesteś Skryba — asystent finansowy Portfel (polski).
 Odpowiedz JSON jednym z wariantów:
+
+${persona}
+
+Pole reply: krótkie, naturalne zdanie po polsku — co proponujesz i co user ma potwierdzić (bez żargonu technicznego).
+${style ? `\n${style}` : ''}
 
 Dodanie transakcji:
 {"mode":"action","intent":"add_transaction","reply":"...","action":{"tool":"add_transaction","params":{"amount":20,"type":"expense","mainCategory":"Zakupy","subCategory":"[Bez podkategorii]","date":"${today}","note":"..."}}}
@@ -158,10 +171,15 @@ ${categoryBlock}`;
 function buildSkrybaPendingCorrectionPrompt(pendingTransactionJson) {
     const today = getSkrybaTodayIso();
     const categoryBlock = buildSkrybaCategorySchemaBlock();
+    const { persona } = getSkrybaCommunicationBlocks();
     return `Jesteś Skryba — asystent Portfel (polski).
 Użytkownik koryguje OCZEKUJĄCĄ transakcję (jeszcze niezapisana). Odpowiedz WYŁĄCZNIE JSON.
 
 Dzisiejsza data: ${today}.
+
+${persona}
+
+Pole reply: potwierdź zmianę jednym zdaniem (np. „OK, zmieniam kategorię na Zakupy.”) albo przy anulowaniu — „Zostawiam bez zapisu.”
 
 ${categoryBlock}
 
@@ -185,10 +203,15 @@ Zasady:
 function buildSkrybaUnifiedPrompt(lightContextJson) {
     const today = getSkrybaTodayIso();
     const categoryBlock = buildSkrybaCategorySchemaBlock();
+    const { persona, style } = getSkrybaCommunicationBlocks();
     return `Jesteś Skryba — pełny asystent finansowy Portfel PWA (język polski).
 Odpowiedz WYŁĄCZNIE jednym obiektem JSON. Bez markdown.
 
 Dzisiejsza data: ${today}.
+
+${persona}
+
+${style}
 
 ${categoryBlock}
 
@@ -200,11 +223,11 @@ Warianty odpowiedzi:
 1) Potrzebujesz DODATKOWYCH danych (konkretny filtr transakcji / okres / kategoria):
 {"mode":"plan","tools":["filter_transactions"],"toolParams":{"filter_transactions":{"startDate":"2025-05-01","endDate":"2025-05-31","mainCategory":"Samochód","type":"expense"}},"action":null}
 
-2) Odpowiedź analityczna (na podstawie KONTEKST_BIEŻĄCY lub po planie):
-{"mode":"advisor","reply":"tekst po polsku — werdykt, liczby, rekomendacja"}
+2) Odpowiedź analityczna (na podstawie KONTEKST_BIEŻĄCY lub po planie) — użyj struktury Werdykt/Liczby/Co dalej w polu reply:
+{"mode":"advisor","reply":"tekst po polsku"}
 
-3) Akcja do wykonania:
-{"mode":"action","intent":"add_transaction","reply":"krótko","action":{"tool":"add_transaction","params":{...}}}
+3) Akcja do wykonania — reply: naturalne zaproszenie do potwierdzenia:
+{"mode":"action","intent":"add_transaction","reply":"krótko po polsku","action":{"tool":"add_transaction","params":{...}}}
 
 Tools: snapshot_wealth, list_debts, debt_overpay_hints, filter_transactions, debt_schedule_today, budget_status, month_summary, top_categories, debt_dsr, spending_insights, recurring_gaps, suggest_budget, weekly_briefing, surplus_hints, month_close_status, savings_goal_status
 
@@ -213,7 +236,8 @@ Akcje: pay_installment, repay_loan, repay_card, add_transaction, set_budget, add
 Zasady:
 - Jeśli pytanie da się odpowiedzieć z KONTEKST_BIEŻĄCY — użyj advisor bez plan.
 - Nie zgaduj liczb spoza kontekstu.
-- Kategorie tylko z DOZWOLONE_KATEGORIE.`;
+- Kategorie tylko z DOZWOLONE_KATEGORIE.
+- Uwzględniaj historię rozmowy (follow-upy: „a suma?”, „porównaj”, „więcej”).`;
 }
 
 function parseSkrybaModelJson(raw) {

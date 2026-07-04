@@ -15,6 +15,7 @@ beforeAll(() => {
         expense: globalThis.categoryTree.expense,
         income: globalThis.categoryTree.income
     });
+    loadScript('js/skryba-style.js');
     loadScript('js/skryba-prompts.js');
 });
 
@@ -32,10 +33,18 @@ describe('buildSkrybaCategorySchemaBlock', () => {
         expect(buildSkrybaAdvisorSystemPrompt('{}')).toContain('DOZWOLONE_KATEGORIE');
     });
 
-    it('buduje unified prompt z kontekstem', () => {
+    it('advisor prompt zawiera personę i styl odpowiedzi', () => {
+        const prompt = buildSkrybaAdvisorSystemPrompt('{}');
+        expect(prompt).toContain('PERSONA SKRYBY');
+        expect(prompt).toContain('Werdykt:');
+        expect(prompt).toContain('historii rozmowy');
+    });
+
+    it('buduje unified prompt z kontekstem i personą', () => {
         const prompt = buildSkrybaUnifiedPrompt('{"month_summary":{"expensePln":100}}');
         expect(prompt).toContain('KONTEKST_BIEŻĄCY');
         expect(prompt).toContain('set_budget');
+        expect(prompt).toContain('PERSONA SKRYBY');
     });
 });
 

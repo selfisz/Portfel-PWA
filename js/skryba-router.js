@@ -133,24 +133,24 @@ async function processSkrybaPendingCorrection(userMessage) {
     if (isSkrybaUnrelatedQueryWhilePending(userMessage)) {
         return {
             kind: 'pending_clarify',
-            reply: 'Masz oczekującą propozycję transakcji. Najpierw ją popraw (np. „zmień kategorię na Kosmetyki”), kliknij Dodaj/Anuluj, albo napisz „anuluj”.'
+            reply: 'Masz jeszcze otwartą propozycję transakcji. Popraw ją (np. „zmień kategorię na Kosmetyki”), kliknij Dodaj albo Anuluj — albo napisz „anuluj”, jeśli rezygnujesz.'
         };
     }
 
     const corrected = await callGroqSkrybaPendingCorrection(userMessage, pending.transaction);
     if (corrected?.mode === 'cancel_pending') {
-        return { kind: 'pending_cancel', reply: corrected.reply || 'OK, nie dodaję transakcji.' };
+        return { kind: 'pending_cancel', reply: corrected.reply || 'Zostawiam bez zapisu.' };
     }
     if (corrected?.mode === 'correct_pending' && corrected.transaction) {
         return {
             kind: 'pending_update',
             transaction: corrected.transaction,
-            reply: corrected.reply || 'Zaktualizowałem propozycję.'
+            reply: corrected.reply || 'Zaktualizowałem propozycję — sprawdź i potwierdź.'
         };
     }
     return {
         kind: 'pending_clarify',
-        reply: corrected?.reply || 'Nie rozumiem korekty — podaj np. „zmień kategorię na Zakupy” lub „kwota 50”.'
+        reply: corrected?.reply || 'Nie do końca rozumiem — podaj np. „zmień kategorię na Zakupy” albo „kwota 50”.'
     };
 }
 
@@ -238,11 +238,14 @@ async function processSkrybaUserMessage(text) {
         };
     }
 
+    const fallbackReply = typeof SKRYBA_FALLBACK_REPLY !== 'undefined'
+        ? SKRYBA_FALLBACK_REPLY
+        : 'Nie jestem pewien, o co pytasz. Podaj kwotę i opis wydatku, zapytaj o majątek albo np. „ile wydałem na paliwo w maju”.';
     return {
         kind: 'parsed',
         parsed: {
             mode: 'advisor',
-            reply: 'Nie jestem pewien, o co pytasz. Podaj kwotę i opis wydatku, zapytaj o majątek albo np. „ile wydałem na paliwo w maju”.'
+            reply: fallbackReply
         }
     };
 }

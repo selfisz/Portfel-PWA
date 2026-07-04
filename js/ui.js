@@ -529,6 +529,7 @@ const MODULE_JS_FILES = [
     'js/skryba-entities.js',
     'js/skryba-tools.js',
     'js/skryba-actions.js',
+    'js/skryba-style.js',
     'js/skryba-prompts.js',
     'js/skryba-router.js',
     'js/assistant.js',

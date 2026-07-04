@@ -37,6 +37,7 @@ beforeAll(() => {
 
     loadScript('js/constants.js');
     loadScript('js/search-utils.js');
+    loadScript('js/skryba-style.js');
     loadScript('js/skryba-prompts.js');
     loadScript('js/skryba-router.js');
     loadScript('js/assistant.js');

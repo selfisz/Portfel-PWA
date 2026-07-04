@@ -36,6 +36,7 @@ beforeAll(() => {
     loadScript('js/skryba-entities.js');
     loadScript('js/skryba-tools.js');
     loadScript('js/skryba-actions.js');
+    loadScript('js/skryba-style.js');
     loadScript('js/skryba-prompts.js');
     loadScript('js/skryba-router.js');
     loadScript('js/assistant.js');
@@ -107,7 +108,7 @@ describe('formatAssistantSummarize', () => {
         ];
         const text = formatAssistantSummarize(items, 'sum');
         expect(text).toContain('35.50 zł');
-        expect(text).toContain('2 transakcji');
+        expect(text).toContain('2 pozycji');
     });
 
     it('zwraca komunikat gdy brak wyników', () => {

@@ -364,25 +364,16 @@ function renderSkrybaWelcomeIfEmpty() {
     const list = document.getElementById('skryba-messages');
     if (!list || list.children.length) return;
 
-    const briefing = typeof buildSkrybaDailyBriefing === 'function'
-        ? buildSkrybaDailyBriefing(3)
-        : null;
-    const isMonday = new Date().getDay() === 1;
-    const weekly = isMonday && typeof skrybaToolWeeklyBriefing === 'function'
-        ? skrybaToolWeeklyBriefing()
-        : null;
-    const intro = 'Cześć! Jestem Skrybą — analitykiem i asystentem Twoich finansów.';
-    let body = intro;
-    if (weekly?.text) {
-        body += `\n\nBriefing tygodnia:\n${weekly.text}`;
-    } else if (briefing?.text) {
-        body += `\n\n${briefing.text}`;
-    } else {
-        body += ' Mogę dodać wydatek, przeanalizować miesiąc, ustawić limit budżetu lub spłacić ratę.';
-    }
-    body += '\n\nZapytaj o cokolwiek albo wybierz podpowiedź poniżej.';
+    const body = typeof buildSkrybaWelcomeBody === 'function'
+        ? buildSkrybaWelcomeBody()
+        : 'Cześć! Tu Skryba — pomogę ogarnąć wydatki i budżet.';
     const chipsHtml = buildSkrybaWelcomeChipsHtml();
     appendSkrybaMessage('assistant', body, chipsHtml, { skipPersist: true });
+}
+
+function polishSkrybaText(text) {
+    if (text === '…') return text;
+    return typeof polishSkrybaReply === 'function' ? polishSkrybaReply(text) : String(text || '');
 }
 
 function appendSkrybaFollowUpChips(chips) {
@@ -476,7 +467,7 @@ function appendSkrybaMessage(role, text, extraHtml = '', options = {}) {
     body.className = 'skryba-msg-body';
     const bubble = document.createElement('div');
     bubble.className = 'skryba-msg-bubble';
-    bubble.textContent = text;
+    bubble.textContent = role === 'assistant' ? polishSkrybaText(text) : text;
     body.appendChild(bubble);
     if (extraHtml) {
         const extra = document.createElement('div');
@@ -520,7 +511,7 @@ function appendSkrybaTypewriterMessage(text, options = {}) {
     list.appendChild(row);
     if (!options.skipScroll) scrollSkrybaToBottom();
 
-    const fullText = String(text || '');
+    const fullText = polishSkrybaText(String(text || ''));
     if (!fullText || options.instant) {
         bubble.textContent = fullText;
         return messageId;
@@ -596,7 +587,10 @@ function appendSkrybaPendingTransaction(tx, options = {}) {
     if (!normalized) return;
 
     const pendingId = `pending_${Date.now()}`;
-    const replyText = options.replyText || 'Proponuję dodać transakcję:';
+    const replyText = options.replyText
+        || (typeof getSkrybaActionReplyPhrase === 'function'
+            ? getSkrybaActionReplyPhrase('add_transaction')
+            : 'Proponuję dodać taką transakcję — sprawdź szczegóły i potwierdź:');
     const label = formatAssistantTransactionPreview(normalized);
     const extraHtml = `<div class="skryba-tx-preview">${escapeHtml(label)}</div>${buildSkrybaPendingTransactionExtraHtml()}`;
     const domMessageId = appendSkrybaMessage('assistant', replyText, extraHtml);
@@ -634,7 +628,9 @@ function restoreSkrybaPendingFromHistoryEntry(entry) {
         : pendingMeta.transaction;
     if (!normalized) return;
 
-    const replyText = entry.text || 'Proponuję dodać transakcję:';
+    const replyText = entry.text || (typeof getSkrybaActionReplyPhrase === 'function'
+        ? getSkrybaActionReplyPhrase('add_transaction')
+        : 'Proponuję dodać taką transakcję — sprawdź szczegóły i potwierdź:');
     const label = formatAssistantTransactionPreview(normalized);
     const extraHtml = `<div class="skryba-tx-preview">${escapeHtml(label)}</div>${buildSkrybaPendingTransactionExtraHtml()}`;
     const domMessageId = appendSkrybaMessage('assistant', replyText, extraHtml, {
@@ -715,7 +711,7 @@ function confirmSkrybaPendingTransaction() {
 function cancelSkrybaPendingTransaction() {
     skrybaPendingTransaction = null;
     clearSkrybaPendingHistoryMeta();
-    const msg = 'OK, nie dodaję transakcji.';
+    const msg = 'Zostawiam bez zapisu — anulowano.';
     appendSkrybaMessage('assistant', msg);
     skrybaChatHistory.push({ role: 'assistant', text: msg });
     skrybaPersistActiveThread();
@@ -728,7 +724,9 @@ function appendSkrybaPendingAction(action) {
             <button type="button" class="skryba-btn skryba-btn--primary" onclick="confirmSkrybaPendingAction()">Wykonaj</button>
             <button type="button" class="skryba-btn" onclick="cancelSkrybaPendingAction()">Anuluj</button>
         </div>`;
-    appendSkrybaMessage('assistant', action.reply || 'Potwierdź operację:', extraHtml);
+    appendSkrybaMessage('assistant', action.reply || (typeof getSkrybaActionReplyPhrase === 'function'
+        ? getSkrybaActionReplyPhrase(action.tool, action.params || {})
+        : 'Potwierdź operację:'), extraHtml);
 }
 
 function confirmSkrybaPendingAction() {
@@ -759,7 +757,7 @@ function confirmSkrybaPendingAction() {
 
 function cancelSkrybaPendingAction() {
     skrybaPendingAction = null;
-    const msg = 'OK, anulowano operację.';
+    const msg = 'OK, rezygnujemy z tej operacji.';
     appendSkrybaMessage('assistant', msg);
     skrybaChatHistory.push({ role: 'assistant', text: msg });
     skrybaPersistActiveThread();
@@ -777,7 +775,7 @@ function appendSkrybaClarifyChoices(action, preview) {
         `<button type="button" class="skryba-btn skryba-choice-btn" onclick="onSkrybaClarifyChoice(${idx})">${escapeHtml(match.label)}</button>`
     )).join('');
     const extraHtml = `<div class="skryba-choice-row">${buttons}</div>`;
-    const msg = 'Którą opcję masz na myśli?';
+    const msg = 'Znalazłem kilka opcji — którą wybierasz?';
     appendSkrybaMessage('assistant', msg, extraHtml);
     skrybaChatHistory.push({ role: 'assistant', text: msg });
     skrybaPersistActiveThread();
@@ -800,7 +798,10 @@ function onSkrybaClarifyChoice(idx) {
 async function dispatchSkrybaAction(action) {
     const tool = action?.tool;
     const params = action?.params || {};
-    const reply = action?.reply || '';
+    const reply = action?.reply
+        || (typeof getSkrybaActionReplyPhrase === 'function'
+            ? getSkrybaActionReplyPhrase(tool, params)
+            : '');
 
     if (tool === 'navigate') {
         const result = executeSkrybaAction(tool, params);
@@ -1250,6 +1251,9 @@ function getAssistantSummarizeOperation(text, summarizePayload) {
 }
 
 function formatAssistantSummarize(items, operation = 'sum') {
+    if (typeof formatAssistantSummarizeFriendly === 'function') {
+        return formatAssistantSummarizeFriendly(items, operation);
+    }
     if (!items.length) {
         return 'Najpierw wyszukaj transakcje, potem zapytam o sumę.';
     }
@@ -1363,14 +1367,15 @@ async function handleAssistantIntent(parsed, userMessage = '', advisorMeta = nul
     const reply = String(parsed?.reply || '').trim();
 
     if (parsed?.mode === 'advisor' && reply) {
-        appendSkrybaTypewriterMessage(reply);
+        const polished = polishSkrybaText(reply);
+        appendSkrybaTypewriterMessage(polished);
         const chips = typeof buildSkrybaFollowUpChips === 'function'
             ? buildSkrybaFollowUpChips(advisorMeta?.context || skrybaLastAdvisorContext?.context || {})
             : [];
         if (chips.length) {
             appendSkrybaFollowUpChips(chips);
         }
-        return reply;
+        return polished;
     }
 
     const intent = parsed?.intent || (parsed?.mode === 'action' ? parsed.intent : 'reply');
@@ -1416,8 +1421,15 @@ async function handleAssistantIntent(parsed, userMessage = '', advisorMeta = nul
             return msg;
         }
         if (isAssistantConfirmTxEnabled()) {
-            appendSkrybaPendingTransaction(normalized, { replyText: reply || 'Proponuję dodać transakcję:', source: 'ai' });
-            return reply || 'Proponuję dodać transakcję:';
+            appendSkrybaPendingTransaction(normalized, {
+                replyText: reply || (typeof getSkrybaActionReplyPhrase === 'function'
+                    ? getSkrybaActionReplyPhrase('add_transaction')
+                    : 'Proponuję dodać taką transakcję — sprawdź szczegóły i potwierdź:'),
+                source: 'ai'
+            });
+            return reply || (typeof getSkrybaActionReplyPhrase === 'function'
+                ? getSkrybaActionReplyPhrase('add_transaction')
+                : 'Proponuję dodać taką transakcję — sprawdź szczegóły i potwierdź:');
         }
         const result = commitAssistantTransaction(normalized);
         if (!result.ok) {
@@ -1463,7 +1475,9 @@ async function handleAssistantIntent(parsed, userMessage = '', advisorMeta = nul
         return msg;
     }
 
-    const msg = reply || 'Napisz kwotę i opis (np. „30 zł obiad”), albo zapytaj o historię.';
+    const msg = reply || (typeof SKRYBA_FALLBACK_REPLY !== 'undefined'
+        ? SKRYBA_FALLBACK_REPLY
+        : 'Napisz kwotę i opis (np. „30 zł obiad”), albo zapytaj o historię.');
     appendSkrybaMessage('assistant', msg);
     return msg;
 }
@@ -1492,7 +1506,7 @@ async function sendSkrybaMessage() {
                 updateSkrybaPendingTransaction(local.transaction, local.reply);
                 return;
             }
-            appendSkrybaMessage('assistant', 'Brak klucza API — popraw propozycję lokalnie (np. „zmień kategorię na Zakupy”, „kwota 50”) albo kliknij Dodaj/Anuluj.');
+            appendSkrybaMessage('assistant', 'Bez klucza API popraw propozycję ręcznie (np. „zmień kategorię na Zakupy”, „kwota 50”) albo kliknij Dodaj/Anuluj.');
             return;
         }
         if (sendBtn) sendBtn.disabled = true;
@@ -1587,7 +1601,10 @@ async function sendSkrybaMessage() {
             return;
         }
         if (!routed.parsed) {
-            appendSkrybaMessage('assistant', 'Nie rozumiem odpowiedzi modelu — spróbuj inaczej sformułować.');
+            const fallback = typeof SKRYBA_FALLBACK_REPLY !== 'undefined'
+                ? SKRYBA_FALLBACK_REPLY
+                : 'Nie rozumiem odpowiedzi modelu — spróbuj inaczej sformułować.';
+            appendSkrybaMessage('assistant', fallback);
             skrybaPersistActiveThread();
             return;
         }
