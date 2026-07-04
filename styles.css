@@ -7751,6 +7751,12 @@ body.auth-locked > #settings-overlay {
     margin-bottom: 2px;
 }
 
+.category-rule-form-mode .toggle-btn.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 2px 10px var(--accent-soft);
+}
+
 .category-rule-form-mode.hidden,
 .category-rule-form-manual.hidden,
 .category-rule-form-proposals.hidden,
@@ -7782,43 +7788,77 @@ body.auth-locked > #settings-overlay {
 .category-rule-proposal-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
+    width: 100%;
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: var(--radius-xs);
     background: var(--input-bg);
+    flex-wrap: nowrap;
 }
 
 .category-rule-proposal-row--added {
-    opacity: 0.72;
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
 }
 
-.category-rule-proposal-body {
+.category-rule-proposal-open {
     flex: 1;
     min-width: 0;
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
 }
 
-.category-rule-proposal-body strong {
+.category-rule-proposal-open:active {
+    opacity: 0.75;
+}
+
+.category-rule-proposal-open strong {
+    flex-shrink: 0;
     font-size: var(--text-sm);
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.category-rule-proposal-add {
-    flex-shrink: 0;
+.category-rule-proposal-open .category-rule-item-meta {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: var(--text-2xs);
+    color: var(--text-muted);
 }
 
-.category-rule-proposal-badge {
+.category-rule-proposal-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.category-rule-proposal-add,
+.category-rule-proposal-edit,
+.category-rule-proposal-dismiss {
     font-size: var(--text-2xs);
-    font-weight: 600;
-    color: var(--text-muted);
+    padding: 4px 6px;
+}
+
+.category-rule-proposal-delete {
+    border: none;
+    background: transparent;
+    color: var(--danger);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 8px;
 }
 
 .category-rule-form-actions {

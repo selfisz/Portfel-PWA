@@ -60,6 +60,7 @@ let categoryRuleFormMode = 'new';
 let categoryRulesPanelOpen = true;
 let categoryRulesShowAll = false;
 const CATEGORY_RULES_PREVIEW = 8;
+const CATEGORY_RULE_DISMISSED_KEY = 'finanse_category_rule_dismissed_proposals';
 
 const STARTER_CATEGORY_RULES = [
     { pattern: 'biedronka', type: 'expense', mainCategory: 'Zakupy', subCategory: 'Zakupy' },
@@ -99,6 +100,188 @@ function getValidStarterCategoryRules() {
     });
 }
 
+function getStarterProposalKey(rule) {
+    return `${rule.type}\u0001${String(rule.pattern || '').trim().toLowerCase()}`;
+}
+
+function readDismissedStarterProposals() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(CATEGORY_RULE_DISMISSED_KEY) || '[]');
+        return new Set(Array.isArray(raw) ? raw.filter(Boolean) : []);
+    } catch {
+        return new Set();
+    }
+}
+
+function writeDismissedStarterProposals(keys) {
+    localStorage.setItem(CATEGORY_RULE_DISMISSED_KEY, JSON.stringify([...keys]));
+}
+
+const GENERIC_PROPOSAL_PATTERNS = new Set([
+    'przelew', 'platnosc', 'płatność', 'zakup', 'karta', 'blik', 'transakcja',
+    'odbior', 'wplata', 'wpłata', 'automat', 'bankomat', 'sklep', 'oplata', 'opłata',
+    'rata', 'splata', 'spłata', 'zwrot', 'cashback', 'portfel', 'finanse', 'konto'
+]);
+
+function normalizeProposalPattern(text) {
+    return String(text || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function isGenericProposalPattern(pattern) {
+    const p = normalizeProposalPattern(pattern);
+    if (p.length < 3 || p.length > 48) return true;
+    if (/^\d+([.,]\d+)?$/.test(p)) return true;
+    if (GENERIC_PROPOSAL_PATTERNS.has(p)) return true;
+    return false;
+}
+
+function isBuiltinStarterPattern(pattern, type) {
+    const needle = normalizeProposalPattern(pattern);
+    return STARTER_CATEGORY_RULES.some(
+        (rule) => rule.type === type && normalizeProposalPattern(rule.pattern) === needle
+    );
+}
+
+function noteWords(note) {
+    return String(note || '')
+        .toLowerCase()
+        .split(/[^a-ząćęłńóśźż0-9]+/u)
+        .filter((word) => word.length >= 4);
+}
+
+function getTransactionDerivedProposals() {
+    const fullNotes = new Map();
+    const words = new Map();
+
+    (appState.transactions || []).forEach((tx) => {
+        if (!tx?.mainCategory) return;
+        const type = tx.type === 'income' ? 'income' : 'expense';
+        const mainCategory = tx.mainCategory;
+        const subCategory = tx.subCategory || '[Bez podkategorii]';
+        if (typeof isAssistantCategoryPairValid === 'function'
+            && !isAssistantCategoryPairValid(type, mainCategory, subCategory)) return;
+
+        const note = String(tx.note || '').trim();
+        if (note.length < 3) return;
+
+        const fullPattern = normalizeProposalPattern(note);
+        if (!isGenericProposalPattern(fullPattern) && fullPattern.length <= 40) {
+            const key = `${type}\u0001${fullPattern}\u0001${mainCategory}\u0001${subCategory}`;
+            fullNotes.set(key, (fullNotes.get(key) || 0) + 1);
+        }
+
+        noteWords(note).forEach((word) => {
+            if (isGenericProposalPattern(word)) return;
+            const key = `${type}\u0001${word}\u0001${mainCategory}\u0001${subCategory}`;
+            words.set(key, (words.get(key) || 0) + 1);
+        });
+    });
+
+    const proposals = [];
+    const pushBucket = (bucket, minCount) => {
+        bucket.forEach((count, key) => {
+            if (count < minCount) return;
+            const [type, pattern, mainCategory, subCategory] = key.split('\u0001');
+            if (hasCategoryRulePattern(pattern, type)) return;
+            if (isBuiltinStarterPattern(pattern, type)) return;
+            proposals.push({
+                pattern,
+                type,
+                mainCategory,
+                subCategory,
+                txCount: count,
+                source: 'history'
+            });
+        });
+    };
+    pushBucket(fullNotes, 2);
+    pushBucket(words, 3);
+
+    const byPattern = new Map();
+    proposals.forEach((rule) => {
+        const key = `${getStarterProposalKey(rule)}\u0001${rule.mainCategory}\u0001${rule.subCategory}`;
+        const prev = byPattern.get(key);
+        if (!prev || rule.txCount > prev.txCount) byPattern.set(key, rule);
+    });
+
+    return [...byPattern.values()]
+        .sort((a, b) => b.txCount - a.txCount || a.pattern.localeCompare(b.pattern, 'pl'));
+}
+
+function getAllCategoryRuleProposals() {
+    const dismissed = readDismissedStarterProposals();
+    const seen = new Set();
+    const merged = [];
+
+    getTransactionDerivedProposals().forEach((rule) => {
+        const key = getStarterProposalKey(rule);
+        if (dismissed.has(key) || seen.has(key)) return;
+        seen.add(key);
+        merged.push(rule);
+    });
+
+    getValidStarterCategoryRules().forEach((rule) => {
+        const key = getStarterProposalKey(rule);
+        if (dismissed.has(key) || seen.has(key)) return;
+        seen.add(key);
+        merged.push({ ...rule, source: 'builtin' });
+    });
+
+    return merged.filter((rule) => !dismissed.has(getStarterProposalKey(rule)));
+}
+
+function findCategoryRuleByPattern(pattern, type) {
+    const needle = String(pattern || '').trim().toLowerCase();
+    if (!needle) return null;
+    return getCategoryRules().find((rule) => rule.type === type && rule.pattern.toLowerCase() === needle) || null;
+}
+
+function fillCategoryRuleFormFromStarter(starter) {
+    if (!starter) return;
+    const patternInput = document.getElementById('category-rule-pattern');
+    const typeSelect = document.getElementById('category-rule-type');
+    const mainSelect = document.getElementById('category-rule-main');
+    const subSelect = document.getElementById('category-rule-sub');
+    if (patternInput) patternInput.value = starter.pattern;
+    if (typeSelect) typeSelect.value = starter.type;
+    populateCategoryRuleMainSelect();
+    if (mainSelect) mainSelect.value = starter.mainCategory;
+    populateCategoryRuleSubSelect();
+    if (subSelect) subSelect.value = starter.subCategory;
+}
+
+function dismissStarterCategoryRuleAt(index) {
+    const starter = getAllCategoryRuleProposals()[index];
+    if (!starter) return;
+    const dismissed = readDismissedStarterProposals();
+    dismissed.add(getStarterProposalKey(starter));
+    writeDismissedStarterProposals(dismissed);
+    renderCategoryRuleProposals();
+}
+
+function openStarterProposalForEdit(index) {
+    const starter = getAllCategoryRuleProposals()[index];
+    if (!starter) return;
+    const existing = findCategoryRuleByPattern(starter.pattern, starter.type);
+    if (existing) {
+        editCategoryRule(existing.id);
+        return;
+    }
+    categoryRuleEditingId = null;
+    fillCategoryRuleFormFromStarter(starter);
+    setCategoryRuleFormMode('new');
+    document.getElementById('category-rule-pattern')?.focus();
+}
+
+function removeCategoryRuleFromProposal(index) {
+    const starter = getAllCategoryRuleProposals()[index];
+    if (!starter) return;
+    const existing = findCategoryRuleByPattern(starter.pattern, starter.type);
+    if (!existing) return;
+    removeCategoryRule(existing.id);
+    renderCategoryRuleProposals();
+}
+
 function hasCategoryRulePattern(pattern, type) {
     const needle = String(pattern || '').trim().toLowerCase();
     if (!needle) return false;
@@ -118,7 +301,7 @@ function addStarterCategoryRule(starter) {
 }
 
 function addAllStarterCategoryRules() {
-    const available = getValidStarterCategoryRules().filter((rule) => !hasCategoryRulePattern(rule.pattern, rule.type));
+    const available = getAllCategoryRuleProposals().filter((rule) => !hasCategoryRulePattern(rule.pattern, rule.type));
     if (!available.length) {
         if (typeof showSettingsToast === 'function') showSettingsToast('Wszystkie propozycje są już na liście');
         renderCategoryRuleProposals();
@@ -147,30 +330,34 @@ function setCategoryRuleFormMode(mode) {
 function renderCategoryRuleProposals() {
     const list = document.getElementById('category-rule-proposals-list');
     if (!list) return;
-    const starters = getValidStarterCategoryRules();
+    const starters = getAllCategoryRuleProposals();
     if (!starters.length) {
-        list.innerHTML = '<p class="settings-hint">Brak propozycji pasujących do Twoich kategorii.</p>';
+        list.innerHTML = '<p class="settings-hint">Brak propozycji — wszystkie dodane lub ukryte. Możesz dodać własną regułę w zakładce „Nowa reguła”.</p>';
         return;
     }
     list.innerHTML = starters.map((rule, index) => {
-        const exists = hasCategoryRulePattern(rule.pattern, rule.type);
+        const existing = findCategoryRuleByPattern(rule.pattern, rule.type);
         const sub = rule.subCategory !== '[Bez podkategorii]' ? ` / ${escapeHtml(rule.subCategory)}` : '';
-        const typeLabel = rule.type === 'income' ? 'Wpływ' : 'Wydatek';
-        const action = exists
-            ? '<span class="category-rule-proposal-badge">Masz już</span>'
-            : `<button type="button" class="btn-text-link category-rule-proposal-add" onclick="addStarterCategoryRuleAt(${index})">Dodaj</button>`;
-        return `<div class="category-rule-proposal-row${exists ? ' category-rule-proposal-row--added' : ''}">
-            <div class="category-rule-proposal-body">
+        const historyMeta = rule.source === 'history' && rule.txCount
+            ? ` · ${rule.txCount}× w historii`
+            : '';
+        const actions = existing
+            ? `<button type="button" class="btn-text-link category-rule-proposal-edit" onclick="editCategoryRule('${escapeHtml(existing.id)}')">Edytuj</button>
+               <button type="button" class="category-rule-proposal-delete" onclick="removeCategoryRuleFromProposal(${index})" aria-label="Usuń regułę">×</button>`
+            : `<button type="button" class="btn-text-link category-rule-proposal-add" onclick="addStarterCategoryRuleAt(${index})">Dodaj</button>
+               <button type="button" class="btn-text-link category-rule-proposal-dismiss" onclick="dismissStarterCategoryRuleAt(${index})">Pomiń</button>`;
+        return `<div class="category-rule-proposal-row${existing ? ' category-rule-proposal-row--added' : ''}">
+            <button type="button" class="category-rule-proposal-open" onclick="openStarterProposalForEdit(${index})">
                 <strong>„${escapeHtml(rule.pattern)}”</strong>
-                <span class="category-rule-item-meta">${typeLabel} → ${escapeHtml(rule.mainCategory)}${sub}</span>
-            </div>
-            ${action}
+                <span class="category-rule-item-meta">→ ${escapeHtml(rule.mainCategory)}${sub}${historyMeta}</span>
+            </button>
+            <div class="category-rule-proposal-actions">${actions}</div>
         </div>`;
     }).join('');
 }
 
 function addStarterCategoryRuleAt(index) {
-    const starter = getValidStarterCategoryRules()[index];
+    const starter = getAllCategoryRuleProposals()[index];
     if (!starter || !addStarterCategoryRule(starter)) return;
     renderCategoryRuleProposals();
     if (typeof showSettingsToast === 'function') showSettingsToast('Dodano regułę');
@@ -204,6 +391,7 @@ function removeCategoryRule(ruleId) {
     appState.categoryRules = appState.categoryRules.filter((rule) => rule.id !== ruleId);
     saveState();
     renderCategoryRulesEditor();
+    if (categoryRuleFormMode === 'proposals') renderCategoryRuleProposals();
 }
 
 function updateCategoryRuleFormUi() {
