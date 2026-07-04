@@ -200,7 +200,7 @@ function createPanelHeader(title, options = {}) {
     return header;
 }
 
-function createDetailsPanelHeaderActions({ editBtnId, viewBtnId, onEdit, onView, onClose }) {
+function createDetailsPanelHeaderActions({ editBtnId, viewBtnId, deleteBtnId, onEdit, onView, onDelete, onClose }) {
     const wrap = document.createElement('div');
     wrap.className = 'loan-details-header-actions';
 
@@ -220,6 +220,15 @@ function createDetailsPanelHeaderActions({ editBtnId, viewBtnId, onEdit, onView,
 
     wrap.appendChild(editBtn);
     wrap.appendChild(viewBtn);
+    if (deleteBtnId && typeof onDelete === 'function') {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.id = deleteBtnId;
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'loan-details-header-btn loan-details-header-btn--danger hidden';
+        deleteBtn.textContent = 'Usuń';
+        deleteBtn.addEventListener('click', onDelete);
+        wrap.appendChild(deleteBtn);
+    }
     wrap.appendChild(createCloseIconButton(onClose));
     return wrap;
 }
@@ -302,8 +311,10 @@ function initPanelHeaders() {
         title: 'Transakcja',
         editBtnId: 'btn-transaction-details-edit',
         viewBtnId: 'btn-transaction-details-view',
+        deleteBtnId: 'btn-transaction-details-delete',
         onEdit: () => editTransactionFromDetails(),
         onView: () => {},
+        onDelete: () => deleteTransactionFromDetails(),
         onClose: closeTransactionDetails,
     }));
 }

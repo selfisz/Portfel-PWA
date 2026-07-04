@@ -12004,6 +12004,11 @@ button.reports-debt-split-item strong {
     display: none;
 }
 
+.loan-details-header-btn--danger {
+    color: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+}
+
 .loan-details-btn {
     display: block;
     width: 100%;

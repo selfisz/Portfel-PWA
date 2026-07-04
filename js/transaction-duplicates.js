@@ -107,20 +107,11 @@ function confirmNoDuplicateBeforeSave(tx, excludeIndex = null) {
 
 function deleteTransactionAtIndex(index) {
     if (index < 0 || index >= appState.transactions.length) return false;
-    const tx = appState.transactions[index];
-    const snapshot = { tx: { ...tx }, index };
-    appState.transactions.splice(index, 1);
-    if (typeof syncCreditCardOnTransactionSave === 'function') syncCreditCardOnTransactionSave({}, tx);
-    if (typeof syncCashOnTransactionSave === 'function') syncCashOnTransactionSave({}, tx);
-    if (typeof syncAssetOnTransactionSave === 'function') syncAssetOnTransactionSave({}, tx);
-    saveState();
-    if (typeof showUndoToast === 'function') {
-        showUndoToast('Usunięto duplikat', () => {
-            if (typeof undoDeleteTransaction === 'function') undoDeleteTransaction(snapshot);
-        });
+    if (typeof deleteTransaction === 'function') {
+        deleteTransaction(index);
+        return true;
     }
-    if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
-    return true;
+    return false;
 }
 
 function dismissDuplicatePair(pair) {

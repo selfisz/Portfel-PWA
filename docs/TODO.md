@@ -64,3 +64,21 @@ Jedno konto (`dawidrekal@gmail.com`), hybryda logowania (iOS/localhost: hasło, 
 - Lokalne dane (`localStorage`, eksport JSON) niezależne od chmury.
 - Archiwum transakcji nie syncuje się do Firestore.
 - Skrypty Node/Python: `$env:FIREBASE_AUTH_PASSWORD` przed uruchomieniem.
+
+---
+
+## Sync chmury na iOS PWA (odłożone)
+
+**Status:** plan zapisany 2026-07-04 · **nie implementować** bez `start/koduj`
+
+**Objawy:** na PC sync OK; na telefonie po powrocie z tła żółta/pomarańczowa kropka i błąd „Synchronizacja nie powiodła się”; po zamknięciu i ponownym otwarciu apki kropka zielona.
+
+**Przyczyna (diagnoza):** iOS usypia WebSocket Firestore; brak reconnectu listenera `onSnapshot` po `visibilitychange` / `pageshow`.
+
+**Plan naprawy:**
+
+- [ ] Po powrocie apki na pierwszy plan (`visibilitychange` / `pageshow`): odświeżyć token (`getIdToken(true)`), przełączyć listener (`stopCloudSync` + `initData` / ponowny `onSnapshot`), cicho ponowić sync (`force: true`).
+- [ ] Przy ręcznym kliknięciu kropki: 1–2 automatyczne ponowienia z krótką pauzą zanim toast błędu.
+- [ ] Lepszy komunikat błędu (offline vs permission vs odbudowa połączenia).
+
+**Pliki:** `js/sync-queue.js`, `js/state.js`, `js/auth.js`, ewentualnie `js/offline.js`.

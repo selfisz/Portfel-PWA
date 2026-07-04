@@ -511,9 +511,13 @@ function refreshTransactionDetailsPanel() {
     const title = document.getElementById('transaction-details-title');
     const content = document.getElementById('transaction-details-content');
     const viewBtn = document.getElementById('btn-transaction-details-view');
+    const deleteBtn = document.getElementById('btn-transaction-details-delete');
+    const overlay = document.getElementById('transaction-details-overlay');
+    const monthCloseContext = overlay?.dataset.monthCloseContext === '1';
     if (title) title.textContent = getTransactionDetailTitle(tx);
     if (content) content.innerHTML = tx ? renderTransactionDetailsHtml(tx) : '';
     if (viewBtn) viewBtn.classList.add('hidden');
+    if (deleteBtn) deleteBtn.classList.toggle('hidden', !monthCloseContext);
 }
 
 function openTransactionDetails(index) {
@@ -549,6 +553,18 @@ function editTransactionFromDetails() {
     const index = activeTransactionDetailsIndex;
     closeTransactionDetails();
     if (index !== null && index >= 0) editTransaction(index);
+}
+
+function deleteTransactionFromDetails() {
+    const index = activeTransactionDetailsIndex;
+    if (index === null || index < 0) return;
+    const overlay = document.getElementById('transaction-details-overlay');
+    const fromMonthClose = overlay?.dataset.monthCloseContext === '1';
+    closeTransactionDetails();
+    deleteTransaction(index);
+    if (fromMonthClose && typeof renderMonthCloseWizard === 'function') {
+        renderMonthCloseWizard();
+    }
 }
 
 function editTransaction(index) {
