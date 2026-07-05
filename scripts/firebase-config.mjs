@@ -14,6 +14,8 @@ export const firebaseConfig = {
 
 export const ALLOWED_AUTH_EMAIL = 'dawidrekal@gmail.com';
 
+export { ALLOWED_AUTH_EMAILS, DEMO_ACCOUNT_EMAIL, isAllowedAuthEmail } from './auth-allowed.mjs';
+
 export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);

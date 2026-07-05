@@ -73,6 +73,7 @@ const ASSETS = [
   'js/subscription-center.js',
   'js/surplus-allocator.js',
   'js/bootstrap.js',
+  'js/auth-config.js',
   'js/app-lock.js',
   'js/reports-calendar.js',
   'js/reports-debt-calculations.js',

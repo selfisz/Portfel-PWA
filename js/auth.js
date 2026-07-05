@@ -1,5 +1,3 @@
-const ALLOWED_AUTH_EMAILS = ['dawidrekal@gmail.com'];
-
 let authReady = false;
 let currentAuthUser = null;
 let authUiMode = 'checking';
@@ -19,8 +17,11 @@ function getUserAuthEmail(user) {
 }
 
 function isEmailAllowed(email) {
+    if (typeof isEmailAllowedInConfig === 'function') {
+        return isEmailAllowedInConfig(email);
+    }
     const normalized = normalizeAuthEmail(email);
-    return ALLOWED_AUTH_EMAILS.some((allowed) => normalizeAuthEmail(allowed) === normalized);
+    return normalized === 'dawidrekal@gmail.com' || normalized === 'test@test.pl';
 }
 
 function isUserSignedIn() {
@@ -122,9 +123,12 @@ function hideAuthOverlay() {
 
 function configureAuthPlatformUi() {
     const emailInput = document.getElementById('auth-email');
-    if (emailInput && !emailInput.value && ALLOWED_AUTH_EMAILS[0]) {
-        emailInput.value = ALLOWED_AUTH_EMAILS[0];
+    if (!emailInput || emailInput.value) return;
+    if (isLocalDevHost() && typeof DEMO_ACCOUNT_EMAIL !== 'undefined') {
+        emailInput.value = DEMO_ACCOUNT_EMAIL;
+        return;
     }
+    emailInput.value = 'dawidrekal@gmail.com';
 }
 
 function forceCanonicalIndexUrl() {

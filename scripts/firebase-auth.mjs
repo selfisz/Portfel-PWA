@@ -1,5 +1,6 @@
 import { collection, doc } from 'firebase/firestore';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { isAllowedAuthEmail } from './auth-allowed.mjs';
 import { ALLOWED_AUTH_EMAIL, auth, db } from './firebase-config.mjs';
 
 export function userStateRef(uid) {
@@ -21,7 +22,7 @@ export async function signInForScripts() {
         throw new Error('Ustaw zmienną środowiskową FIREBASE_AUTH_PASSWORD (hasło konta Firebase).');
     }
     const { user } = await signInWithEmailAndPassword(auth, email, password);
-    if (user.email !== ALLOWED_AUTH_EMAIL) {
+    if (!isAllowedAuthEmail(user.email)) {
         throw new Error(`Konto ${user.email} nie jest na liście dozwolonych.`);
     }
     return user.uid;
