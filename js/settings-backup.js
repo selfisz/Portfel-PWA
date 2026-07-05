@@ -55,6 +55,10 @@ function renderBackupProgressSteps() {
     }).join('');
 }
 
+function resetBackupProgressBodyScrollLock() {
+    document.body.style.overflow = '';
+}
+
 function showBackupProgress({ mode = 'restore', source = 'file' } = {}) {
     const overlay = document.getElementById('backup-restore-progress-overlay');
     const card = overlay?.querySelector('.backup-restore-progress-card');
@@ -79,7 +83,6 @@ function showBackupProgress({ mode = 'restore', source = 'file' } = {}) {
     if (detail) detail.textContent = '';
     overlay.classList.remove('hidden');
     overlay.setAttribute('aria-hidden', 'false');
-    document.body.style.overflow = 'hidden';
     updateBackupProgress(getBackupProgressFirstStep(mode, source));
 }
 
@@ -116,10 +119,7 @@ function closeBackupRestoreProgress() {
     backupProgressState = null;
     overlay?.classList.add('hidden');
     overlay?.setAttribute('aria-hidden', 'true');
-    if (!document.body.classList.contains('settings-open')
-        && !document.body.classList.contains('notifications-open')) {
-        document.body.style.overflow = '';
-    }
+    resetBackupProgressBodyScrollLock();
 }
 
 function finishBackupProgress(message, detailText = '', mode = backupProgressState?.mode) {
@@ -173,7 +173,6 @@ function getExportPayload() {
 
 function finishBackupRestoreUi() {
     if (typeof closeCloudRestorePicker === 'function') closeCloudRestorePicker();
-    document.body.style.overflow = '';
 }
 
 async function applyBackupPayloadAsync(payload, options = {}) {

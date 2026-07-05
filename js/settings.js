@@ -897,5 +897,10 @@ function saveBudgetEditor() {
 function closeSettings() {
     document.getElementById('settings-overlay').classList.add('hidden');
     document.body.classList.remove('settings-open');
+    if (typeof resetBackupProgressBodyScrollLock === 'function') {
+        resetBackupProgressBodyScrollLock();
+    } else {
+        document.body.style.overflow = '';
+    }
 }
 
