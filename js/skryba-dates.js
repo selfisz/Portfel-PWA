@@ -75,5 +75,17 @@ function parseSkrybaPeriodFromText(text, referenceDate = new Date()) {
         }
     }
 
+    const yearInW = t.match(/\bw\s+((?:19|20)\d{2})\b/);
+    if (yearInW) {
+        const year = parseInt(yearInW[1], 10);
+        return { startDate: `${year}-01-01`, endDate: `${year}-12-31`, label: yearInW[1] };
+    }
+
+    const bareYear = t.match(/\b((?:19|20)\d{2})\b/);
+    if (bareYear && !/\b\d+(?:[.,]\d+)?\s*(?:zł|zl|pln)\b/.test(t)) {
+        const year = parseInt(bareYear[1], 10);
+        return { startDate: `${year}-01-01`, endDate: `${year}-12-31`, label: bareYear[1] };
+    }
+
     return null;
 }

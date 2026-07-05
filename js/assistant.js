@@ -1155,6 +1155,8 @@ function tryParseLocalAddTransaction(text) {
     const t = String(text || '').trim();
     if (!t || t.length < 4) return null;
 
+    if (typeof isSkrybaReadOnlyQuery === 'function' && isSkrybaReadOnlyQuery(t)) return null;
+
     if (typeof tryParseTransactionSplit === 'function') {
         const split = tryParseTransactionSplit(t);
         if (split) {
@@ -1194,6 +1196,7 @@ function tryParseLocalAddTransaction(text) {
         amount = typeof parsePlnInput === 'function' ? parsePlnInput(m2[2]) : parseFloat(m2[2].replace(',', '.'));
     }
     if (!Number.isFinite(amount) || amount <= 0 || desc.length < 2) return null;
+    if (typeof isLikelySkrybaYearAmount === 'function' && isLikelySkrybaYearAmount(amount, t)) return null;
 
     const lower = desc.toLowerCase();
     let type = 'expense';
@@ -1359,6 +1362,49 @@ function resolveSkrybaShowTransactionsFilter() {
     return null;
 }
 
+function resolveSkrybaAdvisorTransactionList(advisorMeta, replyText = '') {
+    let filter = resolveSkrybaShowTransactionsFilter();
+
+    if ((!filter || !hasScopedSkrybaTransactionFilter(filter)) && replyText
+        && typeof inferSkrybaFilterFromAssistantText === 'function') {
+        const fromReply = inferSkrybaFilterFromAssistantText(replyText);
+        if (fromReply?.mainCategory) {
+            filter = fromReply;
+            skrybaLastTransactionFilter = fromReply;
+        }
+    }
+
+    if (!filter || !hasScopedSkrybaTransactionFilter(filter)) {
+        return { items: [], filter: null };
+    }
+
+    if (typeof skrybaGetFilteredTransactionItems === 'function') {
+        const items = skrybaGetFilteredTransactionItems(filter);
+        skrybaLastSearchResults = items;
+        return { items, filter };
+    }
+    return { items: [], filter: null };
+}
+
+function tryHandleLocalSkrybaTransactionQuery(text) {
+    if (typeof tryAnswerSkrybaTransactionQuery !== 'function') return false;
+    const answer = tryAnswerSkrybaTransactionQuery(text);
+    if (!answer) return false;
+    const extraHtml = answer.items.length ? buildSkrybaTransactionListExtraHtml(answer.items) : '';
+    appendSkrybaMessage('assistant', answer.intro, extraHtml);
+    const meta = typeof hasScopedSkrybaTransactionFilter === 'function'
+        && hasScopedSkrybaTransactionFilter(answer.filter)
+        ? { skrybaTxList: { filter: { ...answer.filter }, count: answer.items.length } }
+        : undefined;
+    skrybaChatHistory.push({
+        role: 'assistant',
+        text: answer.intro,
+        ...(meta ? { meta } : {})
+    });
+    skrybaPersistActiveThread();
+    return true;
+}
+
 function resolveSkrybaTransactionsForDisplay() {
     const filter = resolveSkrybaShowTransactionsFilter();
     if (filter && typeof skrybaGetFilteredTransactionItems === 'function') {
@@ -1446,6 +1492,8 @@ function formatAssistantSummarize(items, operation = 'sum') {
 
 function buildSkrybaTxListHistoryMeta() {
     if (!skrybaLastSearchResults?.length || !skrybaLastTransactionFilter) return undefined;
+    if (typeof hasScopedSkrybaTransactionFilter === 'function'
+        && !hasScopedSkrybaTransactionFilter(skrybaLastTransactionFilter)) return undefined;
     return {
         skrybaTxList: {
             filter: { ...skrybaLastTransactionFilter },
@@ -1590,7 +1638,7 @@ async function handleAssistantIntent(parsed, userMessage = '', advisorMeta = nul
 
     if (parsed?.mode === 'advisor' && reply) {
         const polished = polishSkrybaText(reply);
-        const { items } = resolveSkrybaTransactionsForDisplay();
+        const { items } = resolveSkrybaAdvisorTransactionList(advisorMeta, polished);
         const extraHtml = items.length ? buildSkrybaTransactionListExtraHtml(items) : '';
         appendSkrybaTypewriterMessage(polished, { extraHtml });
         const chips = typeof buildSkrybaFollowUpChips === 'function'
@@ -1635,6 +1683,16 @@ async function handleAssistantIntent(parsed, userMessage = '', advisorMeta = nul
     }
 
     if (intent === 'add_transaction' && (parsed.transaction || parsed?.action?.params)) {
+        if (typeof isSkrybaReadOnlyQuery === 'function' && isSkrybaReadOnlyQuery(userMessage)) {
+            const answer = typeof tryAnswerSkrybaTransactionQuery === 'function'
+                ? tryAnswerSkrybaTransactionQuery(userMessage)
+                : null;
+            if (answer) {
+                const extraHtml = answer.items.length ? buildSkrybaTransactionListExtraHtml(answer.items) : '';
+                appendSkrybaMessage('assistant', answer.intro, extraHtml);
+                return answer.intro;
+            }
+        }
         const raw = parsed.transaction || parsed.action.params;
         const normalized = typeof normalizeAssistantTransaction === 'function'
             ? normalizeAssistantTransaction(raw)
@@ -1773,6 +1831,8 @@ async function sendSkrybaMessage() {
         return;
     }
 
+    if (tryHandleLocalSkrybaTransactionQuery(text)) return;
+
     const localTx = tryParseLocalAddTransaction(text);
     if (localTx) {
         await dispatchAssistantParsed(localTx, text);
@@ -1828,6 +1888,21 @@ async function sendSkrybaMessage() {
             if (displayText && !pendingHandled) {
                 skrybaChatHistory.push({ role: 'assistant', text: displayText });
             }
+            skrybaPersistActiveThread();
+            return;
+        }
+        if (routed.kind === 'local_query') {
+            const extraHtml = routed.items?.length ? buildSkrybaTransactionListExtraHtml(routed.items) : '';
+            appendSkrybaMessage('assistant', routed.intro, extraHtml);
+            const meta = typeof hasScopedSkrybaTransactionFilter === 'function'
+                && hasScopedSkrybaTransactionFilter(routed.filter)
+                ? { skrybaTxList: { filter: { ...routed.filter }, count: routed.items.length } }
+                : undefined;
+            skrybaChatHistory.push({
+                role: 'assistant',
+                text: routed.intro,
+                ...(meta ? { meta } : {})
+            });
             skrybaPersistActiveThread();
             return;
         }

@@ -32,8 +32,8 @@ beforeAll(() => {
 
   loadScript('js/constants.js');
     loadScript('js/search-utils.js');
-    loadScript('js/skryba-dates.js');
-    loadScript('js/skryba-entities.js');
+  loadScript('js/skryba-dates.js');
+  loadScript('js/skryba-entities.js');
     loadScript('js/skryba-tools.js');
     loadScript('js/skryba-actions.js');
     loadScript('js/skryba-style.js');
@@ -130,5 +130,10 @@ describe('tryParseLocalAddTransaction', () => {
         expect(parsed?.intent).toBe('add_transaction');
         expect(parsed?.transaction?.amount).toBe(20);
         expect(parsed?.transaction?.mainCategory).toBe('Zakupy');
+    });
+
+    it('nie traktuje roku jako kwoty (czynsz w 2026)', () => {
+        expect(tryParseLocalAddTransaction('Czynsz w 2026')).toBeNull();
+        expect(tryParseLocalAddTransaction('Ile czynsz w 2026')).toBeNull();
     });
 });

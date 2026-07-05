@@ -67,6 +67,7 @@ beforeAll(() => {
 
     loadScript('js/search-utils.js');
     loadScript('js/skryba-dates.js');
+    loadScript('js/constants.js');
     loadScript('js/skryba-entities.js');
     loadScript('js/skryba-tools.js');
 });
@@ -82,6 +83,12 @@ describe('parseSkrybaPeriodFromText', () => {
         const period = parseSkrybaPeriodFromText('Ile wpływów w poprzednim miesiącu?', new Date('2025-06-15'));
         expect(period?.startDate).toBe('2025-05-01');
         expect(period?.endDate).toBe('2025-05-31');
+    });
+
+    it('rozpoznaje rok w „w 2026”', () => {
+        const period = parseSkrybaPeriodFromText('Ile czynsz w 2026', new Date('2026-07-05'));
+        expect(period?.startDate).toBe('2026-01-01');
+        expect(period?.endDate).toBe('2026-12-31');
     });
 });
 
@@ -119,6 +126,35 @@ describe('detectSkrybaToolsFromText', () => {
         expect(d.tools).toContain('month_summary');
         expect(d.toolParams.month_summary.startDate).toBe('2025-05-01');
         expect(d.toolParams.month_summary.comparePrevious).toBe(false);
+    });
+
+    it('wykrywa przyjemności w czerwcu', () => {
+        const d = detectSkrybaToolsFromText('Ile wydałem na przyjemności w czerwcu?', new Date('2026-07-05'));
+        expect(d.tools).toContain('filter_transactions');
+        expect(d.toolParams.filter_transactions.mainCategory).toBe('Przyjemności');
+        expect(d.toolParams.filter_transactions.startDate).toBe('2026-06-01');
+    });
+});
+
+describe('inferSkrybaFilterFromAssistantText', () => {
+    it('wyciąga kategorię z odpowiedzi doradcy', () => {
+        const filter = inferSkrybaFilterFromAssistantText(
+            'Wydałeś 1278,98 zł na Przyjemności w czerwcu. To głównie Wycieczki.',
+            '2026-06'
+        );
+        expect(filter?.mainCategory).toBe('Przyjemności');
+        expect(filter?.startDate).toBe('2026-06-01');
+    });
+});
+
+describe('tryAnswerSkrybaTransactionQuery', () => {
+    it('odpowiada na pytanie o czynsz bez dodawania transakcji', () => {
+        globalThis.appState.transactions.push(
+            { date: '2026-03-01', type: 'expense', amount: 2500, mainCategory: 'Dom', subCategory: 'Czynsz', note: 'Czynsz marzec' }
+        );
+        const answer = tryAnswerSkrybaTransactionQuery('Ile czynsz w 2026');
+        expect(answer?.intro).toContain('Dom');
+        expect(answer?.items).toHaveLength(1);
     });
 });
 

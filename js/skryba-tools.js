@@ -1025,37 +1025,55 @@ function deriveSkrybaTransactionFilterFromContext(context, toolParams = {}) {
     return null;
 }
 
+function hasScopedSkrybaTransactionFilter(filter) {
+    return !!(filter?.mainCategory || filter?.subCategory || filter?.query);
+}
+
 function inferSkrybaFilterFromAssistantText(text, monthKey = null) {
     const raw = String(text || '');
     if (!raw) return null;
 
+    const period = typeof parseSkrybaPeriodFromText === 'function'
+        ? parseSkrybaPeriodFromText(raw, new Date())
+        : null;
+    const monthBounds = skrybaMonthBoundsFromMonthKey(
+        monthKey || (typeof getCurrentMonthKey === 'function' ? getCurrentMonthKey() : null)
+    );
+    const periodDates = period || monthBounds;
+
+    const buildFromLabel = (label) => {
+        const resolved = typeof resolveSkrybaCategoryFromText === 'function'
+            ? resolveSkrybaCategoryFromText(label)
+            : detectSkrybaCategoryHints(label);
+        if (!resolved?.mainCategory) return null;
+        return {
+            mainCategory: resolved.mainCategory,
+            subCategory: resolved.subCategory || null,
+            query: resolved.query || null,
+            startDate: periodDates?.startDate || null,
+            endDate: periodDates?.endDate || null,
+            type: 'expense',
+            label: String(label || '').trim()
+        };
+    };
+
     const labelPatterns = [
+        /\bwyda\w*\s+[\d\s.,]+\s*zł\s+na\s+([^,\n.]+?)(?:\s+w\s+|\s*$|\.|,)/i,
+        /\bna\s+([A-ZĄĆĘŁŃÓŚŹŻa-ząćęłńóśźż][^,\n.]*?)(?:\s+w\s+|\s*$|\.|,)/i,
         /(?:PRZEKROCZONY|UWAGA|przekrocz\w*|limit)\s+([^:\n]+)/i,
         /kategorii\s+([^:\n.]+)/i,
         /([^\n:.,]+?)\s*[›\-–]\s*([^\n:.,]+)/i
     ];
-    let label = null;
-    labelPatterns.forEach((pattern) => {
-        if (label) return;
-        const match = raw.match(pattern);
-        if (!match) return;
-        label = match[2] ? `${match[1].trim()} › ${match[2].trim()}` : match[1].trim();
-    });
-    if (!label) return null;
 
-    const { mainCategory, subCategory } = parseSkrybaCategoryLabel(label);
-    if (!mainCategory) return null;
-    const bounds = skrybaMonthBoundsFromMonthKey(
-        monthKey || (typeof getCurrentMonthKey === 'function' ? getCurrentMonthKey() : null)
-    );
-    return {
-        mainCategory,
-        subCategory: subCategory && subCategory !== '[Bez podkategorii]' ? subCategory : null,
-        startDate: bounds?.startDate || null,
-        endDate: bounds?.endDate || null,
-        type: 'expense',
-        label
-    };
+    for (const pattern of labelPatterns) {
+        const match = raw.match(pattern);
+        if (!match) continue;
+        const label = match[2] ? `${match[1].trim()} › ${match[2].trim()}` : match[1].trim();
+        const filter = buildFromLabel(label);
+        if (filter) return filter;
+    }
+
+    return null;
 }
 
 function captureSkrybaAdvisorContext(context, toolParams = {}) {
@@ -1195,12 +1213,12 @@ function detectSkrybaToolsFromText(text, referenceDate = new Date()) {
         tools.push('savings_goal_status');
     }
 
-    const categoryHints = typeof detectSkrybaCategoryHints === 'function'
-        ? detectSkrybaCategoryHints(text)
-        : {};
-    const wantsTx = /wydałem|wydalem|wydatki|ile kosztował|ile kosztowal|ile wydane|ile łącznie|ile lacznie|transakcj|tankowan|paliwo|zakup/.test(t);
+    const categoryHints = typeof resolveSkrybaCategoryFromText === 'function'
+        ? resolveSkrybaCategoryFromText(text)
+        : detectSkrybaCategoryHints(text);
+    const wantsTx = /wyda[lł]em|wydalem|wydatki|ile\s+(wyda|koszt|bylo|było|poszlo|poszło|łącznie|lacznie)|ile\s+\w+\s+(w|na)|kosztowa[lł]|kosztowal|transakcj|tankowan|paliwo|zakup|czynsz|przyjemnos|przyjemnoś|rata\b|najem\b/.test(t);
 
-    if (period || wantsTx || categoryHints.mainCategory) {
+    if (period || wantsTx || categoryHints.mainCategory || categoryHints.query) {
         tools.push('filter_transactions');
         toolParams.filter_transactions = {
             startDate: period?.startDate,
@@ -1208,11 +1226,57 @@ function detectSkrybaToolsFromText(text, referenceDate = new Date()) {
             label: period?.label,
             mainCategory: categoryHints.mainCategory,
             subCategory: categoryHints.subCategory,
+            query: categoryHints.query,
             type: /wpływ|wplyw|zarobiłem|zarobilem|przychód|przychod/.test(t) ? 'income' : 'expense'
         };
     }
 
     return { tools: [...new Set(tools)], toolParams };
+}
+
+function tryAnswerSkrybaTransactionQuery(text) {
+    if (typeof isSkrybaReadOnlyQuery !== 'function' || !isSkrybaReadOnlyQuery(text)) return null;
+
+    const detection = detectSkrybaToolsFromText(text);
+    let params = detection.toolParams?.filter_transactions || {};
+    const period = typeof parseSkrybaPeriodFromText === 'function'
+        ? parseSkrybaPeriodFromText(text, new Date())
+        : null;
+    const hints = typeof resolveSkrybaCategoryFromText === 'function'
+        ? resolveSkrybaCategoryFromText(text)
+        : detectSkrybaCategoryHints(text);
+
+    if (!params.mainCategory && !params.subCategory && !params.query) {
+        params = {
+            ...params,
+            startDate: period?.startDate || params.startDate,
+            endDate: period?.endDate || params.endDate,
+            label: period?.label || params.label,
+            mainCategory: hints.mainCategory,
+            subCategory: hints.subCategory,
+            query: hints.query,
+            type: 'expense'
+        };
+    }
+
+    if (!hasScopedSkrybaTransactionFilter(params) && !period?.startDate) return null;
+
+    const items = skrybaGetFilteredTransactionItems(params);
+    const summary = skrybaToolFilterTransactions(params);
+    const fmt = typeof formatPlnAmount === 'function' ? formatPlnAmount : (n) => `${Number(n).toFixed(2)} zł`;
+    const scopeParts = [];
+    if (params.mainCategory) scopeParts.push(params.mainCategory);
+    if (params.subCategory) scopeParts.push(params.subCategory);
+    if (params.label && !scopeParts.length) scopeParts.push(params.label);
+    const scope = scopeParts.length ? scopeParts.join(' › ') : 'wybrane';
+    const intro = items.length
+        ? `${scope}: ${summary.count} pozycji, łącznie ${fmt(summary.sumExpensesPln)}.`
+        : `Nie znalazłem transakcji dla „${scope}” w tym okresie.`;
+
+    if (typeof skrybaLastSearchResults !== 'undefined') skrybaLastSearchResults = items;
+    if (typeof skrybaLastTransactionFilter !== 'undefined') skrybaLastTransactionFilter = params;
+
+    return { intro, items, filter: params };
 }
 
 function isSkrybaAdvisorQuery(detection) {
