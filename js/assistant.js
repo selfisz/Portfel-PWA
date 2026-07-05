@@ -787,7 +787,17 @@ function resolveSkrybaShowTransactionsFilter() {
     return null;
 }
 
-function resolveSkrybaAdvisorTransactionList(advisorMeta, replyText = '') {
+function resolveSkrybaAdvisorTransactionList(advisorMeta, replyText = '', userMessage = '') {
+    if (userMessage && typeof resolveSkrybaTransactionListParams === 'function') {
+        const params = resolveSkrybaTransactionListParams(userMessage);
+        if (hasSkrybaTransactionListFilter(params) && typeof skrybaGetFilteredTransactionItems === 'function') {
+            const items = skrybaGetFilteredTransactionItems(params);
+            skrybaLastSearchResults = items;
+            skrybaLastTransactionFilter = params;
+            return { items, filter: params };
+        }
+    }
+
     let filter = resolveSkrybaShowTransactionsFilter();
 
     if ((!filter || !hasScopedSkrybaTransactionFilter(filter)) && replyText
@@ -857,8 +867,10 @@ function pushSkrybaTransactionListMessage(intro, items, filter = null) {
 function isSkrybaShowTransactionsCommand(text) {
     const normalized = String(text || '').toLowerCase().trim().replace(/[?!.…]+$/g, '');
     if (!normalized) return false;
-    if (typeof hasSkrybaTransactionListFilter === 'function'
-        && hasSkrybaTransactionListFilter(extractSkrybaTransactionListParams(text))) {
+    if (typeof extractSkrybaTransactionListParams === 'function'
+        && typeof hasSkrybaTransactionListFilter === 'function'
+        && typeof resolveSkrybaTransactionListParams === 'function'
+        && hasSkrybaTransactionListFilter(resolveSkrybaTransactionListParams(text))) {
         return false;
     }
     if (/^poka[zż]\s*(wi[eę]cej|transakcj\w*|pozycj\w*|wpis\w*|je|mi|to)?$/.test(normalized)) return true;
@@ -966,7 +978,9 @@ function tryHandleLocalSkrybaShowTransactions(text) {
         && typeof hasSkrybaTransactionListFilter === 'function'
         && typeof skrybaGetFilteredTransactionItems === 'function'
         && typeof skrybaToolFilterTransactions === 'function') {
-        const params = extractSkrybaTransactionListParams(text);
+        const params = typeof resolveSkrybaTransactionListParams === 'function'
+            ? resolveSkrybaTransactionListParams(text)
+            : extractSkrybaTransactionListParams(text);
         const lower = String(text || '').toLowerCase();
         if (hasSkrybaTransactionListFilter(params) && /poka[zż]|pokaz|wy[sś]wietl|lista|transakcj/.test(lower)) {
             const items = skrybaGetFilteredTransactionItems(params);
@@ -1094,8 +1108,13 @@ async function handleAssistantIntent(parsed, userMessage = '', advisorMeta = nul
 
     if (parsed?.mode === 'advisor' && reply) {
         const polished = polishSkrybaText(reply);
-        const { items } = resolveSkrybaAdvisorTransactionList(advisorMeta, polished);
-        const extraHtml = items.length ? buildSkrybaTransactionListExtraHtml(items) : '';
+        let extraHtml = '';
+        const explicitTxContext = advisorMeta?.context?.filter_transactions
+            || advisorMeta?.toolParams?.filter_transactions;
+        if (explicitTxContext) {
+            const { items } = resolveSkrybaAdvisorTransactionList(advisorMeta, polished, userMessage);
+            extraHtml = items.length ? buildSkrybaTransactionListExtraHtml(items) : '';
+        }
         appendSkrybaTypewriterMessage(polished, { extraHtml });
         const chips = typeof buildSkrybaFollowUpChips === 'function'
             ? buildSkrybaFollowUpChips(advisorMeta?.context || skrybaLastAdvisorContext?.context || {})

@@ -96,6 +96,31 @@ function parseSkrybaAmountFilterFromText(text) {
     return Object.keys(result).length ? result : null;
 }
 
+function parseSkrybaBareTransactionAmount(text) {
+    const raw = String(text || '');
+    const t = normalizeSkrybaHintText(raw);
+    if (!/transakcj/.test(t)) return null;
+    const match = t.match(/transakcj\w*\s+(?:(?:powyzej|powyuzej|wiecej niz|wieksze niz|od)\s+|(?:ponizej|mniej niz|do)\s+)?(\d+(?:[.,]\d{1,2})?)/);
+    if (!match) return null;
+    const amount = parseSkrybaAmountFromText(match[1]);
+    if (!Number.isFinite(amount) || amount <= 0) return null;
+    if (/ponizej|mniej niz|do\s+\d/.test(match[0])) {
+        return { maxAmount: amount };
+    }
+    return { minAmount: amount };
+}
+
+function isSkrybaTransactionFilterRefinement(text) {
+    const t = normalizeSkrybaHintText(text).trim();
+    if (!t || t.length > 56) return false;
+    const period = typeof parseSkrybaPeriodFromText === 'function'
+        ? parseSkrybaPeriodFromText(text, new Date())
+        : null;
+    if (!period) return false;
+    if (/transakcj\w*\s+\d{3,}/.test(t)) return false;
+    return /^(tylko\s+)?(w\s+)?/.test(t) || /^tylko\b/.test(t);
+}
+
 function normalizeSkrybaHintText(text) {
     return String(text || '').toLowerCase()
         .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e').replace(/ł/g, 'l')
@@ -119,6 +144,10 @@ function isSkrybaReadOnlyQuery(text) {
     const t = normalizeSkrybaHintText(text).trim();
     if (!t) return false;
     if (/^(ile|kiedy|czy|jak|co|gdzie|poka[zż]|pokaz|wy[sś]wietl|suma|lista|por[oó]wnaj|transakcj)/.test(t)) return true;
+    if (typeof isSkrybaTransactionFilterRefinement === 'function' && isSkrybaTransactionFilterRefinement(text)) {
+        return true;
+    }
+    if (/transakcj\w*\s+\d{3,}/.test(t)) return true;
     if (/\b(ile|jak\s+duzo|jak\s+dużo)\s+(wyda|koszt|bylo|było|poszlo|poszło|lacznie|łącznie)\b/.test(t)) return true;
     if (/\bw\s+(?:19|20)\d{2}\b/.test(t) && !/^\d+(?:[.,]\d+)?\s*(?:zł|zl|pln)\b/.test(t)) return true;
     if (/\b(czynsz|rata|najem|przyjemnos|przyjemnoś|oplat\w*\s+mieszk)\b/.test(t)

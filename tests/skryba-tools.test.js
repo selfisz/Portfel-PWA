@@ -395,4 +395,33 @@ describe('tryAnswerSkrybaTransactionQuery — kwota', () => {
         expect(answer?.items).toHaveLength(1);
         expect(answer.items[0].amount).toBe(2500);
     });
+
+    it('rozpoznaje „transakcje 1500 w czerwcu” bez słowa powyżej', () => {
+        globalThis.appState.transactions = [
+            { date: '2026-06-11', type: 'expense', amount: 4130.69, mainCategory: 'Długi', subCategory: 'Kredyt hipoteczny', note: 'H' },
+            { date: '2026-06-29', type: 'expense', amount: 682.13, mainCategory: 'Dom', subCategory: 'Remont', note: 'R' },
+            { date: '2026-05-11', type: 'expense', amount: 4134.36, mainCategory: 'Długi', subCategory: 'Kredyt hipoteczny', note: 'H2' }
+        ];
+        const params = extractSkrybaTransactionListParams('Transakcje 1500 w czerwcu', new Date('2026-06-29'));
+        expect(params.minAmount).toBe(1500);
+        expect(params.startDate).toBe('2026-06-01');
+        const answer = tryAnswerSkrybaTransactionQuery('Transakcje 1500 w czerwcu');
+        expect(answer?.items).toHaveLength(1);
+        expect(answer.items[0].amount).toBe(4130.69);
+    });
+
+    it('łączy poprzedni filtr kwoty z doprecyzowaniem okresu', () => {
+        globalThis.appState.transactions = [
+            { date: '2026-06-11', type: 'expense', amount: 4130.69, mainCategory: 'Długi', subCategory: 'Kredyt hipoteczny', note: 'H' },
+            { date: '2026-06-29', type: 'expense', amount: 682.13, mainCategory: 'Dom', subCategory: 'Remont', note: 'R' },
+            { date: '2026-05-11', type: 'expense', amount: 4134.36, mainCategory: 'Długi', subCategory: 'Kredyt hipoteczny', note: 'H2' }
+        ];
+        tryAnswerSkrybaTransactionQuery('Transakcje powyżej 1500');
+        expect(globalThis.skrybaLastTransactionFilter?.minAmount).toBe(1500);
+        const answer = tryAnswerSkrybaTransactionQuery('Tylko w czerwcu');
+        expect(answer?.items).toHaveLength(1);
+        expect(answer.items[0].amount).toBe(4130.69);
+        expect(answer.filter.minAmount).toBe(1500);
+        expect(answer.filter.startDate).toBe('2026-06-01');
+    });
 });
