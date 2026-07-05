@@ -11,27 +11,36 @@ function yieldToMain() {
     });
 }
 
-const BACKUP_RESTORE_PROGRESS_STEPS = [
-    { id: 'fetch', label: 'Pobieranie z chmury', sources: ['cloud'] },
-    { id: 'read', label: 'Wczytywanie pliku', sources: ['file'] },
-    { id: 'validate', label: 'Sprawdzanie kopii', sources: ['cloud', 'file'] },
-    { id: 'restore', label: 'Przywracanie danych', sources: ['cloud', 'file'] },
-    { id: 'save', label: 'Zapis i synchronizacja', sources: ['cloud', 'file'] },
-    { id: 'refresh', label: 'Odświeżanie widoków', sources: ['cloud', 'file'] },
-    { id: 'done', label: 'Gotowe', sources: ['cloud', 'file'] }
+const BACKUP_OPERATION_PROGRESS_STEPS = [
+    { id: 'fetch', label: 'Pobieranie z chmury', operations: ['restore:cloud'] },
+    { id: 'read', label: 'Wczytywanie pliku', operations: ['restore:file'] },
+    { id: 'prepare', label: 'Przygotowanie danych', operations: ['export:cloud', 'export:file'] },
+    { id: 'upload', label: 'Wysyłanie do chmury', operations: ['export:cloud'] },
+    { id: 'download', label: 'Zapis pliku', operations: ['export:file'] },
+    { id: 'validate', label: 'Sprawdzanie kopii', operations: ['restore:cloud', 'restore:file'] },
+    { id: 'restore', label: 'Przywracanie danych', operations: ['restore:cloud', 'restore:file'] },
+    { id: 'save', label: 'Zapis i synchronizacja', operations: ['restore:cloud', 'restore:file'] },
+    { id: 'refresh', label: 'Odświeżanie widoków', operations: ['restore:cloud', 'restore:file'] },
+    { id: 'done', label: 'Gotowe', operations: ['restore:cloud', 'restore:file', 'export:cloud', 'export:file'] }
 ];
 
-let backupRestoreProgressState = null;
-let backupRestoreProgressCloseTimer = null;
+let backupProgressState = null;
+let backupProgressCloseTimer = null;
 
-function getBackupRestoreProgressSteps(source) {
-    return BACKUP_RESTORE_PROGRESS_STEPS.filter((step) => step.sources.includes(source));
+function getBackupProgressSteps(mode, source) {
+    const operationKey = `${mode}:${source}`;
+    return BACKUP_OPERATION_PROGRESS_STEPS.filter((step) => step.operations.includes(operationKey));
 }
 
-function renderBackupRestoreProgressSteps() {
+function getBackupProgressFirstStep(mode, source) {
+    if (mode === 'export') return 'prepare';
+    return source === 'cloud' ? 'fetch' : 'read';
+}
+
+function renderBackupProgressSteps() {
     const list = document.getElementById('backup-restore-progress-steps');
-    if (!list || !backupRestoreProgressState) return;
-    const { steps, currentStepId } = backupRestoreProgressState;
+    if (!list || !backupProgressState) return;
+    const { steps, currentStepId } = backupProgressState;
     const currentIdx = steps.findIndex((step) => step.id === currentStepId);
     list.innerHTML = steps.map((step, index) => {
         const isDone = currentStepId === 'done' || index < currentIdx;
@@ -46,21 +55,24 @@ function renderBackupRestoreProgressSteps() {
     }).join('');
 }
 
-function showBackupRestoreProgress({ source = 'file' } = {}) {
+function showBackupProgress({ mode = 'restore', source = 'file' } = {}) {
     const overlay = document.getElementById('backup-restore-progress-overlay');
     const card = overlay?.querySelector('.backup-restore-progress-card');
     const actions = document.getElementById('backup-restore-progress-actions');
     const detail = document.getElementById('backup-restore-progress-detail');
+    const title = document.getElementById('backup-restore-progress-title');
     if (!overlay) return;
-    if (backupRestoreProgressCloseTimer) {
-        window.clearTimeout(backupRestoreProgressCloseTimer);
-        backupRestoreProgressCloseTimer = null;
+    if (backupProgressCloseTimer) {
+        window.clearTimeout(backupProgressCloseTimer);
+        backupProgressCloseTimer = null;
     }
-    backupRestoreProgressState = {
+    backupProgressState = {
+        mode,
         source,
-        steps: getBackupRestoreProgressSteps(source),
+        steps: getBackupProgressSteps(mode, source),
         currentStepId: null
     };
+    if (title) title.textContent = mode === 'export' ? 'Tworzenie kopii' : 'Przywracanie kopii';
     card?.classList.remove('backup-restore-progress-card--success', 'backup-restore-progress-card--error');
     actions?.classList.add('hidden');
     detail?.classList.add('hidden');
@@ -68,18 +80,22 @@ function showBackupRestoreProgress({ source = 'file' } = {}) {
     overlay.classList.remove('hidden');
     overlay.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
-    updateBackupRestoreProgress(source === 'cloud' ? 'fetch' : 'read');
+    updateBackupProgress(getBackupProgressFirstStep(mode, source));
 }
 
-function updateBackupRestoreProgress(stepId, detailText = '') {
-    if (!backupRestoreProgressState) return;
-    const step = backupRestoreProgressState.steps.find((item) => item.id === stepId);
+function showBackupRestoreProgress({ source = 'file' } = {}) {
+    showBackupProgress({ mode: 'restore', source });
+}
+
+function updateBackupProgress(stepId, detailText = '') {
+    if (!backupProgressState) return;
+    const step = backupProgressState.steps.find((item) => item.id === stepId);
     if (!step) return;
-    backupRestoreProgressState.currentStepId = stepId;
+    backupProgressState.currentStepId = stepId;
     const status = document.getElementById('backup-restore-progress-status');
     const detail = document.getElementById('backup-restore-progress-detail');
     if (status) status.textContent = step.label;
-    renderBackupRestoreProgressSteps();
+    renderBackupProgressSteps();
     if (detail) {
         const text = String(detailText || '').trim();
         detail.textContent = text;
@@ -87,13 +103,17 @@ function updateBackupRestoreProgress(stepId, detailText = '') {
     }
 }
 
+function updateBackupRestoreProgress(stepId, detailText = '') {
+    updateBackupProgress(stepId, detailText);
+}
+
 function closeBackupRestoreProgress() {
     const overlay = document.getElementById('backup-restore-progress-overlay');
-    if (backupRestoreProgressCloseTimer) {
-        window.clearTimeout(backupRestoreProgressCloseTimer);
-        backupRestoreProgressCloseTimer = null;
+    if (backupProgressCloseTimer) {
+        window.clearTimeout(backupProgressCloseTimer);
+        backupProgressCloseTimer = null;
     }
-    backupRestoreProgressState = null;
+    backupProgressState = null;
     overlay?.classList.add('hidden');
     overlay?.setAttribute('aria-hidden', 'true');
     if (!document.body.classList.contains('settings-open')
@@ -102,25 +122,35 @@ function closeBackupRestoreProgress() {
     }
 }
 
-function finishBackupRestoreProgress(message, detailText = '') {
-    updateBackupRestoreProgress('done', detailText);
+function finishBackupProgress(message, detailText = '', mode = backupProgressState?.mode) {
+    updateBackupProgress('done', detailText);
     const card = document.querySelector('.backup-restore-progress-card');
     const status = document.getElementById('backup-restore-progress-status');
     card?.classList.add('backup-restore-progress-card--success');
-    if (status) status.textContent = message || 'Kopia została przywrócona';
-    backupRestoreProgressCloseTimer = window.setTimeout(() => {
+    const defaultMessage = mode === 'export' ? 'Kopia została utworzona' : 'Kopia została przywrócona';
+    if (status) status.textContent = message || defaultMessage;
+    backupProgressCloseTimer = window.setTimeout(() => {
         closeBackupRestoreProgress();
         if (message && typeof showSettingsToast === 'function') showSettingsToast(message);
     }, 1400);
 }
 
-function failBackupRestoreProgress(message) {
+function finishBackupRestoreProgress(message, detailText = '') {
+    finishBackupProgress(message, detailText, 'restore');
+}
+
+function failBackupProgress(message, mode = backupProgressState?.mode) {
     const card = document.querySelector('.backup-restore-progress-card');
     const status = document.getElementById('backup-restore-progress-status');
     const actions = document.getElementById('backup-restore-progress-actions');
     card?.classList.add('backup-restore-progress-card--error');
-    if (status) status.textContent = message || 'Nie udało się przywrócić kopii';
+    const defaultMessage = mode === 'export' ? 'Nie udało się utworzyć kopii' : 'Nie udało się przywrócić kopii';
+    if (status) status.textContent = message || defaultMessage;
     actions?.classList.remove('hidden');
+}
+
+function failBackupRestoreProgress(message) {
+    failBackupProgress(message, 'restore');
 }
 
 function getExportPayload() {
@@ -414,31 +444,32 @@ async function backupToCloud() {
     const count = getTransactionCount(appState);
     if (!confirm(`Na pewno wysłać kopię do chmury (${count} trans.)?\nZostanie dodana jako ręczna wersja (przechowujemy do ${MAX_CLOUD_BACKUP_SNAPSHOTS_MANUAL} ręcznych kopii).`)) return;
 
-    const btn = document.getElementById('btn-backup-cloud');
-    setSettingsButtonBusy(btn, true, 'Wysyłanie…');
+    showBackupProgress({ mode: 'export', source: 'cloud' });
     try {
+        updateBackupProgress('prepare', `${count} trans.`);
         await yieldToMain();
         const payload = getExportPayload();
+        updateBackupProgress('upload');
         await saveCloudBackupSnapshot(payload, { source: 'manual' });
-        showSettingsToast('Kopia wysłana do chmury');
+        finishBackupProgress('Kopia wysłana do chmury', `${count} trans.`, 'export');
         refreshBackupInfo();
         hapticFeedback();
     } catch (err) {
-        showSettingsToast('Nie udało się wysłać kopii', 'error');
+        failBackupProgress('Nie udało się wysłać kopii', 'export');
         console.error(err);
-    } finally {
-        setSettingsButtonBusy(btn, false);
     }
 }
 
 async function backupToPhone() {
-    const btn = document.getElementById('btn-backup-phone');
-    setSettingsButtonBusy(btn, true, 'Zapisywanie…');
+    const count = getTransactionCount(appState);
+    showBackupProgress({ mode: 'export', source: 'file' });
     try {
+        updateBackupProgress('prepare', `${count} trans.`);
         await yieldToMain();
         const payload = getExportPayload();
         const json = JSON.stringify(payload);
         await yieldToMain();
+        updateBackupProgress('download');
         localStorage.setItem(getLocalBackupStorageKey(), json);
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -447,14 +478,12 @@ async function backupToPhone() {
         link.download = `finanse-backup-${new Date().toISOString().slice(0, 10)}.json`;
         link.click();
         URL.revokeObjectURL(url);
-        showSettingsToast('Kopia zapisana na telefonie');
+        finishBackupProgress('Kopia zapisana na telefonie', `${count} trans.`, 'export');
         refreshBackupInfo();
         hapticFeedback();
     } catch (err) {
-        showSettingsToast('Nie udało się zapisać kopii', 'error');
+        failBackupProgress('Nie udało się zapisać kopii', 'export');
         console.error(err);
-    } finally {
-        setSettingsButtonBusy(btn, false);
     }
 }
 

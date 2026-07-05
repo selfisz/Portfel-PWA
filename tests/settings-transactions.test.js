@@ -269,15 +269,22 @@ describe('applyBackupPayload', () => {
 });
 
 describe('backup restore progress', () => {
-    it('zawiera krok pobierania tylko dla chmury', () => {
-        const cloud = getBackupRestoreProgressSteps('cloud').map((step) => step.id);
-        const file = getBackupRestoreProgressSteps('file').map((step) => step.id);
+    it('zawiera krok pobierania tylko dla przywracania z chmury', () => {
+        const cloud = getBackupProgressSteps('restore', 'cloud').map((step) => step.id);
+        const file = getBackupProgressSteps('restore', 'file').map((step) => step.id);
         expect(cloud).toContain('fetch');
         expect(cloud).not.toContain('read');
         expect(file).toContain('read');
         expect(file).not.toContain('fetch');
         expect(cloud).toContain('done');
         expect(file).toContain('done');
+    });
+
+    it('zawiera kroki tworzenia kopii dla eksportu', () => {
+        const cloud = getBackupProgressSteps('export', 'cloud').map((step) => step.id);
+        const file = getBackupProgressSteps('export', 'file').map((step) => step.id);
+        expect(cloud).toEqual(['prepare', 'upload', 'done']);
+        expect(file).toEqual(['prepare', 'download', 'done']);
     });
 });
 
