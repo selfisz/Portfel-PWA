@@ -29,9 +29,11 @@ const SKRYBA_ACTION_TOOLS = [
 ];
 
 function getSkrybaTransactionsSource() {
-    return typeof getMergedTransactions === 'function'
-        ? getMergedTransactions()
-        : (appState?.transactions || []);
+    return typeof getTransactionSearchSource === 'function'
+        ? getTransactionSearchSource()
+        : (typeof getMergedTransactions === 'function'
+            ? getMergedTransactions()
+            : (appState?.transactions || []));
 }
 
 function skrybaRoundPln(value) {
@@ -114,27 +116,6 @@ function skrybaSummarizeTransactions(items) {
         balancePln: skrybaRoundPln(balance),
         savingsRatePct: income > 0 ? Math.round((balance / income) * 100) : 0
     };
-}
-
-function skrybaGetFilteredTransactionItems(params = {}) {
-    let items = getSkrybaTransactionsSource();
-    const typeFilter = params.type === 'income' || params.type === 'expense' ? params.type : null;
-
-    if (typeFilter) items = items.filter((t) => t.type === typeFilter);
-    if (params.startDate) items = items.filter((t) => t.date >= params.startDate);
-    if (params.endDate) items = items.filter((t) => t.date <= params.endDate);
-    if (typeof filterItemsByFuzzyCategoryField === 'function') {
-        items = filterItemsByFuzzyCategoryField(items, 'mainCategory', params.mainCategory);
-        items = filterItemsByFuzzyCategoryField(items, 'subCategory', params.subCategory);
-    }
-    if (params.query) {
-        items = items.filter((t) => (
-            typeof transactionMatchesFuzzyQuery === 'function'
-                ? transactionMatchesFuzzyQuery(t, params.query)
-                : true
-        ));
-    }
-    return items;
 }
 
 function skrybaToolSnapshotWealth() {

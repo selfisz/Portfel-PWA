@@ -159,24 +159,6 @@ function isMonthCloseAvailable(monthKey) {
     return localIsoDate(new Date()) >= end;
 }
 
-function renderMonthCloseTxRowHtml(tx, globalIndex) {
-    if (globalIndex < 0) return '';
-    const title = tx.subCategory === '[Bez podkategorii]' ? tx.mainCategory : tx.subCategory;
-    const amountClass = tx.type === 'expense' ? 'expense' : 'income';
-    const sign = tx.type === 'expense' ? '−' : '+';
-    const iconHtml = typeof renderCategoryIcon === 'function'
-        ? renderCategoryIcon(tx.mainCategory, 'list', tx.subCategory !== '[Bez podkategorii]' ? tx.subCategory : null, tx.type)
-        : '';
-    return `<button type="button" class="reports-tx-row" onclick="monthCloseOpenTransactionDetails(${globalIndex})">
-        ${iconHtml}
-        <span class="reports-tx-row-text">
-            <span class="reports-tx-row-title">${escapeHtml(title)}</span>
-            <span class="reports-tx-row-meta">${formatTxDate(tx.date)} · ${escapeHtml(tx.mainCategory)}</span>
-        </span>
-        <span class="reports-tx-row-amount ${amountClass}">${sign}${formatPlnAmount(tx.amount)}</span>
-    </button>`;
-}
-
 function monthCloseOpenTransactionDetails(index) {
     const overlay = document.getElementById('transaction-details-overlay');
     if (overlay) overlay.dataset.monthCloseContext = '1';
@@ -297,14 +279,7 @@ function buildMonthCloseSteps(monthKey) {
             id: 'duplicates',
             title: 'Możliwe duplikaty',
             empty: !duplicates.length,
-            html: duplicates.length
-                ? `<div class="month-close-tx-list">${duplicates.slice(0, 8).map((pair) => `
-                    <div class="month-close-dupe-group">
-                        <p class="reports-hint month-close-dupe-label">Podejrzany duplikat — kliknij transakcję, aby edytować lub usunąć</p>
-                        ${renderMonthCloseTxRowHtml(pair.a.tx, pair.a.index)}
-                        ${renderMonthCloseTxRowHtml(pair.b.tx, pair.b.index)}
-                    </div>`).join('')}</div>`
-                : '<p class="reports-hint">Nie znaleziono podejrzanych duplikatów.</p>'
+            html: buildMonthCloseDuplicatesStepHtml(duplicates)
         },
         {
             id: 'budget',
@@ -363,12 +338,6 @@ function monthCloseAddRecurringByIndex(index) {
             showAppToast('Dodano transakcję', 'success');
             renderMonthCloseWizard();
         }
-    }
-}
-
-function monthCloseDeleteDuplicate(index) {
-    if (typeof deleteTransactionAtIndex === 'function' && deleteTransactionAtIndex(index)) {
-        renderMonthCloseWizard();
     }
 }
 

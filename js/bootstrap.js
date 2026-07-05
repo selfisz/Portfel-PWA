@@ -9,9 +9,10 @@ function bootstrapApp() {
     initOnboarding();
     initPanelHeaders();
     initOverlayCloseIcons();
+    initAppActionDelegation();
     if (typeof initCategoryRulesEditor === 'function') initCategoryRulesEditor();
     initData();
-    initCloudSyncListeners();
+    if (typeof initSyncLifecycleListeners === 'function') initSyncLifecycleListeners();
     scheduleMarketPriceRefresh();
     initNotifications();
     if (typeof initSkrybaVoice === 'function') initSkrybaVoice();

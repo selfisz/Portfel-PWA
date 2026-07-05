@@ -26,6 +26,7 @@ beforeAll(() => {
     };
     globalThis.saveState = () => {};
     globalThis.summarizePeriod = () => ({ income: 0, expense: 10, balance: -10, savings: 0 });
+    loadScript('js/tx-row-html.js');
     loadScript('js/transaction-duplicates.js');
     loadScript('js/month-close.js');
 });

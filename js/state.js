@@ -38,24 +38,6 @@ let chartViewType = 'expense';
 let chartHiddenMainCategories = {};
 let chartHiddenSubCategories = {};
 let chartViewFilterExpanded = false;
-let dashboardChartInstance = null;
-let reportsChartInstance = null;
-let reportsTrendChartInstance = null;
-let reportsYoyChartInstance = null;
-let reportsDowChartInstance = null;
-let reportsDebtChartInstance = null;
-let reportsDebtTrendChartInstance = null;
-let reportsDebtSplitChartInstance = null;
-let reportsDebtsTabChartInstance = null;
-let reportsDebtsTabSplitInstance = null;
-let reportsDebtPeakChartInstance = null;
-let reportsAssetAllocationChartInstance = null;
-let reportsAssetsTabAllocationInstance = null;
-let reportsCashTrendChartInstance = null;
-let reportsAssetsTabCashTrendInstance = null;
-let reportsNetWorthTrendChartInstance = null;
-let reportsAllocationTrendChartInstance = null;
-let reportsDiversificationChartInstance = null;
 let reportsViewType = 'expense';
 let reportsRankLevel = 'main';
 let reportsCalendarYear = null;
@@ -64,7 +46,6 @@ let reportsDebtCalendarYear = null;
 let reportsDebtCalendarMonth = null;
 let reportsLastPeriod = null;
 let cloudSyncUnlocked = false;
-let stateSnapshotUnsubscribe = null;
 function getPersistedState(raw = appState) {
     const data = raw ?? appState ?? {};
     const transactions = typeof normalizeTransactionsArray === 'function'
@@ -247,13 +228,6 @@ function applyMigrations() {
     return hadCategory || hadLoanMigration || hadCardMigration || hadAssetMigration || hadCashMigration || hadAnalyticsMigration;
 }
 
-function stopCloudSync() {
-    if (stateSnapshotUnsubscribe) {
-        stateSnapshotUnsubscribe();
-        stateSnapshotUnsubscribe = null;
-    }
-}
-
 function readStoredAppStateRaw() {
     const stored = localStorage.getItem(getFinanceStorageKey());
     if (stored) {
@@ -424,7 +398,6 @@ function initData() {
         return;
     }
 
-    stopCloudSync();
     if (loadLocalFinanceState()) {
         /* local snapshot loaded — cloud sync continues below */
     }
@@ -432,54 +405,11 @@ function initData() {
     cloudSyncUnlocked = true;
     setSyncStatus('');
 
-    const settleSyncIndicator = () => {
-        const count = getTransactionCount(appState);
-        const statusEl = document.getElementById('sync-status');
-        if (!statusEl || statusEl.className) return;
-        if (count > 0) setSyncStatus('online', count);
-        else setSyncStatus('offline', 0);
-    };
-
-    let syncTimeout = window.setTimeout(settleSyncIndicator, 12000);
-
-    const clearSyncTimeout = () => {
-        window.clearTimeout(syncTimeout);
-        syncTimeout = null;
-    };
-
-    if (getTransactionCount(appState) < 100) {
-        autoRecoverFromCloudBackupIfNeeded().then((recovered) => {
-            if (recovered) clearSyncTimeout();
-        });
-    }
-
     window.setTimeout(() => {
         if (typeof maybeRunAutoCloudBackup === 'function') maybeRunAutoCloudBackup();
     }, 4000);
 
-    stateSnapshotUnsubscribe = stateRef.onSnapshot((docSnap) => {
-        clearSyncTimeout();
-        if (docSnap.exists) {
-            syncFromRemoteData(docSnap.data());
-            return;
-        }
-        cloudSyncUnlocked = true;
-        const count = getTransactionCount(appState);
-        if (count > 0) saveState({ forceCloud: true });
-        else setSyncStatus('online', 0);
-    }, (error) => {
-        console.error('Błąd synchronizacji', error);
-        clearSyncTimeout();
-        const count = getTransactionCount(appState);
-        if (count > 0) setSyncStatus('offline', count);
-        else settleSyncIndicator();
-        if (count < 100) {
-            autoRecoverFromCloudBackupIfNeeded().finally(() => {
-                clearSyncTimeout();
-                settleSyncIndicator();
-            });
-        }
-    });
+    if (typeof startCloudSnapshotSync === 'function') startCloudSnapshotSync();
 
     if (typeof initOfflineListeners === 'function') initOfflineListeners();
 }
@@ -532,7 +462,7 @@ function refreshCurrentView() {
     const loans = document.getElementById('view-loans');
     if (dash?.classList.contains('active')) renderDashboard();
     if (reports?.classList.contains('active')) renderReports();
-    if (investments?.classList.contains('active')) renderInvestments();
+    if (investments?.classList.contains('active') && typeof renderAssets === 'function') renderAssets();
     if (loans?.classList.contains('active')) renderLoans();
 }
 

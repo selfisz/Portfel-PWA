@@ -26,7 +26,7 @@ await page.waitForTimeout(1500);
 const globals = await page.evaluate(() => ({
     renderDashboard: typeof renderDashboard,
     renderReports: typeof renderReports,
-    renderInvestments: typeof renderInvestments,
+    renderAssets: typeof renderAssets,
     renderLoans: typeof renderLoans,
     getPortfolioValuePln: typeof getPortfolioValuePln,
     renderPhase3Reports: typeof renderPhase3Reports,

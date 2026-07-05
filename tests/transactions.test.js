@@ -124,7 +124,7 @@ beforeAll(() => {
   globalThis.runAssetAnalyticsMigrations = () => false;
   globalThis.renderDashboard = () => {};
   globalThis.renderReports = () => {};
-  globalThis.renderInvestments = () => {};
+  globalThis.renderAssets = () => {};
   globalThis.renderLoans = () => {};
   globalThis.saveState = () => {};
   globalThis.hapticFeedback = () => {};

@@ -1,0 +1,48 @@
+    <div id="skryba-overlay" class="skryba-overlay hidden">
+        <div class="skryba-shell">
+            <header class="skryba-header">
+                <button type="button" id="btn-skryba-back" class="skryba-header-btn hidden" onclick="skrybaShowChatView()" aria-label="Wróć do czatu">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                </button>
+                <div class="skryba-header-titles">
+                    <h2 class="skryba-header-title" id="skryba-header-title">Skryba</h2>
+                    <p class="skryba-header-subtitle hidden" id="skryba-header-subtitle"></p>
+                </div>
+                <div class="skryba-header-actions">
+                    <button type="button" id="btn-skryba-threads" class="skryba-header-btn" onclick="skrybaShowThreadsView()" aria-label="Historia rozmów">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+                    </button>
+                    <button type="button" class="skryba-header-btn" onclick="skrybaStartNewThread()" aria-label="Nowa rozmowa">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                    </button>
+                    <button type="button" class="skryba-header-btn" onclick="closeSkrybaPanel()" aria-label="Zamknij">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                    </button>
+                </div>
+            </header>
+
+            <div id="skryba-threads-view" class="skryba-threads-view hidden">
+                <div id="skryba-threads-list" class="skryba-threads-list"></div>
+            </div>
+
+            <div id="skryba-chat-view" class="skryba-chat-view">
+                <div id="skryba-messages" class="skryba-messages"></div>
+                <div id="skryba-voice-preview" class="skryba-voice-preview hidden" aria-live="polite">
+                    <span id="skryba-voice-preview-text" class="skryba-voice-preview-text"></span>
+                    <div class="skryba-voice-preview-actions">
+                        <button type="button" class="skryba-btn skryba-btn--primary" onclick="confirmSkrybaVoicePreview()">Wyślij</button>
+                        <button type="button" class="skryba-btn" onclick="cancelSkrybaVoicePreview()">Anuluj</button>
+                    </div>
+                </div>
+                <div class="skryba-composer">
+                    <button type="button" id="btn-skryba-voice" class="skryba-voice-btn hidden" onclick="toggleSkrybaVoiceInput()" aria-label="Dyktuj wiadomość" aria-pressed="false">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+                    </button>
+                    <textarea id="skryba-input" class="skryba-input" rows="1" placeholder="Np. 20 zł zakupy biedronka…" onkeydown="onSkrybaInputKeydown(event)" oninput="onSkrybaInputInput()"></textarea>
+                    <button type="button" id="btn-skryba-send" class="skryba-send-btn" onclick="sendSkrybaMessage()" aria-label="Wyślij">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>

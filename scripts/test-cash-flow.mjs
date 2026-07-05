@@ -41,7 +41,7 @@ globalThis.showSettingsToast = () => {};
 globalThis.showAppToast = () => {};
 globalThis.renderReports = () => {};
 globalThis.renderDashboard = () => {};
-globalThis.renderInvestments = () => {};
+globalThis.renderAssets = () => {};
 globalThis.renderLoans = () => {};
 globalThis.setPlnAmountElement = () => {};
 globalThis.formatPlnAmountHtml = (n) => String(n);

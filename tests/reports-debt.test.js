@@ -80,8 +80,10 @@ beforeAll(() => {
   loadScript('js/loan-details.js');
   loadScript('js/portfolio.js');
   loadScript('js/state.js');
+  loadScript('js/format.js');
+  loadScript('js/tx-row-html.js');
   loadScript('js/reports-core.js');
-  loadScript('js/reports-phase3.js');
+  loadScript('js/reports-analysis.js');
   loadScript('js/reports-debt.js');
 
   runInContext(`
@@ -525,5 +527,25 @@ describe('getRecentCardRepaymentAverage', () => {
       ]
     });
     expect(getRecentCardRepaymentAverage('c1')).toBe(0);
+  });
+});
+
+describe('sumLoanPaymentsForLoanInRange', () => {
+  it('sumuje spłaty kredytu w zakresie dat', () => {
+    const loan = { id: 'l1', name: 'Hipoteka' };
+    globalThis.transactionMatchesLoan = (t, l) => l.id === 'l1';
+    _setAppState({
+      ..._getAppState(),
+      transactions: [
+        { date: '2024-06-01', type: 'expense', amount: 1000, mainCategory: 'Długi' },
+        { date: '2024-06-15', type: 'expense', amount: 500, mainCategory: 'Długi' },
+        { date: '2024-05-01', type: 'expense', amount: 999, mainCategory: 'Długi' }
+      ]
+    });
+    expect(sumLoanPaymentsForLoanInRange(loan, '2024-06-01', '2024-06-30')).toBe(1500);
+  });
+
+  it('zwraca 0 gdy brak kredytu', () => {
+    expect(sumLoanPaymentsForLoanInRange(null, '2024-01-01', '2024-12-31')).toBe(0);
   });
 });

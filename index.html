@@ -109,6 +109,7 @@
         <span>Tryb offline — zmiany zapisują się lokalnie i zsynchronizują się po powrocie internetu.</span>
     </div>
 
+    <!-- Źródło markupu: partials/skryba-overlay.html (sync: node scripts/assemble-html.mjs) -->
     <div id="skryba-overlay" class="skryba-overlay hidden">
         <div class="skryba-shell">
             <header class="skryba-header">
@@ -733,7 +734,7 @@
         </div>
     </div>
 
-    <div id="transaction-details-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeTransactionDetails()">
+    <div id="transaction-details-overlay" class="calendar-day-overlay hidden" data-action="close-transaction-details">
         <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
             <div id="panel-header-transaction-details"></div>
             <div id="transaction-details-content" class="loan-details-content"></div>
@@ -1976,19 +1977,23 @@
 
     <script src="js/constants.js"></script>
     <script src="js/firebase.js"></script>
+    <script src="js/chart-instances.js"></script>
     <script src="js/state.js"></script>
     <script src="js/format.js"></script>
     <script src="js/search-utils.js"></script>
     <script src="js/theme.js"></script>
     <script src="js/categories.js"></script>
+    <script src="js/tx-row-html.js"></script>
     <script src="js/category-rules.js"></script>
     <script src="js/loan-details.js"></script>
     <script src="js/credit-cards.js"></script>
     <script src="js/portfolio.js"></script>
     <script src="js/state-limits.js"></script>
+    <script src="js/transaction-search.js"></script>
     <script src="js/backup-import.js"></script>
     <script src="js/sync-queue.js"></script>
     <script src="js/offline.js"></script>
+    <script src="js/sync-lifecycle.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/add-form-ui.js"></script>
     <script src="js/transactions.js"></script>
@@ -1996,14 +2001,16 @@
     <script src="js/transaction-split.js"></script>
     <script src="js/recurring-confirm.js"></script>
     <script src="js/app-shortcuts.js"></script>
+    <script src="js/dashboard-forecast.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/reports-core.js"></script>
     <script src="js/assets.js"></script>
+    <script src="js/assets-migrations.js"></script>
     <script src="js/market-prices.js"></script>
     <script src="js/cash.js"></script>
     <script src="js/asset-analytics.js"></script>
-    <script src="js/investments.js"></script>
     <script src="js/loans.js"></script>
+    <script src="js/settings-backup.js"></script>
     <script src="js/settings.js"></script>
     <script src="js/skryba-dates.js"></script>
     <script src="js/skryba-entities.js"></script>
@@ -2011,19 +2018,25 @@
     <script src="js/skryba-actions.js"></script>
     <script src="js/skryba-style.js"></script>
     <script src="js/skryba-prompts.js"></script>
+    <script src="js/skryba-chat-ui.js"></script>
+    <script src="js/skryba-threads.js"></script>
     <script src="js/skryba-router.js"></script>
     <script src="js/skryba-voice.js"></script>
     <script src="js/assistant.js"></script>
+    <script src="js/skryba-local-parser.js"></script>
     <script src="js/notifications.js"></script>
     <script src="js/budget-ui.js"></script>
     <script src="js/budget-alerts.js"></script>
     <script src="js/debt-reminders.js"></script>
     <script src="js/reports-calendar.js"></script>
+    <script src="js/reports-debt-calculations.js"></script>
     <script src="js/reports-debt.js"></script>
     <script src="js/reports-assets.js"></script>
     <script src="js/reports-analysis-chart.js"></script>
     <script src="js/reports-day-month-summary.js"></script>
-    <script src="js/reports-phase3.js"></script>
+    <script src="js/reports-analysis-cache.js"></script>
+    <script src="js/reports-analysis.js"></script>
+    <script src="js/month-close-duplicates-ui.js"></script>
     <script src="js/month-close.js"></script>
     <script src="js/spending-insights.js"></script>
     <script src="js/subscription-center.js"></script>

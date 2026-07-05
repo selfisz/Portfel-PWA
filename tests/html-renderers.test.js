@@ -93,6 +93,7 @@ beforeAll(() => {
     globalThis.showMoreLoanPayments = () => {};
 
     loadScript('js/constants.js');
+    loadScript('js/tx-row-html.js');
     loadScript('js/loan-details.js');
     loadScript('js/portfolio.js');
     loadScript('js/state.js');
@@ -725,5 +726,39 @@ describe('populateCreditCardSelectors', () => {
         expect(select.disabled).toBe(false);
         expect(select.innerHTML).toContain('Erste');
         expect(select.innerHTML).toContain('mBank');
+    });
+});
+
+describe('buildTransactionRowHtml', () => {
+    const tx = {
+        date: '2026-06-01',
+        type: 'expense',
+        amount: 120,
+        mainCategory: 'Zakupy',
+        subCategory: 'Biedronka'
+    };
+
+    it('buduje wiersz z data-action dla raportów', () => {
+        const html = buildTransactionRowHtml(tx, { globalIndex: 3, clickMode: 'open' });
+        expect(html).toContain('data-action="open-transaction"');
+        expect(html).toContain('data-tx-index="3"');
+        expect(html).toContain('Biedronka');
+        expect(html).toContain('120.00 zł');
+    });
+
+    it('buduje wiersz rozliczenia miesiąca z data-action', () => {
+        const html = buildTransactionRowHtml(tx, { globalIndex: 2, clickMode: 'monthClose' });
+        expect(html).toContain('data-action="month-close-transaction"');
+        expect(html).toContain('data-tx-index="2"');
+    });
+
+    it('buduje wiersz Skryby z data-tx-index', () => {
+        const html = buildTransactionRowHtml(tx, { globalIndex: 5, clickMode: 'skryba' });
+        expect(html).toContain('data-tx-index="5"');
+        expect(html).toContain('skryba-tx-row');
+    });
+
+    it('zwraca pusty string dla rozliczenia miesiąca bez indeksu', () => {
+        expect(buildTransactionRowHtml(tx, { globalIndex: -1, clickMode: 'monthClose' })).toBe('');
     });
 });

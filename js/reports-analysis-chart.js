@@ -1,6 +1,6 @@
 /* Analiza — wykres struktury (donut + drill-down jak Pulpit) */
 
-let reportsStructureChartInstance = null;
+// Chart instance in chart-instances.js
 let reportsStructureViewType = 'expense';
 let reportsStructureMainCategory = null;
 let reportsStructureSubCategory = null;

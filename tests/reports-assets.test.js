@@ -124,7 +124,7 @@ beforeAll(() => {
   loadScript('js/portfolio.js');
   loadScript('js/state.js');
   loadScript('js/reports-core.js');
-  loadScript('js/reports-phase3.js');
+  loadScript('js/reports-analysis.js');
   loadScript('js/reports-debt.js');
   loadScript('js/reports-assets.js');
 

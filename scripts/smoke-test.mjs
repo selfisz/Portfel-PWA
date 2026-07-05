@@ -13,6 +13,8 @@ const cachedJs = [...swAssets.matchAll(/'js\/[^']+\.js'/g)].map((m) => m[0].slic
 const staticAssets = [
     'index.html',
     'styles.css',
+    'styles/base.css',
+    'styles/components.css',
     'manifest.json',
     'sw.js',
     ...scriptSrcs,
@@ -61,7 +63,7 @@ console.log(`\n=== Global symbols (grep) ===\n`);
 const requiredGlobals = [
     'renderDashboard',
     'renderReports',
-    'renderInvestments',
+    'renderAssets',
     'renderLoans',
     'saveTransaction',
     'getPortfolioValuePln',

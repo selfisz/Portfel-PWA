@@ -1,6 +1,6 @@
 /**
  * Finalne testy pozostałych funkcji: getCategoryMonthlyTotals, getDebtPaymentsForBounds,
- * buildTrendEntries z reports-phase3.js + getTransactionsInRange.
+ * buildTrendEntries z reports-analysis.js + getTransactionsInRange.
  */
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { loadScript, runInContext } from './helpers/load.js';
@@ -45,7 +45,7 @@ beforeAll(() => {
     loadScript('js/loans.js');
     loadScript('js/reports-core.js');
     loadScript('js/reports-debt.js');
-    loadScript('js/reports-phase3.js');
+    loadScript('js/reports-analysis.js');
 
     runInContext(`
         function _getAppState()  { return appState; }

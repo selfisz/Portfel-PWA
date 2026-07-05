@@ -24,7 +24,7 @@ beforeAll(() => {
 
     loadScript('js/constants.js');
     loadScript('js/portfolio.js');
-    loadScript('js/reports-phase3.js');
+    loadScript('js/reports-analysis.js');
     loadScript('js/subscription-center.js');
 
     runInContext(`

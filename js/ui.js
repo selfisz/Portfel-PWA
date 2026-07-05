@@ -327,6 +327,38 @@ function initOverlayCloseIcons() {
     });
 }
 
+let appActionDelegationBound = false;
+
+function initAppActionDelegation() {
+    if (appActionDelegationBound) return;
+    appActionDelegationBound = true;
+
+    document.body.addEventListener('click', (e) => {
+        const openTx = e.target.closest('[data-action="open-transaction"]');
+        if (openTx) {
+            const index = parseInt(openTx.dataset.txIndex, 10);
+            if (!Number.isNaN(index) && typeof openTransactionDetails === 'function') {
+                openTransactionDetails(index);
+            }
+            return;
+        }
+
+        const monthCloseTx = e.target.closest('[data-action="month-close-transaction"]');
+        if (monthCloseTx) {
+            const index = parseInt(monthCloseTx.dataset.txIndex, 10);
+            if (!Number.isNaN(index) && typeof monthCloseOpenTransactionDetails === 'function') {
+                monthCloseOpenTransactionDetails(index);
+            }
+            return;
+        }
+
+        const closeOverlay = e.target.closest('[data-action="close-transaction-details"]');
+        if (closeOverlay && e.target === closeOverlay) {
+            if (typeof closeTransactionDetails === 'function') closeTransactionDetails();
+        }
+    });
+}
+
 function getOrCreateShowMoreButton(id, onClick) {
     let btn = document.getElementById(id);
     if (!btn) {
@@ -519,6 +551,7 @@ function showModuleSplitAlert(fileName, lineCount) {
 const MODULE_JS_FILES = [
     'js/constants.js',
     'js/firebase.js',
+    'js/chart-instances.js',
     'js/state.js',
     'js/format.js',
     'js/theme.js',
@@ -528,13 +561,15 @@ const MODULE_JS_FILES = [
     'js/portfolio.js',
     'js/ui.js',
     'js/transactions.js',
+    'js/dashboard-forecast.js',
     'js/dashboard.js',
     'js/reports-core.js',
     'js/assets.js',
+    'js/assets-migrations.js',
     'js/cash.js',
     'js/asset-analytics.js',
-    'js/investments.js',
     'js/loans.js',
+    'js/settings-backup.js',
     'js/settings.js',
     'js/skryba-dates.js',
     'js/skryba-entities.js',
@@ -546,9 +581,12 @@ const MODULE_JS_FILES = [
     'js/assistant.js',
     'js/bootstrap.js',
     'js/reports-calendar.js',
+    'js/reports-debt-calculations.js',
     'js/reports-debt.js',
     'js/reports-assets.js',
-    'js/reports-phase3.js'
+    'js/reports-analysis-chart.js',
+    'js/reports-analysis-cache.js',
+    'js/reports-analysis.js',
 ];
 
 async function checkModuleSplitThreshold() {

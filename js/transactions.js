@@ -21,7 +21,7 @@ function switchView(viewId, title, element) {
         if (typeof ensureAnalysisUIInit === 'function') ensureAnalysisUIInit();
         renderReports();
     }
-    if (viewId === 'investments') renderInvestments();
+    if (viewId === 'investments' && typeof renderAssets === 'function') renderAssets();
     if (viewId === 'loans') renderLoans();
 
     if (viewId === 'add' && editingTxIndex === null) {

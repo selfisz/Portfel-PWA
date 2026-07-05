@@ -47,6 +47,7 @@ beforeAll(() => {
     globalThis.reportsPeriodMode = 'month';
     globalThis.ANALYSIS_MONTH_SHORT = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze', 'Lip', 'Sie', 'Wrz', 'Paź', 'Lis', 'Gru'];
 
+    loadScript('js/tx-row-html.js');
     loadScript('js/transaction-duplicates.js');
     loadScript('js/month-close.js');
     loadScript('js/reports-core.js');
@@ -219,7 +220,7 @@ describe('checklist: układ chipów roku', () => {
     });
 
     it('Całość osobno + lata w kolejności', () => {
-        loadScript('js/reports-phase3.js');
+        loadScript('js/reports-analysis.js');
         renderAnalysisYearChips();
         const out = mockDom['reports-year-chips'].innerHTML;
         expect(out.indexOf('Całość')).toBeLessThan(out.indexOf('2026'));

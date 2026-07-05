@@ -66,6 +66,7 @@ beforeAll(() => {
     globalThis.loadSavingsGoal = () => 20;
 
     loadScript('js/search-utils.js');
+    loadScript('js/transaction-search.js');
     loadScript('js/skryba-dates.js');
     loadScript('js/constants.js');
     loadScript('js/skryba-entities.js');

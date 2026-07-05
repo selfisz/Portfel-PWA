@@ -100,37 +100,6 @@ function clearOfflineSession() {
     hideOfflineBanner();
 }
 
-async function flushOfflineChangesAfterOnline(options = {}) {
-    if (isAppOffline()) return false;
-    if (typeof isUserSignedIn !== 'function' || !isUserSignedIn()) return false;
-
-    const hadPending = typeof hasPendingCloudSync === 'function' && hasPendingCloudSync();
-    const wasOfflineSession = offlineSessionActive;
-    if (!hadPending && !wasOfflineSession) return false;
-
-    const txCount = typeof getTransactionCount === 'function' ? getTransactionCount(appState) : 0;
-    let synced = false;
-
-    if (typeof resumePendingCloudSync === 'function') {
-        synced = await resumePendingCloudSync({ force: true, silent: true });
-    }
-
-    if (!synced && hadPending && typeof flushCloudSync === 'function' && typeof getPersistedState === 'function') {
-        synced = await flushCloudSync(getPersistedState(appState), { forceCloud: true });
-    }
-
-    const allowToast = options.allowToast !== false;
-    if (allowToast && typeof showAppToast === 'function') {
-        if (synced) {
-            showAppToast(formatOfflineSyncSuccessMessage(txCount), 'success');
-        } else if (hadPending || wasOfflineSession) {
-            showAppToast('Synchronizacja nie powiodła się — dotknij kropki, aby ponowić', 'error');
-        }
-    }
-
-    return synced;
-}
-
 function formatOfflineSyncSuccessMessage(txCount) {
     const count = Number.isFinite(txCount) ? txCount : 0;
     if (count === 1) return 'Zsynchronizowano z chmurą (1 transakcja)';
@@ -171,10 +140,6 @@ function initOfflineListeners() {
                     console.error('handleAuthenticatedUser after online', err);
                 });
             }
-            return;
         }
-        flushOfflineChangesAfterOnline().catch((err) => {
-            console.warn('flushOfflineChangesAfterOnline', err);
-        });
     });
 }

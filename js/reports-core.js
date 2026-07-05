@@ -504,17 +504,7 @@ function renderReportsTxListHtml(transactions, limit = 40) {
     }
     return transactions.slice(0, limit).map((t) => {
         const globalIndex = appState.transactions.indexOf(t);
-        const title = t.subCategory === '[Bez podkategorii]' ? t.mainCategory : t.subCategory;
-        const amountClass = t.type === 'expense' ? 'expense' : 'income';
-        const sign = t.type === 'expense' ? '−' : '+';
-        return `<button type="button" class="reports-tx-row" onclick="openTransactionDetails(${globalIndex})">
-            ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
-            <span class="reports-tx-row-text">
-                <span class="reports-tx-row-title">${escapeHtml(title)}</span>
-                <span class="reports-tx-row-meta">${formatTxDate(t.date)} · ${escapeHtml(t.mainCategory)}</span>
-            </span>
-            <span class="reports-tx-row-amount ${amountClass}">${sign}${formatPlnAmount(t.amount)}</span>
-        </button>`;
+        return buildTransactionRowHtml(t, { globalIndex, clickMode: globalIndex >= 0 ? 'open' : 'none' });
     }).join('');
 }
 
