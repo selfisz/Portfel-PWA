@@ -249,4 +249,43 @@ describe('moduł zadań', () => {
         tasksActiveFilter = 'all';
         expect(getActiveShoppingList()).toBeNull();
     });
+
+    it('usuwa dopisek from finance z tytułu zadania', () => {
+        expect(stripTodoListHintFromTitle('test from finance')).toBe('test');
+        expect(stripTodoListHintFromTitle('czynsz na finanse')).toBe('czynsz');
+        expect(stripTodoListHintFromTitle('mleko')).toBe('mleko');
+    });
+
+    it('parsuje dodanie bez dopisku from finance', () => {
+        const parsed = tryParseSkrybaTodoAdd('przypomnij test from finance');
+        expect(parsed?.titles).toEqual(['test']);
+        expect(parsed?.kind).toBe('shopping');
+    });
+
+    it('czyści istniejące zadania z dopiskiem from finance', () => {
+        const list = getTodoListByKind('finance');
+        appState.todos.push({
+            id: 'todo-from-finance',
+            listId: list.id,
+            title: 'test from finance',
+            done: false,
+            sortOrder: 0,
+            createdAt: '2026-07-05T10:00:00.000Z',
+            updatedAt: '2026-07-05T10:00:00.000Z'
+        });
+        ensureTodoListsInitialized();
+        expect(getTodoItemById('todo-from-finance')?.title).toBe('test');
+    });
+
+    it('nie pokazuje from finance w powiadomieniu o terminie', () => {
+        const created = [];
+        globalThis.upsertNotification = (proposal) => {
+            created.push(proposal);
+            return { isNew: true, item: proposal };
+        };
+        const list = getTodoListByKind('finance');
+        addTodoItem({ title: 'test from finance', listId: list.id, dueDate: '2026-07-05' });
+        evaluateTaskDueReminders();
+        expect(created[0]?.title).toBe('Dziś termin: test');
+    });
 });

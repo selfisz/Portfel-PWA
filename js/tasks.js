@@ -51,11 +51,27 @@ function normalizeTodoList(raw) {
     };
 }
 
+function stripTodoListHintFromTitle(title) {
+    let cleaned = String(title || '').trim();
+    if (!cleaned) return '';
+    cleaned = cleaned
+        .replace(/\s+(?:do|na|z|from|to|on|in)\s+(?:the\s+)?(?:listy\s+|list\s+)?(?:zakup\w*|list[aę]\s+zakup\w*|zapłat\w*|zaplat\w*|finans\w*|finance\w*|zada[nń]|tasks?|rachunk\w*|payments?|shopping)\s*$/i, '')
+        .replace(/\s+from\s+finanse\s*$/i, '');
+    return cleaned.trim();
+}
+
+function getTodoDisplayTitle(itemOrTitle) {
+    const title = typeof itemOrTitle === 'string'
+        ? itemOrTitle
+        : itemOrTitle?.title;
+    return stripTodoListHintFromTitle(title);
+}
+
 function normalizeTodoItem(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const id = String(raw.id || '').trim();
     const listId = String(raw.listId || '').trim();
-    const title = String(raw.title || '').trim();
+    const title = stripTodoListHintFromTitle(String(raw.title || '').trim());
     if (!id || !listId || !title) return null;
     const item = {
         id,
@@ -143,7 +159,9 @@ function ensureTodoListsInitialized() {
     });
 
     appState.todoLists = normalizeTodoListsArray(appState.todoLists);
+    const todosBefore = appState.todos.map((item) => item.title).join('\0');
     appState.todos = normalizeTodosArray(appState.todos);
+    if (todosBefore !== appState.todos.map((item) => item.title).join('\0')) changed = true;
     if (changed && typeof saveState === 'function') saveState({ silentLimits: true });
     return changed;
 }
@@ -323,7 +341,7 @@ function skrybaToolTodoOverview(params = {}) {
         kind,
         items: filtered.slice(0, 12).map((item) => ({
             id: item.id,
-            title: item.title,
+            title: getTodoDisplayTitle(item),
             dueDate: item.dueDate || null,
             amount: Number.isFinite(item.amount) ? item.amount : null,
             listKind: getTodoListById(item.listId)?.kind || null,
@@ -352,7 +370,7 @@ function buildMorningDailyReviewText() {
         const lines = urgent.slice(0, 8).map((item, index) => {
             const list = getTodoListById(item.listId);
             const meta = formatTodoItemMeta(item);
-            return `${index + 1}. ${item.title}${meta ? ` — ${meta}` : ''}${list ? ` (${list.name})` : ''}`;
+            return `${index + 1}. ${getTodoDisplayTitle(item)}${meta ? ` — ${meta}` : ''}${list ? ` (${list.name})` : ''}`;
         });
         sections.push(`Moje zadania (${urgent.length} pilnych):\n${lines.join('\n')}`);
     } else if (getOpenTodosCount() > 0) {
@@ -394,7 +412,7 @@ function collectUserTodoBoardTasks() {
         .filter((item) => !item.done)
         .map((item) => {
             const list = getTodoListById(item.listId);
-            const bodyParts = [item.title];
+            const bodyParts = [getTodoDisplayTitle(item)];
             if (Number.isFinite(item.amount) && typeof formatPlnAmount === 'function') {
                 bodyParts.push(formatPlnAmount(item.amount));
             }
@@ -555,7 +573,7 @@ function renderDashboardTasksPanel() {
             : `<button type="button" class="dashboard-quick-action-btn" onclick="toggleTodoItem('${escapeHtml(item.id)}')" aria-label="Odhacz">✓</button>`;
         return `<div class="dashboard-action-row${overdue ? ' dashboard-action-row--overdue' : ''}">
             <button type="button" class="dashboard-action-info dashboard-action-info--btn" onclick="openDashboardTodoItem('${escapeHtml(item.id)}')">
-                <strong class="dashboard-action-name">${escapeHtml(item.title)}</strong>
+                <strong class="dashboard-action-name">${escapeHtml(getTodoDisplayTitle(item))}</strong>
                 ${meta ? `<span class="dashboard-action-meta">${escapeHtml(meta)}</span>` : ''}
             </button>
             ${actionBtn}
@@ -644,7 +662,7 @@ function evaluateTaskDueReminders() {
         const result = upsertNotification({
             id: `task-due|${item.id}|${digestKey}|${type}`,
             type,
-            title: `${titlePrefix}: ${item.title}`,
+            title: `${titlePrefix}: ${getTodoDisplayTitle(item)}`,
             body: bodyParts.join(' · '),
             payload: { todoId: item.id, listId: item.listId, dueDate: item.dueDate }
         });
@@ -868,7 +886,7 @@ function buildShoppingListExportText(listId, options = {}) {
     const lines = [list.name];
     items.forEach((item) => {
         const prefix = item.done ? '✓ ' : '- ';
-        lines.push(`${prefix}${item.title}`);
+        lines.push(`${prefix}${getTodoDisplayTitle(item)}`);
     });
     return lines.join('\n');
 }
@@ -964,7 +982,7 @@ function buildTasksItemRowHtml(item) {
             <span class="tasks-row-check-ui" aria-hidden="true"></span>
         </label>
         <button type="button" class="tasks-row-body" onclick="openTodoItemEditor('${escapeHtml(item.id)}')" aria-label="Edytuj zadanie">
-            <strong class="tasks-row-title">${escapeHtml(item.title)}</strong>
+            <strong class="tasks-row-title">${escapeHtml(getTodoDisplayTitle(item))}</strong>
             ${meta ? `<span class="tasks-row-meta">${escapeHtml(meta)}</span>` : ''}
         </button>
         <button type="button" class="tasks-row-edit" title="Edytuj" aria-label="Edytuj" onclick="openTodoItemEditor('${escapeHtml(item.id)}')">✎</button>
@@ -1276,7 +1294,10 @@ function tryParseSkrybaTodoAdd(text) {
     if (titlePart.length < 2 && isReminder) titlePart = 'Przypomnienie';
     if (titlePart.length < 2) return null;
 
-    const titles = titlePart.split(/\s+i\s+/).map((part) => part.trim()).filter((part) => part.length >= 2);
+    const titles = titlePart
+        .split(/\s+i\s+/)
+        .map((part) => stripTodoListHintFromTitle(part.trim()))
+        .filter((part) => part.length >= 2);
     if (!titles.length) return null;
 
     return { kind: kind || (dueDate || amount ? 'payments' : 'shopping'), titles, dueDate, amount };
@@ -1315,7 +1336,7 @@ function buildSkrybaTodoListHtml(items, options = {}) {
     const clickable = options.clickable !== false;
     return `<div class="skryba-todo-list">${items.map((item) => {
         const meta = formatTodoItemMeta(item);
-        const inner = `<span class="skryba-todo-title">${escapeHtml(item.title)}</span>${meta ? `<span class="skryba-todo-meta">${escapeHtml(meta)}</span>` : ''}`;
+        const inner = `<span class="skryba-todo-title">${escapeHtml(getTodoDisplayTitle(item))}</span>${meta ? `<span class="skryba-todo-meta">${escapeHtml(meta)}</span>` : ''}`;
         if (!clickable) {
             return `<div class="skryba-todo-row">${inner}</div>`;
         }
@@ -1383,7 +1404,7 @@ function tryAnswerSkrybaTodoQuery(text) {
         const item = matches[0];
         toggleTodoItem(item.id);
         return {
-            intro: `Odhaczyłem: „${item.title}”.`,
+            intro: `Odhaczyłem: „${getTodoDisplayTitle(item)}”.`,
             items: []
         };
     }
