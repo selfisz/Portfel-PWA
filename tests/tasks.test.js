@@ -65,8 +65,9 @@ beforeEach(() => {
 describe('moduł zadań', () => {
     it('inicjalizuje domyślne listy', () => {
         ensureTodoListsInitialized();
-        expect(appState.todoLists).toHaveLength(3);
+        expect(appState.todoLists).toHaveLength(4);
         expect(getTodoListByKind('shopping')?.name).toBe('Zakupy');
+        expect(getTodoListByKind('reminders')?.name).toBe('Przypomnienia');
     });
 
     it('dodaje i odhacza zadanie', () => {
@@ -106,7 +107,7 @@ describe('moduł zadań', () => {
             { todoLists: getVisibleTodoLists(), todos: [localTodo] }
         );
         expect(merged.todos.some((t) => t.title === 'Jajka')).toBe(true);
-        expect(merged.todoLists.length).toBeGreaterThanOrEqual(3);
+        expect(merged.todoLists.length).toBeGreaterThanOrEqual(4);
     });
 
     it('edytuje zadanie i zmienia nazwę listy', () => {
@@ -157,16 +158,41 @@ describe('moduł zadań', () => {
         const parsed = tryParseSkrybaTodoAdd('ustaw przypomnienie na 20 lipca');
         expect(parsed?.titles).toEqual(['Przypomnienie']);
         expect(parsed?.dueDate).toBe('2026-07-20');
-        expect(parsed?.kind).toBe('finance');
+        expect(parsed?.kind).toBe('reminders');
     });
 
-    it('kieruje przypomnij bez listy na Finanse, nie na Zakupy', () => {
+    it('kieruje przypomnij bez listy na Przypomnienia, nie na Zakupy', () => {
         const parsed = tryParseSkrybaTodoAdd('przypomnij o wizycie u lekarza');
-        expect(parsed?.kind).toBe('finance');
+        expect(parsed?.kind).toBe('reminders');
         expect(parsed?.titles[0]).toMatch(/lekarz/i);
-        const list = getTodoListByKind('finance');
+        const list = getTodoListByKind('reminders');
         const answer = tryAnswerSkrybaTodoQuery('dodaj przypomnienie o ubezpieczeniu');
         expect(answer?.items[0]?.listId).toBe(list.id);
+    });
+
+    it('przejmuje własną listę Przypomnienia jako wbudowaną', () => {
+        appState.todoLists.push({
+            id: 'todo-list-custom-rem',
+            name: 'Przypomnienia',
+            kind: 'custom',
+            sortOrder: 9,
+            builtIn: false,
+            archived: false
+        });
+        appState.todos.push({
+            id: 'todo-rem-1',
+            listId: 'todo-list-custom-rem',
+            title: 'Test',
+            done: false,
+            sortOrder: 0,
+            createdAt: '2026-07-05T10:00:00.000Z',
+            updatedAt: '2026-07-05T10:00:00.000Z'
+        });
+        ensureTodoListsInitialized();
+        const list = getTodoListByKind('reminders');
+        expect(list?.id).toBe('todo-list-reminders');
+        expect(getTodoItemById('todo-rem-1')?.listId).toBe('todo-list-reminders');
+        expect(appState.todoLists.filter((entry) => entry.name === 'Przypomnienia')).toHaveLength(1);
     });
 
     it('dodaje przypomnienie przez Skrybę', () => {
@@ -268,7 +294,7 @@ describe('moduł zadań', () => {
     it('parsuje dodanie bez dopisku from finance', () => {
         const parsed = tryParseSkrybaTodoAdd('przypomnij test from finance');
         expect(parsed?.titles).toEqual(['test']);
-        expect(parsed?.kind).toBe('finance');
+        expect(parsed?.kind).toBe('reminders');
     });
 
     it('czyści istniejące zadania z dopiskiem from finance', () => {
@@ -292,7 +318,7 @@ describe('moduł zadań', () => {
             created.push(proposal);
             return { isNew: true, item: proposal };
         };
-        const list = getTodoListByKind('finance');
+        const list = getTodoListByKind('reminders');
         addTodoItem({ title: 'test from finance', listId: list.id, dueDate: '2026-07-05' });
         evaluateTaskDueReminders();
         expect(created[0]?.title).toBe('Dziś termin: test');
