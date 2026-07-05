@@ -10,31 +10,69 @@ beforeAll(() => {
 describe('printPrintPreview', () => {
     let elMap;
     let printSpy;
+    let createdFrame;
 
     function getById(id) {
         return elMap[id] ?? null;
     }
 
+    function createFrameElement() {
+        const frameDoc = {
+            open: vi.fn(),
+            write: vi.fn(),
+            close: vi.fn(),
+            readyState: 'complete'
+        };
+        const frameWin = { focus: vi.fn(), print: printSpy, document: frameDoc };
+        return createMockElement({
+            id: 'reports-pdf-print-frame',
+            contentWindow: frameWin,
+            contentDocument: frameDoc,
+            style: {},
+            onload: null,
+            setAttribute: vi.fn(),
+            addEventListener: vi.fn(),
+            appendChild: vi.fn()
+        });
+    }
+
+    function withUserAgent(userAgent, fn) {
+        Object.defineProperty(globalThis, 'navigator', {
+            configurable: true,
+            value: { userAgent, share: undefined, canShare: undefined }
+        });
+        fn();
+    }
+
     beforeEach(() => {
         printSpy = vi.fn();
+        createdFrame = null;
         elMap = {};
         setupDomStubs({
             elMap,
             window: {
-                print: printSpy,
+                open: vi.fn(() => null),
                 matchMedia: () => ({ matches: false, addEventListener: () => {} })
             }
         });
+        withUserAgent('Mozilla/5.0 Windows NT 10.0', () => {});
         globalThis.document.getElementById = getById;
-        globalThis.showAppToast = vi.fn();
-        globalThis.requestAnimationFrame = (cb) => {
-            cb();
-            return 1;
+        globalThis.document.createElement = (tag) => {
+            if (String(tag).toLowerCase() === 'iframe') {
+                createdFrame = createFrameElement();
+                return createdFrame;
+            }
+            return createMockElement({ tagName: String(tag).toUpperCase() });
         };
+        globalThis.document.body = createMockElement({
+            appendChild: (node) => { elMap[node.id] = node; }
+        });
+        globalThis.showAppToast = vi.fn();
         globalThis.setTimeout = (cb) => {
             cb();
             return 1;
         };
+        elMap['reports-pdf-title'] = createMockElement({ id: 'reports-pdf-title', textContent: 'Raport testowy' });
     });
 
     it('pokazuje błąd gdy brak treści', () => {
@@ -44,28 +82,52 @@ describe('printPrintPreview', () => {
         expect(printSpy).not.toHaveBeenCalled();
     });
 
-    it('drukuje widoczny podgląd bez tworzenia iframe', () => {
+    it('drukuje przez ukryty iframe z własnym HTML', () => {
         elMap['reports-pdf-content'] = createMockElement({
             id: 'reports-pdf-content',
             innerHTML: '<h1 class="reports-pdf-title">Test</h1>',
             querySelectorAll: () => []
         });
         printPrintPreview();
+        expect(createdFrame).toBeTruthy();
+        expect(createdFrame.contentDocument.write).toHaveBeenCalled();
         expect(printSpy).toHaveBeenCalledTimes(1);
-        expect(document.getElementById('reports-pdf-print-frame')).toBeNull();
     });
 
-    it('usuwa stary iframe przed drukiem', () => {
-        const staleFrame = createMockElement({ id: 'reports-pdf-print-frame' });
-        staleFrame.remove = () => { delete elMap['reports-pdf-print-frame']; };
-        elMap['reports-pdf-print-frame'] = staleFrame;
-        elMap['reports-pdf-content'] = createMockElement({
-            id: 'reports-pdf-content',
-            innerHTML: '<p>Raport</p>',
-            querySelectorAll: () => []
+    it('na iPhone otwiera nowe okno zamiast window.print na stronie', () => {
+        withUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)', () => {
+            const popupDoc = {
+                open: vi.fn(),
+                write: vi.fn(),
+                close: vi.fn(),
+                readyState: 'complete'
+            };
+            const popupWin = {
+                document: popupDoc,
+                focus: vi.fn(),
+                print: printSpy,
+                addEventListener: vi.fn()
+            };
+            globalThis.window.open = vi.fn(() => popupWin);
+            elMap['reports-pdf-content'] = createMockElement({
+                id: 'reports-pdf-content',
+                innerHTML: '<p>Raport</p>',
+                querySelectorAll: () => []
+            });
+            printPrintPreview();
+            expect(globalThis.window.open).toHaveBeenCalled();
+            expect(popupDoc.write).toHaveBeenCalled();
+            expect(printSpy).toHaveBeenCalled();
+            expect(showAppToast).toHaveBeenCalledWith('Wybierz Drukuj lub Zapisz jako PDF', 'default');
         });
-        printPrintPreview();
-        expect(document.getElementById('reports-pdf-print-frame')).toBeNull();
-        expect(printSpy).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('buildPrintDocumentHtml', () => {
+    it('wbudowuje treść i style druku', () => {
+        const html = buildPrintDocumentHtml('Test', '<p class="reports-pdf-summary">Suma</p>');
+        expect(html).toContain('<p class="reports-pdf-summary">Suma</p>');
+        expect(html).toContain('.reports-pdf-table');
+        expect(html).toContain('<title>Test</title>');
     });
 });

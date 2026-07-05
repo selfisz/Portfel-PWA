@@ -94,6 +94,120 @@ function closePrintPreview() {
     document.body.style.overflow = '';
 }
 
+function isIosLikeClient() {
+    return /iPad|iPhone|iPod/i.test(navigator.userAgent || '');
+}
+
+function buildPrintDocumentHtml(title, bodyHtml) {
+    const safeTitle = String(title || 'Raport').replace(/[<>&"]/g, '');
+    return `<!DOCTYPE html><html lang="pl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${safeTitle}</title><style>
+        body { margin: 16px; background: #fff; color: #111; font-family: system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.45; }
+        .reports-pdf-title, .reports-pdf-section-title { margin: 0 0 8px; font-size: 1.25rem; font-weight: 700; color: #111; }
+        .reports-pdf-summary, .reports-pdf-disclaimer { margin: 0 0 16px; font-size: 0.82rem; color: #333; line-height: 1.45; }
+        .reports-pdf-table { width: 100%; border-collapse: collapse; }
+        .reports-pdf-table th, .reports-pdf-table td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.72rem; vertical-align: top; color: #111; }
+        .reports-pdf-table th { background: #f5f5f5; font-weight: 600; }
+        .reports-pdf-chart-img { display: block; width: 100%; max-width: 100%; height: auto; max-height: 280px; object-fit: contain; margin: 8px 0 12px; }
+        .reports-pdf-analysis-body .card, .reports-pdf-analysis-body .compare-overview-card,
+        .reports-pdf-analysis-body .hero-card, .reports-pdf-analysis-body .dashboard-panel, .reports-pdf-analysis-body .chart-card {
+            border: 1px solid #ddd; background: #fff; box-shadow: none; margin-bottom: 14px; padding: 12px;
+        }
+        .reports-pdf-analysis-body .hero-balance, .reports-pdf-analysis-body .compare-overview-delta,
+        .reports-pdf-analysis-body .value, .reports-pdf-analysis-body strong { color: #111 !important; }
+        @page { margin: 12mm; }
+        @media print { body { margin: 0; } }
+    </style></head><body>${bodyHtml}</body></html>`;
+}
+
+function triggerPrintOnWindow(win) {
+    if (!win) return false;
+    try {
+        win.focus();
+        win.print();
+        return true;
+    } catch (err) {
+        console.warn('triggerPrintOnWindow', err);
+        return false;
+    }
+}
+
+function schedulePrintOnce(win, { doc = null, frame = null } = {}) {
+    let printed = false;
+    const run = () => {
+        if (printed) return;
+        printed = true;
+        triggerPrintOnWindow(win);
+    };
+    if (doc?.readyState === 'complete') setTimeout(run, 150);
+    else if (frame) frame.onload = () => setTimeout(run, 150);
+    else win?.addEventListener?.('load', () => setTimeout(run, 200), { once: true });
+    setTimeout(run, 500);
+}
+
+function printViaPopupWindow(html) {
+    const win = window.open('about:blank', '_blank');
+    if (!win) return false;
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    schedulePrintOnce(win, { doc: win.document });
+    return true;
+}
+
+function printViaHiddenFrame(html) {
+    let frame = document.getElementById('reports-pdf-print-frame');
+    if (!frame) {
+        frame = document.createElement('iframe');
+        frame.id = 'reports-pdf-print-frame';
+        frame.setAttribute('aria-hidden', 'true');
+        frame.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;border:0;opacity:0;pointer-events:none;z-index:-1';
+        document.body.appendChild(frame);
+    }
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument || win?.document;
+    if (!doc || !win) return false;
+    doc.open();
+    doc.write(html);
+    doc.close();
+    schedulePrintOnce(win, { doc, frame });
+    return true;
+}
+
+async function sharePrintPreviewHtml(html, title = 'Raport') {
+    if (!navigator.share) return false;
+    try {
+        const file = new File([html], 'raport-finanse.html', { type: 'text/html;charset=utf-8' });
+        if (navigator.canShare?.({ files: [file] })) {
+            await navigator.share({ title, files: [file] });
+            return true;
+        }
+        await navigator.share({ title, text: title });
+        return true;
+    } catch (err) {
+        if (err?.name === 'AbortError') return true;
+        console.warn('sharePrintPreviewHtml', err);
+        return false;
+    }
+}
+
+function runPrintPreviewExport(html, title) {
+    if (isIosLikeClient()) {
+        if (printViaPopupWindow(html)) {
+            showAppToast('Wybierz Drukuj lub Zapisz jako PDF', 'default');
+            return;
+        }
+        sharePrintPreviewHtml(html, title).then((shared) => {
+            if (shared) return;
+            if (printViaHiddenFrame(html)) return;
+            showAppToast('Nie udało się otworzyć druku — spróbuj ponownie', 'error');
+        });
+        return;
+    }
+    if (printViaHiddenFrame(html)) return;
+    if (printViaPopupWindow(html)) return;
+    showAppToast('Nie udało się otworzyć druku', 'error');
+}
+
 function printPrintPreview() {
     const content = document.getElementById('reports-pdf-content');
     if (!content || !content.innerHTML.trim()) {
@@ -101,40 +215,28 @@ function printPrintPreview() {
         return;
     }
 
-    // Stary ukryty iframe (0×0) zostawał w DOM i drukował pusty kwadracik zamiast podglądu.
-    const staleFrame = document.getElementById('reports-pdf-print-frame');
-    if (staleFrame) {
-        if (typeof staleFrame.remove === 'function') staleFrame.remove();
-        else if (staleFrame.parentNode) staleFrame.parentNode.removeChild(staleFrame);
-    }
-
-    let printed = false;
-    const doPrint = () => {
-        if (printed) return;
-        printed = true;
-        window.print();
-    };
+    const title = document.getElementById('reports-pdf-title')?.textContent || 'Raport';
+    const html = buildPrintDocumentHtml(title, content.innerHTML);
+    const startPrint = () => runPrintPreviewExport(html, title);
 
     const images = [...content.querySelectorAll('img')];
     const pending = images.filter((img) => !img.complete);
     if (!pending.length) {
-        requestAnimationFrame(() => requestAnimationFrame(doPrint));
+        startPrint();
         return;
     }
 
     let settled = 0;
     const onImageSettled = () => {
         settled += 1;
-        if (settled >= pending.length) {
-            requestAnimationFrame(() => requestAnimationFrame(doPrint));
-        }
+        if (settled >= pending.length) startPrint();
     };
 
     pending.forEach((img) => {
         img.addEventListener('load', onImageSettled, { once: true });
         img.addEventListener('error', onImageSettled, { once: true });
     });
-    setTimeout(doPrint, 3000);
+    setTimeout(startPrint, 3000);
 }
 
 function clearAddFormError() {
