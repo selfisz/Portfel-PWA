@@ -33,6 +33,7 @@ function setSettingsSection(section) {
 }
 
 function openSettings(preferredSection) {
+    if (typeof guardAppLockSensitiveAction === 'function' && !guardAppLockSensitiveAction()) return;
     document.getElementById('settings-overlay').classList.remove('hidden');
     document.body.classList.add('settings-open');
     if (typeof syncNotificationSettingsUI === 'function') syncNotificationSettingsUI();

@@ -311,6 +311,11 @@ function refreshAccountSettingsUI() {
     const showReset = usesEmailPasswordAuth();
     if (resetBtn) resetBtn.classList.toggle('hidden', !showReset);
     if (actionsGrid) actionsGrid.classList.toggle('settings-account-actions--solo', !showReset);
+    const bioLabel = document.getElementById('app-lock-bio-label');
+    if (bioLabel && typeof getAppLockBiometricLabel === 'function') {
+        bioLabel.textContent = getAppLockBiometricLabel();
+    }
+    if (typeof refreshAppLockSettingsUI === 'function') refreshAppLockSettingsUI();
 }
 
 async function handleAuthenticatedUser(user) {
@@ -352,6 +357,8 @@ async function handleAuthenticatedUser(user) {
         if (typeof clearOfflineSession === 'function') clearOfflineSession();
 
         if (typeof bootstrapApp === 'function') bootstrapApp();
+        if (typeof initAppLock === 'function') initAppLock();
+        if (typeof maybeRequireAppLock === 'function') maybeRequireAppLock({ reason: 'startup' });
         refreshAccountSettingsUI();
         registerServiceWorker();
         if (typeof flushOfflineChangesAfterOnline === 'function') {

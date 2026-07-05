@@ -224,6 +224,7 @@ function renderNotificationsPanel() {
 }
 
 function openNotificationsPanel() {
+    if (typeof guardAppLockSensitiveAction === 'function' && !guardAppLockSensitiveAction()) return;
     const panel = document.getElementById('notifications-overlay');
     if (!panel) return;
     panel.classList.remove('hidden');
@@ -256,6 +257,7 @@ function openNotificationTarget(id) {
 }
 
 function navigateFromNotification(item) {
+    if (typeof guardAppLockSensitiveAction === 'function' && !guardAppLockSensitiveAction()) return;
     const payload = item.payload || {};
     const loansNav = document.querySelector('.nav-item[onclick*="\'loans\'"]');
 

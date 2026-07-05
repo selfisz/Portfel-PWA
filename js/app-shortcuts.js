@@ -29,6 +29,12 @@ function applyAppLaunchShortcut() {
     const view = getAppLaunchView();
     if (!view || typeof switchView !== 'function') return false;
 
+    if (typeof isAppLockRestricted === 'function' && isAppLockRestricted() && view !== 'add') {
+        if (typeof requestAppLockUnlockPrompt === 'function') requestAppLockUnlockPrompt();
+        clearAppLaunchParams();
+        return false;
+    }
+
     const addType = view === 'add' ? getAppLaunchAddType() : null;
     const cfg = APP_VIEW_SHORTCUTS[view];
     const nav = document.querySelectorAll('.nav-item')[cfg.navIndex];

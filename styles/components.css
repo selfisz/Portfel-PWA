@@ -2955,6 +2955,84 @@ body.auth-locked > #settings-overlay {
     pointer-events: none;
 }
 
+body.app-lock-locked > header,
+body.app-lock-locked > main,
+body.app-lock-locked > .bottom-nav,
+body.app-lock-locked > #app-lock-restricted-banner,
+body.app-lock-locked > #module-split-banner,
+body.app-lock-locked > #offline-banner,
+body.app-lock-locked > #notifications-overlay,
+body.app-lock-locked > #skryba-overlay,
+body.app-lock-locked > #settings-overlay {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+body.app-lock-restricted #btn-skryba,
+body.app-lock-restricted #btn-settings,
+body.app-lock-restricted #btn-notifications,
+body.app-lock-restricted #sync-status {
+    display: none;
+}
+
+body.app-lock-restricted .app-view:not(#view-add) {
+    display: none !important;
+}
+
+body.app-lock-restricted #view-add {
+    display: block !important;
+}
+
+body.app-lock-restricted .nav-item--app-lock-blocked {
+    opacity: 0.42;
+}
+
+.app-lock-restricted-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--accent-soft);
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-size: var(--text-xs);
+    z-index: 90;
+}
+
+.app-lock-restricted-banner.hidden {
+    display: none;
+}
+
+.app-lock-restricted-banner-text {
+    flex: 1;
+    line-height: 1.35;
+}
+
+.app-lock-restricted-banner-btn {
+    flex-shrink: 0;
+    border: 1px solid var(--accent);
+    background: var(--card);
+    color: var(--accent);
+    border-radius: var(--radius-md, 12px);
+    padding: 8px 12px;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.app-lock-back-quick {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    text-align: center;
+}
+
+.app-lock-back-quick.hidden {
+    display: none;
+}
+
 .auth-overlay {
     position: fixed;
     inset: 0;
@@ -2968,6 +3046,113 @@ body.auth-locked > #settings-overlay {
 }
 
 .auth-overlay.hidden { display: none; }
+
+.app-lock-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg, #f5f3ef);
+    z-index: 360;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    padding-bottom: calc(16px + var(--safe-bottom));
+}
+
+.app-lock-overlay.hidden { display: none; }
+
+#app-lock-setup-overlay {
+    z-index: 370;
+}
+
+.app-lock-card {
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+}
+
+.app-lock-card img {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 12px;
+    display: block;
+}
+
+.app-lock-subtitle {
+    margin: 8px 0 16px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.app-lock-pin-dots {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    margin: 8px 0 18px;
+}
+
+.app-lock-pin-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: transparent;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.app-lock-pin-dot.filled {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+.app-lock-pin-pad {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.app-lock-key {
+    min-height: 52px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 12px);
+    background: var(--card);
+    color: var(--text);
+    font-size: 1.25rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.app-lock-key:active {
+    transform: scale(0.98);
+}
+
+.app-lock-key--spacer {
+    visibility: hidden;
+    pointer-events: none;
+    border: none;
+    background: transparent;
+}
+
+.app-lock-key--action {
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.app-lock-bio-btn {
+    width: 100%;
+    margin-top: 4px;
+}
+
+.app-lock-bio-unavailable {
+    opacity: 0.55;
+}
+
+.btn-icon--lock svg {
+    width: 22px;
+    height: 22px;
+    fill: currentColor;
+}
 
 .auth-card {
     width: 100%;

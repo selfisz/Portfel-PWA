@@ -1,7 +1,13 @@
 let activeViewId = 'dashboard';
 let activeTransactionDetailsIndex = null;
 
-function switchView(viewId, title, element) {
+function switchView(viewId, title, element, options = {}) {
+    if (!options.bypassAppLock
+        && typeof canAccessAppLockView === 'function'
+        && !canAccessAppLockView(viewId)) {
+        if (typeof requestAppLockUnlockPrompt === 'function') requestAppLockUnlockPrompt();
+        return;
+    }
     if (activeViewId === 'dashboard' && viewId !== 'dashboard') {
         resetDashboardTxListPagination();
     }
@@ -50,6 +56,7 @@ function switchView(viewId, title, element) {
         focusAmountField();
         if (typeof updateAddDateChipLabel === 'function') updateAddDateChipLabel();
         if (typeof initAddFormUi === 'function') initAddFormUi();
+        if (typeof syncAppLockAddFormRestrictions === 'function') syncAppLockAddFormRestrictions();
     }
 }
 

@@ -62,6 +62,59 @@
         </div>
     </div>
 
+    <div id="app-lock-overlay" class="app-lock-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="app-lock-title">
+        <div class="app-lock-card onboarding-card">
+            <img src="icons/icon-192.png" alt="">
+            <h2 id="app-lock-title">Zablokowane</h2>
+            <p id="app-lock-subtitle" class="app-lock-subtitle">Wpisz PIN, aby kontynuować.</p>
+            <p id="app-lock-error" class="auth-error hidden" role="alert"></p>
+            <div id="app-lock-pin-dots" class="app-lock-pin-dots" aria-hidden="true">
+                <span class="app-lock-pin-dot"></span><span class="app-lock-pin-dot"></span><span class="app-lock-pin-dot"></span><span class="app-lock-pin-dot"></span>
+            </div>
+            <div id="app-lock-pin-pad" class="app-lock-pin-pad">
+                <button type="button" class="app-lock-key" data-app-lock-digit="1">1</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="2">2</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="3">3</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="4">4</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="5">5</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="6">6</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="7">7</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="8">8</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="9">9</button>
+                <span class="app-lock-key app-lock-key--spacer" aria-hidden="true"></span>
+                <button type="button" class="app-lock-key" data-app-lock-digit="0">0</button>
+                <button type="button" class="app-lock-key app-lock-key--action" data-app-lock-action="backspace" aria-label="Usuń">⌫</button>
+            </div>
+            <button type="button" id="btn-app-lock-bio" class="btn-onboarding-primary app-lock-bio-btn hidden">Odblokuj biometrią</button>
+            <button type="button" id="btn-app-lock-back-quick" class="btn-text-link app-lock-back-quick hidden" type="button">Wróć do szybkiego wpisu</button>
+        </div>
+    </div>
+
+    <div id="app-lock-setup-overlay" class="app-lock-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="app-lock-setup-title">
+        <div class="app-lock-card onboarding-card">
+            <h2 id="app-lock-setup-title">Ustaw PIN</h2>
+            <p id="app-lock-setup-subtitle" class="app-lock-subtitle">Wpisz 4-cyfrowy PIN.</p>
+            <p id="app-lock-setup-error" class="auth-error hidden" role="alert"></p>
+            <div id="app-lock-setup-dots" class="app-lock-pin-dots" aria-hidden="true">
+                <span class="app-lock-pin-dot"></span><span class="app-lock-pin-dot"></span><span class="app-lock-pin-dot"></span><span class="app-lock-pin-dot"></span>
+            </div>
+            <div class="app-lock-pin-pad">
+                <button type="button" class="app-lock-key" data-app-lock-digit="1" data-app-lock-target="setup">1</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="2" data-app-lock-target="setup">2</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="3" data-app-lock-target="setup">3</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="4" data-app-lock-target="setup">4</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="5" data-app-lock-target="setup">5</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="6" data-app-lock-target="setup">6</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="7" data-app-lock-target="setup">7</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="8" data-app-lock-target="setup">8</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="9" data-app-lock-target="setup">9</button>
+                <button type="button" class="app-lock-key app-lock-key--action" data-app-lock-action="cancel-setup" data-app-lock-target="setup">Anuluj</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="0" data-app-lock-target="setup">0</button>
+                <button type="button" class="app-lock-key app-lock-key--action" data-app-lock-action="backspace" data-app-lock-target="setup" aria-label="Usuń">⌫</button>
+            </div>
+        </div>
+    </div>
+
     <div id="onboarding" class="onboarding-overlay hidden">
         <div class="onboarding-card">
             <img id="onboarding-icon" src="icons/icon-192.png" alt="Finanse">
@@ -83,6 +136,9 @@
             <h1 id="view-title">Pulpit</h1>
         </div>
         <div class="header-actions">
+            <button type="button" id="btn-app-lock" class="btn-icon btn-icon--lock hidden" aria-label="Zablokuj aplikację">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm-6 9a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm3.1-9H8.9V6a3.1 3.1 0 0 1 6.2 0v2z"/></svg>
+            </button>
             <button type="button" id="btn-skryba" class="btn-icon btn-icon--skryba hidden" onclick="toggleSkrybaPanel()" aria-label="Skryba — asystent AI" aria-expanded="false">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h3l3 3 3-3h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
             </button>
@@ -96,6 +152,11 @@
             <div id="sync-status" title="Status synchronizacji z chmurą"></div>
         </div>
     </header>
+
+    <div id="app-lock-restricted-banner" class="app-lock-restricted-banner hidden" role="status">
+        <span class="app-lock-restricted-banner-text">Aplikacja zablokowana — możesz dodać transakcję lub odblokować pełny dostęp.</span>
+        <button type="button" id="btn-app-lock-unlock" class="app-lock-restricted-banner-btn">Odblokuj</button>
+    </div>
 
     <div id="module-split-banner" class="module-split-banner hidden" role="alert">
         <div>
@@ -201,6 +262,32 @@
                             <span class="settings-action-btn-desc">Koniec sesji</span>
                         </button>
                     </div>
+                </div>
+                <div class="settings-section">
+                    <div class="section-label">Blokada aplikacji</div>
+                    <p class="settings-hint">Dodatkowa ochrona na urządzeniu. Po odblokowaniu aplikacja pozostaje otwarta przez 5 minut bezczynności — szybkie przełączenie nie wymaga ponownego PIN-u.</p>
+                    <label class="settings-toggle-row">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title">PIN</span>
+                            <span class="settings-nav-row-desc">4-cyfrowy kod przy starcie i po bezczynności</span>
+                        </span>
+                        <input type="checkbox" id="app-lock-pin-toggle" onchange="onAppLockPinToggle()">
+                    </label>
+                    <label class="settings-toggle-row" id="app-lock-bio-row">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title" id="app-lock-bio-label">Face ID / Touch ID</span>
+                            <span class="settings-nav-row-desc" id="app-lock-bio-hint">Odblokowanie biometrią na tym urządzeniu.</span>
+                        </span>
+                        <input type="checkbox" id="app-lock-bio-toggle" onchange="onAppLockBiometricToggle()">
+                    </label>
+                    <button type="button" id="btn-app-lock-change-pin" class="btn-text-link settings-api-key-save hidden" onclick="onAppLockChangePinClick()">Zmień PIN</button>
+                    <label class="settings-toggle-row">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title">Szybki wpis przy blokadzie</span>
+                            <span class="settings-nav-row-desc">Przy blokadzie dostępna tylko zakładka „Dodaj” — bez pełnego odblokowania</span>
+                        </span>
+                        <input type="checkbox" id="app-lock-quick-add-toggle" onchange="onAppLockQuickAddToggle()" checked>
+                    </label>
                 </div>
             </div>
 
@@ -2013,11 +2100,11 @@
     </div>
 
     <nav class="bottom-nav">
-        <button class="nav-item active" onclick="switchView('dashboard', 'Pulpit', this)"><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Pulpit</button>
-        <button class="nav-item" onclick="switchView('add', 'Dodaj', this)"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>Dodaj</button>
-        <button class="nav-item" onclick="switchView('reports', 'Analiza', this)"><svg viewBox="0 0 24 24"><path d="M11 2v20c-5.07-.5-9-4.75-9-10s3.93-9.5 9-10zm2 0v8h9c-.44-4.14-3.51-7.27-7.5-7.85zm0 10v10c3.99-.58 7.06-3.71 7.5-7.85h-9z"/></svg>Analiza</button>
-        <button class="nav-item" onclick="switchView('investments', 'Aktywa', this)"><svg viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>Aktywa</button>
-        <button class="nav-item" onclick="switchView('loans', 'Kredyty', this)"><svg viewBox="0 0 24 24"><path d="M21 18v2H3v-2h18M5 16h2V8H5v8m6 0h2V4h-2v12m6 0h2v-5h-2v5z"/></svg>Długi</button>
+        <button class="nav-item active" data-nav-view="dashboard" onclick="switchView('dashboard', 'Pulpit', this)"><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Pulpit</button>
+        <button class="nav-item" data-nav-view="add" onclick="switchView('add', 'Dodaj', this)"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>Dodaj</button>
+        <button class="nav-item" data-nav-view="reports" onclick="switchView('reports', 'Analiza', this)"><svg viewBox="0 0 24 24"><path d="M11 2v20c-5.07-.5-9-4.75-9-10s3.93-9.5 9-10zm2 0v8h9c-.44-4.14-3.51-7.27-7.5-7.85zm0 10v10c3.99-.58 7.06-3.71 7.5-7.85h-9z"/></svg>Analiza</button>
+        <button class="nav-item" data-nav-view="investments" onclick="switchView('investments', 'Aktywa', this)"><svg viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>Aktywa</button>
+        <button class="nav-item" data-nav-view="loans" onclick="switchView('loans', 'Kredyty', this)"><svg viewBox="0 0 24 24"><path d="M21 18v2H3v-2h18M5 16h2V8H5v8m6 0h2V4h-2v12m6 0h2v-5h-2v5z"/></svg>Długi</button>
     </nav>
 
     <div id="reports-print-meta" class="hidden" aria-hidden="true"></div>
@@ -2094,6 +2181,7 @@
     <script src="js/subscription-center.js"></script>
     <script src="js/surplus-allocator.js"></script>
     <script src="js/bootstrap.js"></script>
+    <script src="js/app-lock.js"></script>
     <script src="js/auth.js"></script>
 </body>
 </html>

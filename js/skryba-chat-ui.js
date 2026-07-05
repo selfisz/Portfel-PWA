@@ -43,6 +43,7 @@ function toggleSkrybaPanel() {
 }
 
 function openSkrybaPanel() {
+    if (typeof guardAppLockSensitiveAction === 'function' && !guardAppLockSensitiveAction()) return;
     if (!isAssistantEnabled()) {
         if (typeof showAppToast === 'function') {
             showAppToast('Włącz Skrybę w Ustawienia → Asystent AI', 'default');

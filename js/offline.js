@@ -91,6 +91,8 @@ async function bootstrapOfflineSession() {
     showOfflineBanner(true);
 
     if (typeof bootstrapApp === 'function') bootstrapApp();
+    if (typeof initAppLock === 'function') initAppLock();
+    if (typeof maybeRequireAppLock === 'function') maybeRequireAppLock({ reason: 'startup' });
     if (typeof registerServiceWorker === 'function') registerServiceWorker();
     return true;
 }
