@@ -870,9 +870,10 @@ function renderDashboard() {
             <div class="tx-amount-col">
                 <div class="tx-amount ${t.type}">${t.type === 'expense' ? '-' : '+'}${t.amount.toFixed(2)} zł</div>
             </div>
-            ${fromArchive ? '' : '<span class="tx-chevron" aria-hidden="true">›</span>'}
-            ${fromArchive ? '' : '<div class="tx-swipe-hint">Usuń</div>'}`;
-        if (globalIndex >= 0) attachSwipeDelete(row, globalIndex);
+            ${fromArchive ? '' : '<span class="tx-chevron" aria-hidden="true">›</span>'}`;
+        if (globalIndex >= 0) {
+            row.addEventListener('click', () => openTransactionDetails(globalIndex));
+        }
         list.appendChild(row);
     });
 

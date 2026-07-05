@@ -2630,9 +2630,7 @@ html:not([data-theme="dark"]) .grid-item.selected {
     padding: 14px 4px;
     border-bottom: 1px solid var(--border);
     position: relative;
-    touch-action: pan-y;
     transition: background 0.2s;
-    will-change: transform;
     cursor: pointer;
 }
 
@@ -2650,14 +2648,6 @@ html:not([data-theme="dark"]) .grid-item.selected {
     color: var(--text-muted);
     opacity: 0.45;
     margin-right: 2px;
-}
-
-.tx-row.swiping .tx-chevron {
-    opacity: 0;
-}
-
-.tx-row.is-dragging {
-    transition: none;
 }
 
 #recent-transactions-list {
@@ -2741,34 +2731,13 @@ html:not([data-theme="dark"]) .grid-item.selected {
     opacity: 0.92;
 }
 
-.tx-row--archive .tx-chevron,
-.tx-row--archive .tx-swipe-hint {
+.tx-row--archive .tx-chevron {
     display: none;
 }
 
 .calendar-day-tx--archive {
     opacity: 0.92;
 }
-
-.tx-swipe-hint {
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    width: 72px;
-    background: var(--danger);
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: var(--text-xs);
-    font-weight: 700;
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    opacity: 0;
-    pointer-events: none;
-}
-
-.tx-row.swiping .tx-swipe-hint { opacity: 1; }
 
 .empty-state {
     text-align: center;
