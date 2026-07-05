@@ -109,6 +109,37 @@ function getWelcomePaymentsTileLabel() {
     return `${count} ${word}`;
 }
 
+function getWelcomeCurrentMonthBounds() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const startDate = typeof localIsoDate === 'function'
+        ? localIsoDate(new Date(year, month, 1))
+        : `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const endDate = typeof localIsoDate === 'function'
+        ? localIsoDate(new Date(year, month + 1, 0))
+        : startDate;
+    return { startDate, endDate };
+}
+
+function getWelcomeCurrentMonthLabel() {
+    const label = new Date().toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function getWelcomeCurrentMonthExpenses() {
+    const { startDate, endDate } = getWelcomeCurrentMonthBounds();
+    return appState.transactions
+        .filter((t) => t.type === 'expense' && t.date >= startDate && t.date <= endDate)
+        .reduce((sum, t) => sum + t.amount, 0);
+}
+
+function formatWelcomeExpenseAmount(amount) {
+    const n = Number(amount);
+    if (!Number.isFinite(n)) return '—';
+    return n.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function closePanelsForWelcome() {
     if (typeof closeSkrybaPanel === 'function') closeSkrybaPanel();
     if (typeof closeSettings === 'function') closeSettings();
@@ -156,12 +187,11 @@ function renderWelcomeDashboard() {
         pinLink.classList.toggle('hidden', lockEnabled || restrictedGateway);
     }
 
-    const { netBalance } = getWelcomePeriodTotals();
-    if (periodEl && typeof formatDashboardPeriodLabel === 'function') {
-        periodEl.textContent = formatDashboardPeriodLabel();
+    const monthExpenses = getWelcomeCurrentMonthExpenses();
+    if (periodEl) {
+        periodEl.textContent = getWelcomeCurrentMonthLabel();
     }
-    balanceEl.textContent = `${netBalance >= 0 ? '+' : ''}${netBalance.toFixed(2)} zł`;
-    balanceEl.style.color = netBalance >= 0 ? '#6ee7b7' : '#fca5a5';
+    balanceEl.textContent = formatWelcomeExpenseAmount(monthExpenses);
 
     const tasksMeta = document.getElementById('welcome-tile-tasks-meta');
     const paymentsMeta = document.getElementById('welcome-tile-payments-meta');
