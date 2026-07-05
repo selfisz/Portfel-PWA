@@ -2969,6 +2969,7 @@ body.app-lock-locked > #settings-overlay {
 }
 
 body.app-lock-restricted #btn-skryba,
+body.app-lock-restricted #btn-tasks,
 body.app-lock-restricted #btn-settings,
 body.app-lock-restricted #btn-notifications,
 body.app-lock-restricted #sync-status {

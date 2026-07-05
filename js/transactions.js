@@ -29,6 +29,7 @@ function switchView(viewId, title, element, options = {}) {
     }
     if (viewId === 'investments' && typeof renderAssets === 'function') renderAssets();
     if (viewId === 'loans') renderLoans();
+    if (viewId === 'tasks' && typeof renderTasksView === 'function') renderTasksView();
 
     if (viewId === 'add' && editingTxIndex === null) {
         document.getElementById('form-header').innerText = 'Nowa transakcja';

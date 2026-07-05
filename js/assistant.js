@@ -1064,6 +1064,12 @@ function tryHandleLocalSkrybaFinancialQuery(text) {
 }
 
 function tryHandleLocalSkrybaCommand(text) {
+    if (/^otwórz zadania$/i.test(String(text || '').trim()) && typeof openTasksView === 'function') {
+        if (typeof closeSkrybaPanel === 'function') closeSkrybaPanel();
+        openTasksView();
+        return true;
+    }
+    if (typeof tryHandleLocalSkrybaTodoQuery === 'function' && tryHandleLocalSkrybaTodoQuery(text)) return true;
     if (tryHandleLocalSkrybaShowTransactions(text)) return true;
     if (tryHandleLocalSkrybaFinancialQuery(text)) return true;
 

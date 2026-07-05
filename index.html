@@ -142,6 +142,10 @@
             <button type="button" id="btn-skryba" class="btn-icon btn-icon--skryba hidden" onclick="toggleSkrybaPanel()" aria-label="Skryba — asystent AI" aria-expanded="false">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h3l3 3 3-3h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
             </button>
+            <button type="button" id="btn-tasks" class="btn-icon btn-icon--tasks" onclick="openTasksView()" aria-label="Zadania">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 14l-5-5 1.41-1.41L11 14.17l7.59-7.59L20 8l-9 9z"/></svg>
+                <span id="tasks-badge" class="notifications-badge hidden">0</span>
+            </button>
             <button type="button" id="btn-notifications" class="btn-icon btn-icon--bell" onclick="toggleNotificationsPanel()" aria-label="Powiadomienia" aria-expanded="false">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6V11a7 7 0 0 0-5-6.71V4a2 2 0 1 0-4 0v.29A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2z"/></svg>
                 <span id="notifications-badge" class="notifications-badge hidden">0</span>
@@ -888,6 +892,34 @@
         <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
             <div id="panel-header-transaction-details"></div>
             <div id="transaction-details-content" class="loan-details-content"></div>
+        </div>
+    </div>
+
+    <div id="tasks-item-edit-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeTodoItemEditor()">
+        <div class="calendar-day-panel tasks-edit-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-tasks-item-edit"></div>
+            <form class="tasks-edit-form" onsubmit="saveTodoItemEditor(event)">
+                <label class="tasks-edit-field">
+                    <span class="tasks-edit-label">Tytuł</span>
+                    <input type="text" id="tasks-edit-title" maxlength="120" required autocomplete="off">
+                </label>
+                <label class="tasks-edit-field" id="tasks-edit-due-wrap">
+                    <span class="tasks-edit-label">Termin</span>
+                    <input type="date" id="tasks-edit-due">
+                </label>
+                <label class="tasks-edit-field" id="tasks-edit-amount-wrap">
+                    <span class="tasks-edit-label">Kwota (PLN)</span>
+                    <input type="number" id="tasks-edit-amount" min="0" step="0.01" inputmode="decimal">
+                </label>
+                <label class="tasks-edit-field">
+                    <span class="tasks-edit-label">Notatka</span>
+                    <input type="text" id="tasks-edit-note" maxlength="500" autocomplete="off">
+                </label>
+                <div class="tasks-edit-actions">
+                    <button type="submit" class="btn-submit btn-submit--form tasks-list-btn">Zapisz</button>
+                    <button type="button" class="tasks-list-btn tasks-list-btn--ghost" onclick="closeTodoItemEditor()">Odrzuć</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -2109,6 +2141,41 @@
                 <div id="loans-archive-list" class="loans-archive-list hidden"></div>
             </div>
         </div>
+
+        <div id="view-tasks" class="app-view">
+            <div class="card tasks-shell">
+                <div class="tasks-toolbar">
+                    <p class="tasks-hint">Listy zakupów, płatności i zadania finansowe — odhacz, gdy gotowe.</p>
+                    <button type="button" id="tasks-toggle-done-btn" class="tasks-toggle-done" onclick="toggleTasksShowDone()" aria-pressed="false">Pokaż zrobione</button>
+                </div>
+                <nav id="tasks-subnav" class="analysis-subnav tasks-subnav" aria-label="Listy zadań"></nav>
+                <div id="tasks-list-actions" class="tasks-list-actions hidden">
+                    <button type="button" id="tasks-list-edit-toggle" class="tasks-list-action-btn" onclick="toggleTodoListEditor()">Edytuj nazwę listy</button>
+                    <div id="tasks-list-edit-panel" class="tasks-list-edit-panel hidden">
+                        <form class="tasks-list-edit-form" onsubmit="saveTodoListEditor(event)">
+                            <input type="text" id="tasks-list-edit-name" class="tasks-list-edit-input" maxlength="40" autocomplete="off" placeholder="Nazwa listy">
+                            <div class="tasks-list-edit-actions">
+                                <button type="submit" class="btn-submit btn-submit--form tasks-list-btn">Zapisz</button>
+                                <button type="button" class="tasks-list-btn tasks-list-btn--ghost" onclick="cancelTodoListEditor()">Odrzuć</button>
+                            </div>
+                            <button type="button" id="tasks-list-delete-btn" class="tasks-list-btn tasks-list-btn--danger" onclick="deleteActiveTodoList()">Usuń listę</button>
+                        </form>
+                    </div>
+                </div>
+                <div id="tasks-new-list-panel" class="tasks-new-list-panel hidden">
+                    <form id="tasks-new-list-form" class="tasks-new-list-form" onsubmit="handleTasksNewListSubmit(event)">
+                        <input type="text" id="tasks-new-list-input" class="tasks-new-list-input" placeholder="Nazwa nowej listy" maxlength="40" autocomplete="off">
+                        <button type="submit" class="btn-submit btn-submit--form">Utwórz</button>
+                        <button type="button" class="btn-cancel btn-cancel--form" onclick="toggleTasksNewListForm()">Anuluj</button>
+                    </form>
+                </div>
+                <div id="tasks-items-list" class="tasks-items-list"></div>
+                <form id="tasks-quick-add-form" class="tasks-quick-add" onsubmit="handleTasksQuickAdd(event)">
+                    <input type="text" id="tasks-quick-add-input" placeholder="Dodaj zadanie…" maxlength="120" autocomplete="off" enterkeyhint="done">
+                    <button type="submit" class="btn-submit btn-submit--form tasks-quick-add-btn" aria-label="Dodaj">+</button>
+                </form>
+            </div>
+        </div>
     </div>
 
     <nav class="bottom-nav">
@@ -2176,6 +2243,7 @@
     <script src="js/assistant.js"></script>
     <script src="js/skryba-local-parser.js"></script>
     <script src="js/action-board.js"></script>
+    <script src="js/tasks.js"></script>
     <script src="js/notifications.js"></script>
     <script src="js/budget-ui.js"></script>
     <script src="js/budget-alerts.js"></script>

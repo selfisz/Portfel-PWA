@@ -833,6 +833,7 @@ function buildSkrybaFollowUpChips(context = {}) {
     if (context?.savings_goal_status && !context.savings_goal_status.onTrack) {
         add('Cel oszczędności');
     }
+    if (context?.open_tasks) add('Otwórz zadania');
 
     return chips.slice(0, 4);
 }

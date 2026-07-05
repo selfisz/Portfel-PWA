@@ -150,6 +150,7 @@ function buildSkrybaWelcomeChipsHtml() {
         'Podsumowanie miesiąca',
         'Briefing tygodnia',
         'Transakcje bez podkategorii',
+        'Co mam na liście zakupów?',
         'Co z nadwyżką?',
         'Rozlicz miesiąc',
         'Otwórz analizę'
