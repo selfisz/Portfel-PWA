@@ -227,4 +227,26 @@ describe('moduł zadań', () => {
         expect(getFilteredTodos()).toHaveLength(1);
         expect(tasksActiveFilter).toBe('all');
     });
+
+    it('buduje tekst eksportu listy zakupów', () => {
+        const shopping = getTodoListByKind('shopping');
+        tasksActiveFilter = shopping.id;
+        addTodoItem({ title: 'Mleko', listId: shopping.id });
+        addTodoItem({ title: 'Chleb', listId: shopping.id });
+        const text = buildShoppingListExportText(shopping.id);
+        expect(text).toContain('Zakupy');
+        expect(text).toContain('- Mleko');
+        expect(text).toContain('- Chleb');
+    });
+
+    it('pokazuje eksport tylko na zakładce Zakupy', () => {
+        const shopping = getTodoListByKind('shopping');
+        const payments = getTodoListByKind('payments');
+        tasksActiveFilter = shopping.id;
+        expect(getActiveShoppingList()?.id).toBe(shopping.id);
+        tasksActiveFilter = payments.id;
+        expect(getActiveShoppingList()).toBeNull();
+        tasksActiveFilter = 'all';
+        expect(getActiveShoppingList()).toBeNull();
+    });
 });
