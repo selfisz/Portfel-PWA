@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { loadScript } from './helpers/load.js';
 
 beforeAll(() => {
@@ -184,45 +184,62 @@ describe('evaluateSpendingAnomalyAlerts', () => {
     });
 });
 
-describe('formatSystemNotificationForDisplay', () => {
-    function withUserAgent(userAgent, fn) {
-        const original = globalThis.navigator?.userAgent;
+describe('postSystemNotifications', () => {
+    async function withUserAgent(userAgent, extraNavigator, fn) {
+        const original = globalThis.navigator;
+        const setAppBadge = vi.fn().mockResolvedValue(undefined);
+        const clearAppBadge = vi.fn().mockResolvedValue(undefined);
         Object.defineProperty(globalThis, 'navigator', {
             configurable: true,
-            value: { userAgent }
+            value: {
+                userAgent,
+                serviceWorker: original?.serviceWorker,
+                setAppBadge,
+                clearAppBadge,
+                ...extraNavigator
+            }
         });
         try {
-            fn();
+            await fn({ setAppBadge, clearAppBadge });
         } finally {
             Object.defineProperty(globalThis, 'navigator', {
                 configurable: true,
-                value: { userAgent: original || '' }
+                value: original
             });
         }
     }
 
-    it('zostawia tytuł na desktopie', () => {
-        withUserAgent('Mozilla/5.0 Windows NT 10.0', () => {
-            const formatted = formatSystemNotificationForDisplay({
-                title: 'Powiadomienia włączone',
-                body: 'Będziesz dostawać alerty'
+    beforeEach(() => {
+        localStorage.clear();
+    });
+
+    it('na iPhone aktualizuje badge zamiast wysyłać baner z „from Finanse”', async () => {
+        await withUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)', {}, async ({ setAppBadge }) => {
+            upsertNotification({
+                id: 'notif-1',
+                type: 'budget',
+                title: 'Limit',
+                body: '80%'
             });
-            expect(formatted).toEqual({
-                title: 'Powiadomienia włączone',
-                body: 'Będziesz dostawać alerty'
-            });
+            const sent = await postSystemNotifications([{ id: 'notif-1', title: 'Limit', body: '80%' }]);
+            expect(sent).toBe(true);
+            expect(setAppBadge).toHaveBeenCalledWith(1);
         });
     });
 
-    it('na iPhone przenosi tytuł do treści, żeby uniknąć „from Finanse”', () => {
-        withUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)', () => {
-            const formatted = formatSystemNotificationForDisplay({
-                title: 'Masz 4 powiadomień',
-                body: 'Nierozliczone miesiące · Szybkie tempo: Zakupy'
-            });
-            expect(formatted.title).toBe('');
-            expect(formatted.body).toContain('Masz 4 powiadomień');
-            expect(formatted.body).toContain('Nierozliczone miesiące');
+    it('na desktopie wysyła powiadomienie przez service workera', async () => {
+        const postMessage = vi.fn();
+        await withUserAgent('Mozilla/5.0 Windows NT 10.0', {
+            serviceWorker: {
+                ready: Promise.resolve({ active: { postMessage } })
+            }
+        }, async () => {
+            const sent = await postSystemNotifications([{ id: 'notif-2', title: 'Test', body: 'Treść' }]);
+            expect(sent).toBe(true);
+            expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({
+                type: 'SHOW_NOTIFICATION',
+                notification: { id: 'notif-2', title: 'Test', body: 'Treść' }
+            }));
         });
     });
 });

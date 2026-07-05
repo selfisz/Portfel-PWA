@@ -7,17 +7,21 @@ function isStandalonePwa() {
         || window.navigator.standalone === true;
 }
 
-function formatSystemNotificationForDisplay(item) {
-    const title = String(item?.title || '').trim();
-    const body = String(item?.body || '').trim();
-    if (!isIosNotificationClient()) {
-        return { title, body };
+function shouldUseIosBadgeInsteadOfBanner() {
+    return isIosNotificationClient();
+}
+
+async function syncAppIconBadge() {
+    if (!('setAppBadge' in navigator)) return false;
+    const count = getUnreadNotificationCount();
+    try {
+        if (count > 0) await navigator.setAppBadge(count);
+        else if ('clearAppBadge' in navigator) await navigator.clearAppBadge();
+        return true;
+    } catch (err) {
+        console.warn('syncAppIconBadge', err);
+        return false;
     }
-    // iOS pod tytułem wstawia linię „from <nazwa aplikacji>” — bez pustego tytułu
-    // wygląda to jak „Masz 4 powiadomień from Finanse” w jednej linii.
-    if (!title) return { title: '', body };
-    if (!body) return { title: '', body: title };
-    return { title: '', body: `${title}\n${body}` };
 }
 
 function getDefaultNotificationPrefs() {
@@ -224,6 +228,7 @@ function updateNotificationsBadge() {
     badge.classList.toggle('hidden', count === 0);
     const btn = document.getElementById('btn-notifications');
     if (btn) btn.classList.toggle('btn-icon--has-badge', count > 0);
+    void syncAppIconBadge();
 }
 
 let notificationsPanelTab = 'alerts';
@@ -427,6 +432,12 @@ function maybeShowSystemNotifications(newItems) {
 
 async function postSystemNotifications(items) {
     if (!items?.length) return false;
+
+    // iOS wymusza linię „from <nazwa aplikacji>” na banerze — nie da się jej usunąć.
+    // Zamiast banera aktualizujemy licznik na ikonie PWA.
+    if (shouldUseIosBadgeInsteadOfBanner()) {
+        return syncAppIconBadge();
+    }
     if (!('serviceWorker' in navigator)) return false;
 
     try {
@@ -436,14 +447,13 @@ async function postSystemNotifications(items) {
 
         const supportsActions = !isIosNotificationClient();
         items.forEach((item) => {
-            const formatted = formatSystemNotificationForDisplay(item);
             target.postMessage({
                 type: 'SHOW_NOTIFICATION',
                 supportsActions,
                 notification: {
                     id: item.id,
-                    title: formatted.title,
-                    body: formatted.body
+                    title: String(item?.title || '').trim(),
+                    body: String(item?.body || '').trim()
                 }
             });
         });
@@ -493,7 +503,9 @@ async function showTestSystemNotification() {
 
     if (typeof showSettingsToast === 'function') {
         if (sent) {
-            showSettingsToast('Wysłano test — zminimalizuj aplikację, jeśli nie widzisz banera');
+            showSettingsToast(shouldUseIosBadgeInsteadOfBanner()
+                ? 'Test OK — na iPhone liczba na ikonce i szczegóły w panelu powiadomień'
+                : 'Wysłano test — zminimalizuj aplikację, jeśli nie widzisz banera');
         } else {
             showSettingsToast('Nie udało się wysłać — odśwież aplikację i spróbuj ponownie', 'error');
         }
@@ -683,7 +695,7 @@ function syncNotificationSettingsUI() {
             status.textContent = 'Na iPhone powiadomienia na pasku działają tylko z ikony na ekranie głównym (Udostępnij → Dodaj do ekranu początkowego).';
         } else if (Notification.permission === 'granted') {
             status.textContent = isIosNotificationClient()
-                ? 'Powiadomienia włączone. Na iPhone banery widać głównie przy aplikacji w tle.'
+                ? 'Powiadomienia włączone. Na iPhone zamiast banera z podpisem „from Finanse” pojawia się liczba na ikonce — szczegóły w panelu powiadomień.'
                 : 'Powiadomienia systemowe włączone.';
         } else if (Notification.permission === 'denied') {
             status.textContent = isIosNotificationClient()
