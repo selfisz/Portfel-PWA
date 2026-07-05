@@ -159,6 +159,7 @@ function renderWelcomeDashboard() {
     const balanceEl = document.getElementById('welcome-balance');
     const pinLink = document.getElementById('btn-welcome-enable-pin');
     const openFullBtn = document.getElementById('btn-welcome-open-full');
+    const bioBtn = document.getElementById('btn-welcome-unlock-bio');
     const card = document.getElementById('welcome-dashboard-card');
     if (!greetingEl || !balanceEl) return;
 
@@ -182,6 +183,17 @@ function renderWelcomeDashboard() {
     }
     if (openFullBtn) {
         openFullBtn.textContent = restrictedGateway ? 'Odblokuj aplikację' : 'Otwórz pełną aplikację';
+    }
+    if (bioBtn) {
+        const showBio = restrictedGateway
+            && typeof isAppLockBiometricEnabled === 'function'
+            && isAppLockBiometricEnabled()
+            && typeof getStoredAppLockCredentialId === 'function'
+            && !!getStoredAppLockCredentialId();
+        bioBtn.classList.toggle('hidden', !showBio);
+        if (showBio && typeof getAppLockBiometricLabel === 'function') {
+            bioBtn.textContent = `Odblokuj ${getAppLockBiometricLabel()}`;
+        }
     }
     if (pinLink) {
         pinLink.classList.toggle('hidden', lockEnabled || restrictedGateway);
@@ -316,6 +328,12 @@ function onWelcomeTileClick(target) {
     exitWelcomeModeToView(target);
 }
 
+function onWelcomeBiometricClick() {
+    if (typeof onAppLockBiometricClick === 'function') {
+        onAppLockBiometricClick().catch((err) => console.warn('onWelcomeBiometricClick', err));
+    }
+}
+
 function onWelcomeOpenFullClick() {
     if (typeof isAppLockRestricted === 'function' && isAppLockRestricted()) {
         if (typeof requestAppLockUnlockPrompt === 'function') requestAppLockUnlockPrompt();
@@ -355,6 +373,7 @@ function initWelcomeDashboard() {
     initWelcomeDashboard._done = true;
 
     document.getElementById('btn-welcome-open-full')?.addEventListener('click', onWelcomeOpenFullClick);
+    document.getElementById('btn-welcome-unlock-bio')?.addEventListener('click', onWelcomeBiometricClick);
     document.getElementById('btn-welcome-enable-pin')?.addEventListener('click', onWelcomeEnablePinClick);
 
     document.querySelectorAll('[data-welcome-target]').forEach((btn) => {
