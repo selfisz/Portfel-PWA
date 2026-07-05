@@ -7,6 +7,19 @@ function isStandalonePwa() {
         || window.navigator.standalone === true;
 }
 
+function formatSystemNotificationForDisplay(item) {
+    const title = String(item?.title || '').trim();
+    const body = String(item?.body || '').trim();
+    if (!isIosNotificationClient()) {
+        return { title, body };
+    }
+    // iOS pod tytułem wstawia linię „from <nazwa aplikacji>” — bez pustego tytułu
+    // wygląda to jak „Masz 4 powiadomień from Finanse” w jednej linii.
+    if (!title) return { title: '', body };
+    if (!body) return { title: '', body: title };
+    return { title: '', body: `${title}\n${body}` };
+}
+
 function getDefaultNotificationPrefs() {
     return {
         enabled: false,
@@ -423,13 +436,14 @@ async function postSystemNotifications(items) {
 
         const supportsActions = !isIosNotificationClient();
         items.forEach((item) => {
+            const formatted = formatSystemNotificationForDisplay(item);
             target.postMessage({
                 type: 'SHOW_NOTIFICATION',
                 supportsActions,
                 notification: {
                     id: item.id,
-                    title: item.title,
-                    body: item.body
+                    title: formatted.title,
+                    body: formatted.body
                 }
             });
         });

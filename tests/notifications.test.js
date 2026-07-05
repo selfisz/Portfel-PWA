@@ -183,3 +183,46 @@ describe('evaluateSpendingAnomalyAlerts', () => {
         expect(created.some((n) => n.type === 'spending_anomaly')).toBe(true);
     });
 });
+
+describe('formatSystemNotificationForDisplay', () => {
+    function withUserAgent(userAgent, fn) {
+        const original = globalThis.navigator?.userAgent;
+        Object.defineProperty(globalThis, 'navigator', {
+            configurable: true,
+            value: { userAgent }
+        });
+        try {
+            fn();
+        } finally {
+            Object.defineProperty(globalThis, 'navigator', {
+                configurable: true,
+                value: { userAgent: original || '' }
+            });
+        }
+    }
+
+    it('zostawia tytuł na desktopie', () => {
+        withUserAgent('Mozilla/5.0 Windows NT 10.0', () => {
+            const formatted = formatSystemNotificationForDisplay({
+                title: 'Powiadomienia włączone',
+                body: 'Będziesz dostawać alerty'
+            });
+            expect(formatted).toEqual({
+                title: 'Powiadomienia włączone',
+                body: 'Będziesz dostawać alerty'
+            });
+        });
+    });
+
+    it('na iPhone przenosi tytuł do treści, żeby uniknąć „from Finanse”', () => {
+        withUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)', () => {
+            const formatted = formatSystemNotificationForDisplay({
+                title: 'Masz 4 powiadomień',
+                body: 'Nierozliczone miesiące · Szybkie tempo: Zakupy'
+            });
+            expect(formatted.title).toBe('');
+            expect(formatted.body).toContain('Masz 4 powiadomień');
+            expect(formatted.body).toContain('Nierozliczone miesiące');
+        });
+    });
+});

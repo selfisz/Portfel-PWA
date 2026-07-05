@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanse-pwa-v356';
+const CACHE_NAME = 'finanse-pwa-v357';
 
 const FIREBASE_CDN = [
   'https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js',
@@ -182,8 +182,10 @@ self.addEventListener('message', (event) => {
   if (!data || data.type !== 'SHOW_NOTIFICATION' || !data.notification) return;
   const n = data.notification;
   const iconUrl = new URL('icons/icon-192.png', self.registration.scope).href;
+  const body = n.body || '';
+  const title = typeof n.title === 'string' ? n.title : (body ? '' : 'Finanse');
   const options = {
-    body: n.body || '',
+    body,
     icon: iconUrl,
     badge: iconUrl,
     tag: n.id,
@@ -196,7 +198,7 @@ self.addEventListener('message', (event) => {
     ];
   }
   event.waitUntil(
-    self.registration.showNotification(n.title || 'Finanse', options)
+    self.registration.showNotification(title, options)
   );
 });
 
