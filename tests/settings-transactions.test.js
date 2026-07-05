@@ -268,6 +268,19 @@ describe('applyBackupPayload', () => {
     });
 });
 
+describe('backup restore progress', () => {
+    it('zawiera krok pobierania tylko dla chmury', () => {
+        const cloud = getBackupRestoreProgressSteps('cloud').map((step) => step.id);
+        const file = getBackupRestoreProgressSteps('file').map((step) => step.id);
+        expect(cloud).toContain('fetch');
+        expect(cloud).not.toContain('read');
+        expect(file).toContain('read');
+        expect(file).not.toContain('fetch');
+        expect(cloud).toContain('done');
+        expect(file).toContain('done');
+    });
+});
+
 // ===========================================================================
 // settings.js — saveCategoryEditor
 // ===========================================================================

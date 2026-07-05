@@ -11,6 +11,118 @@ function yieldToMain() {
     });
 }
 
+const BACKUP_RESTORE_PROGRESS_STEPS = [
+    { id: 'fetch', label: 'Pobieranie z chmury', sources: ['cloud'] },
+    { id: 'read', label: 'Wczytywanie pliku', sources: ['file'] },
+    { id: 'validate', label: 'Sprawdzanie kopii', sources: ['cloud', 'file'] },
+    { id: 'restore', label: 'Przywracanie danych', sources: ['cloud', 'file'] },
+    { id: 'save', label: 'Zapis i synchronizacja', sources: ['cloud', 'file'] },
+    { id: 'refresh', label: 'Odświeżanie widoków', sources: ['cloud', 'file'] },
+    { id: 'done', label: 'Gotowe', sources: ['cloud', 'file'] }
+];
+
+let backupRestoreProgressState = null;
+let backupRestoreProgressCloseTimer = null;
+
+function getBackupRestoreProgressSteps(source) {
+    return BACKUP_RESTORE_PROGRESS_STEPS.filter((step) => step.sources.includes(source));
+}
+
+function renderBackupRestoreProgressSteps() {
+    const list = document.getElementById('backup-restore-progress-steps');
+    if (!list || !backupRestoreProgressState) return;
+    const { steps, currentStepId } = backupRestoreProgressState;
+    const currentIdx = steps.findIndex((step) => step.id === currentStepId);
+    list.innerHTML = steps.map((step, index) => {
+        const isDone = currentStepId === 'done' || index < currentIdx;
+        const isActive = !isDone && step.id === currentStepId;
+        let stateClass = '';
+        if (isDone) stateClass = ' backup-restore-progress-step--done';
+        else if (isActive) stateClass = ' backup-restore-progress-step--active';
+        return `<li class="backup-restore-progress-step${stateClass}">
+            <span class="backup-restore-progress-step-icon" aria-hidden="true"></span>
+            <span>${escapeHtml(step.label)}</span>
+        </li>`;
+    }).join('');
+}
+
+function showBackupRestoreProgress({ source = 'file' } = {}) {
+    const overlay = document.getElementById('backup-restore-progress-overlay');
+    const card = overlay?.querySelector('.backup-restore-progress-card');
+    const actions = document.getElementById('backup-restore-progress-actions');
+    const detail = document.getElementById('backup-restore-progress-detail');
+    if (!overlay) return;
+    if (backupRestoreProgressCloseTimer) {
+        window.clearTimeout(backupRestoreProgressCloseTimer);
+        backupRestoreProgressCloseTimer = null;
+    }
+    backupRestoreProgressState = {
+        source,
+        steps: getBackupRestoreProgressSteps(source),
+        currentStepId: null
+    };
+    card?.classList.remove('backup-restore-progress-card--success', 'backup-restore-progress-card--error');
+    actions?.classList.add('hidden');
+    detail?.classList.add('hidden');
+    if (detail) detail.textContent = '';
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    updateBackupRestoreProgress(source === 'cloud' ? 'fetch' : 'read');
+}
+
+function updateBackupRestoreProgress(stepId, detailText = '') {
+    if (!backupRestoreProgressState) return;
+    const step = backupRestoreProgressState.steps.find((item) => item.id === stepId);
+    if (!step) return;
+    backupRestoreProgressState.currentStepId = stepId;
+    const status = document.getElementById('backup-restore-progress-status');
+    const detail = document.getElementById('backup-restore-progress-detail');
+    if (status) status.textContent = step.label;
+    renderBackupRestoreProgressSteps();
+    if (detail) {
+        const text = String(detailText || '').trim();
+        detail.textContent = text;
+        detail.classList.toggle('hidden', !text);
+    }
+}
+
+function closeBackupRestoreProgress() {
+    const overlay = document.getElementById('backup-restore-progress-overlay');
+    if (backupRestoreProgressCloseTimer) {
+        window.clearTimeout(backupRestoreProgressCloseTimer);
+        backupRestoreProgressCloseTimer = null;
+    }
+    backupRestoreProgressState = null;
+    overlay?.classList.add('hidden');
+    overlay?.setAttribute('aria-hidden', 'true');
+    if (!document.body.classList.contains('settings-open')
+        && !document.body.classList.contains('notifications-open')) {
+        document.body.style.overflow = '';
+    }
+}
+
+function finishBackupRestoreProgress(message, detailText = '') {
+    updateBackupRestoreProgress('done', detailText);
+    const card = document.querySelector('.backup-restore-progress-card');
+    const status = document.getElementById('backup-restore-progress-status');
+    card?.classList.add('backup-restore-progress-card--success');
+    if (status) status.textContent = message || 'Kopia została przywrócona';
+    backupRestoreProgressCloseTimer = window.setTimeout(() => {
+        closeBackupRestoreProgress();
+        if (message && typeof showSettingsToast === 'function') showSettingsToast(message);
+    }, 1400);
+}
+
+function failBackupRestoreProgress(message) {
+    const card = document.querySelector('.backup-restore-progress-card');
+    const status = document.getElementById('backup-restore-progress-status');
+    const actions = document.getElementById('backup-restore-progress-actions');
+    card?.classList.add('backup-restore-progress-card--error');
+    if (status) status.textContent = message || 'Nie udało się przywrócić kopii';
+    actions?.classList.remove('hidden');
+}
+
 function getExportPayload() {
     const data = getPersistedState(appState);
     const archivedTransactions = typeof getArchivedTransactions === 'function'
@@ -34,9 +146,20 @@ function finishBackupRestoreUi() {
     document.body.style.overflow = '';
 }
 
-async function applyBackupPayloadAsync(payload) {
+async function applyBackupPayloadAsync(payload, options = {}) {
+    const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
+    onProgress('validate');
     await yieldToMain();
     const { data, archivedTransactions, report } = validateBackupPayload(payload);
+    const transactionCount = (data.transactions?.length || 0) + (archivedTransactions?.length || 0);
+    const todoCount = data.todos?.length || 0;
+    const rulesCount = data.categoryRules?.length || 0;
+    const restoreDetail = [
+        transactionCount ? `${transactionCount} trans.` : '',
+        rulesCount ? `${rulesCount} reguł` : '',
+        todoCount ? `${todoCount} zadań` : ''
+    ].filter(Boolean).join(' · ');
+    onProgress('restore', restoreDetail);
     await yieldToMain();
     if (typeof setArchivedTransactions === 'function') {
         setArchivedTransactions(archivedTransactions);
@@ -50,6 +173,7 @@ async function applyBackupPayloadAsync(payload) {
         writeMonthCloseState(payload.monthCloseState);
     }
     cloudSyncUnlocked = true;
+    onProgress('save');
     await yieldToMain();
     try {
         localStorage.setItem(getFinanceStorageKey(), JSON.stringify(getPersistedState(appState)));
@@ -59,6 +183,7 @@ async function applyBackupPayloadAsync(payload) {
     saveState({ forceCloud: true });
     setSyncStatus('online', getTransactionCount(appState));
     finishBackupRestoreUi();
+    onProgress('refresh');
     await yieldToMain();
     try {
         refreshCurrentView();
@@ -73,7 +198,7 @@ async function applyBackupPayloadAsync(payload) {
     if (importNote) {
         console.info('Import kopii:', importNote);
     }
-    return { report, importNote };
+    return { report, importNote, transactionCount };
 }
 
 function applyBackupPayload(payload) {
@@ -404,40 +529,36 @@ async function restoreCloudBackupById(id) {
     const dateLabel = meta ? formatCloudBackupDate(meta.exportedAt) : 'wybraną';
     if (!confirm(`Na pewno przywrócić kopię z ${dateLabel}?\nObecne dane w aplikacji zostaną zastąpione.`)) return;
 
-    const btn = document.getElementById('btn-restore-cloud');
-    setSettingsButtonBusy(btn, true, 'Pobieranie…');
+    showBackupRestoreProgress({ source: 'cloud' });
     let payload;
     try {
         payload = await getCloudBackupSnapshotById(id);
     } catch (err) {
         console.error('restoreCloudBackupById get', err);
-        showSettingsToast('Nie udało się pobrać kopii z chmury', 'error');
-        setSettingsButtonBusy(btn, false);
+        failBackupRestoreProgress('Nie udało się pobrać kopii z chmury');
         return;
     }
-    setSettingsButtonBusy(btn, false);
     if (!payload) {
-        showSettingsToast('Nie znaleziono wybranej kopii', 'error');
+        failBackupRestoreProgress('Nie znaleziono wybranej kopii');
         return;
     }
     const count = payload.transactionCount || payload.data?.transactions?.length || 0;
     if (!count) {
-        showSettingsToast('Wybrana kopia jest pusta', 'error');
+        failBackupRestoreProgress('Wybrana kopia jest pusta');
         return;
     }
-    setSettingsButtonBusy(btn, true, 'Przywracanie…');
     try {
-        const { importNote } = await applyBackupPayloadAsync(payload);
-        showSettingsToast(importNote
-            ? `Przywrócono ${count} transakcji z chmury (${importNote})`
-            : `Przywrócono ${count} transakcji z chmury`);
+        const { importNote } = await applyBackupPayloadAsync(payload, { onProgress: updateBackupRestoreProgress });
+        const detail = importNote ? `${count} trans. · ${importNote}` : `${count} trans.`;
+        finishBackupRestoreProgress(
+            importNote ? `Przywrócono ${count} transakcji (${importNote})` : `Przywrócono ${count} transakcji`,
+            detail
+        );
         refreshBackupInfo();
         hapticFeedback();
     } catch (err) {
         console.error('restoreCloudBackupById apply', err);
-        showSettingsToast(err.message || 'Nie udało się przywrócić kopii', 'error');
-    } finally {
-        setSettingsButtonBusy(btn, false);
+        failBackupRestoreProgress(err.message || 'Nie udało się przywrócić kopii');
     }
 }
 
@@ -453,35 +574,34 @@ function restoreFromPhoneFile() {
 function handleBackupFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
-    const btn = document.getElementById('btn-restore-file');
-    setSettingsButtonBusy(btn, true, 'Wczytywanie…');
+    showBackupRestoreProgress({ source: 'file' });
+    updateBackupRestoreProgress('read', file.name);
     const reader = new FileReader();
     reader.onload = async () => {
-        setSettingsButtonBusy(btn, false);
         try {
             const payload = JSON.parse(reader.result);
             const count = payload.transactionCount || payload.data?.transactions?.length || 0;
             if (!count) {
-                showSettingsToast('Plik kopii jest pusty', 'error');
+                failBackupRestoreProgress('Plik kopii jest pusty');
                 return;
             }
-            setSettingsButtonBusy(btn, true, 'Przywracanie…');
-            const { importNote } = await applyBackupPayloadAsync(payload);
+            const { importNote } = await applyBackupPayloadAsync(payload, { onProgress: updateBackupRestoreProgress });
             localStorage.setItem(getLocalBackupStorageKey(), reader.result);
-            showSettingsToast(importNote ? `Przywrócono kopię z pliku (${importNote})` : 'Przywrócono kopię z pliku');
+            const detail = importNote ? `${count} trans. · ${importNote}` : `${count} trans.`;
+            finishBackupRestoreProgress(
+                importNote ? `Przywrócono kopię z pliku (${importNote})` : 'Przywrócono kopię z pliku',
+                detail
+            );
             refreshBackupInfo();
             hapticFeedback();
         } catch (err) {
-            showSettingsToast(err.message || 'Nieprawidłowy plik kopii', 'error');
+            failBackupRestoreProgress(err.message || 'Nieprawidłowy plik kopii');
             console.error(err);
-        } finally {
-            setSettingsButtonBusy(btn, false);
         }
         event.target.value = '';
     };
     reader.onerror = () => {
-        setSettingsButtonBusy(btn, false);
-        showSettingsToast('Nie udało się odczytać pliku', 'error');
+        failBackupRestoreProgress('Nie udało się odczytać pliku');
         event.target.value = '';
     };
     reader.readAsText(file);

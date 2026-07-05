@@ -841,6 +841,172 @@ html[data-theme="dark"] .settings-maintenance strong { color: #fbbf24; }
     color: var(--danger);
 }
 
+.backup-restore-progress-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 420;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px calc(16px + var(--safe-left, 0px)) calc(24px + var(--safe-bottom, 0px)) calc(16px + var(--safe-right, 0px));
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(8px);
+}
+
+.backup-restore-progress-overlay.hidden {
+    display: none;
+}
+
+.backup-restore-progress-card {
+    width: min(100%, 360px);
+    padding: 24px 20px;
+    border-radius: var(--radius);
+    background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    text-align: center;
+}
+
+.backup-restore-progress-card--success .backup-restore-progress-spinner {
+    display: none;
+}
+
+.backup-restore-progress-card--success::before {
+    content: '✓';
+    display: block;
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 12px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--success, #22c55e) 18%, transparent);
+    color: var(--success, #22c55e);
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 48px;
+}
+
+.backup-restore-progress-card--error .backup-restore-progress-spinner {
+    display: none;
+}
+
+.backup-restore-progress-card--error::before {
+    content: '!';
+    display: block;
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 12px;
+    border-radius: 50%;
+    background: var(--danger-soft);
+    color: var(--danger);
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 48px;
+}
+
+.backup-restore-progress-spinner {
+    width: 40px;
+    height: 40px;
+    margin: 0 auto 16px;
+    border: 3px solid color-mix(in srgb, var(--accent) 20%, transparent);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: backupRestoreSpin 0.85s linear infinite;
+}
+
+@keyframes backupRestoreSpin {
+    to { transform: rotate(360deg); }
+}
+
+.backup-restore-progress-title {
+    margin: 0 0 8px;
+    font-size: var(--text-lg);
+    font-weight: 700;
+}
+
+.backup-restore-progress-status {
+    margin: 0 0 16px;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+
+.backup-restore-progress-steps {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.backup-restore-progress-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: var(--text-sm);
+    line-height: 1.35;
+    color: var(--text-muted);
+}
+
+.backup-restore-progress-step--active {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.backup-restore-progress-step--done {
+    color: var(--text-muted);
+}
+
+.backup-restore-progress-step-icon {
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+    margin-top: 1px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    box-sizing: border-box;
+}
+
+.backup-restore-progress-step--active .backup-restore-progress-step-icon {
+    border-color: var(--accent);
+    border-top-color: transparent;
+    animation: backupRestoreSpin 0.85s linear infinite;
+}
+
+.backup-restore-progress-step--done .backup-restore-progress-step-icon {
+    border: none;
+    background: color-mix(in srgb, var(--success, #22c55e) 20%, transparent);
+    color: var(--success, #22c55e);
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+}
+
+.backup-restore-progress-step--done .backup-restore-progress-step-icon::before {
+    content: '✓';
+}
+
+.backup-restore-progress-detail {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.backup-restore-progress-detail.hidden {
+    display: none;
+}
+
+.backup-restore-progress-actions {
+    margin-top: 16px;
+}
+
+.backup-restore-progress-actions.hidden {
+    display: none;
+}
+
 .container {
     padding: 16px var(--container-padding) 24px;
     max-width: 560px;
