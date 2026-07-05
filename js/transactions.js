@@ -1,7 +1,18 @@
 let activeViewId = 'dashboard';
 let activeTransactionDetailsIndex = null;
 
+function getActiveViewId() {
+    return activeViewId;
+}
+
 function switchView(viewId, title, element, options = {}) {
+    if (!options.bypassWelcome
+        && typeof isWelcomeMode === 'function'
+        && isWelcomeMode()
+        && typeof exitWelcomeMode === 'function') {
+        exitWelcomeMode({ view: viewId, title, navItem: element });
+        return;
+    }
     if (!options.bypassAppLock
         && typeof canAccessAppLockView === 'function'
         && !canAccessAppLockView(viewId)) {

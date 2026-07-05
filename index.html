@@ -130,11 +130,53 @@
         </div>
     </div>
 
+    <div id="welcome-dashboard" class="welcome-dashboard hidden" role="main" aria-label="Ekran startowy">
+            <div id="welcome-dashboard-card" class="welcome-dashboard-card onboarding-card">
+            <div class="welcome-dashboard-head">
+                <img class="welcome-dashboard-logo" src="icons/header-logo.png" alt="">
+                <div class="welcome-dashboard-head-text">
+                    <h2 id="welcome-greeting" class="welcome-dashboard-greeting">Dzień dobry</h2>
+                    <p id="welcome-info" class="welcome-dashboard-info"></p>
+                </div>
+            </div>
+            <div class="welcome-dashboard-balance-wrap">
+                <p id="welcome-period" class="welcome-dashboard-period"></p>
+                <p id="welcome-balance" class="welcome-dashboard-balance">0,00 zł</p>
+            </div>
+            <div class="welcome-dashboard-tiles">
+                <button type="button" class="welcome-tile" data-welcome-target="add">
+                    <span class="welcome-tile-icon" aria-hidden="true">+</span>
+                    <span class="welcome-tile-title">Dodaj transakcję</span>
+                    <span class="welcome-tile-meta">Szybki wpis</span>
+                </button>
+                <button type="button" class="welcome-tile" data-welcome-target="tasks">
+                    <span class="welcome-tile-icon" aria-hidden="true">✓</span>
+                    <span class="welcome-tile-title">Na dziś</span>
+                    <span id="welcome-tile-tasks-meta" class="welcome-tile-meta">—</span>
+                </button>
+                <button type="button" class="welcome-tile" data-welcome-target="payments">
+                    <span class="welcome-tile-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
+                    </span>
+                    <span class="welcome-tile-title">Do zapłaty</span>
+                    <span id="welcome-tile-payments-meta" class="welcome-tile-meta">—</span>
+                </button>
+                <button type="button" class="welcome-tile" data-welcome-target="reports">
+                    <span class="welcome-tile-icon" aria-hidden="true">◐</span>
+                    <span class="welcome-tile-title">Analiza</span>
+                    <span id="welcome-tile-reports-meta" class="welcome-tile-meta">—</span>
+                </button>
+            </div>
+            <button type="button" id="btn-welcome-open-full" class="btn-onboarding-primary welcome-dashboard-cta">Otwórz pełną aplikację</button>
+            <button type="button" id="btn-welcome-enable-pin" class="btn-text-link welcome-dashboard-pin-link hidden">Włącz blokadę PIN</button>
+        </div>
+    </div>
+
     <header>
-        <div class="header-brand">
+        <button type="button" class="header-brand" id="btn-header-home" aria-label="Ekran startowy">
             <img class="header-logo" src="icons/header-logo.png" alt="">
             <h1 id="view-title">Pulpit</h1>
-        </div>
+        </button>
         <div class="header-actions">
             <button type="button" id="btn-app-lock" class="btn-icon btn-icon--lock hidden" aria-label="Zablokuj aplikację">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm-6 9a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm3.1-9H8.9V6a3.1 3.1 0 0 1 6.2 0v2z"/></svg>
@@ -2279,6 +2321,7 @@
     <script src="js/surplus-allocator.js"></script>
     <script src="js/bootstrap.js"></script>
     <script src="js/auth-config.js"></script>
+    <script src="js/welcome-dashboard.js"></script>
     <script src="js/app-lock.js"></script>
     <script src="js/auth.js"></script>
 </body>

@@ -654,15 +654,19 @@ function saveState(options = {}) {
 }
 
 function refreshCurrentView() {
+    if (typeof isWelcomeMode === 'function' && isWelcomeMode() && typeof renderWelcomeDashboard === 'function') {
+        renderWelcomeDashboard();
+        return;
+    }
     const dash = document.getElementById('view-dashboard');
     const reports = document.getElementById('view-reports');
     const investments = document.getElementById('view-investments');
     const loans = document.getElementById('view-loans');
-    if (dash?.classList.contains('active')) renderDashboard();
-    if (reports?.classList.contains('active')) renderReports();
-    if (investments?.classList.contains('active') && typeof renderAssets === 'function') renderAssets();
-    if (loans?.classList.contains('active')) renderLoans();
-    if (document.getElementById('view-tasks')?.classList.contains('active') && typeof renderTasksView === 'function') {
+    if (dash?.classList?.contains('active')) renderDashboard();
+    if (reports?.classList?.contains('active')) renderReports();
+    if (investments?.classList?.contains('active') && typeof renderAssets === 'function') renderAssets();
+    if (loans?.classList?.contains('active')) renderLoans();
+    if (document.getElementById('view-tasks')?.classList?.contains('active') && typeof renderTasksView === 'function') {
         renderTasksView();
     }
 }

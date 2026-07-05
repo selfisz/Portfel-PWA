@@ -92,7 +92,9 @@ async function bootstrapOfflineSession() {
 
     if (typeof bootstrapApp === 'function') bootstrapApp();
     if (typeof initAppLock === 'function') initAppLock();
-    if (typeof maybeRequireAppLock === 'function') maybeRequireAppLock({ reason: 'startup' });
+    if (typeof initWelcomeDashboard === 'function') initWelcomeDashboard();
+    const locked = typeof maybeRequireAppLock === 'function' && maybeRequireAppLock({ reason: 'startup' });
+    if (!locked && typeof maybeEnterWelcomeOnStartup === 'function') maybeEnterWelcomeOnStartup();
     if (typeof registerServiceWorker === 'function') registerServiceWorker();
     return true;
 }

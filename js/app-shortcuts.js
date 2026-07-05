@@ -25,6 +25,12 @@ function clearAppLaunchParams() {
     history.replaceState(null, '', next);
 }
 
+let appLaunchShortcutApplied = false;
+
+function wasAppLaunchShortcutApplied() {
+    return appLaunchShortcutApplied;
+}
+
 function applyAppLaunchShortcut() {
     const view = getAppLaunchView();
     if (!view || typeof switchView !== 'function') return false;
@@ -40,11 +46,13 @@ function applyAppLaunchShortcut() {
     const nav = document.querySelectorAll('.nav-item')[cfg.navIndex];
 
     clearAppLaunchParams();
-    switchView(view, cfg.title, nav || null);
+    if (typeof exitWelcomeMode === 'function') exitWelcomeMode({ silent: true });
+    switchView(view, cfg.title, nav || null, { bypassWelcome: true });
 
     if (addType && typeof setFormMode === 'function') {
         setFormMode(addType);
     }
 
+    appLaunchShortcutApplied = true;
     return true;
 }

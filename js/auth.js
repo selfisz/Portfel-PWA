@@ -374,7 +374,9 @@ async function handleAuthenticatedUser(user) {
 
         if (typeof bootstrapApp === 'function') bootstrapApp();
         if (typeof initAppLock === 'function') initAppLock();
-        if (typeof maybeRequireAppLock === 'function') maybeRequireAppLock({ reason: 'startup' });
+        if (typeof initWelcomeDashboard === 'function') initWelcomeDashboard();
+        const locked = typeof maybeRequireAppLock === 'function' && maybeRequireAppLock({ reason: 'startup' });
+        if (!locked && typeof maybeEnterWelcomeOnStartup === 'function') maybeEnterWelcomeOnStartup();
         refreshAccountSettingsUI();
         registerServiceWorker();
         if (typeof flushOfflineChangesAfterOnline === 'function') {

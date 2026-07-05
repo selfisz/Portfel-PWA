@@ -349,6 +349,9 @@ function hideAppLockOverlay() {
     resetAppLockPinBuffer();
     setAppLockError('');
     updateAppLockRestrictedUi();
+    if (typeof maybeReturnToWelcomeRestrictedGateway === 'function') {
+        maybeReturnToWelcomeRestrictedGateway();
+    }
 }
 
 function updateAppLockRestrictedUi() {
@@ -386,6 +389,10 @@ function enterAppLockRestrictedMode() {
     hideAppLockOverlay();
     document.body.classList.add('app-lock-restricted');
     updateAppLockRestrictedUi();
+    if (typeof enterWelcomeMode === 'function') {
+        enterWelcomeMode({ reason: 'locked' });
+        return;
+    }
     const nav = document.querySelector('.nav-item[data-nav-view="add"]');
     if (typeof switchView === 'function') {
         switchView('add', 'Dodaj', nav || null, { bypassAppLock: true });
@@ -401,14 +408,23 @@ function exitAppLockRestrictedMode() {
 
 function activateAppLockState(options = {}) {
     if (!isAppLockEnabled()) {
+        if (typeof exitWelcomeMode === 'function') exitWelcomeMode({ silent: true });
         exitAppLockRestrictedMode();
         hideAppLockOverlay();
         return false;
+    }
+    if (options.reason === 'startup') {
+        if (typeof setWelcomePreferDashboardOnExit === 'function') setWelcomePreferDashboardOnExit(true);
+    } else if (options.force && shouldLockDueToIdle()) {
+        if (typeof setWelcomePreferDashboardOnExit === 'function') setWelcomePreferDashboardOnExit(true);
+    } else if (options.force) {
+        if (typeof setWelcomePreferDashboardOnExit === 'function') setWelcomePreferDashboardOnExit(false);
     }
     closeSensitivePanelsForAppLock();
     if (isAppLockQuickAddEnabled()) {
         enterAppLockRestrictedMode();
     } else {
+        if (typeof exitWelcomeMode === 'function') exitWelcomeMode({ silent: true });
         exitAppLockRestrictedMode();
         showAppLockOverlay();
     }
@@ -416,10 +432,12 @@ function activateAppLockState(options = {}) {
 }
 
 function completeAppLockUnlock() {
+    if (typeof resetWelcomeRestrictedOnAddForm === 'function') resetWelcomeRestrictedOnAddForm();
     markAppLockSessionUnlocked();
     exitAppLockRestrictedMode();
     hideAppLockOverlay();
     scheduleAppLockIdleCheck();
+    if (typeof enterWelcomeMode === 'function') enterWelcomeMode({ reason: 'unlock' });
 }
 
 async function submitAppLockPin() {
