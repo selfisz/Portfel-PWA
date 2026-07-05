@@ -2630,9 +2630,7 @@ html:not([data-theme="dark"]) .grid-item.selected {
     padding: 14px 4px;
     border-bottom: 1px solid var(--border);
     position: relative;
-    touch-action: pan-y;
     transition: background 0.2s;
-    will-change: transform;
     cursor: pointer;
 }
 
