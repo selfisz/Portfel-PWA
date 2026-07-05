@@ -18,6 +18,12 @@ function getExportPayload() {
     };
 }
 
+function finishBackupRestoreUi() {
+    if (typeof closeCloudRestorePicker === 'function') closeCloudRestorePicker();
+    if (typeof closeSettings === 'function') closeSettings();
+    document.body.style.overflow = '';
+}
+
 function applyBackupPayload(payload) {
     const { data, archivedTransactions, report } = validateBackupPayload(payload);
     if (typeof setArchivedTransactions === 'function') {
@@ -39,11 +45,16 @@ function applyBackupPayload(payload) {
     }
     saveState({ forceCloud: true });
     setSyncStatus('online', getTransactionCount(appState));
-    try {
-        refreshCurrentView();
-    } catch (err) {
-        console.error('refreshCurrentView after restore', err);
-    }
+    finishBackupRestoreUi();
+    window.setTimeout(() => {
+        try {
+            refreshCurrentView();
+            if (typeof renderCategoryRulesEditor === 'function') renderCategoryRulesEditor();
+            if (typeof renderTasksView === 'function') renderTasksView();
+        } catch (err) {
+            console.error('refreshCurrentView after restore', err);
+        }
+    }, 0);
     const importNote = typeof formatBackupImportReport === 'function'
         ? formatBackupImportReport(report)
         : '';
@@ -394,7 +405,6 @@ async function restoreCloudBackupById(id) {
         showSettingsToast(importNote
             ? `Przywrócono ${count} transakcji z chmury (${importNote})`
             : `Przywrócono ${count} transakcji z chmury`);
-        closeCloudRestorePicker();
         refreshBackupInfo();
         hapticFeedback();
     } catch (err) {

@@ -10,6 +10,8 @@ beforeAll(() => {
     loadScript('js/cash.js');
     loadScript('js/credit-cards.js');
     loadScript('js/asset-analytics.js');
+    loadScript('js/category-rules.js');
+    loadScript('js/tasks.js');
     loadScript('js/backup-import.js');
 });
 
@@ -98,10 +100,45 @@ describe('validateBackupPayload', () => {
             droppedCashMovements: 0,
             droppedAssetSnapshots: 0,
             droppedAssetValueHistory: 0,
+            droppedCategoryRules: 0,
+            droppedTodoLists: 0,
+            droppedTodos: 0,
             trimmedCashMovements: 0,
             trimmedAssetSnapshots: 0,
             trimmedAssetValueHistory: 0
         });
         expect(text).toContain('3 transakcji pominięto');
+    });
+
+    it('przywraca reguły kategorii i zadania z kopii', () => {
+        const result = validateBackupPayload(validPayload({
+            categoryRules: [
+                { id: 'rule-1', pattern: 'biedronka', type: 'expense', mainCategory: 'Jedzenie', subCategory: 'Zakupy' },
+                { id: 'rule-bad', pattern: '', type: 'expense', mainCategory: 'Dom', subCategory: 'X' }
+            ],
+            todoLists: [
+                { id: 'todo-list-shopping', name: 'Zakupy', kind: 'shopping', sortOrder: 0, builtIn: true, archived: false },
+                { id: 'todo-list-custom', name: 'Moje', kind: 'custom', sortOrder: 4, builtIn: false, archived: false }
+            ],
+            todos: [
+                {
+                    id: 'todo-1',
+                    listId: 'todo-list-custom',
+                    title: 'Kup mleko',
+                    done: false,
+                    sortOrder: 0,
+                    createdAt: '2026-01-01T00:00:00.000Z',
+                    updatedAt: '2026-01-01T00:00:00.000Z'
+                },
+                { id: 'todo-bad', listId: '', title: '', done: false }
+            ]
+        }));
+        expect(result.data.categoryRules).toHaveLength(1);
+        expect(result.data.categoryRules[0].pattern).toBe('biedronka');
+        expect(result.report.droppedCategoryRules).toBe(1);
+        expect(result.data.todoLists).toHaveLength(2);
+        expect(result.data.todos).toHaveLength(1);
+        expect(result.data.todos[0].title).toBe('Kup mleko');
+        expect(result.report.droppedTodos).toBe(1);
     });
 });

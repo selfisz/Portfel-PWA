@@ -181,6 +181,41 @@ function sanitizeAssetValueHistoryList(raw, report) {
     return normalized;
 }
 
+function sanitizeCategoryRulesList(raw, report) {
+    const input = Array.isArray(raw) ? raw : [];
+    if (typeof mergeCategoryRulesById === 'function') {
+        const normalized = mergeCategoryRulesById(input);
+        report.droppedCategoryRules += Math.max(0, input.length - normalized.length);
+        return normalized;
+    }
+    if (typeof normalizeCategoryRule === 'function') {
+        const normalized = input.map(normalizeCategoryRule).filter(Boolean);
+        report.droppedCategoryRules += Math.max(0, input.length - normalized.length);
+        return dedupeNormalized(normalized, (rule) => rule.id);
+    }
+    return input;
+}
+
+function sanitizeTodoListsList(raw, report) {
+    const input = Array.isArray(raw) ? raw : [];
+    if (typeof normalizeTodoListsArray === 'function') {
+        const normalized = normalizeTodoListsArray(input);
+        report.droppedTodoLists += Math.max(0, input.length - normalized.length);
+        return normalized;
+    }
+    return [];
+}
+
+function sanitizeTodosList(raw, report) {
+    const input = Array.isArray(raw) ? raw : [];
+    if (typeof normalizeTodosArray === 'function') {
+        const normalized = normalizeTodosArray(input);
+        report.droppedTodos += Math.max(0, input.length - normalized.length);
+        return normalized;
+    }
+    return [];
+}
+
 function createBackupImportReport() {
     return {
         droppedTransactions: 0,
@@ -191,6 +226,9 @@ function createBackupImportReport() {
         droppedCashMovements: 0,
         droppedAssetSnapshots: 0,
         droppedAssetValueHistory: 0,
+        droppedCategoryRules: 0,
+        droppedTodoLists: 0,
+        droppedTodos: 0,
         trimmedCashMovements: 0,
         trimmedAssetSnapshots: 0,
         trimmedAssetValueHistory: 0
@@ -204,6 +242,9 @@ function formatBackupImportReport(report) {
     if (report.droppedLoans) parts.push(`${report.droppedLoans} kredytów pominięto`);
     if (report.droppedCreditCards) parts.push(`${report.droppedCreditCards} kart pominięto`);
     if (report.droppedAssets) parts.push(`${report.droppedAssets} aktywów pominięto`);
+    if (report.droppedCategoryRules) parts.push(`${report.droppedCategoryRules} reguł pominięto`);
+    if (report.droppedTodoLists) parts.push(`${report.droppedTodoLists} list zadań pominięto`);
+    if (report.droppedTodos) parts.push(`${report.droppedTodos} zadań pominięto`);
     if (report.droppedCashMovements) parts.push(`${report.droppedCashMovements} ruchów gotówki pominięto`);
     const trimmed = report.trimmedCashMovements + report.trimmedAssetSnapshots + report.trimmedAssetValueHistory;
     if (trimmed) parts.push(`${trimmed} wpisów przycięto do limitu`);
@@ -253,14 +294,16 @@ function validateBackupPayload(payload) {
         categoryBudgets: sanitizeNumericRecord(data.categoryBudgets),
         subCategoryBudgets: sanitizeNumericRecord(data.subCategoryBudgets),
         reportPrefs: sanitizeReportPrefs(data.reportPrefs),
-        categoryRules: Array.isArray(data.categoryRules) ? data.categoryRules : [],
+        categoryRules: sanitizeCategoryRulesList(data.categoryRules, report),
         pendingRecurringConfirmations: Array.isArray(data.pendingRecurringConfirmations)
             ? data.pendingRecurringConfirmations
             : [],
         skippedRecurringMonths: data.skippedRecurringMonths && typeof data.skippedRecurringMonths === 'object'
             ? data.skippedRecurringMonths
             : {},
-        deletedAssetIds: sanitizeStringArray(data.deletedAssetIds)
+        deletedAssetIds: sanitizeStringArray(data.deletedAssetIds),
+        todoLists: sanitizeTodoListsList(data.todoLists, report),
+        todos: sanitizeTodosList(data.todos, report)
     };
 
     return {
