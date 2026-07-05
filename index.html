@@ -299,7 +299,7 @@
     </div>
 
     <div id="settings-overlay" class="settings-overlay hidden" onclick="if (event.target === this) closeSettings()">
-        <div class="settings-panel">
+        <div class="settings-panel" onclick="event.stopPropagation()">
             <div id="panel-header-settings"></div>
 
             <nav class="analysis-subnav settings-subnav" aria-label="Sekcje ustawień">
@@ -591,7 +591,7 @@
     </div>
 
     <div id="cloud-restore-overlay" class="settings-overlay category-editor-overlay hidden" onclick="if (event.target === this) closeCloudRestorePicker()">
-        <div class="settings-panel category-editor-panel cloud-restore-panel">
+        <div class="settings-panel category-editor-panel cloud-restore-panel" onclick="event.stopPropagation()">
             <div id="panel-header-cloud-restore"></div>
             <p class="cloud-restore-hint">Wybierz kopię z chmury. Przywrócenie zastąpi obecne dane w aplikacji.</p>
             <div id="cloud-restore-list" class="cloud-restore-list"></div>

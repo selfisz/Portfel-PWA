@@ -938,7 +938,7 @@ describe('isDashboardChartTransactionLevel', () => {
 // settings.js — applyBackupPayload
 // ===========================================================================
 describe('applyBackupPayload', () => {
-    it('wczytuje dane z payload.data', () => {
+    it('wczytuje dane z payload.data', async () => {
         const payload = {
             version: 1,
             data: {
@@ -952,11 +952,11 @@ describe('applyBackupPayload', () => {
                 creditCardMovements: []
             }
         };
-        applyBackupPayload(payload);
+        await applyBackupPayload(payload);
         expect(_getAppState().transactions.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('wczytuje dane bezpośrednio gdy brak payload.data', () => {
+    it('wczytuje dane bezpośrednio gdy brak payload.data', async () => {
         const payload = {
             transactions: [
                 { date: '2024-02-01', type: 'income', amount: 5000, mainCategory: 'Wynagrodzenie', subCategory: 'Podstawa' }
@@ -967,13 +967,13 @@ describe('applyBackupPayload', () => {
             cashMovements: [],
             creditCardMovements: []
         };
-        applyBackupPayload(payload);
+        await applyBackupPayload(payload);
         expect(_getAppState().transactions.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('rzuca błąd gdy brak transactions w danych', () => {
-        expect(() => applyBackupPayload({ data: { transactions: null } })).toThrow();
-        expect(() => applyBackupPayload({})).toThrow();
+    it('rzuca błąd gdy brak transactions w danych', async () => {
+        await expect(applyBackupPayload({ data: { transactions: null } })).rejects.toThrow();
+        await expect(applyBackupPayload({})).rejects.toThrow();
     });
 });
 

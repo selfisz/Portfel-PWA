@@ -228,34 +228,34 @@ describe('getExportPayload', () => {
 // settings.js — applyBackupPayload
 // ===========================================================================
 describe('applyBackupPayload', () => {
-    it('rzuca błąd gdy brak transactions', () => {
-        expect(() => applyBackupPayload({ data: { loans: [] } })).toThrow('Nieprawidłowy plik');
+    it('rzuca błąd gdy brak transactions', async () => {
+        await expect(applyBackupPayload({ data: { loans: [] } })).rejects.toThrow('Nieprawidłowy plik');
     });
 
-    it('rzuca błąd gdy payload jest null', () => {
-        expect(() => applyBackupPayload(null)).toThrow();
+    it('rzuca błąd gdy payload jest null', async () => {
+        await expect(applyBackupPayload(null)).rejects.toThrow();
     });
 
-    it('rzuca błąd gdy transactions nie jest tablicą', () => {
-        expect(() => applyBackupPayload({ transactions: 'bad' })).toThrow();
+    it('rzuca błąd gdy transactions nie jest tablicą', async () => {
+        await expect(applyBackupPayload({ transactions: 'bad' })).rejects.toThrow();
     });
 
-    it('akceptuje payload bez wrappera data', () => {
-        expect(() => applyBackupPayload({ transactions: [], loans: [] })).not.toThrow();
+    it('akceptuje payload bez wrappera data', async () => {
+        await expect(applyBackupPayload({ transactions: [], loans: [] })).resolves.toBeTruthy();
     });
 
-    it('akceptuje payload z wrapperem data', () => {
-        expect(() => applyBackupPayload({ data: { transactions: [], loans: [] } })).not.toThrow();
+    it('akceptuje payload z wrapperem data', async () => {
+        await expect(applyBackupPayload({ data: { transactions: [], loans: [] } })).resolves.toBeTruthy();
     });
 
-    it('przywraca transakcje z payload.data', () => {
+    it('przywraca transakcje z payload.data', async () => {
         const tx = { date: '2024-06-01', type: 'expense', mainCategory: 'Jedzenie', subCategory: 'Biedronka', amount: 55, affectsCash: true };
-        applyBackupPayload({ data: { transactions: [tx], loans: [] } });
+        await applyBackupPayload({ data: { transactions: [tx], loans: [] } });
         expect(_getAppState().transactions.length).toBeGreaterThan(0);
     });
 
-    it('odrzuca śmieciowe transakcje przy imporcie', () => {
-        applyBackupPayload({
+    it('odrzuca śmieciowe transakcje przy imporcie', async () => {
+        await applyBackupPayload({
             data: {
                 transactions: [
                     { date: '2024-06-01', type: 'expense', mainCategory: 'Jedzenie', subCategory: 'A', amount: 10 },

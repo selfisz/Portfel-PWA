@@ -1,5 +1,16 @@
 /* Ustawienia — kopie zapasowe (eksport, import, chmura) */
 
+function yieldToMain() {
+    return new Promise((resolve) => {
+        const schedule = () => window.setTimeout(resolve, 0);
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(schedule);
+            return;
+        }
+        schedule();
+    });
+}
+
 function getExportPayload() {
     const data = getPersistedState(appState);
     const archivedTransactions = typeof getArchivedTransactions === 'function'
@@ -20,12 +31,13 @@ function getExportPayload() {
 
 function finishBackupRestoreUi() {
     if (typeof closeCloudRestorePicker === 'function') closeCloudRestorePicker();
-    if (typeof closeSettings === 'function') closeSettings();
     document.body.style.overflow = '';
 }
 
-function applyBackupPayload(payload) {
+async function applyBackupPayloadAsync(payload) {
+    await yieldToMain();
     const { data, archivedTransactions, report } = validateBackupPayload(payload);
+    await yieldToMain();
     if (typeof setArchivedTransactions === 'function') {
         setArchivedTransactions(archivedTransactions);
     } else if (Array.isArray(archivedTransactions) && archivedTransactions.length
@@ -38,6 +50,7 @@ function applyBackupPayload(payload) {
         writeMonthCloseState(payload.monthCloseState);
     }
     cloudSyncUnlocked = true;
+    await yieldToMain();
     try {
         localStorage.setItem(getFinanceStorageKey(), JSON.stringify(getPersistedState(appState)));
     } catch (err) {
@@ -46,15 +59,14 @@ function applyBackupPayload(payload) {
     saveState({ forceCloud: true });
     setSyncStatus('online', getTransactionCount(appState));
     finishBackupRestoreUi();
-    window.setTimeout(() => {
-        try {
-            refreshCurrentView();
-            if (typeof renderCategoryRulesEditor === 'function') renderCategoryRulesEditor();
-            if (typeof renderTasksView === 'function') renderTasksView();
-        } catch (err) {
-            console.error('refreshCurrentView after restore', err);
-        }
-    }, 0);
+    await yieldToMain();
+    try {
+        refreshCurrentView();
+        if (typeof renderCategoryRulesEditor === 'function') renderCategoryRulesEditor();
+        if (typeof renderTasksView === 'function') renderTasksView();
+    } catch (err) {
+        console.error('refreshCurrentView after restore', err);
+    }
     const importNote = typeof formatBackupImportReport === 'function'
         ? formatBackupImportReport(report)
         : '';
@@ -62,6 +74,10 @@ function applyBackupPayload(payload) {
         console.info('Import kopii:', importNote);
     }
     return { report, importNote };
+}
+
+function applyBackupPayload(payload) {
+    return applyBackupPayloadAsync(payload);
 }
 function setSettingsButtonBusy(btn, busy, busyLabel) {
     if (!btn) return;
@@ -276,6 +292,7 @@ async function backupToCloud() {
     const btn = document.getElementById('btn-backup-cloud');
     setSettingsButtonBusy(btn, true, 'Wysyłanie…');
     try {
+        await yieldToMain();
         const payload = getExportPayload();
         await saveCloudBackupSnapshot(payload, { source: 'manual' });
         showSettingsToast('Kopia wysłana do chmury');
@@ -289,13 +306,16 @@ async function backupToCloud() {
     }
 }
 
-function backupToPhone() {
+async function backupToPhone() {
     const btn = document.getElementById('btn-backup-phone');
     setSettingsButtonBusy(btn, true, 'Zapisywanie…');
     try {
+        await yieldToMain();
         const payload = getExportPayload();
-        localStorage.setItem(getLocalBackupStorageKey(), JSON.stringify(payload));
-        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const json = JSON.stringify(payload);
+        await yieldToMain();
+        localStorage.setItem(getLocalBackupStorageKey(), json);
+        const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -347,10 +367,16 @@ async function openCloudRestorePicker() {
     if (!overlay || !list) return;
     overlay.classList.remove('hidden');
     list.innerHTML = '<p class="cloud-restore-status">Ładowanie kopii…</p>';
+    await yieldToMain();
 
     try {
-        await ensureCloudBackupsReady();
-        const snapshots = await listCloudBackupSnapshots();
+        const ready = typeof withFirestoreTimeout === 'function'
+            ? withFirestoreTimeout(ensureCloudBackupsReady(), 12000)
+            : ensureCloudBackupsReady();
+        await ready;
+        const snapshots = typeof withFirestoreTimeout === 'function'
+            ? await withFirestoreTimeout(listCloudBackupSnapshots(), 12000)
+            : await listCloudBackupSnapshots();
         if (!snapshots.length) {
             list.innerHTML = '<p class="cloud-restore-status">Brak kopii w chmurze</p>';
             return;
@@ -368,7 +394,7 @@ async function openCloudRestorePicker() {
         };
     } catch (err) {
         console.error('openCloudRestorePicker', err);
-        list.innerHTML = '<p class="cloud-restore-status cloud-restore-status--error">Nie udało się pobrać listy kopii</p>';
+        list.innerHTML = '<p class="cloud-restore-status cloud-restore-status--error">Nie udało się pobrać listy kopii — sprawdź internet i spróbuj ponownie</p>';
     }
 }
 
@@ -401,7 +427,7 @@ async function restoreCloudBackupById(id) {
     }
     setSettingsButtonBusy(btn, true, 'Przywracanie…');
     try {
-        const { importNote } = applyBackupPayload(payload);
+        const { importNote } = await applyBackupPayloadAsync(payload);
         showSettingsToast(importNote
             ? `Przywrócono ${count} transakcji z chmury (${importNote})`
             : `Przywrócono ${count} transakcji z chmury`);
@@ -430,7 +456,7 @@ function handleBackupFileSelect(event) {
     const btn = document.getElementById('btn-restore-file');
     setSettingsButtonBusy(btn, true, 'Wczytywanie…');
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
         setSettingsButtonBusy(btn, false);
         try {
             const payload = JSON.parse(reader.result);
@@ -440,7 +466,7 @@ function handleBackupFileSelect(event) {
                 return;
             }
             setSettingsButtonBusy(btn, true, 'Przywracanie…');
-            const { importNote } = applyBackupPayload(payload);
+            const { importNote } = await applyBackupPayloadAsync(payload);
             localStorage.setItem(getLocalBackupStorageKey(), reader.result);
             showSettingsToast(importNote ? `Przywrócono kopię z pliku (${importNote})` : 'Przywrócono kopię z pliku');
             refreshBackupInfo();

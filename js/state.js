@@ -537,7 +537,7 @@ async function autoRecoverFromCloudBackupIfNeeded() {
         const backupCount = payload.transactionCount || getTransactionCount(payload.data || payload);
         if (backupCount <= getTransactionCount(appState)) return false;
 
-        applyBackupPayload(payload);
+        await applyBackupPayload(payload);
         if (typeof showSettingsToast === 'function') {
             showSettingsToast(`Przywrócono ${backupCount} transakcji z kopii w chmurze`);
         }

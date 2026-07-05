@@ -14,7 +14,15 @@
 
 body.settings-open {
     overflow: hidden;
-    touch-action: none;
+    /* Bez touch-action: none — na iOS blokuje scroll wewnątrz panelu ustawień */
+}
+
+.settings-panel,
+.cloud-restore-panel,
+.cloud-restore-list {
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 
 .category-editor-overlay {
@@ -691,7 +699,11 @@ html[data-theme="dark"] .settings-maintenance strong { color: #fbbf24; }
 }
 
 .cloud-restore-panel {
-    max-height: min(85vh, 640px);
+    max-height: min(92vh, 640px);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .cloud-restore-hint {
@@ -705,8 +717,10 @@ html[data-theme="dark"] .settings-maintenance strong { color: #fbbf24; }
     display: flex;
     flex-direction: column;
     gap: 16px;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
-    max-height: min(52vh, 420px);
+    max-height: none;
     padding-right: 2px;
 }
 
