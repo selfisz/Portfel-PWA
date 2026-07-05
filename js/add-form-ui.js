@@ -21,6 +21,10 @@ function getAddFormCategoryLabel() {
     const main = formState.selectedMainCategory;
     if (!main) return '';
     const sub = formState.selectedSubCategory;
+    const subs = categoryTree[formState.currentType]?.[main] || [];
+    if (subs.length > 0 && (!sub || sub === '[Bez podkategorii]')) {
+        return `${main} — wybierz podkategorię`;
+    }
     if (!sub || sub === '[Bez podkategorii]') return main;
     return `${main} · ${sub}`;
 }
@@ -79,7 +83,10 @@ function updateAddCategorySummary() {
         ? (categoryTree[formState.currentType]?.[formState.selectedMainCategory] || [])
         : [];
     const needsSub = subs.length > 0;
-    const subReady = !needsSub || !!formState.selectedSubCategory;
+    const subReady = !needsSub
+        || (typeof isFormSubCategoryComplete === 'function'
+            ? isFormSubCategoryComplete(formState.currentType, formState.selectedMainCategory, formState.selectedSubCategory)
+            : !!formState.selectedSubCategory);
     if (label && subReady && editingTxIndex === null && hasAddFormRecentCategories()) {
         closeAddCategoryBrowse();
     }

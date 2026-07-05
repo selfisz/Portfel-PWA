@@ -415,6 +415,44 @@ describe('saveTransaction — edycja transakcji', () => {
     saveTransaction();
     expect(_getEditingTxIndex()).toBeNull();
   });
+
+  it('wymaga podkategorii gdy główna ją ma', () => {
+    _setAppState({
+      ..._getAppState(),
+      transactions: [{ amount: 40, type: 'expense', date: '2024-06-01', mainCategory: 'Zakupy', subCategory: '[Bez podkategorii]' }]
+    });
+    _setEditingTxIndex(0);
+    buildFormDom({ amount: '40', date: '2024-06-01' });
+    _setFormState({ formMode: 'expense', currentType: 'expense', selectedMainCategory: 'Zakupy', selectedSubCategory: '' });
+    saveTransaction();
+    expect(document.getElementById('add-form-error').textContent).toBe('Wybierz podkategorię.');
+    expect(_getAppState().transactions[0].subCategory).toBe('[Bez podkategorii]');
+  });
+
+  it('zapisuje wybraną podkategorię przy edycji bez podkategorii', () => {
+    _setAppState({
+      ..._getAppState(),
+      transactions: [{ amount: 40, type: 'expense', date: '2024-06-01', mainCategory: 'Zakupy', subCategory: '[Bez podkategorii]', note: 'biedronka' }]
+    });
+    _setEditingTxIndex(0);
+    buildFormDom({ amount: '40', date: '2024-06-01', note: 'biedronka' });
+    _setFormState({ formMode: 'expense', currentType: 'expense', selectedMainCategory: 'Zakupy', selectedSubCategory: 'Alko' });
+    saveTransaction();
+    expect(_getAppState().transactions[0].subCategory).toBe('Alko');
+  });
+
+  it('nie nadpisuje kategorii regułą przy edycji', () => {
+    _setAppState({
+      ..._getAppState(),
+      transactions: [{ amount: 40, type: 'expense', date: '2024-06-01', mainCategory: 'Zakupy', subCategory: '[Bez podkategorii]', note: 'biedronka' }],
+      categoryRules: [{ id: 'r1', pattern: 'biedronka', type: 'expense', mainCategory: 'Zakupy', subCategory: 'Zakupy', priority: 0 }]
+    });
+    _setEditingTxIndex(0);
+    buildFormDom({ amount: '40', date: '2024-06-01', note: 'biedronka' });
+    _setFormState({ formMode: 'expense', currentType: 'expense', selectedMainCategory: 'Zakupy', selectedSubCategory: 'Alko' });
+    saveTransaction();
+    expect(_getAppState().transactions[0].subCategory).toBe('Alko');
+  });
 });
 
 // ---------------------------------------------------------------------------

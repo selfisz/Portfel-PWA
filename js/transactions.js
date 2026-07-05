@@ -270,6 +270,31 @@ function formatTransactionSavedToast(tx, isEdit = false) {
     return `${verb} — ${categoryLabel} · ${sign}${formatPlnAmount(tx.amount)}`;
 }
 
+function getCategorySubcategories(type, mainCategory) {
+    if (!mainCategory) return [];
+    return categoryTree[type]?.[mainCategory] || [];
+}
+
+function isFormSubCategoryRequired(type, mainCategory) {
+    return getCategorySubcategories(type, mainCategory).length > 0;
+}
+
+function isFormSubCategoryComplete(type, mainCategory, subCategory) {
+    if (!mainCategory) return false;
+    if (!isFormSubCategoryRequired(type, mainCategory)) {
+        return !!subCategory;
+    }
+    return !!subCategory && subCategory !== '[Bez podkategorii]';
+}
+
+function normalizeFormSubCategoryForMain(type, mainCategory, subCategory) {
+    if (!mainCategory) return subCategory || '';
+    if (!isFormSubCategoryRequired(type, mainCategory)) {
+        return '[Bez podkategorii]';
+    }
+    return subCategory || '';
+}
+
 function commitTransactionData(txData, options = {}) {
     let normalized = typeof normalizeTransaction === 'function'
         ? normalizeTransaction(txData)
@@ -319,11 +344,23 @@ async function saveTransaction() {
     const creditCardId = document.getElementById('tx-credit-card-select')?.value;
     const affectsCashChecked = document.getElementById('tx-affects-cash')?.checked ?? true;
 
-    if (!Number.isFinite(amount) || amount <= 0 || !formState.selectedMainCategory || !formState.selectedSubCategory || !date) {
+    const subCategory = normalizeFormSubCategoryForMain(
+        formState.currentType,
+        formState.selectedMainCategory,
+        formState.selectedSubCategory
+    );
+
+    if (!Number.isFinite(amount) || amount <= 0 || !formState.selectedMainCategory || !date) {
         showAddFormError('Uzupełnij kwotę, kategorię i datę.');
-        if (!formState.selectedMainCategory || !formState.selectedSubCategory) {
+        if (!formState.selectedMainCategory) {
             if (typeof focusAddCategorySearch === 'function') focusAddCategorySearch();
         }
+        return;
+    }
+
+    if (!isFormSubCategoryComplete(formState.currentType, formState.selectedMainCategory, subCategory)) {
+        showAddFormError('Wybierz podkategorię.');
+        if (typeof focusAddCategorySearch === 'function') focusAddCategorySearch();
         return;
     }
 
@@ -340,26 +377,29 @@ async function saveTransaction() {
         ? (document.getElementById('tx-linked-asset-select')?.value || '')
         : '';
 
-    const txData = {
+    const baseTxData = {
         amount,
         type: formState.currentType,
         mainCategory: formState.selectedMainCategory,
-        subCategory: formState.selectedSubCategory,
+        subCategory,
         date,
         note,
         affectsCash: linkedAssetId && formState.currentType === 'income' ? false : affectsCash
     };
 
+    const previousTx = editingTxIndex !== null
+        ? { ...appState.transactions[editingTxIndex] }
+        : null;
+
+    const txData = previousTx
+        ? { ...previousTx, ...baseTxData }
+        : { ...baseTxData };
+
     if (linkedAssetId) txData.linkedAssetId = linkedAssetId;
+    else if (!linkedAssetChecked) delete txData.linkedAssetId;
     if (linkedAssetChecked && !linkedAssetId) {
         showAddFormError('Wybierz aktywo lub odznacz powiązanie.');
         return;
-    }
-
-    if (typeof applyCategoryRulesToTransaction === 'function') {
-        const ruled = applyCategoryRulesToTransaction(txData);
-        txData.mainCategory = ruled.mainCategory;
-        txData.subCategory = ruled.subCategory;
     }
 
     if (paidWithCard && formState.currentType === 'expense') {
@@ -368,6 +408,14 @@ async function saveTransaction() {
             return;
         }
         txData.creditCardId = creditCardId;
+    } else if (formState.currentType === 'expense') {
+        delete txData.creditCardId;
+    }
+
+    if (editingTxIndex === null && typeof applyCategoryRulesToTransaction === 'function') {
+        const ruled = applyCategoryRulesToTransaction(txData);
+        txData.mainCategory = ruled.mainCategory;
+        txData.subCategory = ruled.subCategory;
     }
 
     const split = typeof shouldOfferTransactionSplit === 'function'
@@ -396,16 +444,12 @@ async function saveTransaction() {
         return;
     }
 
-    const previousTx = editingTxIndex !== null ? { ...appState.transactions[editingTxIndex] } : null;
     if (typeof confirmTransactionBudgetIfNeeded === 'function' && !confirmTransactionBudgetIfNeeded(txData, previousTx)) {
         return;
     }
     const savedEditingIndex = editingTxIndex;
 
     if (editingTxIndex !== null) {
-        if (appState.transactions[editingTxIndex].recurringId) {
-            txData.recurringId = appState.transactions[editingTxIndex].recurringId;
-        }
         appState.transactions[editingTxIndex] = txData;
         editingTxIndex = null;
     } else {
@@ -614,15 +658,26 @@ function editTransaction(index) {
     if (typeof syncAddPaymentMethodUi === 'function') syncAddPaymentMethodUi();
     const moreOpts = document.getElementById('add-form-more-options');
     if (moreOpts) moreOpts.open = !!tx.linkedAssetId;
-    formState.selectedMainCategory = tx.mainCategory;
-    formState.selectedSubCategory = tx.subCategory;
     setFormMode(tx.type);
+    formState.selectedMainCategory = tx.mainCategory;
+    const subs = getCategorySubcategories(tx.type, tx.mainCategory);
+    if (subs.length > 0 && (tx.subCategory === '[Bez podkategorii]' || !tx.subCategory)) {
+        formState.selectedSubCategory = '';
+    } else {
+        formState.selectedSubCategory = tx.subCategory || '[Bez podkategorii]';
+    }
+    renderMainCategoriesForm();
     switchView('add', 'Edytuj', document.querySelectorAll('.nav-item')[1]);
     if (typeof updateAddDateChipLabel === 'function') updateAddDateChipLabel();
     if (typeof syncAddPaymentMethodUi === 'function') syncAddPaymentMethodUi();
+    if (typeof updateAddCategoryBrowseUi === 'function') updateAddCategoryBrowseUi();
     if (typeof updateAddCategorySummary === 'function') updateAddCategorySummary();
     if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();
-    focusAmountField();
+    if (!formState.selectedSubCategory && subs.length > 0) {
+        if (typeof focusAddCategorySearch === 'function') focusAddCategorySearch({ scroll: false });
+    } else {
+        focusAmountField();
+    }
 }
 
 function removeCommittedTransaction(txRef) {
