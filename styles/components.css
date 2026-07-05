@@ -6947,7 +6947,16 @@ html[data-theme="dark"] .welcome-action-btn {
 }
 
 @media print {
-    body > *:not(#reports-pdf-overlay):not(#reports-pdf-print-frame) {
+    body {
+        overflow: visible !important;
+        background: #fff !important;
+    }
+
+    body > *:not(#reports-pdf-overlay) {
+        display: none !important;
+    }
+
+    #reports-pdf-print-frame {
         display: none !important;
     }
 
@@ -7015,8 +7024,12 @@ html[data-theme="dark"] .welcome-action-btn {
     }
 
     .reports-pdf-chart-img {
-        max-height: 280px;
+        max-width: 100% !important;
+        max-height: 280px !important;
+        height: auto !important;
         object-fit: contain;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
     }
 }
 
