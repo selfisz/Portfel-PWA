@@ -852,6 +852,108 @@ function buildTasksSubnavHtml() {
     return buttons.join('');
 }
 
+function getActiveShoppingList() {
+    const listId = resolveTasksActiveListId();
+    if (!listId) return null;
+    const list = getTodoListById(listId);
+    return list?.kind === TODO_LIST_KINDS.shopping ? list : null;
+}
+
+function buildShoppingListExportText(listId, options = {}) {
+    const list = getTodoListById(listId);
+    if (!list || list.kind !== TODO_LIST_KINDS.shopping) return '';
+    const includeDone = options.includeDone ?? tasksShowDone;
+    const items = getFilteredTodos({ listId, includeDone });
+    if (!items.length) return '';
+    const lines = [list.name];
+    items.forEach((item) => {
+        const prefix = item.done ? '✓ ' : '- ';
+        lines.push(`${prefix}${item.title}`);
+    });
+    return lines.join('\n');
+}
+
+function copyPlainTextToClipboard(text) {
+    if (navigator.clipboard?.writeText) {
+        return navigator.clipboard.writeText(text).then(() => true).catch(() => false);
+    }
+    try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        return Promise.resolve(!!ok);
+    } catch {
+        return Promise.resolve(false);
+    }
+}
+
+function downloadPlainTextFile(filename, text) {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+async function copyActiveShoppingList() {
+    const list = getActiveShoppingList();
+    if (!list) return;
+    const text = buildShoppingListExportText(list.id);
+    if (!text) {
+        if (typeof showAppToast === 'function') showAppToast('Lista jest pusta', 'error');
+        return;
+    }
+    const ok = await copyPlainTextToClipboard(text);
+    if (typeof showAppToast === 'function') {
+        showAppToast(ok ? 'Skopiowano listę zakupów' : 'Nie udało się skopiować', ok ? 'success' : 'error');
+    }
+}
+
+async function exportActiveShoppingList() {
+    const list = getActiveShoppingList();
+    if (!list) return;
+    const text = buildShoppingListExportText(list.id);
+    if (!text) {
+        if (typeof showAppToast === 'function') showAppToast('Lista jest pusta', 'error');
+        return;
+    }
+
+    if (navigator.share) {
+        try {
+            await navigator.share({ title: list.name, text });
+            return;
+        } catch (err) {
+            if (err?.name === 'AbortError') return;
+        }
+    }
+
+    const date = typeof localIsoDate === 'function' ? localIsoDate(new Date()) : 'lista';
+    downloadPlainTextFile(`lista-zakupow-${date}.txt`, text);
+    if (typeof showAppToast === 'function') showAppToast('Pobrano plik z listą');
+}
+
+function renderTasksShoppingExport() {
+    const wrap = document.getElementById('tasks-shopping-export');
+    if (!wrap) return;
+    const list = getActiveShoppingList();
+    if (!list) {
+        wrap.classList.add('hidden');
+        wrap.replaceChildren();
+        return;
+    }
+    wrap.classList.remove('hidden');
+    wrap.innerHTML = `<button type="button" class="tasks-shopping-export-btn" onclick="copyActiveShoppingList()">Kopiuj</button>
+        <span class="tasks-shopping-export-sep" aria-hidden="true">·</span>
+        <button type="button" class="tasks-shopping-export-btn" onclick="exportActiveShoppingList()">Eksportuj</button>`;
+}
+
 function buildTasksItemRowHtml(item) {
     const meta = formatTodoItemMeta(item);
     const checked = item.done ? ' checked' : '';
@@ -906,6 +1008,7 @@ function renderTasksView() {
     }
     subnav.innerHTML = buildTasksSubnavHtml();
     renderTasksListActions();
+    renderTasksShoppingExport();
 
     const items = getFilteredTodos();
     if (!items.length) {
