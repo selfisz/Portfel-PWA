@@ -477,6 +477,7 @@ function renderDashboardTasksPanel() {
     const section = document.getElementById('dashboard-tasks');
     const list = document.getElementById('dashboard-tasks-list');
     const summaryEl = document.getElementById('dashboard-tasks-summary');
+    const seeAllBtn = document.getElementById('dashboard-tasks-see-all');
     const moreBtnExisting = document.getElementById('dashboard-tasks-show-more');
     if (!section || !list) return;
 
@@ -485,7 +486,12 @@ function renderDashboardTasksPanel() {
     if (!openCount) {
         section.classList.add('hidden');
         if (moreBtnExisting) moreBtnExisting.classList.add('hidden');
+        if (seeAllBtn) seeAllBtn.classList.add('hidden');
         return;
+    }
+
+    if (seeAllBtn) {
+        seeAllBtn.classList.toggle('hidden', openCount <= DASHBOARD_TASKS_PAGE_SIZE);
     }
 
     const signature = `${openCount}|${allItems[0]?.id ?? ''}|${allItems[allItems.length - 1]?.id ?? ''}`;

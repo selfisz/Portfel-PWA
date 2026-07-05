@@ -1246,6 +1246,18 @@ body.notifications-open {
     margin: 0;
 }
 
+.dashboard-tasks-head .dashboard-tasks-see-all {
+    color: var(--text);
+    flex-shrink: 0;
+}
+
+.dashboard-tasks-head .dashboard-tasks-see-all:hover,
+.dashboard-tasks-head .dashboard-tasks-see-all:focus-visible {
+    color: var(--text);
+    opacity: 0.75;
+    outline: none;
+}
+
 .dashboard-action-info--btn {
     flex: 1;
     min-width: 0;
