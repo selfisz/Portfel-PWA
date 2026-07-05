@@ -1194,8 +1194,15 @@ function parseSkrybaTodoListKind(text) {
     const t = String(text || '').toLowerCase();
     if (/list[aę]\s+zakup|na\s+zakup|do\s+kupienia|zakup\w*|co\s+kupi[cć]/.test(t)) return 'shopping';
     if (/do\s+zapłat|do\s+zaplat|rachunk|płatnoś|platnos|faktur/.test(t)) return 'payments';
-    if (/finans|subskrypc|odsetk|konta\s+oszczędno/.test(t)) return 'finance';
+    if (/finans|subskrypc|przypomnien|odsetk|konta\s+oszczędno/.test(t)) return 'finance';
     return null;
+}
+
+function resolveSkrybaTodoDefaultKind({ kind, isReminder, dueDate, amount }) {
+    if (kind) return kind;
+    if (isReminder) return 'finance';
+    if (dueDate || amount) return 'payments';
+    return 'shopping';
 }
 
 function parseSkrybaTodoDueDateFromText(text, referenceDate = new Date()) {
@@ -1300,7 +1307,12 @@ function tryParseSkrybaTodoAdd(text) {
         .filter((part) => part.length >= 2);
     if (!titles.length) return null;
 
-    return { kind: kind || (dueDate || amount ? 'payments' : 'shopping'), titles, dueDate, amount };
+    return {
+        kind: resolveSkrybaTodoDefaultKind({ kind, isReminder, dueDate, amount }),
+        titles,
+        dueDate,
+        amount
+    };
 }
 
 function tryParseSkrybaTodoShow(text) {
