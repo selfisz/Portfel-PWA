@@ -46,6 +46,77 @@ let reportsDebtCalendarYear = null;
 let reportsDebtCalendarMonth = null;
 let reportsLastPeriod = null;
 let cloudSyncUnlocked = false;
+let preferRemoteFinanceState = false;
+
+function markPreferRemoteFinanceState() {
+    preferRemoteFinanceState = true;
+}
+
+function shouldPreferRemoteFinanceState() {
+    return preferRemoteFinanceState;
+}
+
+function clearPreferRemoteFinanceState() {
+    preferRemoteFinanceState = false;
+}
+
+function clearFinanceSessionMarker() {
+    try {
+        sessionStorage.removeItem(FINANCE_SESSION_UID_KEY);
+    } catch {
+        /* ignore */
+    }
+}
+
+function clearAccountScopedFinanceCache() {
+    try {
+        localStorage.removeItem(getFinanceStorageKey());
+        localStorage.removeItem(getLocalBackupStorageKey());
+        localStorage.removeItem(getPendingCloudSyncStorageKey());
+    } catch {
+        /* ignore */
+    }
+}
+
+function beginFinanceSessionForUid(uid) {
+    if (!uid) return;
+    try {
+        const prev = sessionStorage.getItem(FINANCE_SESSION_UID_KEY);
+        if (prev !== uid) {
+            markPreferRemoteFinanceState();
+            sessionStorage.setItem(FINANCE_SESSION_UID_KEY, uid);
+        }
+        if (typeof isDemoFinanceUid === 'function' && isDemoFinanceUid(uid)) {
+            markPreferRemoteFinanceState();
+            clearAccountScopedFinanceCache();
+        }
+    } catch {
+        markPreferRemoteFinanceState();
+    }
+}
+
+function hasFinancePortfolio(data) {
+    if (!data || typeof data !== 'object') return false;
+    return (Array.isArray(data.loans) && data.loans.length > 0)
+        || (Array.isArray(data.creditCards) && data.creditCards.length > 0)
+        || (Array.isArray(data.assets) && data.assets.length > 0);
+}
+
+function isDemoScopedFinanceId(id, prefix) {
+    return String(id || '').startsWith(prefix);
+}
+
+function stripForeignDemoFinancePayload(payload) {
+    if (!payload || typeof payload !== 'object') return payload;
+    const uid = typeof getAccountUidFromStorage === 'function' ? getAccountUidFromStorage() : null;
+    if (typeof isDemoFinanceUid !== 'function' || !isDemoFinanceUid(uid)) return payload;
+    return {
+        ...payload,
+        loans: (payload.loans || []).filter((loan) => isDemoScopedFinanceId(loan?.id, 'loan-demo-')),
+        creditCards: (payload.creditCards || []).filter((card) => isDemoScopedFinanceId(card?.id, 'card-demo-')),
+        assets: (payload.assets || []).filter((asset) => isDemoScopedFinanceId(asset?.id, 'asset-demo-'))
+    };
+}
 function getPersistedState(raw = appState) {
     const data = raw ?? appState ?? {};
     const transactions = typeof normalizeTransactionsArray === 'function'
@@ -294,9 +365,34 @@ function readLocalRawBeforeSync() {
 }
 
 function syncFromRemoteData(remoteData) {
-    const localRawBeforeSync = readLocalRawBeforeSync();
+    const remoteAuthoritative = shouldPreferRemoteFinanceState();
+    const localRawBeforeSync = remoteAuthoritative ? null : readLocalRawBeforeSync();
     const localTxCount = getTransactionCount(localRawBeforeSync ?? appState);
     const remoteTxCount = getTransactionCount(remoteData);
+
+    if (remoteAuthoritative && (remoteTxCount > 0 || hasFinancePortfolio(remoteData))) {
+        applyRemoteAppState(remoteData);
+        if (typeof repairMissingCashMovementsFromTransactions === 'function') {
+            repairMissingCashMovementsFromTransactions();
+        }
+        checkAndProcessRecurringTransactions();
+        try {
+            localStorage.setItem(getFinanceStorageKey(), JSON.stringify(getPersistedState(appState)));
+        } catch (err) {
+            console.error('syncFromRemoteData localStorage', err);
+        }
+        cloudSyncUnlocked = true;
+        clearPreferRemoteFinanceState();
+        const finalCount = getTransactionCount(appState);
+        setSyncStatus('online', finalCount);
+        try {
+            refreshCurrentView();
+        } catch (err) {
+            console.error('refreshCurrentView', err);
+        }
+        if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
+        return finalCount;
+    }
 
     if (remoteTxCount === 0 && localTxCount > 0) {
         cloudSyncUnlocked = true;
@@ -413,14 +509,14 @@ function loadLocalFinanceState() {
 
 function initData() {
     if (!stateRef || typeof stateRef.onSnapshot !== 'function') {
-        if (loadLocalFinanceState()) {
+        if (!shouldPreferRemoteFinanceState() && loadLocalFinanceState()) {
             setSyncStatus('offline', getTransactionCount(appState));
         }
         if (typeof initOfflineListeners === 'function') initOfflineListeners();
         return;
     }
 
-    if (loadLocalFinanceState()) {
+    if (!shouldPreferRemoteFinanceState() && loadLocalFinanceState()) {
         /* local snapshot loaded — cloud sync continues below */
     }
 
@@ -440,7 +536,7 @@ function saveState(options = {}) {
     if (typeof enforceAppStateLimits === 'function') {
         enforceAppStateLimits({ silent: options.silentLimits === true });
     }
-    const payload = getPersistedState(appState);
+    const payload = stripForeignDemoFinancePayload(getPersistedState(appState));
     const payloadBytes = typeof estimateJsonBytes === 'function' ? estimateJsonBytes(payload) : 0;
     try {
         localStorage.setItem(getFinanceStorageKey(), JSON.stringify(payload));

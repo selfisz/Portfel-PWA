@@ -10,6 +10,7 @@ function getFinanceStorageKey() {
     return activeFinanceStorageKey || STORAGE_KEY;
 }
 
+const FINANCE_SESSION_UID_KEY = 'finanse_session_uid';
 const LOCAL_BACKUP_KEY = 'finanse_local_backup';
 const PENDING_CLOUD_SYNC_KEY = 'finanse_pending_cloud_sync';
 

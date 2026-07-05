@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "exportedAt": "2026-07-05T15:48:11.199Z",
+  "exportedAt": "2026-07-05T16:11:55.538Z",
   "transactionCount": 1000,
   "archivedTransactions": [],
   "monthCloseState": {},
@@ -10010,7 +10010,7 @@
     "loans": [
       {
         "id": "loan-demo-hipoteka",
-        "name": "Kredyt hipoteczny",
+        "name": "Kredyt hipoteczny (demo)",
         "subCategory": "Kredyt hipoteczny",
         "totalAmount": 520000,
         "currentCapitalLeft": 418500,
@@ -10029,7 +10029,7 @@
       },
       {
         "id": "loan-demo-samochod",
-        "name": "Kredyt samochodowy",
+        "name": "Kredyt samochodowy (demo)",
         "subCategory": "Kredyt Pekao SA",
         "totalAmount": 68000,
         "currentCapitalLeft": 28400,
@@ -10049,14 +10049,14 @@
     "creditCards": [
       {
         "id": "card-demo-mbank",
-        "name": "mBank Visa",
+        "name": "mBank Visa (demo)",
         "limit": 18000,
         "currentBalance": 4360,
         "includeInSummary": true
       },
       {
         "id": "card-demo-visa",
-        "name": "Revolut",
+        "name": "Revolut (demo)",
         "limit": 8000,
         "currentBalance": 1240,
         "includeInSummary": true
@@ -11130,33 +11130,62 @@
     ],
     "assets": [
       {
-        "id": "asset-cash-total",
+        "id": "asset-demo-cash",
         "type": "cash",
-        "name": "Gotówka",
+        "name": "Gotówka (demo)",
         "amount": 18420.55,
         "cashBaseline": 18420.55
       },
       {
-        "id": "asset-cash-oszczednosci",
+        "id": "asset-demo-savings",
         "type": "cash",
-        "name": "Konto oszczędnościowe",
+        "name": "Konto oszczędnościowe (demo)",
         "amount": 32500,
         "cashBaseline": 32500
       },
       {
-        "id": "asset-etf-ike",
-        "type": "etf",
-        "name": "ETF World (IKE)",
+        "id": "asset-demo-etf-ike",
+        "type": "investment",
+        "name": "ETF World (IKE, demo)",
+        "ticker": "DEMO.IKE",
         "amount": 42800,
         "quantity": 520,
+        "purchasePrice": 72,
+        "currentPrice": 82.3,
         "currency": "PLN"
       },
       {
-        "id": "asset-lokata",
+        "id": "asset-demo-stock",
+        "type": "investment",
+        "name": "Akcje CD Projekt (demo)",
+        "ticker": "DEMO.CDR",
+        "amount": 12450,
+        "quantity": 45,
+        "purchasePrice": 220,
+        "currentPrice": 276.7,
+        "currency": "PLN"
+      },
+      {
+        "id": "asset-demo-deposit",
         "type": "deposit",
-        "name": "Lokata 3M",
+        "name": "Lokata 3M (demo)",
         "amount": 15000,
         "currency": "PLN"
+      },
+      {
+        "id": "asset-demo-ppk",
+        "type": "retirement",
+        "name": "PPK — konto demo",
+        "retirementKind": "PPK",
+        "institution": "Demo Employer SA",
+        "amount": 28640,
+        "currency": "PLN",
+        "ppkBreakdown": {
+          "employee": 11200,
+          "employer": 9800,
+          "state": 2400,
+          "returns": 5240
+        }
       }
     ],
     "cashMovements": [],

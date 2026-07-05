@@ -5,6 +5,7 @@ export const ALLOWED_AUTH_EMAILS = [
 ];
 
 export const DEMO_ACCOUNT_EMAIL = 'test@test.pl';
+export const DEMO_ACCOUNT_UID = 'dAYNFGQhHkVKVUATV10t8CQ6j6O2';
 
 /** Firebase Auth wymaga min. 6 znaków — „test” jest za krótkie; używamy test00. */
 export const DEMO_ACCOUNT_PASSWORD = 'test00';

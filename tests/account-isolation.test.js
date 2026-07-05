@@ -3,6 +3,7 @@ import { loadScript, runInContext } from './helpers/load.js';
 
 beforeAll(() => {
     const store = {};
+    const sessionStore = {};
     globalThis.localStorage = {
         getItem: (k) => store[k] ?? null,
         setItem: (k, v) => { store[k] = String(v); },
@@ -10,6 +11,12 @@ beforeAll(() => {
         clear: () => { Object.keys(store).forEach((k) => delete store[k]); },
         key: (i) => Object.keys(store)[i] ?? null,
         get length() { return Object.keys(store).length; }
+    };
+    globalThis.sessionStorage = {
+        getItem: (k) => sessionStore[k] ?? null,
+        setItem: (k, v) => { sessionStore[k] = String(v); },
+        removeItem: (k) => { delete sessionStore[k]; },
+        clear: () => { Object.keys(sessionStore).forEach((k) => delete sessionStore[k]); }
     };
 
     globalThis.document = {
@@ -52,8 +59,16 @@ beforeAll(() => {
     globalThis.isEmailAllowedInConfig = () => true;
     globalThis.initTheme = () => {};
     globalThis.isMortgageLoan = () => false;
+    globalThis.mergeCreditCardsById = (...lists) => {
+        const map = new Map();
+        lists.flat().forEach((card) => {
+            if (card?.id) map.set(card.id, card);
+        });
+        return [...map.values()];
+    };
 
     loadScript('js/constants.js');
+    loadScript('js/auth-config.js');
     loadScript('js/loan-details.js');
     loadScript('js/portfolio.js');
     loadScript('js/state-limits.js');
@@ -64,8 +79,10 @@ beforeAll(() => {
 
 beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     setFinanceStorageKey(null);
     clearPendingCloudSync();
+    clearPreferRemoteFinanceState();
     runInContext(`
         appState = {
             transactions: [{ date: '2024-01-01', type: 'expense', amount: 99, mainCategory: 'Dom', subCategory: 'A' }],
@@ -192,5 +209,71 @@ describe('izolacja kont — przełączenie sesji', () => {
         const ok = await resumePendingCloudSync({ force: true });
         expect(ok).toBe(false);
         expect(hasPendingCloudSync()).toBe(false);
+    });
+});
+
+describe('izolacja kont — demo i chmura', () => {
+    it('beginFinanceSessionForUid na demo czyści lokalny cache i preferuje chmurę', () => {
+        setFinanceStorageKey(DEMO_ACCOUNT_UID);
+        localStorage.setItem(getFinanceStorageKey(), JSON.stringify({
+            transactions: [],
+            loans: [{ id: 'loan-main-real', name: 'Moja hipoteka' }],
+            creditCards: [],
+            assets: [{ id: 'asset-real-ppk', type: 'retirement', name: 'PPK' }]
+        }));
+
+        beginFinanceSessionForUid(DEMO_ACCOUNT_UID);
+
+        expect(shouldPreferRemoteFinanceState()).toBe(true);
+        expect(localStorage.getItem(getFinanceStorageKey())).toBeNull();
+    });
+
+    it('syncFromRemoteData w trybie remote-authoritative ignoruje skażony localStorage', () => {
+        setFinanceStorageKey(DEMO_ACCOUNT_UID);
+        markPreferRemoteFinanceState();
+        localStorage.setItem(getFinanceStorageKey(), JSON.stringify({
+            transactions: [{ amount: 99, type: 'expense', date: '2024-01-01', mainCategory: 'Dom', subCategory: 'A' }],
+            loans: [{ id: 'loan-main-real', name: 'Moja hipoteka' }],
+            creditCards: [{ id: 'card-main', name: 'Visa' }],
+            assets: [{ id: 'asset-real-ppk', type: 'retirement', name: 'PPK' }]
+        }));
+
+        const remote = {
+            transactions: [{ amount: 10, type: 'expense', date: '2024-01-02', mainCategory: 'Dom', subCategory: 'B' }],
+            loans: [{ id: 'loan-demo-hipoteka', name: 'Kredyt hipoteczny (demo)', totalAmount: 1, currentCapitalLeft: 1 }],
+            creditCards: [{ id: 'card-demo-mbank', name: 'mBank Visa (demo)', limit: 1, currentBalance: 0 }],
+            assets: [{ id: 'asset-demo-ppk', type: 'retirement', name: 'PPK — konto demo', amount: 1000 }]
+        };
+
+        syncFromRemoteData(remote);
+
+        expect(appState.loans).toHaveLength(1);
+        expect(appState.loans[0].id).toBe('loan-demo-hipoteka');
+        expect(appState.assets).toHaveLength(1);
+        expect(appState.assets[0].id).toBe('asset-demo-ppk');
+        expect(shouldPreferRemoteFinanceState()).toBe(false);
+    });
+
+    it('stripForeignDemoFinancePayload usuwa obce kredyty i aktywa z zapisu demo', () => {
+        setFinanceStorageKey(DEMO_ACCOUNT_UID);
+        const payload = {
+            transactions: [],
+            loans: [
+                { id: 'loan-demo-hipoteka', name: 'demo' },
+                { id: 'loan-main-real', name: 'moja' }
+            ],
+            creditCards: [
+                { id: 'card-demo-mbank', name: 'demo' },
+                { id: 'card-main', name: 'moja' }
+            ],
+            assets: [
+                { id: 'asset-demo-ppk', name: 'demo' },
+                { id: 'asset-real', name: 'moja' }
+            ]
+        };
+        const cleaned = stripForeignDemoFinancePayload(payload);
+        expect(cleaned.loans).toHaveLength(1);
+        expect(cleaned.creditCards).toHaveLength(1);
+        expect(cleaned.assets).toHaveLength(1);
     });
 });

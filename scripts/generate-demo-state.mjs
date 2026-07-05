@@ -69,7 +69,7 @@ export function generateDemoAppState(options = {}) {
     const loans = [
         {
             id: loanMortgageId,
-            name: 'Kredyt hipoteczny',
+            name: 'Kredyt hipoteczny (demo)',
             subCategory: 'Kredyt hipoteczny',
             totalAmount: 520000,
             currentCapitalLeft: 418500,
@@ -88,7 +88,7 @@ export function generateDemoAppState(options = {}) {
         },
         {
             id: loanCarId,
-            name: 'Kredyt samochodowy',
+            name: 'Kredyt samochodowy (demo)',
             subCategory: 'Kredyt Pekao SA',
             totalAmount: 68000,
             currentCapitalLeft: 28400,
@@ -107,15 +107,51 @@ export function generateDemoAppState(options = {}) {
     ];
 
     const creditCards = [
-        { id: cardMbankId, name: 'mBank Visa', limit: 18000, currentBalance: 4360, includeInSummary: true },
-        { id: cardVisaId, name: 'Revolut', limit: 8000, currentBalance: 1240, includeInSummary: true }
+        { id: cardMbankId, name: 'mBank Visa (demo)', limit: 18000, currentBalance: 4360, includeInSummary: true },
+        { id: cardVisaId, name: 'Revolut (demo)', limit: 8000, currentBalance: 1240, includeInSummary: true }
     ];
 
     const assets = [
-        { id: 'asset-cash-total', type: 'cash', name: 'Gotówka', amount: 18420.55, cashBaseline: 18420.55 },
-        { id: 'asset-cash-oszczednosci', type: 'cash', name: 'Konto oszczędnościowe', amount: 32500, cashBaseline: 32500 },
-        { id: 'asset-etf-ike', type: 'etf', name: 'ETF World (IKE)', amount: 42800, quantity: 520, currency: 'PLN' },
-        { id: 'asset-lokata', type: 'deposit', name: 'Lokata 3M', amount: 15000, currency: 'PLN' }
+        { id: 'asset-demo-cash', type: 'cash', name: 'Gotówka (demo)', amount: 18420.55, cashBaseline: 18420.55 },
+        { id: 'asset-demo-savings', type: 'cash', name: 'Konto oszczędnościowe (demo)', amount: 32500, cashBaseline: 32500 },
+        {
+            id: 'asset-demo-etf-ike',
+            type: 'investment',
+            name: 'ETF World (IKE, demo)',
+            ticker: 'DEMO.IKE',
+            amount: 42800,
+            quantity: 520,
+            purchasePrice: 72,
+            currentPrice: 82.3,
+            currency: 'PLN'
+        },
+        {
+            id: 'asset-demo-stock',
+            type: 'investment',
+            name: 'Akcje CD Projekt (demo)',
+            ticker: 'DEMO.CDR',
+            amount: 12450,
+            quantity: 45,
+            purchasePrice: 220,
+            currentPrice: 276.7,
+            currency: 'PLN'
+        },
+        { id: 'asset-demo-deposit', type: 'deposit', name: 'Lokata 3M (demo)', amount: 15000, currency: 'PLN' },
+        {
+            id: 'asset-demo-ppk',
+            type: 'retirement',
+            name: 'PPK — konto demo',
+            retirementKind: 'PPK',
+            institution: 'Demo Employer SA',
+            amount: 28640,
+            currency: 'PLN',
+            ppkBreakdown: {
+                employee: 11200,
+                employer: 9800,
+                state: 2400,
+                returns: 5240
+            }
+        }
     ];
 
     const categoryBudgets = {

@@ -296,6 +296,7 @@ async function signInWithGoogle() {
 async function signOutFromApp() {
     try {
         if (typeof stopCloudSync === 'function') stopCloudSync();
+        if (typeof clearFinanceSessionMarker === 'function') clearFinanceSessionMarker();
         await auth.signOut();
         window.location.reload();
     } catch (err) {
@@ -349,6 +350,7 @@ async function handleAuthenticatedUser(user) {
 
         if (typeof setFinanceStorageKey === 'function') setFinanceStorageKey(user.uid);
         migrateLocalStorageToUidKey(user.uid);
+        if (typeof beginFinanceSessionForUid === 'function') beginFinanceSessionForUid(user.uid);
 
         if (accountSwitched) {
             if (typeof stopCloudSync === 'function') stopCloudSync();
