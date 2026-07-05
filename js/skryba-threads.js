@@ -148,6 +148,38 @@ function formatSkrybaThreadDate(ts) {
     return d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
 }
 
+function skrybaDeleteThread(threadId, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    if (!threadId || !getSkrybaThreadById(threadId)) return;
+    skrybaThreads = skrybaThreads.filter((t) => t.id !== threadId);
+    if (skrybaActiveThreadId === threadId) {
+        skrybaActiveThreadId = skrybaThreads[0]?.id || null;
+        if (!skrybaActiveThreadId) ensureActiveSkrybaThread();
+        skrybaLoadActiveThreadIntoUi();
+    }
+    saveSkrybaThreadsToStorage();
+    renderSkrybaThreadsList();
+    if (typeof showSettingsToast === 'function') showSettingsToast('Usunięto rozmowę');
+}
+
+function skrybaDeleteAllThreads() {
+    if (!skrybaThreads.length) return;
+    if (typeof confirm === 'function'
+        && !confirm('Usunąć całą historię rozmów Skryby? Tej operacji nie cofniesz.')) {
+        return;
+    }
+    skrybaThreads = [];
+    skrybaActiveThreadId = null;
+    ensureActiveSkrybaThread();
+    saveSkrybaThreadsToStorage();
+    skrybaLoadActiveThreadIntoUi();
+    renderSkrybaThreadsList();
+    if (typeof showSettingsToast === 'function') showSettingsToast('Historia rozmów wyczyszczona');
+}
+
 function renderSkrybaThreadsList() {
     const list = document.getElementById('skryba-threads-list');
     if (!list) return;
@@ -160,6 +192,9 @@ function renderSkrybaThreadsList() {
         return;
     }
     skrybaThreads.forEach((thread) => {
+        const row = document.createElement('div');
+        row.className = 'skryba-thread-row';
+
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'skryba-thread-item';
@@ -168,7 +203,17 @@ function renderSkrybaThreadsList() {
         btn.innerHTML = `<p class="skryba-thread-item-title">${escapeHtml(thread.title || 'Rozmowa')}</p>
             <p class="skryba-thread-item-meta">${escapeHtml(formatSkrybaThreadDate(thread.updatedAt))} · ${escapeHtml(preview)}</p>`;
         btn.onclick = () => skrybaOpenThread(thread.id);
-        list.appendChild(btn);
+        row.appendChild(btn);
+
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'skryba-thread-delete';
+        del.setAttribute('aria-label', 'Usuń rozmowę');
+        del.textContent = '×';
+        del.onclick = (event) => skrybaDeleteThread(thread.id, event);
+        row.appendChild(del);
+
+        list.appendChild(row);
     });
 }
 

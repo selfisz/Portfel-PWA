@@ -353,6 +353,15 @@ describe('parseSkrybaAmountFilterFromText', () => {
     it('rozpoznaje literówkę „powyuzej 599”', () => {
         expect(parseSkrybaAmountFilterFromText('pokaz transakcje powyuzej 599 w czerwcu')?.minAmount).toBe(599);
     });
+
+    it('rozpoznaje „powyżej 2000” nawet gdy w zapytaniu jest rok', () => {
+        expect(parseSkrybaAmountFilterFromText('transakcje powyzej 2000 w 2026')?.minAmount).toBe(2000);
+    });
+
+    it('nie myli roku 2026 z progiem kwoty', () => {
+        expect(isLikelySkrybaYearAmount(2000, 'transakcje powyzej 2000 w 2026')).toBe(false);
+        expect(isLikelySkrybaYearAmount(2026, 'transakcje w 2026')).toBe(true);
+    });
 });
 
 describe('tryAnswerSkrybaTransactionQuery — kwota', () => {
@@ -374,5 +383,16 @@ describe('tryAnswerSkrybaTransactionQuery — kwota', () => {
         const answer = tryAnswerSkrybaTransactionQuery('pokaz transakcje powyuzej 599 w czerwcu');
         expect(answer?.items).toHaveLength(1);
         expect(answer.items[0].amount).toBe(1037.5);
+    });
+
+    it('filtruje transakcje powyżej 2000 w 2026', () => {
+        globalThis.appState.transactions = [
+            { date: '2026-01-15', type: 'expense', amount: 1500, mainCategory: 'Zakupy', subCategory: 'Zakupy', note: 'A' },
+            { date: '2026-03-20', type: 'expense', amount: 2500, mainCategory: 'Przyjemności', subCategory: 'Wycieczki', note: 'B' },
+            { date: '2025-12-01', type: 'expense', amount: 3000, mainCategory: 'Zakupy', subCategory: 'Zakupy', note: 'C' }
+        ];
+        const answer = tryAnswerSkrybaTransactionQuery('transakcje powyzej 2000 w 2026');
+        expect(answer?.items).toHaveLength(1);
+        expect(answer.items[0].amount).toBe(2500);
     });
 });

@@ -77,7 +77,7 @@ function parseSkrybaAmountFilterFromText(text) {
         const match = t.match(pattern);
         if (!match) continue;
         const amount = parseSkrybaAmountFromText(match[1]);
-        if (Number.isFinite(amount) && amount > 0 && !isLikelySkrybaYearAmount(amount, raw)) {
+        if (Number.isFinite(amount) && amount > 0) {
             result.minAmount = amount;
             break;
         }
@@ -87,7 +87,7 @@ function parseSkrybaAmountFilterFromText(text) {
         const match = t.match(pattern);
         if (!match) continue;
         const amount = parseSkrybaAmountFromText(match[1]);
-        if (Number.isFinite(amount) && amount > 0 && !isLikelySkrybaYearAmount(amount, raw)) {
+        if (Number.isFinite(amount) && amount > 0) {
             result.maxAmount = amount;
             break;
         }
@@ -107,9 +107,11 @@ function isLikelySkrybaYearAmount(amount, text) {
     const whole = Math.round(amount);
     if (whole < 1990 || whole > 2099 || Math.abs(amount - whole) > 0.001) return false;
     const t = normalizeSkrybaHintText(text);
-    if (/\b(?:w|na|rok[u]?|r\.?)\s*(?:19|20)\d{2}\b/.test(t)) return true;
-    if (/\b(?:19|20)\d{2}\s*rok/.test(t)) return true;
-    if (/\b(?:19|20)\d{2}\b/.test(t) && !/\b(?:19|20)\d{2}\s*(?:zł|zl|pln)\b/.test(t)) return true;
+    if (/powyzej|ponizej|wiecej niz|mniej niz|powyuzej/.test(t)) return false;
+    const yearStr = String(whole);
+    if (new RegExp(`\\b(?:w|na|rok[u]?|r\\.?)\\s*${yearStr}\\b`).test(t)) return true;
+    if (new RegExp(`\\b${yearStr}\\s*rok`).test(t)) return true;
+    if (new RegExp(`\\b${yearStr}\\b`).test(t) && !/\b\d+(?:[.,]\d+)?\s*(?:zł|zl|pln)\b/.test(t)) return true;
     return false;
 }
 

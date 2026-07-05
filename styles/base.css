@@ -460,8 +460,29 @@ body.skryba-open {
     padding: 8px 12px calc(12px + env(safe-area-inset-bottom, 0px));
 }
 
+.skryba-threads-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 8px 12px 0;
+    flex-shrink: 0;
+}
+
+.skryba-threads-clear-btn {
+    font-size: var(--text-xs);
+    color: var(--danger, #c62828);
+}
+
+.skryba-thread-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
 .skryba-thread-item {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
+    width: auto;
     text-align: left;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
@@ -471,6 +492,30 @@ body.skryba-open {
     cursor: pointer;
     font-family: inherit;
     color: var(--text);
+}
+
+.skryba-thread-row .skryba-thread-item {
+    margin-bottom: 0;
+}
+
+.skryba-thread-delete {
+    flex-shrink: 0;
+    width: 40px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--card);
+    color: var(--text-muted);
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.skryba-thread-delete:hover,
+.skryba-thread-delete:focus-visible {
+    border-color: var(--danger, #c62828);
+    color: var(--danger, #c62828);
+    background: rgba(198, 40, 40, 0.06);
 }
 
 .skryba-thread-item:hover,

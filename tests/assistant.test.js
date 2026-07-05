@@ -141,3 +141,28 @@ describe('tryParseLocalAddTransaction', () => {
         expect(tryParseLocalAddTransaction('Ile czynsz w 2026')).toBeNull();
     });
 });
+
+describe('skrybaDeleteThread', () => {
+    beforeEach(() => {
+        skrybaThreads = [
+            { id: 't1', title: 'A', updatedAt: 1, messages: [], lastSearchResults: [] },
+            { id: 't2', title: 'B', updatedAt: 2, messages: [], lastSearchResults: [] }
+        ];
+        skrybaActiveThreadId = 't1';
+        skrybaChatHistory = [];
+        globalThis.showSettingsToast = () => {};
+        globalThis.confirm = () => true;
+        globalThis.escapeHtml = (t) => String(t ?? '');
+        globalThis.renderSkrybaWelcomeIfEmpty = () => {};
+        globalThis.appendSkrybaMessage = () => {};
+        globalThis.scrollSkrybaToBottom = () => {};
+        globalThis.updateSkrybaHeaderForChat = () => {};
+    });
+
+    it('usuwa wskazaną rozmowę i przełącza aktywną', () => {
+        skrybaDeleteThread('t1');
+        expect(skrybaThreads).toHaveLength(1);
+        expect(skrybaThreads[0].id).toBe('t2');
+        expect(skrybaActiveThreadId).toBe('t2');
+    });
+});
