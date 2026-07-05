@@ -192,14 +192,39 @@ function formatNotificationRelativeTime(iso) {
 function updateNotificationsBadge() {
     const badge = document.getElementById('notifications-badge');
     if (!badge) return;
-    const count = getUnreadNotificationCount();
+    const unread = getUnreadNotificationCount();
+    const boardCount = typeof getActionBoardBadgeCount === 'function' ? getActionBoardBadgeCount() : 0;
+    const count = unread + boardCount;
     badge.textContent = count > 9 ? '9+' : String(count);
     badge.classList.toggle('hidden', count === 0);
     const btn = document.getElementById('btn-notifications');
     if (btn) btn.classList.toggle('btn-icon--has-badge', count > 0);
 }
 
-function renderNotificationsPanel() {
+let notificationsPanelTab = 'alerts';
+
+function getNotificationsPanelTab() {
+    return notificationsPanelTab;
+}
+
+function setNotificationsPanelTab(tab) {
+    notificationsPanelTab = tab === 'board' ? 'board' : 'alerts';
+    const alertsPanel = document.getElementById('notifications-tab-alerts');
+    const boardPanel = document.getElementById('notifications-tab-board');
+    const btnAlerts = document.getElementById('btn-notif-tab-alerts');
+    const btnBoard = document.getElementById('btn-notif-tab-board');
+    if (alertsPanel) alertsPanel.classList.toggle('hidden', notificationsPanelTab !== 'alerts');
+    if (boardPanel) boardPanel.classList.toggle('hidden', notificationsPanelTab !== 'board');
+    if (btnAlerts) btnAlerts.classList.toggle('active', notificationsPanelTab === 'alerts');
+    if (btnBoard) btnBoard.classList.toggle('active', notificationsPanelTab === 'board');
+    if (notificationsPanelTab === 'board' && typeof renderActionBoardPanel === 'function') {
+        renderActionBoardPanel();
+    } else {
+        renderNotificationsList();
+    }
+}
+
+function renderNotificationsList() {
     const list = document.getElementById('notifications-list');
     if (!list) return;
     const items = getNotificationInbox().filter((item) => isNotificationVisible(item));
@@ -221,6 +246,11 @@ function renderNotificationsPanel() {
             </div>
         </article>`;
     }).join('');
+}
+
+function renderNotificationsPanel() {
+    setNotificationsPanelTab(notificationsPanelTab);
+    if (typeof updateActionBoardTabBadge === 'function') updateActionBoardTabBadge();
 }
 
 function openNotificationsPanel() {
@@ -469,6 +499,7 @@ function evaluateAllNotifications() {
     updateNotificationsBadge();
     const panel = document.getElementById('notifications-overlay');
     if (panel && !panel.classList.contains('hidden')) renderNotificationsPanel();
+    if (typeof refreshActionBoard === 'function') refreshActionBoard();
     maybeShowSystemNotifications(created);
     return created;
 }
@@ -575,13 +606,15 @@ function initNotifications() {
     syncNotificationSettingsUI();
     updateNotificationsBadge();
     evaluateAllNotifications();
+    if (typeof refreshActionBoard === 'function') refreshActionBoard();
     if (getNotificationPrefs().enabled) scheduleNotificationChecks();
 }
 
 function notifyAfterFinanceChange() {
     if (!getNotificationPrefs().enabled) {
         updateNotificationsBadge();
-        return;
+    } else {
+        evaluateAllNotifications();
     }
-    evaluateAllNotifications();
+    if (typeof refreshActionBoard === 'function') refreshActionBoard();
 }

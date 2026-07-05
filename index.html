@@ -226,10 +226,22 @@
     <div id="notifications-overlay" class="notifications-overlay hidden" onclick="if (event.target === this) closeNotificationsPanel()">
         <div class="notifications-panel settings-panel" onclick="event.stopPropagation()">
             <div id="panel-header-notifications"></div>
-            <div class="notifications-panel-toolbar">
-                <button type="button" class="notifications-mark-all" onclick="markAllNotificationsRead()">Oznacz wszystkie jako przeczytane</button>
+            <nav class="analysis-subnav notifications-subnav" aria-label="Panel powiadomień">
+                <button id="btn-notif-tab-alerts" type="button" class="analysis-subnav-btn active" onclick="setNotificationsPanelTab('alerts')">Powiadomienia</button>
+                <button id="btn-notif-tab-board" type="button" class="analysis-subnav-btn" onclick="setNotificationsPanelTab('board')">Tablica <span id="action-board-tab-badge" class="notifications-tab-badge hidden">0</span></button>
+            </nav>
+            <div id="notifications-tab-alerts" class="notifications-tab-panel">
+                <div class="notifications-panel-toolbar">
+                    <button type="button" class="notifications-mark-all" onclick="markAllNotificationsRead()">Oznacz wszystkie jako przeczytane</button>
+                </div>
+                <div id="notifications-list" class="notifications-list"></div>
             </div>
-            <div id="notifications-list" class="notifications-list"></div>
+            <div id="notifications-tab-board" class="notifications-tab-panel hidden">
+                <div id="action-board-list" class="notifications-list action-board-list"></div>
+                <div id="action-board-footer" class="action-board-footer hidden">
+                    <button type="button" class="btn-submit btn-submit--form action-board-skryba-btn" onclick="startSkrybaActionBoardReview()">Przejdź ze Skrybą</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -2163,6 +2175,7 @@
     <script src="js/skryba-voice.js"></script>
     <script src="js/assistant.js"></script>
     <script src="js/skryba-local-parser.js"></script>
+    <script src="js/action-board.js"></script>
     <script src="js/notifications.js"></script>
     <script src="js/budget-ui.js"></script>
     <script src="js/budget-alerts.js"></script>

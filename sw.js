@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanse-pwa-v318';
+const CACHE_NAME = 'finanse-pwa-v319';
 
 const FIREBASE_CDN = [
   'https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js',
@@ -64,6 +64,7 @@ const ASSETS = [
   'js/skryba-voice.js',
   'js/assistant.js',
   'js/skryba-local-parser.js',
+  'js/action-board.js',
   'js/notifications.js',
   'js/budget-ui.js',
   'js/budget-alerts.js',

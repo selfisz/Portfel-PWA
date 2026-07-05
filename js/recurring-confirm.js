@@ -44,39 +44,17 @@ function formatRecurringMonthLabel(monthKey) {
 
 function renderRecurringConfirmOverlay() {
     const overlay = document.getElementById('recurring-confirm-overlay');
-    const list = document.getElementById('recurring-confirm-list');
-    if (!overlay || !list) return;
-
-    const pending = getPendingRecurringConfirmations();
-    if (!pending.length) {
-        overlay.classList.add('hidden');
-        if (!document.getElementById('reports-pdf-overlay')?.classList.contains('hidden')) return;
-        if (!document.getElementById('assets-pdf-date-overlay')?.classList.contains('hidden')) return;
-        if (!document.getElementById('debts-pdf-date-overlay')?.classList.contains('hidden')) return;
-        document.body.style.overflow = '';
-        return;
+    if (overlay) overlay.classList.add('hidden');
+    if (document.getElementById('reports-pdf-overlay')?.classList.contains('hidden')
+        && document.getElementById('assets-pdf-date-overlay')?.classList.contains('hidden')
+        && document.getElementById('debts-pdf-date-overlay')?.classList.contains('hidden')) {
+        document.body.style.overflow = document.body.classList.contains('notifications-open')
+            || document.body.classList.contains('settings-open')
+            || document.body.classList.contains('skryba-open')
+            ? 'hidden'
+            : '';
     }
-
-    list.innerHTML = pending.map((item) => {
-        const tx = item.transaction;
-        const preview = typeof formatAssistantTransactionPreview === 'function'
-            ? formatAssistantTransactionPreview(tx)
-            : `${tx.amount} zł`;
-        const monthLabel = formatRecurringMonthLabel(item.monthKey);
-        return `<div class="recurring-confirm-item">
-            <div class="recurring-confirm-item-body">
-                <strong>${escapeHtml(monthLabel)}</strong>
-                <span>${escapeHtml(preview)}</span>
-            </div>
-            <div class="recurring-confirm-item-actions">
-                <button type="button" class="btn-submit btn-submit--form" onclick="confirmPendingRecurring('${escapeHtml(item.id)}')">Dodaj</button>
-                <button type="button" class="btn-cancel btn-cancel--form" onclick="skipPendingRecurring('${escapeHtml(item.id)}')">Pomiń</button>
-            </div>
-        </div>`;
-    }).join('');
-
-    overlay.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
+    if (typeof refreshActionBoard === 'function') refreshActionBoard();
 }
 
 function closeRecurringConfirmOverlay() {

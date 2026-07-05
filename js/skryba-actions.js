@@ -132,6 +132,11 @@ function tryParseLocalSkrybaAction(text) {
     const t = String(text || '').trim();
     if (!t) return null;
 
+    const boardReview = typeof tryParseLocalActionBoardReview === 'function'
+        ? tryParseLocalActionBoardReview(t)
+        : null;
+    if (boardReview) return boardReview;
+
     const navigateAction = tryParseLocalSkrybaNavigate(t);
     if (navigateAction) return navigateAction;
 

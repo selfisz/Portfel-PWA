@@ -374,6 +374,14 @@ async function dispatchSkrybaAction(action) {
         return msg;
     }
 
+    if (tool === 'action_board_review') {
+        const msg = typeof buildActionBoardReviewText === 'function'
+            ? buildActionBoardReviewText()
+            : (reply || 'Brak zadań na tablicy.');
+        appendSkrybaMessage('assistant', msg);
+        return msg;
+    }
+
     if (tool === 'add_transaction') {
         return handleAssistantIntent({
             intent: 'add_transaction',
