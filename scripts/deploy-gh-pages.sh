@@ -10,15 +10,15 @@ cleanup() {
 trap cleanup EXIT
 
 echo "Przygotowanie plików w $deploy_dir ..."
-rsync -a \
-  --exclude node_modules \
-  --exclude .git \
-  --exclude tests \
-  --exclude coverage \
-  --exclude functions \
-  --exclude .github \
-  --exclude scripts \
-  "$repo_root/" "$deploy_dir/"
+tar -C "$repo_root" \
+  --exclude=node_modules \
+  --exclude=.git \
+  --exclude=tests \
+  --exclude=coverage \
+  --exclude=functions \
+  --exclude=.github \
+  --exclude=scripts \
+  -cf - . | tar -C "$deploy_dir" -xf -
 
 pushd "$deploy_dir" >/dev/null
 git init -q
