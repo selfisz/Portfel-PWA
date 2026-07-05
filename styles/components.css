@@ -11542,3 +11542,75 @@ body.skryba-open #transaction-details-overlay:not(.hidden),
 .dashboard-wealth-change-pct { margin-top: 4px; font-size: 0.9rem; }
 .reports-networth-hero-delta { margin-bottom: 8px; font-weight: 600; }
 .year-review-actions { margin-top: 16px; }
+
+.ppk-section {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.08));
+}
+
+.ppk-section-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 10px;
+}
+
+.ppk-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted, #6b7280);
+    margin: 0 0 12px;
+    line-height: 1.45;
+}
+
+.ppk-payout-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    border-radius: 12px;
+    background: var(--surface-elevated, rgba(0, 0, 0, 0.03));
+    border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.08));
+}
+
+.ppk-payout-label {
+    font-size: 0.85rem;
+    color: var(--text-muted, #6b7280);
+}
+
+.ppk-payout-value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--success, #15803d);
+}
+
+.ppk-payout-meta {
+    font-size: 0.85rem;
+    color: var(--text-muted, #6b7280);
+}
+
+.ppk-deductions-grid .loan-detail-value {
+    white-space: nowrap;
+}
+
+.ppk-contrib-edit-list {
+    margin-bottom: 12px;
+}
+
+.ppk-contrib-edit-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
+    font-size: 0.9rem;
+}
+
+.ppk-contrib-remove {
+    flex-shrink: 0;
+}
+
+.asset-ppk-section {
+    margin-top: 16px;
+}

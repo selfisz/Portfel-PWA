@@ -17,6 +17,7 @@ const SCRIPT_LOAD_ORDER = {
     'js/reports-debt.js': ['js/reports-debt-calculations.js'],
     'js/settings.js': ['js/settings-backup.js'],
     'js/month-close.js': ['js/month-close-duplicates-ui.js'],
+    'js/assets.js': ['js/ppk.js'],
     'js/assets-migrations.js': ['js/assets.js'],
     'js/sync-lifecycle.js': ['js/offline.js', 'js/sync-queue.js']
 };

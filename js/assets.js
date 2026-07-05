@@ -112,6 +112,7 @@ function normalizeAsset(raw) {
         if (asset.type === 'retirement') {
             asset.retirementKind = RETIREMENT_KINDS.includes(asset.retirementKind) ? asset.retirementKind : 'PPK';
             asset.institution = (asset.institution || '').trim();
+            if (typeof normalizePpkAssetFields === 'function') normalizePpkAssetFields(asset);
         }
     }
     asset.goalTarget = Math.max(0, parseFloat(asset.goalTarget) || 0);
@@ -1106,7 +1107,11 @@ function renderAssetDetails() {
         rows.push(assetDetailRow('Wartość', `${(asset.amount || 0).toFixed(2)} ${asset.currency}`));
     }
 
-    contentEl.innerHTML = `<div class="loan-details-grid">${rows.join('')}</div>`;
+    contentEl.innerHTML = `<div class="loan-details-grid">${rows.join('')}</div>${
+        typeof isPpkAsset === 'function' && isPpkAsset(asset)
+            ? `${buildPpkBreakdownSectionHtml(asset)}${buildPpkEarlyWithdrawalSectionHtml(asset)}`
+            : ''
+    }`;
 
     if (actionsEl) {
         const archiveLabel = asset.archived ? 'Przywróć' : 'Archiwizuj';
@@ -1127,8 +1132,13 @@ function renderAssetDetails() {
 
     if (asset.type === 'cash') {
         renderAssetCashTransactions();
+        document.getElementById('asset-ppk-section')?.classList.add('hidden');
+    } else if (typeof isPpkAsset === 'function' && isPpkAsset(asset)) {
+        document.getElementById('asset-cash-tx-section')?.classList.add('hidden');
+        renderPpkContributionsList(asset);
     } else {
         document.getElementById('asset-cash-tx-section')?.classList.add('hidden');
+        document.getElementById('asset-ppk-section')?.classList.add('hidden');
     }
 }
 
@@ -1173,11 +1183,13 @@ function populateAssetEditForm() {
     if (goalInput) goalInput.value = asset.goalTarget || '';
 
     toggleAssetEditFields(asset.type);
+    if (typeof populatePpkEditForm === 'function') populatePpkEditForm(asset);
 }
 
 function onAssetTypeInputChange() {
     const type = document.getElementById('asset-type-input')?.value || 'investment';
     toggleAssetEditFields(type);
+    if (typeof togglePpkEditFields === 'function') togglePpkEditFields();
     if (type === 'investment') {
         const currency = document.getElementById('asset-currency-input');
         if (currency && currency.value === 'PLN') currency.value = 'EUR';
@@ -1224,6 +1236,7 @@ function saveAssetDetails() {
             payload.retirementKind = document.getElementById('asset-retirement-kind-input')?.value || 'PPK';
             if (!RETIREMENT_KINDS.includes(payload.retirementKind)) payload.retirementKind = 'PPK';
             payload.institution = document.getElementById('asset-institution-input')?.value?.trim() || '';
+            if (typeof readPpkFieldsFromForm === 'function') readPpkFieldsFromForm(payload);
         }
     }
 
