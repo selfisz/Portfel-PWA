@@ -201,9 +201,7 @@ function renderActionBoardTaskActions(task) {
         </div>`;
     }
     if (task.type === 'uncategorized') {
-        const idx = task.payload.index;
         return `<div class="action-board-row-actions">
-            <button type="button" class="btn-submit btn-submit--form btn-sm" onclick="actionBoardEditUncategorized(${idx})">Edytuj</button>
             <button type="button" class="action-board-action-btn" title="Przypomnij jutro" onclick="snoozeActionBoardTask('${id}')">↻</button>
             <button type="button" class="action-board-action-btn action-board-action-btn--dismiss" title="Odrzuć" onclick="dismissActionBoardTask('${id}')">×</button>
         </div>`;
@@ -218,10 +216,7 @@ function renderActionBoardTaskActions(task) {
         </div>`;
     }
     if (task.type === 'user_todo') {
-        const todoId = escapeHtml(task.payload.todoId);
-        const actionLabel = task.payload.listKind === 'payments' ? 'Spłać' : 'Otwórz';
         return `<div class="action-board-row-actions">
-            <button type="button" class="btn-submit btn-submit--form btn-sm" onclick="openUserTodoFromActionBoard('${todoId}')">${actionLabel}</button>
             <button type="button" class="action-board-action-btn" title="Przypomnij jutro" onclick="snoozeActionBoardTask('${id}')">↻</button>
             <button type="button" class="action-board-action-btn action-board-action-btn--dismiss" title="Odrzuć" onclick="dismissActionBoardTask('${id}')">×</button>
         </div>`;
@@ -237,15 +232,23 @@ function renderActionBoardSection(priority, tasks) {
         <div class="action-board-section-list">
             ${tasks.map((task) => {
                 const id = escapeHtml(task.id);
-                const duplicateClick = task.type === 'duplicate'
-                    ? ` onclick="actionBoardOpenDuplicate('${id}', ${task.payload.indexA}, ${task.payload.indexB})" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); actionBoardOpenDuplicate('${id}', ${task.payload.indexA}, ${task.payload.indexB}); }" role="button" tabindex="0"`
-                    : '';
-                const bodyClass = task.type === 'duplicate'
-                    ? ' action-board-row-body action-board-row-body--clickable'
-                    : ' action-board-row-body';
+                let bodyClass = 'action-board-row-body';
+                let bodyAttrs = '';
+                if (task.type === 'duplicate') {
+                    bodyClass += ' action-board-row-body--clickable';
+                    bodyAttrs = ` onclick="actionBoardOpenDuplicate('${id}', ${task.payload.indexA}, ${task.payload.indexB})" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); actionBoardOpenDuplicate('${id}', ${task.payload.indexA}, ${task.payload.indexB}); }" role="button" tabindex="0"`;
+                } else if (task.type === 'user_todo') {
+                    const todoId = escapeHtml(task.payload.todoId);
+                    bodyClass += ' action-board-row-body--clickable';
+                    bodyAttrs = ` onclick="actionBoardOpenUserTodo('${todoId}')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); actionBoardOpenUserTodo('${todoId}'); }" role="button" tabindex="0" aria-label="Otwórz zadanie w liście"`;
+                } else if (task.type === 'uncategorized') {
+                    const idx = task.payload.index;
+                    bodyClass += ' action-board-row-body--clickable';
+                    bodyAttrs = ` onclick="actionBoardOpenUncategorized(${idx})" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); actionBoardOpenUncategorized(${idx}); }" role="button" tabindex="0" aria-label="Otwórz szczegóły transakcji"`;
+                }
                 return `
                 <article class="action-board-row action-board-row--p${task.priority}" data-task-id="${id}">
-                    <div class="${bodyClass.trim()}"${duplicateClick}>
+                    <div class="${bodyClass.trim()}"${bodyAttrs}>
                         <strong class="action-board-row-title">${escapeHtml(task.title)}</strong>
                         <span class="action-board-row-text">${escapeHtml(task.body)}</span>
                     </div>
@@ -316,14 +319,14 @@ function actionBoardSkipRecurring(id) {
     refreshActionBoard();
 }
 
-function actionBoardEditUncategorized(index) {
+function actionBoardOpenUncategorized(index) {
     if (typeof closeNotificationsPanel === 'function') closeNotificationsPanel();
-    const dashNav = document.querySelector('.nav-item[onclick*="\'dashboard\'"]');
-    if (typeof switchView === 'function') switchView('dashboard', 'Pulpit', dashNav);
     if (typeof openTransactionDetails === 'function') openTransactionDetails(index);
-    window.setTimeout(() => {
-        if (typeof editTransaction === 'function') editTransaction(index);
-    }, 80);
+}
+
+/** @deprecated użyj actionBoardOpenUncategorized */
+function actionBoardEditUncategorized(index) {
+    actionBoardOpenUncategorized(index);
 }
 
 function actionBoardDeleteDuplicate(index) {
@@ -339,6 +342,16 @@ function actionBoardDeleteDuplicate(index) {
 function actionBoardOpenDuplicate(taskId, indexA, indexB) {
     if (typeof openDuplicatePairReview !== 'function') return;
     openDuplicatePairReview(indexA, indexB, { taskId, closeNotifications: true });
+}
+
+function actionBoardOpenUserTodo(todoId) {
+    if (typeof openTodoInTasksView === 'function') {
+        openTodoInTasksView(todoId);
+        return;
+    }
+    if (typeof openUserTodoFromActionBoard === 'function') {
+        openUserTodoFromActionBoard(todoId);
+    }
 }
 
 function buildActionBoardReviewText() {

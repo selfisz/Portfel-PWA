@@ -1152,6 +1152,15 @@ body.notifications-open {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
+.tasks-row--highlight {
+    animation: tasks-row-highlight 2.2s ease;
+}
+
+@keyframes tasks-row-highlight {
+    0%, 35% { background: var(--accent-soft); }
+    100% { background: transparent; }
+}
+
 .action-board-row-actions {
     display: flex;
     align-items: center;

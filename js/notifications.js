@@ -294,8 +294,22 @@ function toggleNotificationsPanel() {
 }
 
 function openNotificationTarget(id) {
+    if (!id) return;
+    if (String(id).startsWith('notif-digest|') || String(id).startsWith('notif-test|')) {
+        openNotificationsPanel();
+        return;
+    }
     const item = getNotificationById(id);
-    if (!item) return;
+    if (!item) {
+        window.setTimeout(() => {
+            const retry = getNotificationById(id);
+            if (!retry) return;
+            markNotificationRead(id);
+            closeNotificationsPanel();
+            navigateFromNotification(retry);
+        }, 350);
+        return;
+    }
     markNotificationRead(id);
     closeNotificationsPanel();
     navigateFromNotification(item);
@@ -364,10 +378,14 @@ function navigateFromNotification(item) {
     }
     if ((item.type === 'task_due_today' || item.type === 'task_due_tomorrow' || item.type === 'task_overdue' || item.type === 'task_due_soon')
         && payload.todoId) {
-        if (typeof openTasksView === 'function') openTasksView(payload.listId || null);
-        window.setTimeout(() => {
-            if (typeof openTodoItemEditor === 'function') openTodoItemEditor(payload.todoId);
-        }, 80);
+        if (typeof openTodoInTasksView === 'function') {
+            openTodoInTasksView(payload.todoId);
+        } else if (typeof openTasksView === 'function') {
+            openTasksView(payload.listId || null);
+            window.setTimeout(() => {
+                if (typeof openTodoItemEditor === 'function') openTodoItemEditor(payload.todoId);
+            }, 80);
+        }
         return;
     }
     if (item.type === 'skryba_weekly') {

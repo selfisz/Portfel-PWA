@@ -91,3 +91,48 @@ describe('buildActionBoardReviewText', () => {
         expect(text).toMatch(/pilnych zadań/i);
     });
 });
+
+describe('renderActionBoardPanel', () => {
+    it('renderuje klikalne zadanie użytkownika na tablicy', () => {
+        globalThis.collectUserTodoBoardTasks = () => [{
+            id: 'user-todo|todo-1',
+            type: 'user_todo',
+            priority: 2,
+            title: 'Płatność do zrobienia',
+            body: 'Czynsz · 2500 zł',
+            sortAt: '2026-07-05',
+            payload: { todoId: 'todo-1', listId: 'list-pay', listKind: 'payments' }
+        }];
+        const list = { innerHTML: '' };
+        globalThis.document.getElementById = (id) => {
+            if (id === 'action-board-list') return list;
+            if (id === 'action-board-footer') return { classList: { toggle: () => {}, add: () => {} } };
+            if (id === 'action-board-tab-badge') return { textContent: '', classList: { toggle: () => {} } };
+            return null;
+        };
+        renderActionBoardPanel();
+        expect(list.innerHTML).toMatch(/actionBoardOpenUserTodo\('todo-1'\)/);
+        expect(list.innerHTML).toMatch(/action-board-row-body--clickable/);
+        expect(list.innerHTML).not.toMatch(/btn-submit/);
+    });
+
+    it('renderuje transakcję bez kategorii z klikalnym wierszem i bez przycisku Edytuj', () => {
+        globalThis.collectUserTodoBoardTasks = () => [];
+        appState.transactions = [
+            { type: 'expense', date: '2026-07-02', amount: 80, mainCategory: 'Różne', subCategory: '[Bez podkategorii]' }
+        ];
+        const tasks = collectActionBoardTasks();
+        const uncategorized = tasks.find((t) => t.type === 'uncategorized');
+        expect(uncategorized).toBeTruthy();
+        const list = { innerHTML: '' };
+        globalThis.document.getElementById = (id) => {
+            if (id === 'action-board-list') return list;
+            if (id === 'action-board-footer') return { classList: { toggle: () => {}, add: () => {} } };
+            if (id === 'action-board-tab-badge') return { textContent: '', classList: { toggle: () => {} } };
+            return null;
+        };
+        renderActionBoardPanel();
+        expect(list.innerHTML).toMatch(/actionBoardOpenUncategorized\(0\)/);
+        expect(list.innerHTML).not.toMatch(/>Edytuj</);
+    });
+});

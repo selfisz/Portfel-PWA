@@ -441,25 +441,38 @@ function notifyAfterTodoChange() {
     updateNotificationsTasksFooter();
 }
 
-function openUserTodoFromActionBoard(todoId) {
-    if (typeof closeNotificationsPanel === 'function') closeNotificationsPanel();
+function openTodoInTasksView(todoId, options = {}) {
     const item = getTodoItemById(todoId);
-    if (!item) return;
+    if (!item) return false;
+    if (typeof closeNotificationsPanel === 'function') closeNotificationsPanel();
     const list = getTodoListById(item.listId);
-    if (list?.kind === TODO_LIST_KINDS.payments && typeof openDashboardTodoPayment === 'function') {
+    if (options.payFlow === true && list?.kind === TODO_LIST_KINDS.payments
+        && typeof openDashboardTodoPayment === 'function') {
         openDashboardTodoPayment(todoId);
-        return;
+        return true;
     }
     if (typeof openTasksView === 'function') openTasksView(item.listId);
-    window.setTimeout(() => openTodoItemEditor(todoId), 80);
+    window.setTimeout(() => {
+        if (typeof renderTasksView === 'function') renderTasksView();
+        const row = document.querySelector(`[data-todo-id="${todoId}"]`);
+        if (row) {
+            row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            row.classList.add('tasks-row--highlight');
+            window.setTimeout(() => row.classList.remove('tasks-row--highlight'), 2200);
+        }
+        if (options.openEditor === true) openTodoItemEditor(todoId);
+    }, options.openEditor === true ? 80 : 120);
+    return true;
+}
+
+function openUserTodoFromActionBoard(todoId) {
+    openTodoInTasksView(todoId, { payFlow: true, openEditor: false });
 }
 
 function openSkrybaTodoItem(todoId) {
     if (!getTodoItemById(todoId)) return;
     if (typeof closeSkrybaPanel === 'function') closeSkrybaPanel();
-    const item = getTodoItemById(todoId);
-    if (typeof openTasksView === 'function') openTasksView(item.listId);
-    window.setTimeout(() => openTodoItemEditor(todoId), 80);
+    openTodoInTasksView(todoId, { openEditor: true });
 }
 
 function formatTaskDueLabel(dueDate) {
@@ -558,10 +571,7 @@ function renderDashboardTasksPanel() {
 }
 
 function openDashboardTodoItem(todoId) {
-    const item = getTodoItemById(todoId);
-    if (!item) return;
-    if (typeof openTasksView === 'function') openTasksView(item.listId);
-    window.setTimeout(() => openTodoItemEditor(todoId), 60);
+    openTodoInTasksView(todoId, { openEditor: true });
 }
 
 function openDashboardTodoPayment(todoId) {
