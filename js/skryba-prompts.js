@@ -62,7 +62,7 @@ Dostępne narzędzia odczytu (tools):
 - surplus_hints — alokacja nadwyżki (params: amountPln opcjonalnie)
 - month_close_status — nierozliczone miesiące i otwarte kroki
 - savings_goal_status — cel oszczędności vs bieżąca stopa
-- todo_overview — otwarte zadania użytkownika (params: kind shopping|payments|finance, scope week opcjonalnie)
+- todo_overview — otwarte zadania użytkownika (params: kind shopping|payments|finance|reminders, scope week opcjonalnie)
 
 Akcje (action.tool):
 - pay_installment — spłać ratę kredytu (params: loanQuery)

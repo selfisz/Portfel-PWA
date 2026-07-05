@@ -2,13 +2,15 @@ const TODO_LIST_KINDS = {
     shopping: 'shopping',
     payments: 'payments',
     finance: 'finance',
+    reminders: 'reminders',
     custom: 'custom'
 };
 
 const DEFAULT_TODO_LISTS = [
     { id: 'todo-list-shopping', name: 'Zakupy', kind: 'shopping', sortOrder: 0, builtIn: true, archived: false },
     { id: 'todo-list-payments', name: 'Do zapłaty', kind: 'payments', sortOrder: 1, builtIn: true, archived: false },
-    { id: 'todo-list-finance', name: 'Finanse', kind: 'finance', sortOrder: 2, builtIn: true, archived: false }
+    { id: 'todo-list-finance', name: 'Finanse', kind: 'finance', sortOrder: 2, builtIn: true, archived: false },
+    { id: 'todo-list-reminders', name: 'Przypomnienia', kind: 'reminders', sortOrder: 3, builtIn: true, archived: false }
 ];
 
 let tasksActiveFilter = 'all';
@@ -55,7 +57,7 @@ function stripTodoListHintFromTitle(title) {
     let cleaned = String(title || '').trim();
     if (!cleaned) return '';
     cleaned = cleaned
-        .replace(/\s+(?:do|na|z|from|to|on|in)\s+(?:the\s+)?(?:listy\s+|list\s+)?(?:zakup\w*|list[aę]\s+zakup\w*|zapłat\w*|zaplat\w*|finans\w*|finance\w*|zada[nń]|tasks?|rachunk\w*|payments?|shopping)\s*$/i, '')
+        .replace(/\s+(?:do|na|z|from|to|on|in)\s+(?:the\s+)?(?:listy\s+|list\s+)?(?:zakup\w*|list[aę]\s+zakup\w*|zapłat\w*|zaplat\w*|finans\w*|finance\w*|przypomnien\w*|zada[nń]|tasks?|rachunk\w*|payments?|shopping)\s*$/i, '')
         .replace(/\s+from\s+finanse\s*$/i, '');
     return cleaned.trim();
 }
@@ -145,12 +147,30 @@ function mergeTodoFieldsIntoFinancePayload(payload, ...sources) {
     };
 }
 
+function adoptCustomRemindersList() {
+    if (appState.todoLists.some((list) => !list.archived && list.kind === 'reminders')) return false;
+    const idx = appState.todoLists.findIndex((list) => !list.archived
+        && list.kind === 'custom'
+        && /^przypomnienia$/i.test(String(list.name || '').trim()));
+    if (idx < 0) return false;
+    const custom = appState.todoLists[idx];
+    const oldId = custom.id;
+    const def = DEFAULT_TODO_LISTS.find((entry) => entry.kind === 'reminders');
+    if (!def) return false;
+    appState.todoLists[idx] = { ...def, archived: false };
+    appState.todos.forEach((item) => {
+        if (item.listId === oldId) item.listId = def.id;
+    });
+    if (tasksActiveFilter === oldId) tasksActiveFilter = def.id;
+    return true;
+}
+
 function ensureTodoListsInitialized() {
     if (!Array.isArray(appState.todoLists)) appState.todoLists = [];
     if (!Array.isArray(appState.todos)) appState.todos = [];
 
+    let changed = adoptCustomRemindersList();
     const existingIds = new Set(appState.todoLists.map((list) => list.id));
-    let changed = false;
     DEFAULT_TODO_LISTS.forEach((def) => {
         if (!existingIds.has(def.id)) {
             appState.todoLists.push({ ...def });
@@ -227,6 +247,7 @@ function getQuickAddPlaceholder() {
     if (list.kind === 'shopping') return 'Dodaj na listę zakupów…';
     if (list.kind === 'payments') return 'Dodaj płatność…';
     if (list.kind === 'finance') return 'Dodaj zadanie finansowe…';
+    if (list.kind === 'reminders') return 'Dodaj przypomnienie…';
     return `Dodaj do „${list.name}”…`;
 }
 
@@ -1194,13 +1215,14 @@ function parseSkrybaTodoListKind(text) {
     const t = String(text || '').toLowerCase();
     if (/list[aę]\s+zakup|na\s+zakup|do\s+kupienia|zakup\w*|co\s+kupi[cć]/.test(t)) return 'shopping';
     if (/do\s+zapłat|do\s+zaplat|rachunk|płatnoś|platnos|faktur/.test(t)) return 'payments';
-    if (/finans|subskrypc|przypomnien|odsetk|konta\s+oszczędno/.test(t)) return 'finance';
+    if (/przypomnien/.test(t)) return 'reminders';
+    if (/finans|subskrypc|odsetk|konta\s+oszczędno/.test(t)) return 'finance';
     return null;
 }
 
 function resolveSkrybaTodoDefaultKind({ kind, isReminder, dueDate, amount }) {
     if (kind) return kind;
-    if (isReminder) return 'finance';
+    if (isReminder) return 'reminders';
     if (dueDate || amount) return 'payments';
     return 'shopping';
 }
@@ -1285,7 +1307,7 @@ function tryParseSkrybaTodoAdd(text) {
     let titlePart = t
         .replace(/^(?:ustaw|zaplanuj|zapisz|dodaj|dopisz|wrzu[cć]|wpisz|przypomnij)\s+(?:mi\s+)?/i, '')
         .replace(/^przypomnienie\s+/i, '')
-        .replace(/\s+(?:do|na)\s+(?:listy\s+)?(?:zakup\w*|list[aę]\s+zakup\w*|zapłat\w*|zaplat\w*|finans\w*|zada[nń]|rachunk\w*)\s*$/i, '')
+        .replace(/\s+(?:do|na)\s+(?:listy\s+)?(?:zakup\w*|list[aę]\s+zakup\w*|zapłat\w*|zaplat\w*|finans\w*|przypomnien\w*|zada[nń]|rachunk\w*)\s*$/i, '')
         .replace(/\s+na\s+zakupy\s*$/i, '')
         .replace(/\s+na\s+\d{1,2}\s+(?:stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|wrzesnia|października|pazdziernika|listopada|grudnia)(?:\s+(?:19|20)\d{2})?\b/i, '')
         .replace(/\s+(?:na|w)\s+(?:dzi[sś]|jutro|poniedziałek|poniedzialek|wtorek|środę|srode|czwartek|piątek|piatek|sobotę|sobote|niedzielę|niedziele)\b/i, '')
