@@ -157,7 +157,16 @@ describe('moduł zadań', () => {
         const parsed = tryParseSkrybaTodoAdd('ustaw przypomnienie na 20 lipca');
         expect(parsed?.titles).toEqual(['Przypomnienie']);
         expect(parsed?.dueDate).toBe('2026-07-20');
-        expect(parsed?.kind).toBe('payments');
+        expect(parsed?.kind).toBe('finance');
+    });
+
+    it('kieruje przypomnij bez listy na Finanse, nie na Zakupy', () => {
+        const parsed = tryParseSkrybaTodoAdd('przypomnij o wizycie u lekarza');
+        expect(parsed?.kind).toBe('finance');
+        expect(parsed?.titles[0]).toMatch(/lekarz/i);
+        const list = getTodoListByKind('finance');
+        const answer = tryAnswerSkrybaTodoQuery('dodaj przypomnienie o ubezpieczeniu');
+        expect(answer?.items[0]?.listId).toBe(list.id);
     });
 
     it('dodaje przypomnienie przez Skrybę', () => {
@@ -259,7 +268,7 @@ describe('moduł zadań', () => {
     it('parsuje dodanie bez dopisku from finance', () => {
         const parsed = tryParseSkrybaTodoAdd('przypomnij test from finance');
         expect(parsed?.titles).toEqual(['test']);
-        expect(parsed?.kind).toBe('shopping');
+        expect(parsed?.kind).toBe('finance');
     });
 
     it('czyści istniejące zadania z dopiskiem from finance', () => {
