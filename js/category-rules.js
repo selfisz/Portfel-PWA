@@ -227,7 +227,10 @@ function getAllCategoryRuleProposals() {
         merged.push({ ...rule, source: 'builtin' });
     });
 
-    return merged.filter((rule) => !dismissed.has(getStarterProposalKey(rule)));
+    return merged.filter((rule) =>
+        !dismissed.has(getStarterProposalKey(rule))
+        && !hasCategoryRulePattern(rule.pattern, rule.type)
+    );
 }
 
 function findCategoryRuleByPattern(pattern, type) {
@@ -297,6 +300,7 @@ function addStarterCategoryRule(starter) {
     appState.categoryRules.push(normalized);
     saveState();
     renderCategoryRulesEditor();
+    if (categoryRuleFormMode === 'proposals') renderCategoryRuleProposals();
     return true;
 }
 
@@ -336,22 +340,19 @@ function renderCategoryRuleProposals() {
         return;
     }
     list.innerHTML = starters.map((rule, index) => {
-        const existing = findCategoryRuleByPattern(rule.pattern, rule.type);
         const sub = rule.subCategory !== '[Bez podkategorii]' ? ` / ${escapeHtml(rule.subCategory)}` : '';
         const historyMeta = rule.source === 'history' && rule.txCount
             ? ` · ${rule.txCount}× w historii`
             : '';
-        const actions = existing
-            ? `<button type="button" class="btn-text-link category-rule-proposal-edit" onclick="editCategoryRule('${escapeHtml(existing.id)}')">Edytuj</button>
-               <button type="button" class="category-rule-proposal-delete" onclick="removeCategoryRuleFromProposal(${index})" aria-label="Usuń regułę">×</button>`
-            : `<button type="button" class="btn-text-link category-rule-proposal-add" onclick="addStarterCategoryRuleAt(${index})">Dodaj</button>
-               <button type="button" class="btn-text-link category-rule-proposal-dismiss" onclick="dismissStarterCategoryRuleAt(${index})">Pomiń</button>`;
-        return `<div class="category-rule-proposal-row${existing ? ' category-rule-proposal-row--added' : ''}">
+        return `<div class="category-rule-proposal-row">
             <button type="button" class="category-rule-proposal-open" onclick="openStarterProposalForEdit(${index})">
                 <strong>„${escapeHtml(rule.pattern)}”</strong>
                 <span class="category-rule-item-meta">→ ${escapeHtml(rule.mainCategory)}${sub}${historyMeta}</span>
             </button>
-            <div class="category-rule-proposal-actions">${actions}</div>
+            <div class="category-rule-proposal-actions">
+                <button type="button" class="btn-text-link category-rule-proposal-add" onclick="addStarterCategoryRuleAt(${index})">Dodaj</button>
+                <button type="button" class="btn-text-link category-rule-proposal-dismiss" onclick="dismissStarterCategoryRuleAt(${index})">Pomiń</button>
+            </div>
         </div>`;
     }).join('');
 }
@@ -370,6 +371,7 @@ function addCategoryRule(rule) {
     appState.categoryRules.push(normalized);
     saveState();
     renderCategoryRulesEditor();
+    if (categoryRuleFormMode === 'proposals') renderCategoryRuleProposals();
     return normalized;
 }
 
@@ -382,6 +384,7 @@ function updateCategoryRule(ruleId, patch) {
     appState.categoryRules[idx] = merged;
     saveState();
     renderCategoryRulesEditor();
+    if (categoryRuleFormMode === 'proposals') renderCategoryRuleProposals();
     return merged;
 }
 
