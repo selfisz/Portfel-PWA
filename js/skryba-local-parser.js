@@ -49,9 +49,15 @@ function tryParseLocalAddTransaction(text) {
     let type = 'expense';
     let mainCategory = 'Różne';
     let subCategory = '[Bez podkategorii]';
-    if (/wynagrodzenie|pensja|wpływ|wplyw|premia/.test(lower)) {
+    if (/wynagrodzenie|pensja|wpływ|wplyw|premia|prowizj|bonus/.test(lower)) {
         type = 'income';
-        mainCategory = 'Wynagrodzenie';
+        if (/prowizj/.test(lower)) {
+            mainCategory = 'Wynagrodzenie';
+            subCategory = 'Prowizja';
+        } else {
+            mainCategory = 'Wynagrodzenie';
+            subCategory = 'Podstawa';
+        }
     } else if (/biedronka|lidl|kaufland|żabka|zabka|carrefour|aldi|dino|zakupy/.test(lower)) {
         mainCategory = 'Zakupy';
     } else if (/orlen|paliwo|bp |circle k|stacja/.test(lower)) {

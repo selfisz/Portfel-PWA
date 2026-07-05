@@ -60,6 +60,42 @@ function parseSkrybaAmountFromText(text) {
         : parseFloat(m[1].replace(',', '.'));
 }
 
+function parseSkrybaAmountFilterFromText(text) {
+    const raw = String(text || '');
+    const t = normalizeSkrybaHintText(raw);
+    const result = {};
+
+    const abovePatterns = [
+        /(?:powyzej|powyuzej|wiecej niz|wieksze niz|powyzej kwoty|od)\s+(\d+(?:[.,]\d{1,2})?)/,
+        /(\d+(?:[.,]\d{1,2})?)\s*(?:zl|pln)?\s*(?:i\s+)?(?:wiecej|wyzej)/
+    ];
+    const belowPatterns = [
+        /(?:ponizej|ponizej|mniej niz|nizsze niz|do)\s+(\d+(?:[.,]\d{1,2})?)/
+    ];
+
+    for (const pattern of abovePatterns) {
+        const match = t.match(pattern);
+        if (!match) continue;
+        const amount = parseSkrybaAmountFromText(match[1]);
+        if (Number.isFinite(amount) && amount > 0 && !isLikelySkrybaYearAmount(amount, raw)) {
+            result.minAmount = amount;
+            break;
+        }
+    }
+
+    for (const pattern of belowPatterns) {
+        const match = t.match(pattern);
+        if (!match) continue;
+        const amount = parseSkrybaAmountFromText(match[1]);
+        if (Number.isFinite(amount) && amount > 0 && !isLikelySkrybaYearAmount(amount, raw)) {
+            result.maxAmount = amount;
+            break;
+        }
+    }
+
+    return Object.keys(result).length ? result : null;
+}
+
 function normalizeSkrybaHintText(text) {
     return String(text || '').toLowerCase()
         .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e').replace(/ł/g, 'l')

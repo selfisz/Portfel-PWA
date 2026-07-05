@@ -29,6 +29,14 @@ beforeEach(() => {
             mainCategory: 'Zakupy',
             subCategory: '[Bez podkategorii]',
             note: 'Biedronka'
+        },
+        {
+            date: '2026-07-01',
+            type: 'expense',
+            amount: 650,
+            mainCategory: 'Przyjemności',
+            subCategory: 'Wycieczki',
+            note: 'Hotel'
         }
     ];
 });
@@ -49,6 +57,17 @@ describe('searchTransactionItems', () => {
         const items = searchTransactionItems({ query: 'biedronka', type: 'expense' });
         expect(items).toHaveLength(1);
         expect(items[0].mainCategory).toBe('Zakupy');
+    });
+
+    it('filtruje po kwocie powyżej progu', () => {
+        const items = searchTransactionItems({
+            startDate: '2026-07-01',
+            endDate: '2026-07-31',
+            type: 'expense',
+            minAmount: 600
+        });
+        expect(items).toHaveLength(1);
+        expect(items[0].amount).toBe(650);
     });
 });
 

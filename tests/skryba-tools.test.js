@@ -344,3 +344,35 @@ describe('buildSkrybaFollowUpChips', () => {
         expect(chips).toContain('Rozlicz miesiąc');
     });
 });
+
+describe('parseSkrybaAmountFilterFromText', () => {
+    it('rozpoznaje „powyżej 600”', () => {
+        expect(parseSkrybaAmountFilterFromText('pokaz transakcje powyzej 600')?.minAmount).toBe(600);
+    });
+
+    it('rozpoznaje literówkę „powyuzej 599”', () => {
+        expect(parseSkrybaAmountFilterFromText('pokaz transakcje powyuzej 599 w czerwcu')?.minAmount).toBe(599);
+    });
+});
+
+describe('tryAnswerSkrybaTransactionQuery — kwota', () => {
+    beforeAll(() => {
+        globalThis.appState.transactions = [
+            { date: '2026-06-01', type: 'expense', amount: 532, mainCategory: 'Przyjemności', subCategory: 'Wycieczki', note: 'A' },
+            { date: '2026-06-02', type: 'expense', amount: 1037.5, mainCategory: 'Przyjemności', subCategory: 'Wycieczki', note: 'B' },
+            { date: '2026-06-03', type: 'expense', amount: 28, mainCategory: 'Zakupy', subCategory: 'Zakupy', note: 'C' }
+        ];
+    });
+
+    it('filtruje transakcje powyżej 600 w czerwcu', () => {
+        const answer = tryAnswerSkrybaTransactionQuery('pokaz transakcje powyzej 600 w czerwcu');
+        expect(answer?.items).toHaveLength(1);
+        expect(answer.items[0].amount).toBe(1037.5);
+    });
+
+    it('filtruje transakcje powyżej 599 w czerwcu', () => {
+        const answer = tryAnswerSkrybaTransactionQuery('pokaz transakcje powyuzej 599 w czerwcu');
+        expect(answer?.items).toHaveLength(1);
+        expect(answer.items[0].amount).toBe(1037.5);
+    });
+});

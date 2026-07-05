@@ -109,6 +109,8 @@ function isSkrybaUnrelatedQueryWhilePending(text) {
     const t = String(text || '').toLowerCase();
     if (/^(anuluj|nie dodawaj|odrzuć|rezygnuj|potwierdź|dodaj|zapisz)/.test(t)) return false;
     if (/zmie[nń]|kategoria|kwota|data|wczoraj|dzisiaj|dziś/.test(t)) return false;
+    if (/jako\s+(?:wpływ|wplyw|wydatek)|(?:wpływ|wplyw|przychód|przychod|wydatek)/.test(t)
+        && /jako|zmie[nń]|ustaw|dodaj/.test(t)) return false;
     if (/^\d+(?:[.,]\d{1,2})?\s*zł?/.test(t)) return false;
     return /^(ile|pokaż|pokaz|suma|majątek|majątek|kredyt|hipotek|net worth|saldo)/.test(t)
         || /\b(ile wyda|ile mam|ile zost|harmonogram)\b/.test(t);

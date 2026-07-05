@@ -25,7 +25,7 @@ beforeAll(() => {
             Różne: ['[Bez podkategorii]'],
             Praca: ['[Bez podkategorii]']
         },
-        income: { Inne: ['[Bez podkategorii]'] }
+        income: { Inne: ['[Bez podkategorii]'], Wynagrodzenie: ['Podstawa', 'Prowizja'] }
     };
     globalThis.DEFAULT_CATEGORY_TREE = globalThis.categoryTree;
     globalThis.localIsoDate = (d) => d.toISOString().slice(0, 10);
@@ -43,6 +43,7 @@ beforeAll(() => {
     loadScript('js/skryba-threads.js');
     loadScript('js/skryba-router.js');
     loadScript('js/assistant.js');
+    loadScript('js/skryba-local-parser.js');
 });
 
 describe('validateAssistantCategories', () => {
@@ -106,6 +107,40 @@ describe('tryApplyLocalPendingCorrection', () => {
         expect(result?.action).toBe('update');
         expect(result.transaction.amount).toBe(50);
     });
+
+    it('zmienia wydatek na wpływ po „jako wpływ”', () => {
+        const pending = {
+            transaction: {
+                amount: 42672,
+                type: 'expense',
+                mainCategory: 'Różne',
+                subCategory: 'Praca',
+                date: '2026-07-05',
+                note: 'Prowizja'
+            }
+        };
+        const result = tryApplyLocalPendingCorrection('Jako wpływ', pending);
+        expect(result?.action).toBe('update');
+        expect(result.transaction.type).toBe('income');
+        expect(result.transaction.mainCategory).toBe('Wynagrodzenie');
+        expect(result.transaction.subCategory).toBe('Prowizja');
+    });
+
+    it('zmienia typ po „dodaj to jako wpływ do prowizji”', () => {
+        const pending = {
+            transaction: {
+                amount: 42672,
+                type: 'expense',
+                mainCategory: 'Różne',
+                subCategory: 'Praca',
+                date: '2026-07-05',
+                note: 'Prowizja'
+            }
+        };
+        const result = tryApplyLocalPendingCorrection('Dodaj to jako wpływ do prowizji', pending);
+        expect(result?.action).toBe('update');
+        expect(result.transaction.type).toBe('income');
+    });
 });
 
 describe('formatSkrybaHistoryEntryContent', () => {
@@ -117,5 +152,21 @@ describe('formatSkrybaHistoryEntryContent', () => {
         });
         expect(content).toContain('[[PENDING_TX]]:');
         expect(content).toContain('"amount":20');
+    });
+});
+
+describe('tryParseLocalAddTransaction', () => {
+    beforeAll(() => {
+        globalThis.resolveAssistantCategories = (type, main, sub) => ({ mainCategory: main, subCategory: sub });
+        globalThis.isSkrybaReadOnlyQuery = () => false;
+        globalThis.isLikelySkrybaYearAmount = () => false;
+    });
+
+    it('rozpoznaje prowizję jako wpływ', () => {
+        const parsed = tryParseLocalAddTransaction('Prowizja 42672');
+        expect(parsed?.transaction?.type).toBe('income');
+        expect(parsed?.transaction?.mainCategory).toBe('Wynagrodzenie');
+        expect(parsed?.transaction?.subCategory).toBe('Prowizja');
+        expect(parsed?.transaction?.amount).toBe(42672);
     });
 });

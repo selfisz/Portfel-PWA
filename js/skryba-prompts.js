@@ -151,6 +151,8 @@ ${style ? `\n${style}` : ''}
 Dodanie transakcji:
 {"mode":"action","intent":"add_transaction","reply":"...","action":{"tool":"add_transaction","params":{"amount":20,"type":"expense","mainCategory":"Zakupy","subCategory":"[Bez podkategorii]","date":"${today}","note":"..."}}}
 
+- Prowizja, pensja, wynagrodzenie, premia, bonus = wpływ (type "income"), zwykle Wynagrodzenie (Prowizja lub Podstawa).
+
 Spłata raty:
 {"mode":"action","intent":"pay_installment","reply":"...","action":{"tool":"pay_installment","params":{"loanQuery":"alior"}}}
 
@@ -202,6 +204,9 @@ Anulowanie propozycji (gdy użytkownik wyraźnie rezygnuje):
 Zasady:
 - Zwróć pełny obiekt transaction po korekcie (wszystkie pola).
 - Pola niewymienione przez użytkownika — zachowaj z OCZEKUJĄCA_TRANSAKCJA.
+- „jako wpływ”, „to wpływ”, „dodaj jako wpływ” → type "income" i dopasuj kategorię (prowizja → Wynagrodzenie > Prowizja).
+- „jako wydatek” → type "expense".
+- NIE zwracaj podsumowania miesiąca ani trybu advisor — tylko correct_pending lub cancel_pending.
 - Kategorie tylko z DOZWOLONE_KATEGORIE.
 - Nie twórz drugiej transakcji — tylko aktualizuj oczekującą.`;
 }
@@ -245,6 +250,7 @@ Zasady:
 - Nie zgaduj liczb spoza kontekstu — kontekst ma bieżący i poprzedni miesiąc, długi, majątek.
 - Nigdy nie twierdź, że nie masz dostępu do bazy — pełny dostęp lokalny.
 - Kategorie tylko z DOZWOLONE_KATEGORIE.
+- Prowizja, pensja, wynagrodzenie, premia, bonus = wpływ (type income), nie wydatek.
 - Uwzględniaj historię rozmowy (follow-upy: „a suma?”, „porównaj”, „więcej”).`;
 }
 

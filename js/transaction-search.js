@@ -34,6 +34,13 @@ function filterTransactionItems(items, params = {}) {
         }
     }
 
+    if (Number.isFinite(params.minAmount)) {
+        filtered = filtered.filter((t) => (Number(t.amount) || 0) > params.minAmount);
+    }
+    if (Number.isFinite(params.maxAmount)) {
+        filtered = filtered.filter((t) => (Number(t.amount) || 0) < params.maxAmount);
+    }
+
     return filtered;
 }
 

@@ -578,6 +578,40 @@ function normalizeAssistantTransaction(raw) {
     return typeof normalizeTransaction === 'function' ? normalizeTransaction(tx) : null;
 }
 
+function isSkrybaPendingTypeCorrectionPhrase(text) {
+    const t = String(text || '').trim();
+    if (!t) return false;
+    return /(?:jako|na|to|ustaw(?:\s+na)?|zmie[nń](?:\s+na)?|traktuj\s+jako|dodaj(?:\s+to)?\s+jako)\s+(?:wpływ|wplyw|przychód|przychod|wydatek|wydatku|koszt)/i.test(t)
+        || /^(?:wpływ|wplyw|przychód|przychod|wydatek)$/i.test(t)
+        || /^jako\s+(?:wpływ|wplyw|wydatek)/i.test(t);
+}
+
+function parseSkrybaPendingTypeHint(text) {
+    const t = String(text || '').trim();
+    if (!t) return null;
+    if (/(?:jako|na|to|ustaw(?:\s+na)?|zmie[nń](?:\s+na)?|traktuj\s+jako|dodaj(?:\s+to)?\s+jako)\s+(?:wpływ|wplyw|przychód|przychod)/i.test(t)
+        || /^(?:wpływ|wplyw|przychód|przychod)$/i.test(t)
+        || /^jako\s+(?:wpływ|wplyw)/i.test(t)) {
+        return 'income';
+    }
+    if (/(?:jako|na|to|ustaw(?:\s+na)?|zmie[nń](?:\s+na)?|traktuj\s+jako|dodaj(?:\s+to)?\s+jako)\s+(?:wydatek|wydatku|koszt)/i.test(t)
+        || /^jako\s+wydatek/i.test(t)) {
+        return 'expense';
+    }
+    return null;
+}
+
+function suggestIncomeCategoryForPending(tx) {
+    const combined = `${tx.note || ''} ${tx.mainCategory || ''} ${tx.subCategory || ''}`.toLowerCase();
+    if (/prowizj/.test(combined)) {
+        return resolveAssistantCategories('income', 'Wynagrodzenie', 'Prowizja');
+    }
+    if (/wynagrodzen|pensj|premi|bonus|płac|plac|wypłat|wyplat|umow/.test(combined)) {
+        return resolveAssistantCategories('income', 'Wynagrodzenie', 'Podstawa');
+    }
+    return resolveAssistantCategories('income', tx.mainCategory, tx.subCategory);
+}
+
 function parseSkrybaCorrectionDateToken(token) {
     const t = String(token || '').toLowerCase().trim();
     const today = typeof localIsoDate === 'function'
@@ -642,11 +676,30 @@ function tryApplyLocalPendingCorrection(text, pending) {
         changed = true;
     }
 
+    const typeHint = parseSkrybaPendingTypeHint(t);
+    if (typeHint === 'income' && patch.type !== 'income') {
+        patch.type = 'income';
+        const cats = suggestIncomeCategoryForPending(patch);
+        patch.mainCategory = cats.mainCategory;
+        patch.subCategory = cats.subCategory;
+        changed = true;
+    } else if (typeHint === 'expense' && patch.type !== 'expense') {
+        patch.type = 'expense';
+        const cats = resolveAssistantCategories('expense', patch.mainCategory, patch.subCategory);
+        patch.mainCategory = cats.mainCategory;
+        patch.subCategory = cats.subCategory;
+        changed = true;
+    }
+
     if (!changed) return null;
     return {
         action: 'update',
         transaction: patch,
-        reply: 'Zaktualizowałem propozycję transakcji.'
+        reply: typeHint === 'income'
+            ? 'OK, ustawiam jako wpływ — sprawdź kategorię i potwierdź.'
+            : typeHint === 'expense'
+                ? 'OK, ustawiam jako wydatek — sprawdź i potwierdź.'
+                : 'Zaktualizowałem propozycję transakcji.'
     };
 }
 
@@ -764,10 +817,13 @@ function tryHandleLocalSkrybaTransactionQuery(text) {
     if (!answer) return false;
     const extraHtml = answer.items.length ? buildSkrybaTransactionListExtraHtml(answer.items) : '';
     appendSkrybaMessage('assistant', answer.intro, extraHtml);
-    const meta = typeof hasScopedSkrybaTransactionFilter === 'function'
-        && hasScopedSkrybaTransactionFilter(answer.filter)
+    const meta = typeof hasSkrybaTransactionListFilter === 'function'
+        && hasSkrybaTransactionListFilter(answer.filter)
         ? { skrybaTxList: { filter: { ...answer.filter }, count: answer.items.length } }
-        : undefined;
+        : typeof hasScopedSkrybaTransactionFilter === 'function'
+            && hasScopedSkrybaTransactionFilter(answer.filter)
+            ? { skrybaTxList: { filter: { ...answer.filter }, count: answer.items.length } }
+            : undefined;
     skrybaChatHistory.push({
         role: 'assistant',
         text: answer.intro,
@@ -801,6 +857,10 @@ function pushSkrybaTransactionListMessage(intro, items, filter = null) {
 function isSkrybaShowTransactionsCommand(text) {
     const normalized = String(text || '').toLowerCase().trim().replace(/[?!.…]+$/g, '');
     if (!normalized) return false;
+    if (typeof hasSkrybaTransactionListFilter === 'function'
+        && hasSkrybaTransactionListFilter(extractSkrybaTransactionListParams(text))) {
+        return false;
+    }
     if (/^poka[zż]\s*(wi[eę]cej|transakcj\w*|pozycj\w*|wpis\w*|je|mi|to)?$/.test(normalized)) return true;
     if (/^(poka[zż]|wyświetl|wyswietl|lista)\s+(te\s+)?transakcj/.test(normalized)) return true;
     if (/^(te|tych)\s+transakcj/.test(normalized)) return true;
@@ -902,6 +962,23 @@ function isSkrybaCompareFollowUpCommand(text) {
 }
 
 function tryHandleLocalSkrybaShowTransactions(text) {
+    if (typeof extractSkrybaTransactionListParams === 'function'
+        && typeof hasSkrybaTransactionListFilter === 'function'
+        && typeof skrybaGetFilteredTransactionItems === 'function'
+        && typeof skrybaToolFilterTransactions === 'function') {
+        const params = extractSkrybaTransactionListParams(text);
+        const lower = String(text || '').toLowerCase();
+        if (hasSkrybaTransactionListFilter(params) && /poka[zż]|pokaz|wy[sś]wietl|lista|transakcj/.test(lower)) {
+            const items = skrybaGetFilteredTransactionItems(params);
+            const summary = skrybaToolFilterTransactions(params);
+            const intro = typeof formatSkrybaTransactionListIntro === 'function'
+                ? formatSkrybaTransactionListIntro(params, summary, items)
+                : `${items.length} pozycji.`;
+            pushSkrybaTransactionListMessage(intro, items, params);
+            return true;
+        }
+    }
+
     if (!isSkrybaShowTransactionsCommand(text)) return false;
 
     const { items, filter } = resolveSkrybaTransactionsForDisplay();
@@ -923,6 +1000,13 @@ function tryHandleLocalSkrybaShowTransactions(text) {
 }
 
 function tryHandleLocalSkrybaFinancialQuery(text) {
+    if (typeof getSkrybaPendingTransactionState === 'function' && getSkrybaPendingTransactionState()) {
+        return false;
+    }
+    if (typeof isSkrybaPendingTypeCorrectionPhrase === 'function'
+        && isSkrybaPendingTypeCorrectionPhrase(text)) {
+        return false;
+    }
     if (typeof detectSkrybaToolsFromText !== 'function'
         || typeof formatSkrybaOfflineReply !== 'function') {
         return false;
@@ -1154,8 +1238,6 @@ async function sendSkrybaMessage() {
     appendSkrybaMessage('user', text);
     skrybaPersistActiveThread();
 
-    if (tryHandleLocalSkrybaCommand(text)) return;
-
     if (getSkrybaPendingTransactionState()) {
         if (!getAssistantApiKey()) {
             const local = tryApplyLocalPendingCorrection(text, getSkrybaPendingTransactionState());
@@ -1167,7 +1249,7 @@ async function sendSkrybaMessage() {
                 updateSkrybaPendingTransaction(local.transaction, local.reply);
                 return;
             }
-            appendSkrybaMessage('assistant', 'Bez klucza API popraw propozycję ręcznie (np. „zmień kategorię na Zakupy”, „kwota 50”) albo kliknij Dodaj/Anuluj.');
+            appendSkrybaMessage('assistant', 'Bez klucza API popraw propozycję ręcznie (np. „jako wpływ”, „zmień kategorię na Zakupy”, „kwota 50”) albo kliknij Dodaj/Anuluj.');
             return;
         }
         if (sendBtn) sendBtn.disabled = true;
@@ -1190,6 +1272,8 @@ async function sendSkrybaMessage() {
         }
         return;
     }
+
+    if (tryHandleLocalSkrybaCommand(text)) return;
 
     const localAction = typeof tryParseLocalSkrybaAction === 'function'
         ? tryParseLocalSkrybaAction(text)
