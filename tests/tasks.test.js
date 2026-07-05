@@ -17,6 +17,7 @@ beforeAll(() => {
 
     loadScript('js/constants.js');
     loadScript('js/format.js');
+    loadScript('js/skryba-dates.js');
     loadScript('js/state.js');
     loadScript('js/tasks.js');
 
@@ -24,7 +25,13 @@ beforeAll(() => {
     globalThis.formatTxDate = (d) => d;
     globalThis.formatPlnAmount = (n) => `${Number(n).toFixed(2)} zł`;
     globalThis.getTomorrowIsoDate = () => '2026-07-06';
-    globalThis.localIsoDate = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d));
+    globalThis.localIsoDate = (d) => {
+        if (!(d instanceof Date)) return String(d);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    };
     globalThis.daysUntilDate = (iso) => {
         const today = new Date('2026-07-05T12:00:00');
         const target = new Date(`${iso}T12:00:00`);
@@ -144,6 +151,26 @@ describe('moduł zadań', () => {
         const matches = created.filter((entry) => entry.title.includes('Czynsz'));
         expect(matches).toHaveLength(1);
         expect(matches[0].type).toBe('task_due_today');
+    });
+
+    it('parsuje ustaw przypomnienie z datą słowną', () => {
+        const parsed = tryParseSkrybaTodoAdd('ustaw przypomnienie na 20 lipca');
+        expect(parsed?.titles).toEqual(['Przypomnienie']);
+        expect(parsed?.dueDate).toBe('2026-07-20');
+        expect(parsed?.kind).toBe('payments');
+    });
+
+    it('dodaje przypomnienie przez Skrybę', () => {
+        const answer = tryAnswerSkrybaTodoQuery('ustaw przypomnienie na 20 lipca o czynszu');
+        expect(answer?.intro).toMatch(/czynsz/i);
+        expect(answer?.items.some((item) => /czynsz/i.test(item.title))).toBe(true);
+        expect(answer?.items[0]?.dueDate).toBe('2026-07-20');
+    });
+
+    it('parsuje ustaw przypomnienie bez tytułu', () => {
+        const answer = tryAnswerSkrybaTodoQuery('ustaw przypomnienie na 20 lipca');
+        expect(answer?.intro).toMatch(/Przypomnienie/);
+        expect(answer?.items[0]?.dueDate).toBe('2026-07-20');
     });
 
     it('parsuje termin i kwotę w dodawaniu przez Skrybę', () => {

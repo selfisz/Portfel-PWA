@@ -33,6 +33,12 @@ function getLocalBackupStorageKey() {
 function getPendingCloudSyncStorageKey() {
     return scopedAccountStorageKey(PENDING_CLOUD_SYNC_KEY);
 }
+
+const PENDING_CLOUD_SYNC_PAYLOAD_KEY = 'finanse_pending_cloud_sync_payload';
+
+function getPendingCloudSyncPayloadStorageKey() {
+    return scopedAccountStorageKey(PENDING_CLOUD_SYNC_PAYLOAD_KEY);
+}
 const THEME_KEY = 'theme_preference';
 const MAX_CLOUD_BACKUP_SNAPSHOTS_MANUAL = 10;
 const MAX_CLOUD_BACKUP_SNAPSHOTS_AUTO = 10;

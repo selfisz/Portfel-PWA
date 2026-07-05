@@ -143,6 +143,7 @@ function isLikelySkrybaYearAmount(amount, text) {
 function isSkrybaReadOnlyQuery(text) {
     const t = normalizeSkrybaHintText(text).trim();
     if (!t) return false;
+    if (typeof isSkrybaReminderIntent === 'function' && isSkrybaReminderIntent(text)) return false;
     if (typeof parseSkrybaMissingSubCategoryIntent === 'function' && parseSkrybaMissingSubCategoryIntent(text)) {
         return true;
     }

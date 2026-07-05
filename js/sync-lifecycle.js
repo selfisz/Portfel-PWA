@@ -51,6 +51,8 @@ function startCloudSnapshotSync() {
 
     stateSnapshotUnsubscribe = stateRef.onSnapshot({ includeMetadataChanges: true }, (docSnap) => {
         if (demoSession && docSnap.metadata.fromCache) return;
+        if (docSnap.metadata.hasPendingWrites) return;
+        if (typeof isCloudSyncBlockingRemoteApply === 'function' && isCloudSyncBlockingRemoteApply()) return;
         clearSyncTimeout();
         if (docSnap.exists) {
             syncFromRemoteData(docSnap.data(), { fromCache: docSnap.metadata.fromCache === true });

@@ -1378,6 +1378,7 @@ function detectSkrybaToolsFromText(text, referenceDate = new Date()) {
 }
 
 function tryAnswerSkrybaTransactionQuery(text) {
+    if (typeof isSkrybaReminderIntent === 'function' && isSkrybaReminderIntent(text)) return null;
     if (typeof isSkrybaReadOnlyQuery !== 'function' || !isSkrybaReadOnlyQuery(text)) return null;
 
     let params = typeof resolveSkrybaTransactionListParams === 'function'

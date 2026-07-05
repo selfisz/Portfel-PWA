@@ -171,6 +171,13 @@ async function processSkrybaUserMessage(text) {
         return { kind: 'action', action: localAction };
     }
 
+    const localTodo = typeof tryAnswerSkrybaTodoQuery === 'function'
+        ? tryAnswerSkrybaTodoQuery(text)
+        : null;
+    if (localTodo) {
+        return { kind: 'local_todo', ...localTodo };
+    }
+
     const localQuery = typeof tryAnswerSkrybaTransactionQuery === 'function'
         ? tryAnswerSkrybaTransactionQuery(text)
         : null;

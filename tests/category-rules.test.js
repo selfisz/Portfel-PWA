@@ -82,3 +82,13 @@ describe('addStarterCategoryRule', () => {
         expect(appState.categoryRules).toHaveLength(1);
     });
 });
+
+describe('mergeCategoryRulesById', () => {
+    it('scala reguły z wielu źródeł bez utraty lokalnych', () => {
+        const remote = [{ id: 'r1', pattern: 'netflix', type: 'expense', mainCategory: 'Subskrypcje', subCategory: 'Filmy', priority: 0 }];
+        const local = [{ id: 'r2', pattern: 'biedronka', type: 'expense', mainCategory: 'Zakupy', subCategory: 'Zakupy', priority: 0 }];
+        const merged = mergeCategoryRulesById(remote, local);
+        expect(merged).toHaveLength(2);
+        expect(merged.map((r) => r.id).sort()).toEqual(['r1', 'r2']);
+    });
+});

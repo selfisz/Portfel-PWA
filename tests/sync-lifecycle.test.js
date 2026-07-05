@@ -30,9 +30,14 @@ beforeAll(() => {
 
     unsubscribe = vi.fn();
     globalThis.stateRef = {
-        onSnapshot: (success, error) => {
-            onSnapshotSuccess = success;
-            onSnapshotError = error;
+        onSnapshot: (optionsOrSuccess, successOrError, errorMaybe) => {
+            if (typeof optionsOrSuccess === 'function') {
+                onSnapshotSuccess = optionsOrSuccess;
+                onSnapshotError = successOrError;
+            } else {
+                onSnapshotSuccess = successOrError;
+                onSnapshotError = errorMaybe;
+            }
             return unsubscribe;
         },
         set: () => Promise.resolve()
@@ -49,6 +54,7 @@ beforeAll(() => {
     globalThis.isAppOffline = () => false;
     globalThis.isOfflineSessionActive = () => false;
     globalThis.hasPendingCloudSync = () => false;
+    globalThis.isCloudSyncBlockingRemoteApply = () => false;
     globalThis.resumePendingCloudSync = () => Promise.resolve(false);
     globalThis.retryCloudSyncNow = () => Promise.resolve(false);
     globalThis.cloudSyncRetryAttempt = 0;

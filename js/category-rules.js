@@ -22,6 +22,24 @@ function getCategoryRules() {
         .sort((a, b) => b.priority - a.priority || a.pattern.localeCompare(b.pattern, 'pl'));
 }
 
+function mergeCategoryRulesById(...sources) {
+    const map = new Map();
+    sources.flat().forEach((raw) => {
+        const rule = normalizeCategoryRule(raw);
+        if (rule) map.set(rule.id, rule);
+    });
+    return [...map.values()].sort((a, b) => b.priority - a.priority || a.pattern.localeCompare(b.pattern, 'pl'));
+}
+
+function mergeCategoryRulesIntoFinancePayload(payload, ...sources) {
+    const base = payload && typeof payload === 'object' ? payload : {};
+    const ruleSources = sources.map((src) => (Array.isArray(src?.categoryRules) ? src.categoryRules : []));
+    return {
+        ...base,
+        categoryRules: mergeCategoryRulesById(...ruleSources)
+    };
+}
+
 function categoryRuleMatches(rule, text) {
     const haystack = String(text || '').toLowerCase();
     const needle = rule.pattern.toLowerCase();

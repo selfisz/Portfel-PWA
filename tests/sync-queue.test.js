@@ -100,6 +100,25 @@ describe('sync-queue', () => {
         expect(hasPendingCloudSync()).toBe(false);
     });
 
+    it('resumePendingCloudSync używa zapamiętanego payloadu z regułami', async () => {
+        markPendingCloudSync();
+        const payload = {
+            ...getPersistedState(appState),
+            categoryRules: [{ id: 'rule_a', pattern: 'biedronka', type: 'expense', mainCategory: 'Zakupy', subCategory: 'Zakupy', priority: 0 }]
+        };
+        stashPendingCloudSyncPayload(payload);
+        appState.categoryRules = [];
+        stateRefSet.mockImplementation(() => Promise.resolve());
+        const ok = await resumePendingCloudSync({ force: true });
+        expect(ok).toBe(true);
+        expect(stateRefSet.mock.calls[0][0].categoryRules).toHaveLength(1);
+    });
+
+    it('sanitizeFirestorePayload usuwa undefined', () => {
+        const cleaned = sanitizeFirestorePayload({ a: 1, b: undefined, c: { d: undefined, e: 2 } });
+        expect(cleaned).toEqual({ a: 1, c: { e: 2 } });
+    });
+
     it('canPushPayloadToCloud blokuje zbyt duży payload', () => {
         const huge = {
             transactions: Array.from({ length: 100 }, (_, i) => ({

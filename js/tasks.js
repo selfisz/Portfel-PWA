@@ -1080,11 +1080,27 @@ function parseSkrybaTodoDueDateFromText(text, referenceDate = new Date()) {
         ['czwart', 4], ['piąt', 5], ['piat', 5], ['sobot', 6]
     ];
     for (const [prefix, targetDay] of weekdayMap) {
-        if (new RegExp(`(?:w\\s+)?${prefix}`).test(t)) {
+        if (new RegExp(`(?:w\\s+|na\\s+)?${prefix}`).test(t)) {
             const d = new Date(referenceDate);
             const diff = ((targetDay - d.getDay()) + 7) % 7 || 7;
             d.setDate(d.getDate() + diff);
             return localIsoDate(d);
+        }
+    }
+    const plDayMonth = t.match(
+        /(?:na\s+)?(\d{1,2})\s+(stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|wrze[sś]nia|pa[zź]dziernika|listopada|grudnia)(?:\s+((?:19|20)\d{2}))?/
+    );
+    if (plDayMonth && typeof parseSkrybaMonthToken === 'function') {
+        const day = parseInt(plDayMonth[1], 10);
+        const monthIndex = parseSkrybaMonthToken(plDayMonth[2]);
+        if (monthIndex !== undefined && day >= 1 && day <= 31) {
+            let year = plDayMonth[3] ? parseInt(plDayMonth[3], 10) : referenceDate.getFullYear();
+            const candidate = new Date(year, monthIndex, day);
+            if (!plDayMonth[3]) {
+                const today = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+                if (candidate < today) year += 1;
+            }
+            return localIsoDate(new Date(year, monthIndex, day));
         }
     }
     const isoMatch = t.match(/\b(\d{4}-\d{2}-\d{2})\b/);
@@ -1107,31 +1123,49 @@ function parseSkrybaTodoAmountFromText(text) {
     return Number.isFinite(amount) && amount > 0 ? amount : null;
 }
 
+function isSkrybaReminderIntent(text) {
+    const lower = String(text || '').trim().toLowerCase();
+    if (!lower) return false;
+    return /(?:ustaw|zaplanuj|zapisz|dodaj)\s+(?:mi\s+)?przypomnien/i.test(lower)
+        || /^przypomnij\b/.test(lower);
+}
+
 function tryParseSkrybaTodoAdd(text) {
     const t = String(text || '').trim();
     const lower = t.toLowerCase();
-    if (!/(?:^|\s)(?:dodaj|dopisz|wrzu[cć]|wpisz|przypomnij)\s+/i.test(t)) return null;
+    const isListAdd = /(?:^|\s)(?:dodaj|dopisz|wrzu[cć]|wpisz|przypomnij)\s+/i.test(t);
+    const isReminder = isSkrybaReminderIntent(t);
+    if (!isListAdd && !isReminder) return null;
 
     const kind = parseSkrybaTodoListKind(t);
-    const mentionsList = !!kind || /na\s+list|do\s+list|zadani|do\s+zrobienia/.test(lower);
-    if (!mentionsList && !/przypomnij/.test(lower)) return null;
+    const mentionsList = !!kind || /na\s+list|do\s+list|zadani|do\s+zrobienia|przypomnien/i.test(lower);
+    if (!mentionsList && !/przypomnij|przypomnien/i.test(lower)) return null;
+
+    const dueDate = parseSkrybaTodoDueDateFromText(t);
+    const amount = parseSkrybaTodoAmountFromText(t);
 
     let titlePart = t
-        .replace(/^(?:dodaj|dopisz|wrzu[cć]|wpisz|przypomnij)\s+(?:mi\s+)?(?:o\s+)?/i, '')
+        .replace(/^(?:ustaw|zaplanuj|zapisz|dodaj|dopisz|wrzu[cć]|wpisz|przypomnij)\s+(?:mi\s+)?/i, '')
+        .replace(/^przypomnienie\s+/i, '')
         .replace(/\s+(?:do|na)\s+(?:listy\s+)?(?:zakup\w*|list[aę]\s+zakup\w*|zapłat\w*|zaplat\w*|finans\w*|zada[nń]|rachunk\w*)\s*$/i, '')
         .replace(/\s+na\s+zakupy\s*$/i, '')
+        .replace(/\s+na\s+\d{1,2}\s+(?:stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|wrzesnia|października|pazdziernika|listopada|grudnia)(?:\s+(?:19|20)\d{2})?\b/i, '')
+        .replace(/\s+(?:na|w)\s+(?:dzi[sś]|jutro|poniedziałek|poniedzialek|wtorek|środę|srode|czwartek|piątek|piatek|sobotę|sobote|niedzielę|niedziele)\b/i, '')
         .replace(/\s*,\s*\d+(?:[.,]\d{1,2})?\s*(?:zł|zl|pln)\b.*$/i, '')
-        .replace(/\s+(?:na|w)\s+(?:dzi[sś]|jutro|poniedziałek|poniedzialek|wtorek|środę|srode|czwartek|piątek|piatek|sobotę|sobote|niedzielę|niedziele)\b.*$/i, '')
+        .replace(/^\s*o\s+/i, '')
+        .replace(/^\s*na\s+/i, '')
         .trim();
 
-    if (/^\d+(?:[.,]\d+)?\s*(?:zł|zl|pln)?\b/i.test(titlePart)) return null;
+    if (/^\d+(?:[.,]\d+)?\s*(?:zł|zl|pln)\b/i.test(titlePart)) return null;
+    if (dueDate && /^\d{1,2}\s+(?:stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|wrzesnia|października|pazdziernika|listopada|grudnia)(?:\s+(?:19|20)\d{2})?$/i.test(titlePart)) {
+        titlePart = isReminder ? 'Przypomnienie' : '';
+    }
+    if (titlePart.length < 2 && isReminder) titlePart = 'Przypomnienie';
     if (titlePart.length < 2) return null;
 
     const titles = titlePart.split(/\s+i\s+/).map((part) => part.trim()).filter((part) => part.length >= 2);
     if (!titles.length) return null;
 
-    const dueDate = parseSkrybaTodoDueDateFromText(t);
-    const amount = parseSkrybaTodoAmountFromText(t);
     return { kind: kind || (dueDate || amount ? 'payments' : 'shopping'), titles, dueDate, amount };
 }
 
@@ -1194,8 +1228,11 @@ function tryAnswerSkrybaTodoQuery(text) {
             .filter(Boolean);
         if (!created.length) return null;
         const labels = created.map((item) => item.title).join(', ');
+        const dateHint = add.dueDate && typeof formatTxDate === 'function'
+            ? ` — termin ${formatTxDate(add.dueDate)}`
+            : (add.dueDate ? ` — termin ${add.dueDate}` : '');
         return {
-            intro: `Dodałem na listę „${list.name}”: ${labels}.`,
+            intro: `Dodałem na listę „${list.name}”: ${labels}${dateHint}.`,
             items: getFilteredTodos({ listId: list.id, includeDone: false })
         };
     }

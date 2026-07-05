@@ -1407,6 +1407,16 @@ async function sendSkrybaMessage() {
             skrybaPersistActiveThread();
             return;
         }
+        if (routed.kind === 'local_todo') {
+            const extraHtml = routed.items?.length && typeof buildSkrybaTodoListHtml === 'function'
+                ? buildSkrybaTodoListHtml(routed.items)
+                : '';
+            appendSkrybaMessage('assistant', routed.intro, extraHtml);
+            skrybaChatHistory.push({ role: 'assistant', text: routed.intro });
+            skrybaPersistActiveThread();
+            if (typeof updateTasksBadge === 'function') updateTasksBadge();
+            return;
+        }
         if (!routed.parsed) {
             const fallback = typeof SKRYBA_FALLBACK_REPLY !== 'undefined'
                 ? SKRYBA_FALLBACK_REPLY

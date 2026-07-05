@@ -148,6 +148,9 @@ function finalizeFinanceRemoteApply(remoteData) {
     if (typeof mergeTodoFieldsIntoFinancePayload === 'function') {
         payload = mergeTodoFieldsIntoFinancePayload(payload, remotePersisted, localPersisted, memoryPersisted);
     }
+    if (typeof mergeCategoryRulesIntoFinancePayload === 'function') {
+        payload = mergeCategoryRulesIntoFinancePayload(payload, remotePersisted, localPersisted, memoryPersisted);
+    }
     applyRemoteAppState(payload);
     if (typeof repairMissingCashMovementsFromTransactions === 'function') {
         repairMissingCashMovementsFromTransactions();
@@ -422,6 +425,9 @@ function resetAppStateForAccountSwitch() {
 function setSyncStatus(mode, txCount) {
     const statusEl = document.getElementById('sync-status');
     if (!statusEl) return;
+    if (mode === 'online' && typeof hasPendingCloudSync === 'function' && hasPendingCloudSync()) {
+        mode = 'pending';
+    }
     statusEl.className = mode || '';
     const countHint = typeof txCount === 'number' ? ` (${txCount} transakcji)` : '';
     const titles = {
@@ -489,7 +495,10 @@ function syncFromRemoteData(remoteData, options = {}) {
             : (localPersisted.todoLists?.length ? localPersisted.todoLists : memoryPersisted.todoLists),
         todos: typeof mergeTodosById === 'function'
             ? mergeTodosById(remotePersisted.todos, localPersisted.todos, memoryPersisted.todos)
-            : (localPersisted.todos?.length ? localPersisted.todos : memoryPersisted.todos)
+            : (localPersisted.todos?.length ? localPersisted.todos : memoryPersisted.todos),
+        categoryRules: typeof mergeCategoryRulesById === 'function'
+            ? mergeCategoryRulesById(remotePersisted.categoryRules, localPersisted.categoryRules, memoryPersisted.categoryRules)
+            : (localPersisted.categoryRules?.length ? localPersisted.categoryRules : memoryPersisted.categoryRules)
     };
 
     applyRemoteAppState(mergedRemote, localLoans, localCreditCards);
