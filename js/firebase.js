@@ -69,6 +69,40 @@ function sortCloudBackupSnapshots(items) {
     });
 }
 
+function normalizeCloudBackupSnapshotData(data, options = {}) {
+    if (!data || typeof data !== 'object') return null;
+    const backupSource = options.source || (data.backupSource === 'auto' ? 'auto' : 'manual');
+    return {
+        ...data,
+        exportedAt: data.exportedAt || data.data?.exportedAt || new Date().toISOString(),
+        backupSource
+    };
+}
+
+async function fetchCloudBackupSnapshotDocs() {
+    if (!cloudBackupSnapshotsRef) return [];
+    const byId = new Map();
+    const ingest = (doc) => {
+        if (!byId.has(doc.id)) byId.set(doc.id, doc);
+    };
+
+    try {
+        const ordered = await cloudBackupSnapshotsRef.orderBy('exportedAt', 'desc').get();
+        ordered.docs.forEach(ingest);
+    } catch (err) {
+        console.warn('fetchCloudBackupSnapshotDocs orderBy', err);
+    }
+
+    try {
+        const all = await cloudBackupSnapshotsRef.get();
+        all.docs.forEach(ingest);
+    } catch (err) {
+        console.warn('fetchCloudBackupSnapshotDocs get', err);
+    }
+
+    return [...byId.values()];
+}
+
 async function ensureLegacyCloudBackupMigrated() {
     if (legacyCloudBackupMigrated || !cloudBackupSnapshotsRef || !cloudBackupRef) return;
     legacyCloudBackupMigrated = true;
@@ -78,8 +112,9 @@ async function ensureLegacyCloudBackupMigrated() {
         const legacy = await cloudBackupRef.get();
         if (!legacy.exists) return;
         const data = legacy.data();
-        if (!data || (!data.exportedAt && !data.data?.transactions?.length)) return;
-        await cloudBackupSnapshotsRef.add(data);
+        const normalized = normalizeCloudBackupSnapshotData(data);
+        if (!normalized || (!normalized.exportedAt && !normalized.data?.transactions?.length)) return;
+        await cloudBackupSnapshotsRef.add(normalized);
     } catch (err) {
         console.warn('ensureLegacyCloudBackupMigrated', err);
         legacyCloudBackupMigrated = false;
@@ -89,13 +124,23 @@ async function ensureLegacyCloudBackupMigrated() {
 async function pruneCloudBackupSnapshots() {
     if (!cloudBackupSnapshotsRef) return;
     try {
-        const snap = await cloudBackupSnapshotsRef.orderBy('exportedAt', 'desc').get();
+        const docs = await fetchCloudBackupSnapshotDocs();
         const autoDocs = [];
         const manualDocs = [];
-        snap.docs.forEach((doc) => {
+        docs.forEach((doc) => {
             const source = getCloudBackupSnapshotSource(doc.data());
             if (source === 'auto') autoDocs.push(doc);
             else manualDocs.push(doc);
+        });
+        autoDocs.sort((a, b) => {
+            const ta = new Date(a.data()?.exportedAt || 0).getTime();
+            const tb = new Date(b.data()?.exportedAt || 0).getTime();
+            return tb - ta;
+        });
+        manualDocs.sort((a, b) => {
+            const ta = new Date(a.data()?.exportedAt || 0).getTime();
+            const tb = new Date(b.data()?.exportedAt || 0).getTime();
+            return tb - ta;
         });
         const excess = [
             ...autoDocs.slice(MAX_CLOUD_BACKUP_SNAPSHOTS_AUTO),
@@ -111,7 +156,9 @@ async function pruneCloudBackupSnapshots() {
 }
 
 async function saveCloudBackupSnapshot(payload, options = {}) {
-    if (!cloudBackupSnapshotsRef || !cloudBackupRef) return;
+    if (!cloudBackupSnapshotsRef || !cloudBackupRef) {
+        throw new Error('Chmura niedostępna — zaloguj się ponownie');
+    }
     await ensureLegacyCloudBackupMigrated();
     const backupSource = options.source === 'auto' ? 'auto' : 'manual';
     const snapshotPayload = {
@@ -130,8 +177,8 @@ async function listCloudBackupSnapshots() {
     const byId = new Map();
 
     try {
-        const snap = await cloudBackupSnapshotsRef.orderBy('exportedAt', 'desc').get();
-        snap.docs.forEach((doc) => {
+        const docs = await fetchCloudBackupSnapshotDocs();
+        docs.forEach((doc) => {
             byId.set(doc.id, cloudBackupSnapshotMeta(doc.data(), doc.id));
         });
     } catch (err) {
@@ -209,8 +256,80 @@ function legacyMigrationStorageKey(uid) {
     return `legacy_finances_migrated_${uid}`;
 }
 
+function legacyCloudBackupsMigrationStorageKey(uid) {
+    return `legacy_cloud_backups_migrated_${uid}`;
+}
+
+async function migrateLegacyCloudBackupsIfNeeded(uid) {
+    if (!uid || !cloudBackupSnapshotsRef || !cloudBackupRef) return;
+    if (typeof isDemoFinanceUid === 'function' && isDemoFinanceUid(uid)) {
+        localStorage.setItem(legacyCloudBackupsMigrationStorageKey(uid), '1');
+        return;
+    }
+    if (localStorage.getItem(legacyCloudBackupsMigrationStorageKey(uid)) === '1') return;
+
+    try {
+        const existing = await cloudBackupSnapshotsRef.limit(1).get();
+        if (!existing.empty) {
+            localStorage.setItem(legacyCloudBackupsMigrationStorageKey(uid), '1');
+            return;
+        }
+    } catch (err) {
+        console.warn('migrateLegacyCloudBackupsIfNeeded check', err);
+    }
+
+    await ensureLegacyCloudBackupMigrated();
+
+    try {
+        const afterMeta = await cloudBackupSnapshotsRef.limit(1).get();
+        if (!afterMeta.empty) {
+            localStorage.setItem(legacyCloudBackupsMigrationStorageKey(uid), '1');
+            return;
+        }
+    } catch (err) {
+        console.warn('migrateLegacyCloudBackupsIfNeeded after meta', err);
+    }
+
+    let migratedCount = 0;
+
+    try {
+        const legacySnaps = await db.collection('finances').doc('backups').collection('snapshots').get();
+        for (const doc of legacySnaps.docs) {
+            const normalized = normalizeCloudBackupSnapshotData(doc.data());
+            if (!normalized) continue;
+            await cloudBackupSnapshotsRef.doc(doc.id).set(normalized);
+            migratedCount += 1;
+        }
+        if (migratedCount) {
+            console.info(`Migracja kopii: przeniesiono ${migratedCount} snapshotów z finances/backups`);
+        }
+    } catch (err) {
+        console.warn('migrateLegacyCloudBackupsIfNeeded snapshots', err);
+    }
+
+    try {
+        const legacyBackup = await db.collection('finances').doc('cloud_backup').get();
+        if (legacyBackup.exists) {
+            const normalized = normalizeCloudBackupSnapshotData(legacyBackup.data());
+            if (normalized) {
+                await cloudBackupRef.set(normalized);
+                if (!migratedCount) {
+                    await cloudBackupSnapshotsRef.add(normalized);
+                }
+                migratedCount += 1;
+                console.info('Migracja kopii: przeniesiono finances/cloud_backup');
+            }
+        }
+    } catch (err) {
+        console.warn('migrateLegacyCloudBackupsIfNeeded cloud_backup', err);
+    }
+
+    localStorage.setItem(legacyCloudBackupsMigrationStorageKey(uid), '1');
+}
+
 async function migrateLegacyUserDataIfNeeded(uid) {
     if (!uid || !stateRef) return;
+    await migrateLegacyCloudBackupsIfNeeded(uid);
     if (typeof isDemoFinanceUid === 'function' && isDemoFinanceUid(uid)) {
         localStorage.setItem(legacyMigrationStorageKey(uid), '1');
         return;
@@ -242,27 +361,6 @@ async function migrateLegacyUserDataIfNeeded(uid) {
         }
     } catch (err) {
         console.warn('migrateLegacyUserDataIfNeeded state', err);
-    }
-
-    try {
-        const legacySnaps = await db.collection('finances').doc('backups').collection('snapshots').get();
-        for (const doc of legacySnaps.docs) {
-            await cloudBackupSnapshotsRef.doc(doc.id).set(doc.data());
-        }
-        if (!legacySnaps.empty) {
-            console.info(`Migracja: przeniesiono ${legacySnaps.size} kopii zapasowych`);
-        }
-    } catch (err) {
-        console.warn('migrateLegacyUserDataIfNeeded snapshots', err);
-    }
-
-    try {
-        const legacyBackup = await db.collection('finances').doc('cloud_backup').get();
-        if (legacyBackup.exists) {
-            await cloudBackupRef.set(legacyBackup.data());
-        }
-    } catch (err) {
-        console.warn('migrateLegacyUserDataIfNeeded cloud_backup', err);
     }
 
     localStorage.setItem(legacyMigrationStorageKey(uid), '1');

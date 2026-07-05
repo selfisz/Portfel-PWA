@@ -1,3 +1,12 @@
+function isIosNotificationClient() {
+    return /iPad|iPhone|iPod/i.test(navigator.userAgent || '');
+}
+
+function isStandalonePwa() {
+    return window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+}
+
 function getDefaultNotificationPrefs() {
     return {
         enabled: false,
@@ -374,6 +383,8 @@ function navigateFromNotification(item) {
     }
 }
 
+let backgroundNotificationDigestSent = false;
+
 function maybeShowSystemNotifications(newItems) {
     const prefs = getNotificationPrefs();
     if (!prefs.enabled || !newItems?.length) return;
@@ -383,30 +394,78 @@ function maybeShowSystemNotifications(newItems) {
     postSystemNotifications(newItems.filter((item) => !item.read));
 }
 
-function postSystemNotifications(items) {
-    if (!items?.length) return;
-    const reg = navigator.serviceWorker?.controller;
-    if (!reg) return;
-    items.forEach((item) => {
-        reg.postMessage({
-            type: 'SHOW_NOTIFICATION',
-            notification: {
-                id: item.id,
-                title: item.title,
-                body: item.body
-            }
+async function postSystemNotifications(items) {
+    if (!items?.length) return false;
+    if (!('serviceWorker' in navigator)) return false;
+
+    try {
+        const reg = await navigator.serviceWorker.ready;
+        const target = reg.active || navigator.serviceWorker.controller;
+        if (!target) return false;
+
+        const supportsActions = !isIosNotificationClient();
+        items.forEach((item) => {
+            target.postMessage({
+                type: 'SHOW_NOTIFICATION',
+                supportsActions,
+                notification: {
+                    id: item.id,
+                    title: item.title,
+                    body: item.body
+                }
+            });
         });
-    });
+        return true;
+    } catch (err) {
+        console.warn('postSystemNotifications', err);
+        return false;
+    }
 }
 
-function showTestSystemNotification() {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    postSystemNotifications([{
-        id: 'notif-test|welcome',
+async function showTestSystemNotification() {
+    const prefs = getNotificationPrefs();
+    if (!prefs.enabled) {
+        if (typeof showSettingsToast === 'function') {
+            showSettingsToast('Włącz powiadomienia przełącznikiem powyżej', 'error');
+        }
+        return;
+    }
+    if (!('Notification' in window)) {
+        if (typeof showSettingsToast === 'function') {
+            showSettingsToast('Ta przeglądarka nie obsługuje powiadomień systemowych', 'error');
+        }
+        return;
+    }
+    if (isIosNotificationClient() && !isStandalonePwa()) {
+        if (typeof showSettingsToast === 'function') {
+            showSettingsToast('Na iPhone dodaj aplikację do ekranu początkowego — wtedy działają powiadomienia na pasku', 'error');
+        }
+        return;
+    }
+    if (Notification.permission !== 'granted') {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') {
+            if (typeof showSettingsToast === 'function') {
+                showSettingsToast('Zezwól na powiadomienia w Ustawieniach iPhone’a → Finanse', 'error');
+            }
+            return;
+        }
+    }
+
+    const sent = await postSystemNotifications([{
+        id: `notif-test|${Date.now()}`,
         title: 'Powiadomienia włączone',
-        body: 'Będziesz dostawać alerty o budżecie, ratach i rozliczeniu miesiąca — gdy aplikacja jest w tle.',
+        body: 'Będziesz dostawać alerty o budżecie, ratach i zadaniach — gdy aplikacja jest w tle.',
         read: false
     }]);
+
+    if (typeof showSettingsToast === 'function') {
+        if (sent) {
+            showSettingsToast('Wysłano test — zminimalizuj aplikację, jeśli nie widzisz banera');
+        } else {
+            showSettingsToast('Nie udało się wysłać — odśwież aplikację i spróbuj ponownie', 'error');
+        }
+    }
 }
 
 function evaluateSkrybaWeeklyBriefing() {
@@ -588,10 +647,16 @@ function syncNotificationSettingsUI() {
     if (status) {
         if (!('Notification' in window)) {
             status.textContent = 'Przeglądarka nie obsługuje powiadomień systemowych — działa panel w aplikacji.';
+        } else if (isIosNotificationClient() && !isStandalonePwa()) {
+            status.textContent = 'Na iPhone powiadomienia na pasku działają tylko z ikony na ekranie głównym (Udostępnij → Dodaj do ekranu początkowego).';
         } else if (Notification.permission === 'granted') {
-            status.textContent = 'Powiadomienia systemowe włączone.';
+            status.textContent = isIosNotificationClient()
+                ? 'Powiadomienia włączone. Na iPhone banery widać głównie przy aplikacji w tle.'
+                : 'Powiadomienia systemowe włączone.';
         } else if (Notification.permission === 'denied') {
-            status.textContent = 'Powiadomienia zablokowane w przeglądarce — dostępny jest panel w aplikacji.';
+            status.textContent = isIosNotificationClient()
+                ? 'Powiadomienia zablokowane — Ustawienia iPhone’a → Finanse → Powiadomienia.'
+                : 'Powiadomienia zablokowane w przeglądarce — dostępny jest panel w aplikacji.';
         } else {
             status.textContent = 'Po włączeniu zostaniesz poproszony o zgodę na powiadomienia systemowe.';
         }
@@ -610,11 +675,32 @@ function initNotifications() {
     }
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
+            backgroundNotificationDigestSent = false;
             evaluateAllNotifications();
-        } else if (getNotificationPrefs().enabled) {
-            const created = evaluateAllNotifications();
-            maybeShowSystemNotifications(created);
+            return;
         }
+        if (!getNotificationPrefs().enabled) return;
+
+        const created = evaluateAllNotifications();
+        if (created.length) {
+            maybeShowSystemNotifications(created);
+            return;
+        }
+        if (backgroundNotificationDigestSent) return;
+
+        const unread = getNotificationInbox().filter((item) => isNotificationVisible(item) && !item.read);
+        if (!unread.length) return;
+
+        backgroundNotificationDigestSent = true;
+        const digest = unread.length === 1
+            ? unread[0]
+            : {
+                id: `notif-digest|${localIsoDate(new Date())}`,
+                title: `Masz ${unread.length} powiadomień`,
+                body: unread.slice(0, 3).map((item) => item.title).join(' · '),
+                read: false
+            };
+        postSystemNotifications([digest]);
     });
     bindNotificationPrefToggle('notif-pref-budget', 'budgetAlerts');
     bindNotificationPrefToggle('notif-pref-loan', 'loanReminders');

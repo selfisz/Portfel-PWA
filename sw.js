@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanse-pwa-v351';
+const CACHE_NAME = 'finanse-pwa-v353';
 
 const FIREBASE_CDN = [
   'https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js',
@@ -182,18 +182,21 @@ self.addEventListener('message', (event) => {
   if (!data || data.type !== 'SHOW_NOTIFICATION' || !data.notification) return;
   const n = data.notification;
   const iconUrl = new URL('icons/icon-192.png', self.registration.scope).href;
+  const options = {
+    body: n.body || '',
+    icon: iconUrl,
+    badge: iconUrl,
+    tag: n.id,
+    data: { id: n.id }
+  };
+  if (data.supportsActions !== false) {
+    options.actions = [
+      { action: 'snooze', title: 'Przypomnij jutro' },
+      { action: 'dismiss', title: 'Odrzuć' }
+    ];
+  }
   event.waitUntil(
-    self.registration.showNotification(n.title || 'Finanse', {
-      body: n.body || '',
-      icon: iconUrl,
-      badge: iconUrl,
-      tag: n.id,
-      data: { id: n.id },
-      actions: [
-        { action: 'snooze', title: 'Przypomnij jutro' },
-        { action: 'dismiss', title: 'Odrzuć' }
-      ]
-    })
+    self.registration.showNotification(n.title || 'Finanse', options)
   );
 });
 

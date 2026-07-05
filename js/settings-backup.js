@@ -175,45 +175,68 @@ function formatCloudBackupSourceLabel(source) {
     return source === 'auto' ? 'auto' : 'ręczna';
 }
 
+function isCloudBackupAvailable() {
+    return !!(cloudBackupSnapshotsRef && cloudBackupRef);
+}
+
+async function ensureCloudBackupsReady() {
+    const uid = typeof auth !== 'undefined' && auth?.currentUser?.uid
+        ? auth.currentUser.uid
+        : null;
+    if (uid && typeof migrateLegacyCloudBackupsIfNeeded === 'function') {
+        await migrateLegacyCloudBackupsIfNeeded(uid);
+    }
+}
+
 async function refreshBackupInfo() {
     const cloudEl = document.getElementById('backup-cloud-info');
     const localEl = document.getElementById('backup-local-info');
     if (cloudEl) cloudEl.textContent = 'Sprawdzanie…';
-    try {
-        const snapshots = await listCloudBackupSnapshots();
-        if (snapshots.length) {
-            const latest = snapshots[0];
-            const date = formatCloudBackupDate(latest.exportedAt);
-            const autoCount = snapshots.filter((s) => s.backupSource === 'auto').length;
-            const manualCount = snapshots.length - autoCount;
-            const autoToday = isAutoCloudBackupEnabled() && getLastAutoCloudBackupDate() === getTodayDateKey();
-            if (cloudEl) {
-                cloudEl.textContent = `${formatCloudBackupCount(snapshots.length)} (${manualCount} ręczn., ${autoCount} auto) · ostatnia ${date} · ${latest.transactionCount} trans.`;
-            }
-            const autoHint = document.getElementById('auto-cloud-backup-status');
-            if (autoHint) {
-                if (!isAutoCloudBackupEnabled()) {
-                    autoHint.textContent = 'Automatyczna kopia wyłączona.';
-                } else if (autoToday) {
-                    autoHint.textContent = 'Dzisiejsza automatyczna kopia jest już zapisana.';
-                } else {
-                    autoHint.textContent = 'Automatyczna kopia zostanie utworzona przy następnym uruchomieniu aplikacji.';
+
+    if (!isCloudBackupAvailable()) {
+        if (cloudEl) {
+            cloudEl.textContent = auth?.currentUser
+                ? 'Chmura niedostępna — odśwież aplikację'
+                : 'Zaloguj się, aby korzystać z chmury';
+        }
+    } else {
+        try {
+            await ensureCloudBackupsReady();
+            const snapshots = await listCloudBackupSnapshots();
+            if (snapshots.length) {
+                const latest = snapshots[0];
+                const date = formatCloudBackupDate(latest.exportedAt);
+                const autoCount = snapshots.filter((s) => s.backupSource === 'auto').length;
+                const manualCount = snapshots.length - autoCount;
+                const autoToday = isAutoCloudBackupEnabled() && getLastAutoCloudBackupDate() === getTodayDateKey();
+                if (cloudEl) {
+                    cloudEl.textContent = `${formatCloudBackupCount(snapshots.length)} (${manualCount} ręczn., ${autoCount} auto) · ostatnia ${date} · ${latest.transactionCount} trans.`;
+                }
+                const autoHint = document.getElementById('auto-cloud-backup-status');
+                if (autoHint) {
+                    if (!isAutoCloudBackupEnabled()) {
+                        autoHint.textContent = 'Automatyczna kopia wyłączona.';
+                    } else if (autoToday) {
+                        autoHint.textContent = 'Dzisiejsza automatyczna kopia jest już zapisana.';
+                    } else {
+                        autoHint.textContent = 'Automatyczna kopia zostanie utworzona przy następnym uruchomieniu aplikacji.';
+                    }
+                }
+            } else if (cloudEl) {
+                cloudEl.textContent = 'Brak kopii w chmurze';
+                const autoHint = document.getElementById('auto-cloud-backup-status');
+                if (autoHint) {
+                    autoHint.textContent = isAutoCloudBackupEnabled()
+                        ? 'Automatyczna kopia zostanie utworzona przy pierwszym uruchomieniu z danymi.'
+                        : 'Automatyczna kopia wyłączona.';
                 }
             }
-        } else if (cloudEl) {
-            cloudEl.textContent = 'Brak kopii w chmurze';
+        } catch {
+            if (cloudEl) cloudEl.textContent = 'Niedostępna — brak połączenia';
             const autoHint = document.getElementById('auto-cloud-backup-status');
-            if (autoHint) {
-                autoHint.textContent = isAutoCloudBackupEnabled()
-                    ? 'Automatyczna kopia zostanie utworzona przy pierwszym uruchomieniu z danymi.'
-                    : 'Automatyczna kopia wyłączona.';
+            if (autoHint && !isAutoCloudBackupEnabled()) {
+                autoHint.textContent = 'Automatyczna kopia wyłączona.';
             }
-        }
-    } catch {
-        if (cloudEl) cloudEl.textContent = 'Niedostępna — brak połączenia';
-        const autoHint = document.getElementById('auto-cloud-backup-status');
-        if (autoHint && !isAutoCloudBackupEnabled()) {
-            autoHint.textContent = 'Automatyczna kopia wyłączona.';
         }
     }
     const localRaw = localStorage.getItem(getLocalBackupStorageKey());
@@ -232,6 +255,10 @@ async function refreshBackupInfo() {
     }
 }
 async function backupToCloud() {
+    if (!isCloudBackupAvailable()) {
+        showSettingsToast('Chmura niedostępna — zaloguj się ponownie', 'error');
+        return;
+    }
     const count = getTransactionCount(appState);
     if (!confirm(`Na pewno wysłać kopię do chmury (${count} trans.)?\nZostanie dodana jako ręczna wersja (przechowujemy do ${MAX_CLOUD_BACKUP_SNAPSHOTS_MANUAL} ręcznych kopii).`)) return;
 
@@ -311,6 +338,7 @@ async function openCloudRestorePicker() {
     list.innerHTML = '<p class="cloud-restore-status">Ładowanie kopii…</p>';
 
     try {
+        await ensureCloudBackupsReady();
         const snapshots = await listCloudBackupSnapshots();
         if (!snapshots.length) {
             list.innerHTML = '<p class="cloud-restore-status">Brak kopii w chmurze</p>';
