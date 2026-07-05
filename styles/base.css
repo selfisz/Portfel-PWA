@@ -1198,6 +1198,34 @@ body.notifications-open {
     fill: currentColor;
 }
 
+.tasks-badge--urgent {
+    background: #e85d5d;
+}
+
+.dashboard-tasks-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.dashboard-tasks-head .dashboard-section-title {
+    margin: 0;
+}
+
+.dashboard-action-info--btn {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: none;
+    padding: 0;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+
 .tasks-shell {
     display: flex;
     flex-direction: column;
@@ -1525,6 +1553,16 @@ body.notifications-open {
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--card-bg);
+}
+
+.skryba-todo-row--btn {
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+}
+
+.skryba-todo-row--btn:active {
+    opacity: 0.85;
 }
 
 .skryba-todo-title {

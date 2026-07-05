@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { loadScript } from './helpers/load.js';
 
 beforeAll(() => {
@@ -23,30 +23,36 @@ beforeAll(() => {
     globalThis.escapeHtml = (s) => String(s);
     globalThis.formatTxDate = (d) => d;
     globalThis.formatPlnAmount = (n) => `${Number(n).toFixed(2)} zł`;
+    globalThis.getTomorrowIsoDate = () => '2026-07-06';
+    globalThis.localIsoDate = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d));
+    globalThis.daysUntilDate = (iso) => {
+        const today = new Date('2026-07-05T12:00:00');
+        const target = new Date(`${iso}T12:00:00`);
+        return Math.round((target - today) / 86400000);
+    };
     globalThis.saveState = () => {};
 });
 
 beforeEach(() => {
-    globalThis.appState = {
-        transactions: [],
-        loans: [],
-        creditCards: [],
-        creditCardMovements: [],
-        assets: [],
-        cashMovements: [],
-        assetSnapshots: [],
-        assetValueHistory: [],
-        categoryBudgets: {},
-        subCategoryBudgets: {},
-        categoryIcons: { expense: { mains: {}, subs: {} }, income: { mains: {}, subs: {} } },
-        reportPrefs: {},
-        categoryRules: [],
-        pendingRecurringConfirmations: [],
-        skippedRecurringMonths: {},
-        deletedAssetIds: [],
-        todoLists: [],
-        todos: []
-    };
+    vi.setSystemTime(new Date('2026-07-05T10:00:00'));
+    appState.transactions = [];
+    appState.loans = [];
+    appState.creditCards = [];
+    appState.creditCardMovements = [];
+    appState.assets = [];
+    appState.cashMovements = [];
+    appState.assetSnapshots = [];
+    appState.assetValueHistory = [];
+    appState.categoryBudgets = {};
+    appState.subCategoryBudgets = {};
+    appState.categoryIcons = { expense: { mains: {}, subs: {} }, income: { mains: {}, subs: {} } };
+    appState.reportPrefs = {};
+    appState.categoryRules = [];
+    appState.pendingRecurringConfirmations = [];
+    appState.skippedRecurringMonths = {};
+    appState.deletedAssetIds = [];
+    appState.todoLists = [];
+    appState.todos = [];
 });
 
 describe('moduł zadań', () => {
@@ -112,5 +118,86 @@ describe('moduł zadań', () => {
         const restored = ensureTodoListForKind('shopping');
         expect(restored?.archived).toBe(false);
         expect(getTodoListByKind('shopping')?.id).toBe(list.id);
+    });
+
+    it('priorytetyzuje pilne zadania na pulpicie', () => {
+        const shopping = getTodoListByKind('shopping');
+        const payments = getTodoListByKind('payments');
+        addTodoItem({ title: 'Później', listId: shopping.id, dueDate: '2026-07-20' });
+        addTodoItem({ title: 'Dziś', listId: payments.id, dueDate: '2026-07-05' });
+        addTodoItem({ title: 'Bez terminu', listId: shopping.id });
+        const items = getDashboardTodoItems(3);
+        expect(items[0].title).toBe('Dziś');
+        expect(getUrgentTodosCount()).toBe(1);
+        expect(getTasksBadgeCount()).toBe(1);
+    });
+
+    it('tworzy powiadomienie o terminie zadania', () => {
+        const created = [];
+        globalThis.upsertNotification = (proposal) => {
+            created.push(proposal);
+            return { isNew: true, item: proposal };
+        };
+        const list = getTodoListByKind('payments');
+        addTodoItem({ title: 'Czynsz', listId: list.id, dueDate: '2026-07-05', amount: 2500 });
+        evaluateTaskDueReminders();
+        const matches = created.filter((entry) => entry.title.includes('Czynsz'));
+        expect(matches).toHaveLength(1);
+        expect(matches[0].type).toBe('task_due_today');
+    });
+
+    it('parsuje termin i kwotę w dodawaniu przez Skrybę', () => {
+        const parsed = tryParseSkrybaTodoAdd('przypomnij o prądzie w piątek, 200 zł do zapłaty');
+        expect(parsed?.kind).toBe('payments');
+        expect(parsed?.titles[0]).toMatch(/prąd/i);
+        expect(parsed?.amount).toBe(200);
+        expect(parsed?.dueDate).toBe('2026-07-10');
+    });
+
+    it('pokazuje płatności na tydzień', () => {
+        const list = getTodoListByKind('payments');
+        addTodoItem({ title: 'Czynsz', listId: list.id, dueDate: '2026-07-08', amount: 2500 });
+        addTodoItem({ title: 'Internet', listId: list.id, dueDate: '2026-07-20' });
+        const show = tryParseSkrybaTodoShow('pokaż płatności na tydzień');
+        expect(show?.scope).toBe('week');
+        const answer = tryAnswerSkrybaTodoQuery('pokaż płatności na tydzień');
+        expect(answer?.items).toHaveLength(1);
+        expect(answer.items[0].title).toBe('Czynsz');
+    });
+
+    it('buduje poranny przegląd z zadaniami', () => {
+        const payments = getTodoListByKind('payments');
+        addTodoItem({ title: 'Czynsz', listId: payments.id, dueDate: '2026-07-05' });
+        const text = buildMorningDailyReviewText();
+        expect(text).toContain('Moje zadania');
+        expect(text).toContain('Czynsz');
+    });
+
+    it('zwraca przegląd zadań dla Skryby', () => {
+        const payments = getTodoListByKind('payments');
+        addTodoItem({ title: 'Prąd', listId: payments.id, dueDate: '2026-07-05', amount: 200 });
+        const overview = skrybaToolTodoOverview({ kind: 'payments' });
+        expect(overview.items).toHaveLength(1);
+        expect(overview.urgentCount).toBe(1);
+        expect(overview.items[0].title).toBe('Prąd');
+    });
+
+    it('pokazuje otwarte zadania na tablicy', () => {
+        ensureTodoListsInitialized();
+        const shopping = getTodoListByKind('shopping');
+        addTodoItem({ title: 'Mleko', listId: shopping.id });
+        const board = collectUserTodoBoardTasks();
+        expect(board).toHaveLength(1);
+        expect(board[0].type).toBe('user_todo');
+        expect(board[0].title).toBe('Zakupy');
+    });
+
+    it('nie chowa zadań przy nieaktualnym filtrze listy', () => {
+        ensureTodoListsInitialized();
+        tasksActiveFilter = 'todo-list-usunieta';
+        const shopping = getTodoListByKind('shopping');
+        addTodoItem({ title: 'Chleb', listId: shopping.id });
+        expect(getFilteredTodos()).toHaveLength(1);
+        expect(tasksActiveFilter).toBe('all');
     });
 });

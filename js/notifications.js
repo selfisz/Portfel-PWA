@@ -7,7 +7,8 @@ function getDefaultNotificationPrefs() {
         spendingPaceAlerts: true,
         recurringMissingAlerts: true,
         insightAlerts: true,
-        weeklyBriefing: true
+        weeklyBriefing: true,
+        taskReminders: true
     };
 }
 
@@ -193,7 +194,9 @@ function updateNotificationsBadge() {
     const badge = document.getElementById('notifications-badge');
     if (!badge) return;
     const unread = getUnreadNotificationCount();
-    const boardCount = typeof getActionBoardBadgeCount === 'function' ? getActionBoardBadgeCount() : 0;
+    const boardCount = typeof getActionBoardTabCount === 'function'
+        ? getActionBoardTabCount()
+        : (typeof getActionBoardBadgeCount === 'function' ? getActionBoardBadgeCount() : 0);
     const count = unread + boardCount;
     badge.textContent = count > 9 ? '9+' : String(count);
     badge.classList.toggle('hidden', count === 0);
@@ -222,6 +225,7 @@ function setNotificationsPanelTab(tab) {
     } else {
         renderNotificationsList();
     }
+    if (typeof updateNotificationsTasksFooter === 'function') updateNotificationsTasksFooter();
 }
 
 function renderNotificationsList() {
@@ -230,6 +234,7 @@ function renderNotificationsList() {
     const items = getNotificationInbox().filter((item) => isNotificationVisible(item));
     if (!items.length) {
         list.innerHTML = '<p class="notifications-empty">Brak powiadomień</p>';
+        if (typeof updateNotificationsTasksFooter === 'function') updateNotificationsTasksFooter();
         return;
     }
     list.innerHTML = items.map((item) => {
@@ -246,6 +251,7 @@ function renderNotificationsList() {
             </div>
         </article>`;
     }).join('');
+    if (typeof updateNotificationsTasksFooter === 'function') updateNotificationsTasksFooter();
 }
 
 function renderNotificationsPanel() {
@@ -345,6 +351,14 @@ function navigateFromNotification(item) {
         if (typeof switchView === 'function') switchView('loans', 'Długi', loansNav);
         const cardId = payload.cardId || payload.cardIds?.[0];
         if (cardId && typeof openCreditCardDetails === 'function') openCreditCardDetails(cardId);
+        return;
+    }
+    if ((item.type === 'task_due_today' || item.type === 'task_due_tomorrow' || item.type === 'task_overdue' || item.type === 'task_due_soon')
+        && payload.todoId) {
+        if (typeof openTasksView === 'function') openTasksView(payload.listId || null);
+        window.setTimeout(() => {
+            if (typeof openTodoItemEditor === 'function') openTodoItemEditor(payload.todoId);
+        }, 80);
         return;
     }
     if (item.type === 'skryba_weekly') {
@@ -493,6 +507,9 @@ function evaluateAllNotifications() {
     if (prefs.insightAlerts && typeof evaluateSpendingInsightAlerts === 'function') {
         created.push(...evaluateSpendingInsightAlerts());
     }
+    if (prefs.taskReminders && typeof evaluateTaskDueReminders === 'function') {
+        created.push(...evaluateTaskDueReminders());
+    }
     if (prefs.weeklyBriefing && typeof evaluateSkrybaWeeklyBriefing === 'function') {
         created.push(...evaluateSkrybaWeeklyBriefing());
     }
@@ -555,6 +572,7 @@ function syncNotificationSettingsUI() {
     const card = document.getElementById('notif-pref-card');
     const pace = document.getElementById('notif-pref-pace');
     const recurring = document.getElementById('notif-pref-recurring');
+    const tasks = document.getElementById('notif-pref-tasks');
     const insight = document.getElementById('notif-pref-insight');
     const status = document.getElementById('notif-permission-status');
     if (master) master.checked = prefs.enabled;
@@ -563,6 +581,7 @@ function syncNotificationSettingsUI() {
     if (card) card.checked = prefs.cardReminders;
     if (pace) pace.checked = prefs.spendingPaceAlerts;
     if (recurring) recurring.checked = prefs.recurringMissingAlerts;
+    if (tasks) tasks.checked = prefs.taskReminders;
     if (insight) insight.checked = prefs.insightAlerts;
     const sub = document.getElementById('notif-pref-subtoggles');
     if (sub) sub.classList.toggle('hidden', !prefs.enabled);
@@ -602,6 +621,7 @@ function initNotifications() {
     bindNotificationPrefToggle('notif-pref-card', 'cardReminders');
     bindNotificationPrefToggle('notif-pref-pace', 'spendingPaceAlerts');
     bindNotificationPrefToggle('notif-pref-recurring', 'recurringMissingAlerts');
+    bindNotificationPrefToggle('notif-pref-tasks', 'taskReminders');
     bindNotificationPrefToggle('notif-pref-insight', 'insightAlerts');
     syncNotificationSettingsUI();
     updateNotificationsBadge();

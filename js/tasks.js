@@ -17,6 +17,20 @@ let tasksNewListFormOpen = false;
 let tasksListEditorOpen = false;
 let tasksEditingItemId = null;
 
+const DASHBOARD_TASKS_PAGE_SIZE = 5;
+let dashboardTasksVisibleCount = DASHBOARD_TASKS_PAGE_SIZE;
+let dashboardTasksListSignature = '';
+
+function resetDashboardTasksPagination() {
+    dashboardTasksVisibleCount = DASHBOARD_TASKS_PAGE_SIZE;
+    dashboardTasksListSignature = '';
+}
+
+function showMoreDashboardTasks() {
+    dashboardTasksVisibleCount += DASHBOARD_TASKS_PAGE_SIZE;
+    renderDashboardTasksPanel();
+}
+
 function createTodoId(prefix = 'todo') {
     return `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
@@ -173,7 +187,11 @@ function ensureTodoListForKind(kind) {
 
 function resolveTasksActiveListId() {
     if (tasksActiveFilter === 'all') return null;
-    return getTodoListById(tasksActiveFilter) ? tasksActiveFilter : 'all';
+    if (!getTodoListById(tasksActiveFilter)) {
+        tasksActiveFilter = 'all';
+        return null;
+    }
+    return tasksActiveFilter;
 }
 
 function getQuickAddTargetListId() {
@@ -219,6 +237,405 @@ function getFilteredTodos(options = {}) {
 function getOpenTodosCount() {
     ensureTodoListsInitialized();
     return appState.todos.filter((item) => !item.done).length;
+}
+
+function getUrgentTodosCount() {
+    ensureTodoListsInitialized();
+    const tomorrow = typeof getTomorrowIsoDate === 'function'
+        ? getTomorrowIsoDate()
+        : null;
+    if (!tomorrow) return 0;
+    return appState.todos.filter((item) => !item.done && item.dueDate && item.dueDate <= tomorrow).length;
+}
+
+function getTasksBadgeCount() {
+    const urgent = getUrgentTodosCount();
+    return urgent > 0 ? urgent : getOpenTodosCount();
+}
+
+function compareDashboardTodoItems(a, b) {
+    const today = localIsoDate(new Date());
+    const rank = (item) => {
+        if (!item.dueDate) return 4;
+        if (item.dueDate < today) return 0;
+        if (item.dueDate === today) return 1;
+        const tomorrow = typeof getTomorrowIsoDate === 'function' ? getTomorrowIsoDate() : '';
+        if (item.dueDate === tomorrow) return 2;
+        return 3;
+    };
+    const rankDiff = rank(a) - rank(b);
+    if (rankDiff !== 0) return rankDiff;
+    if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+    return (a.sortOrder - b.sortOrder) || String(a.createdAt).localeCompare(String(b.createdAt));
+}
+
+function getDashboardTodoItems(limit = null) {
+    ensureTodoListsInitialized();
+    const sorted = appState.todos
+        .filter((item) => !item.done)
+        .sort(compareDashboardTodoItems);
+    if (limit == null) return sorted;
+    return sorted.slice(0, limit);
+}
+
+function getTodoItemsDueWithinDays(days = 7, listKind = null) {
+    ensureTodoListsInitialized();
+    const today = localIsoDate(new Date());
+    const end = new Date();
+    end.setDate(end.getDate() + Math.max(0, days));
+    const endIso = localIsoDate(end);
+    return appState.todos
+        .filter((item) => {
+            if (item.done || !item.dueDate) return false;
+            if (item.dueDate < today || item.dueDate > endIso) return false;
+            if (listKind) {
+                const list = getTodoListById(item.listId);
+                if (!list || list.kind !== listKind) return false;
+            }
+            return true;
+        })
+        .sort(compareDashboardTodoItems);
+}
+
+function skrybaToolTodoOverview(params = {}) {
+    ensureTodoListsInitialized();
+    const open = appState.todos.filter((item) => !item.done);
+    const tomorrow = typeof getTomorrowIsoDate === 'function' ? getTomorrowIsoDate() : '';
+    const today = localIsoDate(new Date());
+    const scope = params.scope || null;
+    const kind = params.kind || null;
+
+    let filtered = open;
+    if (scope === 'week') {
+        filtered = getTodoItemsDueWithinDays(7, kind || null);
+    } else if (kind) {
+        filtered = open.filter((item) => getTodoListById(item.listId)?.kind === kind);
+    }
+
+    const urgent = open.filter((item) => item.dueDate && tomorrow && item.dueDate <= tomorrow);
+    const dueToday = open.filter((item) => item.dueDate === today);
+
+    return {
+        openCount: open.length,
+        urgentCount: urgent.length,
+        dueTodayCount: dueToday.length,
+        scope: scope || 'all',
+        kind,
+        items: filtered.slice(0, 12).map((item) => ({
+            id: item.id,
+            title: item.title,
+            dueDate: item.dueDate || null,
+            amount: Number.isFinite(item.amount) ? item.amount : null,
+            listKind: getTodoListById(item.listId)?.kind || null,
+            listName: getTodoListById(item.listId)?.name || 'Zadania'
+        }))
+    };
+}
+
+function buildMorningDailyReviewText() {
+    const sections = [];
+
+    if (typeof buildActionBoardReviewText === 'function') {
+        const boardText = buildActionBoardReviewText();
+        if (!/pusta|nie masz pilnych/i.test(boardText)) {
+            sections.push(`Tablica (system):\n${boardText}`);
+        }
+    }
+
+    const urgent = getDashboardTodoItems().filter((item) => {
+        if (!item.dueDate) return false;
+        const tomorrow = typeof getTomorrowIsoDate === 'function' ? getTomorrowIsoDate() : '';
+        return tomorrow && item.dueDate <= tomorrow;
+    });
+
+    if (urgent.length) {
+        const lines = urgent.slice(0, 8).map((item, index) => {
+            const list = getTodoListById(item.listId);
+            const meta = formatTodoItemMeta(item);
+            return `${index + 1}. ${item.title}${meta ? ` — ${meta}` : ''}${list ? ` (${list.name})` : ''}`;
+        });
+        sections.push(`Moje zadania (${urgent.length} pilnych):\n${lines.join('\n')}`);
+    } else if (getOpenTodosCount() > 0) {
+        sections.push(`Masz ${getOpenTodosCount()} otwartych zadań — bez pilnych terminów na dziś i jutro.`);
+    }
+
+    if (!sections.length) {
+        return 'Poranny przegląd: Tablica pusta i brak pilnych zadań. Miłego dnia!';
+    }
+
+    return `Poranny przegląd:\n\n${sections.join('\n\n')}\n\nOtwórz Tablicę w dzwonku lub Zadania w nagłówku.`;
+}
+
+function getSkrybaDailyReviewText() {
+    if (typeof buildMorningDailyReviewText === 'function') {
+        return buildMorningDailyReviewText();
+    }
+    if (typeof buildActionBoardReviewText === 'function') {
+        return buildActionBoardReviewText();
+    }
+    return 'Brak zadań do przeglądu.';
+}
+
+function openTasksFromNotifications() {
+    if (typeof closeNotificationsPanel === 'function') closeNotificationsPanel();
+    if (typeof openTasksView === 'function') openTasksView();
+}
+
+function updateNotificationsTasksFooter() {
+    const footer = document.getElementById('notifications-tasks-footer');
+    if (!footer) return;
+    const count = getOpenTodosCount();
+    footer.classList.toggle('hidden', count === 0);
+}
+
+function collectUserTodoBoardTasks() {
+    ensureTodoListsInitialized();
+    return appState.todos
+        .filter((item) => !item.done)
+        .map((item) => {
+            const list = getTodoListById(item.listId);
+            const bodyParts = [item.title];
+            if (Number.isFinite(item.amount) && typeof formatPlnAmount === 'function') {
+                bodyParts.push(formatPlnAmount(item.amount));
+            }
+            let priority = 3;
+            let title = list?.name || 'Zadanie';
+            if (list?.kind === 'payments') title = 'Płatność do zrobienia';
+            if (item.dueDate) {
+                const days = typeof daysUntilDate === 'function' ? daysUntilDate(item.dueDate) : null;
+                if (days !== null) {
+                    if (days < 0) priority = 1;
+                    else if (days <= 1) priority = 2;
+                    if (typeof formatTxDate === 'function') bodyParts.push(formatTxDate(item.dueDate));
+                    const dueLabel = formatTaskDueLabel(item.dueDate);
+                    if (dueLabel) bodyParts.push(dueLabel);
+                }
+            }
+            return {
+                id: `user-todo|${item.id}`,
+                type: 'user_todo',
+                priority,
+                title,
+                body: bodyParts.join(' · '),
+                sortAt: item.dueDate || item.createdAt,
+                payload: {
+                    todoId: item.id,
+                    listId: item.listId,
+                    listKind: list?.kind || null
+                }
+            };
+        })
+        .sort((a, b) => {
+            if (a.priority !== b.priority) return a.priority - b.priority;
+            return String(a.sortAt || '').localeCompare(String(b.sortAt || ''));
+        });
+}
+
+function notifyAfterTodoChange() {
+    if (typeof evaluateAllNotifications === 'function') {
+        evaluateAllNotifications();
+    } else if (typeof updateNotificationsBadge === 'function') {
+        updateNotificationsBadge();
+    }
+    if (typeof refreshActionBoard === 'function') refreshActionBoard();
+    updateNotificationsTasksFooter();
+}
+
+function openUserTodoFromActionBoard(todoId) {
+    if (typeof closeNotificationsPanel === 'function') closeNotificationsPanel();
+    const item = getTodoItemById(todoId);
+    if (!item) return;
+    const list = getTodoListById(item.listId);
+    if (list?.kind === TODO_LIST_KINDS.payments && typeof openDashboardTodoPayment === 'function') {
+        openDashboardTodoPayment(todoId);
+        return;
+    }
+    if (typeof openTasksView === 'function') openTasksView(item.listId);
+    window.setTimeout(() => openTodoItemEditor(todoId), 80);
+}
+
+function openSkrybaTodoItem(todoId) {
+    if (!getTodoItemById(todoId)) return;
+    if (typeof closeSkrybaPanel === 'function') closeSkrybaPanel();
+    const item = getTodoItemById(todoId);
+    if (typeof openTasksView === 'function') openTasksView(item.listId);
+    window.setTimeout(() => openTodoItemEditor(todoId), 80);
+}
+
+function formatTaskDueLabel(dueDate) {
+    if (!dueDate || typeof daysUntilDate !== 'function') return '';
+    const days = daysUntilDate(dueDate);
+    if (days === null) return '';
+    if (typeof formatDueLabel === 'function') return formatDueLabel(days);
+    if (days === 0) return 'dziś';
+    if (days === 1) return 'jutro';
+    if (days < 0) return `${Math.abs(days)} dni temu`;
+    return `za ${days} dni`;
+}
+
+function renderDashboardTasksPanel() {
+    const section = document.getElementById('dashboard-tasks');
+    const list = document.getElementById('dashboard-tasks-list');
+    const summaryEl = document.getElementById('dashboard-tasks-summary');
+    const moreBtnExisting = document.getElementById('dashboard-tasks-show-more');
+    if (!section || !list) return;
+
+    const allItems = getDashboardTodoItems();
+    const openCount = allItems.length;
+    if (!openCount) {
+        section.classList.add('hidden');
+        if (moreBtnExisting) moreBtnExisting.classList.add('hidden');
+        return;
+    }
+
+    const signature = `${openCount}|${allItems[0]?.id ?? ''}|${allItems[allItems.length - 1]?.id ?? ''}`;
+    if (signature !== dashboardTasksListSignature) {
+        dashboardTasksListSignature = signature;
+        dashboardTasksVisibleCount = DASHBOARD_TASKS_PAGE_SIZE;
+    }
+
+    const items = allItems.slice(0, dashboardTasksVisibleCount);
+
+    section.classList.remove('hidden');
+    const urgentCount = getUrgentTodosCount();
+    if (summaryEl) {
+        if (urgentCount > 0) {
+            summaryEl.classList.remove('hidden');
+            summaryEl.innerHTML = `<div class="dashboard-installments-summary-grid">
+                <span class="label">Z terminem dziś lub wcześniej</span>
+                <strong class="expense">${urgentCount}</strong>
+            </div>`;
+        } else {
+            summaryEl.classList.add('hidden');
+            summaryEl.innerHTML = '';
+        }
+    }
+
+    if (!items.length) {
+        list.innerHTML = '<p class="upcoming-loans-empty">Brak otwartych zadań.</p>';
+        return;
+    }
+
+    list.innerHTML = items.map((item) => {
+        const listMeta = getTodoListById(item.listId);
+        const due = item.dueDate || '';
+        const days = due && typeof daysUntilDate === 'function' ? daysUntilDate(due) : null;
+        const overdue = days !== null && days < 0;
+        const dueLabel = formatTaskDueLabel(due);
+        const metaParts = [];
+        if (listMeta) metaParts.push(listMeta.name);
+        if (Number.isFinite(item.amount) && typeof formatPlnAmount === 'function') {
+            metaParts.push(formatPlnAmount(item.amount));
+        }
+        if (due && typeof formatTxDate === 'function') metaParts.push(formatTxDate(due));
+        if (dueLabel) metaParts.push(dueLabel);
+        const meta = metaParts.join(' · ');
+        const isPayment = listMeta?.kind === TODO_LIST_KINDS.payments;
+        const actionBtn = isPayment
+            ? `<button type="button" class="dashboard-quick-action-btn" onclick="event.stopPropagation(); openDashboardTodoPayment('${escapeHtml(item.id)}')">Spłać</button>`
+            : `<button type="button" class="dashboard-quick-action-btn" onclick="toggleTodoItem('${escapeHtml(item.id)}')" aria-label="Odhacz">✓</button>`;
+        return `<div class="dashboard-action-row${overdue ? ' dashboard-action-row--overdue' : ''}">
+            <button type="button" class="dashboard-action-info dashboard-action-info--btn" onclick="openDashboardTodoItem('${escapeHtml(item.id)}')">
+                <strong class="dashboard-action-name">${escapeHtml(item.title)}</strong>
+                ${meta ? `<span class="dashboard-action-meta">${escapeHtml(meta)}</span>` : ''}
+            </button>
+            ${actionBtn}
+        </div>`;
+    }).join('');
+
+    const moreBtn = typeof getOrCreateShowMoreButton === 'function'
+        ? getOrCreateShowMoreButton('dashboard-tasks-show-more', showMoreDashboardTasks)
+        : moreBtnExisting;
+    if (typeof updateShowMoreButton === 'function' && moreBtn) {
+        updateShowMoreButton(moreBtn, allItems.length, items.length, section, list);
+    }
+}
+
+function openDashboardTodoItem(todoId) {
+    const item = getTodoItemById(todoId);
+    if (!item) return;
+    if (typeof openTasksView === 'function') openTasksView(item.listId);
+    window.setTimeout(() => openTodoItemEditor(todoId), 60);
+}
+
+function openDashboardTodoPayment(todoId) {
+    const item = getTodoItemById(todoId);
+    if (!item) return;
+    const list = getTodoListById(item.listId);
+    if (list?.kind !== TODO_LIST_KINDS.payments) return;
+
+    const navItems = document.querySelectorAll('.nav-item');
+    if (typeof switchView === 'function') {
+        switchView('add', 'Dodaj', navItems[1] || null);
+    }
+
+    const amountInput = document.getElementById('tx-amount');
+    const noteInput = document.getElementById('tx-note');
+    const dateInput = document.getElementById('tx-date');
+    if (amountInput && Number.isFinite(item.amount) && item.amount > 0) {
+        amountInput.value = String(item.amount);
+    }
+    if (noteInput) noteInput.value = item.title || '';
+    if (dateInput) {
+        dateInput.value = item.dueDate || localIsoDate(new Date());
+    }
+    if (typeof setFormMode === 'function') setFormMode('expense');
+    if (typeof updateAddDateChipLabel === 'function') updateAddDateChipLabel();
+    if (typeof focusAmountField === 'function') focusAmountField();
+}
+
+function dismissNotificationsForTodo(todoId) {
+    if (typeof getNotificationInbox !== 'function' || typeof dismissNotification !== 'function') return;
+    getNotificationInbox()
+        .filter((entry) => entry.payload?.todoId === todoId)
+        .forEach((entry) => dismissNotification(entry.id));
+}
+
+function evaluateTaskDueReminders() {
+    if (typeof upsertNotification !== 'function') return [];
+    ensureTodoListsInitialized();
+    const today = localIsoDate(new Date());
+    const tomorrow = typeof getTomorrowIsoDate === 'function' ? getTomorrowIsoDate() : '';
+    const created = [];
+
+    appState.todos.forEach((item) => {
+        if (item.done || !item.dueDate) return;
+        const days = typeof daysUntilDate === 'function' ? daysUntilDate(item.dueDate) : null;
+        if (days === null) return;
+
+        let type;
+        let titlePrefix;
+        if (days < 0) {
+            type = 'task_overdue';
+            titlePrefix = 'Zaległe zadanie';
+        } else if (days === 0) {
+            type = 'task_due_today';
+            titlePrefix = 'Dziś termin';
+        } else if (days === 1) {
+            type = 'task_due_tomorrow';
+            titlePrefix = 'Jutro termin';
+        } else if (days <= 7) {
+            type = 'task_due_soon';
+            titlePrefix = 'Zbliża się termin';
+        } else {
+            return;
+        }
+
+        const list = getTodoListById(item.listId);
+        const bodyParts = [list?.name || 'Zadania', formatTxDate(item.dueDate)];
+        if (Number.isFinite(item.amount)) bodyParts.splice(1, 0, formatPlnAmount(item.amount));
+        const digestKey = type === 'task_overdue' ? today : item.dueDate;
+        const result = upsertNotification({
+            id: `task-due|${item.id}|${digestKey}|${type}`,
+            type,
+            title: `${titlePrefix}: ${item.title}`,
+            body: bodyParts.join(' · '),
+            payload: { todoId: item.id, listId: item.listId, dueDate: item.dueDate }
+        });
+        if (result?.isNew) created.push(result.item);
+    });
+
+    return created;
 }
 
 function getTodoItemById(id) {
@@ -275,12 +692,14 @@ function toggleTodoItem(id) {
     item.done = !item.done;
     item.updatedAt = now;
     item.completedAt = item.done ? now : null;
+    if (item.done) dismissNotificationsForTodo(id);
     if (typeof saveState === 'function') saveState({ silentLimits: true });
     refreshTasksUi();
     return true;
 }
 
 function deleteTodoItem(id) {
+    dismissNotificationsForTodo(id);
     const before = appState.todos.length;
     appState.todos = appState.todos.filter((item) => item.id !== id);
     if (appState.todos.length === before) return false;
@@ -466,6 +885,9 @@ function renderTasksView() {
     if (!subnav || !list) return;
 
     ensureTodoListsInitialized();
+    if (tasksActiveFilter !== 'all' && !getTodoListById(tasksActiveFilter)) {
+        tasksActiveFilter = 'all';
+    }
     subnav.innerHTML = buildTasksSubnavHtml();
     renderTasksListActions();
 
@@ -495,21 +917,31 @@ function refreshTasksUi() {
     const view = document.getElementById('view-tasks');
     if (view?.classList.contains('active')) renderTasksView();
     else updateTasksBadge();
+    const dash = document.getElementById('view-dashboard');
+    if (dash?.classList.contains('active')) renderDashboardTasksPanel();
+    notifyAfterTodoChange();
 }
 
 function updateTasksBadge() {
     const badge = document.getElementById('tasks-badge');
     if (!badge) return;
-    const count = getOpenTodosCount();
+    const count = getTasksBadgeCount();
+    const urgent = getUrgentTodosCount();
     badge.textContent = count > 9 ? '9+' : String(count);
     badge.classList.toggle('hidden', count === 0);
+    badge.classList.toggle('tasks-badge--urgent', urgent > 0);
     const btn = document.getElementById('btn-tasks');
     if (btn) btn.classList.toggle('btn-icon--has-badge', count > 0);
 }
 
 function openTasksView(listFilter = null) {
     if (typeof guardAppLockSensitiveAction === 'function' && !guardAppLockSensitiveAction()) return;
-    if (listFilter) tasksActiveFilter = listFilter;
+    ensureTodoListsInitialized();
+    if (listFilter && getTodoListById(listFilter)) {
+        tasksActiveFilter = listFilter;
+    } else if (tasksActiveFilter !== 'all' && !getTodoListById(tasksActiveFilter)) {
+        tasksActiveFilter = 'all';
+    }
     if (typeof switchView === 'function') switchView('tasks', 'Zadania', null);
 }
 
@@ -629,19 +1061,61 @@ function parseSkrybaTodoListKind(text) {
     return null;
 }
 
+function parseSkrybaTodoDueDateFromText(text, referenceDate = new Date()) {
+    const t = String(text || '').toLowerCase();
+    if (/\b(?:na\s+)?dzi[sś]\b/.test(t)) return localIsoDate(referenceDate);
+    if (/\b(?:na\s+)?jutro\b/.test(t)) {
+        const d = new Date(referenceDate);
+        d.setDate(d.getDate() + 1);
+        return localIsoDate(d);
+    }
+    const weekdayMap = [
+        ['niedziel', 0], ['poniedzia', 1], ['wtork', 2], ['środ', 3], ['srod', 3],
+        ['czwart', 4], ['piąt', 5], ['piat', 5], ['sobot', 6]
+    ];
+    for (const [prefix, targetDay] of weekdayMap) {
+        if (new RegExp(`(?:w\\s+)?${prefix}`).test(t)) {
+            const d = new Date(referenceDate);
+            const diff = ((targetDay - d.getDay()) + 7) % 7 || 7;
+            d.setDate(d.getDate() + diff);
+            return localIsoDate(d);
+        }
+    }
+    const isoMatch = t.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    if (isoMatch) return isoMatch[1];
+    const plMatch = t.match(/\b(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?\b/);
+    if (plMatch) {
+        const day = parseInt(plMatch[1], 10);
+        const month = parseInt(plMatch[2], 10);
+        let year = plMatch[3] ? parseInt(plMatch[3], 10) : referenceDate.getFullYear();
+        if (year < 100) year += 2000;
+        return localIsoDate(new Date(year, month - 1, day));
+    }
+    return null;
+}
+
+function parseSkrybaTodoAmountFromText(text) {
+    const match = String(text || '').match(/(\d+(?:[.,]\d{1,2})?)\s*(?:zł|zl|pln)(?=\s|,|$|\.)/i);
+    if (!match) return null;
+    const amount = parseFloat(match[1].replace(',', '.'));
+    return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
 function tryParseSkrybaTodoAdd(text) {
     const t = String(text || '').trim();
     const lower = t.toLowerCase();
-    if (!/(?:^|\s)(?:dodaj|dopisz|wrzu[cć]|wpisz)\s+/i.test(t)) return null;
+    if (!/(?:^|\s)(?:dodaj|dopisz|wrzu[cć]|wpisz|przypomnij)\s+/i.test(t)) return null;
 
     const kind = parseSkrybaTodoListKind(t);
     const mentionsList = !!kind || /na\s+list|do\s+list|zadani|do\s+zrobienia/.test(lower);
-    if (!mentionsList) return null;
+    if (!mentionsList && !/przypomnij/.test(lower)) return null;
 
     let titlePart = t
-        .replace(/^(?:dodaj|dopisz|wrzu[cć]|wpisz)\s+/i, '')
+        .replace(/^(?:dodaj|dopisz|wrzu[cć]|wpisz|przypomnij)\s+(?:mi\s+)?(?:o\s+)?/i, '')
         .replace(/\s+(?:do|na)\s+(?:listy\s+)?(?:zakup\w*|list[aę]\s+zakup\w*|zapłat\w*|zaplat\w*|finans\w*|zada[nń]|rachunk\w*)\s*$/i, '')
         .replace(/\s+na\s+zakupy\s*$/i, '')
+        .replace(/\s*,\s*\d+(?:[.,]\d{1,2})?\s*(?:zł|zl|pln)\b.*$/i, '')
+        .replace(/\s+(?:na|w)\s+(?:dzi[sś]|jutro|poniedziałek|poniedzialek|wtorek|środę|srode|czwartek|piątek|piatek|sobotę|sobote|niedzielę|niedziele)\b.*$/i, '')
         .trim();
 
     if (/^\d+(?:[.,]\d+)?\s*(?:zł|zl|pln)?\b/i.test(titlePart)) return null;
@@ -649,15 +1123,22 @@ function tryParseSkrybaTodoAdd(text) {
 
     const titles = titlePart.split(/\s+i\s+/).map((part) => part.trim()).filter((part) => part.length >= 2);
     if (!titles.length) return null;
-    return { kind: kind || 'shopping', titles };
+
+    const dueDate = parseSkrybaTodoDueDateFromText(t);
+    const amount = parseSkrybaTodoAmountFromText(t);
+    return { kind: kind || (dueDate || amount ? 'payments' : 'shopping'), titles, dueDate, amount };
 }
 
 function tryParseSkrybaTodoShow(text) {
     const t = String(text || '').toLowerCase();
     if (!/(?:poka[zż]|co\s+mam|lista|wyświetl|wyswietl|wypisz)/.test(t)) return null;
     const kind = parseSkrybaTodoListKind(text);
+    const weekScope = /tydzie[nń]|tygodni|7\s*dni|najbliższ|najblizsz/.test(t);
+    if (weekScope && (kind === 'payments' || /płatno|platno|rachunk/.test(t))) {
+        return { kind: 'payments', scope: 'week' };
+    }
     if (!kind && !/zadani|do\s+zrobienia|kupi[cć]|kupic/.test(t)) return null;
-    return { kind: kind || 'shopping' };
+    return { kind: kind || 'shopping', scope: null };
 }
 
 function tryParseSkrybaTodoComplete(text) {
@@ -676,14 +1157,16 @@ function tryParseSkrybaTodoComplete(text) {
     };
 }
 
-function buildSkrybaTodoListHtml(items) {
+function buildSkrybaTodoListHtml(items, options = {}) {
     if (!items.length) return '';
+    const clickable = options.clickable !== false;
     return `<div class="skryba-todo-list">${items.map((item) => {
         const meta = formatTodoItemMeta(item);
-        return `<div class="skryba-todo-row">
-            <span class="skryba-todo-title">${escapeHtml(item.title)}</span>
-            ${meta ? `<span class="skryba-todo-meta">${escapeHtml(meta)}</span>` : ''}
-        </div>`;
+        const inner = `<span class="skryba-todo-title">${escapeHtml(item.title)}</span>${meta ? `<span class="skryba-todo-meta">${escapeHtml(meta)}</span>` : ''}`;
+        if (!clickable) {
+            return `<div class="skryba-todo-row">${inner}</div>`;
+        }
+        return `<button type="button" class="skryba-todo-row skryba-todo-row--btn" onclick="openSkrybaTodoItem('${escapeHtml(item.id)}')">${inner}</button>`;
     }).join('')}</div>`;
 }
 
@@ -695,7 +1178,13 @@ function tryAnswerSkrybaTodoQuery(text) {
             : getTodoListByKind(add.kind);
         if (!list) return null;
         const created = add.titles
-            .map((title) => addTodoItem({ title, listId: list.id, source: 'skryba' }))
+            .map((title) => addTodoItem({
+                title,
+                listId: list.id,
+                dueDate: add.dueDate || undefined,
+                amount: add.amount || undefined,
+                source: 'skryba'
+            }))
             .filter(Boolean);
         if (!created.length) return null;
         const labels = created.map((item) => item.title).join(', ');
@@ -707,6 +1196,17 @@ function tryAnswerSkrybaTodoQuery(text) {
 
     const show = tryParseSkrybaTodoShow(text);
     if (show) {
+        if (show.scope === 'week') {
+            const list = getTodoListByKind('payments');
+            if (!list) return null;
+            const items = getTodoItemsDueWithinDays(7, 'payments');
+            return {
+                intro: items.length
+                    ? `Płatności w najbliższych 7 dniach (${items.length}):`
+                    : 'Brak płatności z terminem w najbliższym tygodniu.',
+                items
+            };
+        }
         const list = getTodoListByKind(show.kind);
         if (!list) return null;
         const items = getFilteredTodos({ listId: list.id, includeDone: false });
@@ -732,6 +1232,20 @@ function tryAnswerSkrybaTodoQuery(text) {
         };
     }
 
+    return null;
+}
+
+function tryParseLocalMorningReview(text) {
+    const t = String(text || '').trim().toLowerCase();
+    if (!t) return null;
+    if (/^(?:poranny przegl[aą]d|codzienny przegl[aą]d|co mam dzi[sś] do zrobienia(?: finansowo)?)$/.test(t)
+        || /(?:rozpocznij|zr[oó]b|start).*(?:poranny|codzienny)\s+przegl[aą]d/.test(t)) {
+        return {
+            tool: 'morning_review',
+            params: {},
+            reply: getSkrybaDailyReviewText()
+        };
+    }
     return null;
 }
 

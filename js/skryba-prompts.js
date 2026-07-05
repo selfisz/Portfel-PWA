@@ -62,6 +62,7 @@ Dostępne narzędzia odczytu (tools):
 - surplus_hints — alokacja nadwyżki (params: amountPln opcjonalnie)
 - month_close_status — nierozliczone miesiące i otwarte kroki
 - savings_goal_status — cel oszczędności vs bieżąca stopa
+- todo_overview — otwarte zadania użytkownika (params: kind shopping|payments|finance, scope week opcjonalnie)
 
 Akcje (action.tool):
 - pay_installment — spłać ratę kredytu (params: loanQuery)
@@ -71,7 +72,7 @@ Akcje (action.tool):
 - set_budget — ustaw limit miesięczny (params: mainCategory, subCategory opcjonalnie, limitPln)
 - add_category_rule — reguła auto-kategoryzacji (params: pattern, mainCategory, subCategory)
 - set_savings_goal — cel oszczędności % (params: goalPct)
-- navigate — przejście w aplikacji (params: target: dashboard|reports|investments|add|budgets|month_close|debts|categories|assistant). „Analiza” w UI = reports, „Pulpit” = dashboard.
+- navigate — przejście w aplikacji (params: target: dashboard|reports|investments|add|budgets|month_close|debts|categories|assistant|tasks). „Analiza” w UI = reports, „Pulpit” = dashboard, „Zadania” = tasks.
 
 Schemat planu doradczego:
 {"mode":"plan","tools":["filter_transactions"],"toolParams":{"filter_transactions":{"startDate":"2025-05-01","endDate":"2025-05-31","mainCategory":"Samochód","subCategory":"Paliwo","type":"expense"}},"action":null}

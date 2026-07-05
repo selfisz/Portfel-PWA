@@ -150,10 +150,14 @@ function collectRecurringConfirmBoardTasks() {
 
 function collectActionBoardTasks() {
     const todayStr = localIsoDate(new Date());
+    const userTodos = typeof collectUserTodoBoardTasks === 'function'
+        ? collectUserTodoBoardTasks()
+        : [];
     return [
         ...collectRecurringConfirmBoardTasks(),
         ...collectUncategorizedBoardTasks(),
-        ...collectDuplicateBoardTasks()
+        ...collectDuplicateBoardTasks(),
+        ...userTodos
     ]
         .filter((task) => !isActionBoardTaskDismissed(task.id, todayStr))
         .sort((a, b) => {
@@ -171,7 +175,7 @@ function getActionBoardBadgeCount() {
 }
 
 function getActionBoardTabCount() {
-    return getActionBoardBadgeCount();
+    return getVisibleActionBoardTasks().length;
 }
 
 function isActionBoardClearForToday() {
@@ -211,6 +215,15 @@ function renderActionBoardTaskActions(task) {
             <button type="button" class="btn-outline btn-sm" onclick="actionBoardDeleteDuplicate(${idxA})">Usuń 1.</button>
             <button type="button" class="btn-outline btn-sm" onclick="actionBoardDeleteDuplicate(${idxB})">Usuń 2.</button>
             <button type="button" class="action-board-action-btn action-board-action-btn--dismiss" title="To nie duplikat" onclick="dismissActionBoardTask('${id}')">×</button>
+        </div>`;
+    }
+    if (task.type === 'user_todo') {
+        const todoId = escapeHtml(task.payload.todoId);
+        const actionLabel = task.payload.listKind === 'payments' ? 'Spłać' : 'Otwórz';
+        return `<div class="action-board-row-actions">
+            <button type="button" class="btn-submit btn-submit--form btn-sm" onclick="openUserTodoFromActionBoard('${todoId}')">${actionLabel}</button>
+            <button type="button" class="action-board-action-btn" title="Przypomnij jutro" onclick="snoozeActionBoardTask('${id}')">↻</button>
+            <button type="button" class="action-board-action-btn action-board-action-btn--dismiss" title="Odrzuć" onclick="dismissActionBoardTask('${id}')">×</button>
         </div>`;
     }
     return '';
@@ -345,7 +358,9 @@ function startSkrybaActionBoardReview() {
         return;
     }
     openSkrybaPanel();
-    const reply = buildActionBoardReviewText();
+    const reply = typeof getSkrybaDailyReviewText === 'function'
+        ? getSkrybaDailyReviewText()
+        : buildActionBoardReviewText();
     if (typeof appendSkrybaMessage === 'function') appendSkrybaMessage('assistant', reply);
     if (typeof skrybaChatHistory !== 'undefined') {
         skrybaChatHistory.push({ role: 'assistant', text: reply });
@@ -363,6 +378,8 @@ function tryParseLocalActionBoardReview(text) {
     return {
         tool: 'action_board_review',
         params: {},
-        reply: buildActionBoardReviewText()
+        reply: typeof getSkrybaDailyReviewText === 'function'
+            ? getSkrybaDailyReviewText()
+            : buildActionBoardReviewText()
     };
 }

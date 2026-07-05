@@ -10,6 +10,7 @@ function switchView(viewId, title, element, options = {}) {
     }
     if (activeViewId === 'dashboard' && viewId !== 'dashboard') {
         resetDashboardTxListPagination();
+        if (typeof resetDashboardTasksPagination === 'function') resetDashboardTasksPagination();
     }
     if (activeViewId === 'loans' && viewId !== 'loans') {
         resetLoanPaymentsListPagination();

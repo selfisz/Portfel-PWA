@@ -619,6 +619,7 @@ function renderDashboardWealth() {
 }
 
 function renderDashboard() {
+    if (typeof renderDashboardTasksPanel === 'function') renderDashboardTasksPanel();
     renderUpcomingLoanInstallments();
     renderDashboardCreditCards();
     renderDashboardWealth();

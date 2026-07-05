@@ -147,10 +147,12 @@ function cancelSkrybaVoicePreview() {
 
 function buildSkrybaWelcomeChipsHtml() {
     const chips = [
+        'Poranny przegląd',
         'Podsumowanie miesiąca',
         'Briefing tygodnia',
         'Transakcje bez podkategorii',
         'Co mam na liście zakupów?',
+        'Płatności na tydzień',
         'Co z nadwyżką?',
         'Rozlicz miesiąc',
         'Otwórz analizę'

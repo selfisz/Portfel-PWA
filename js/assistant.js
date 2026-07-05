@@ -374,10 +374,12 @@ async function dispatchSkrybaAction(action) {
         return msg;
     }
 
-    if (tool === 'action_board_review') {
-        const msg = typeof buildActionBoardReviewText === 'function'
-            ? buildActionBoardReviewText()
-            : (reply || 'Brak zadań na tablicy.');
+    if (tool === 'action_board_review' || tool === 'morning_review') {
+        const msg = typeof getSkrybaDailyReviewText === 'function'
+            ? getSkrybaDailyReviewText()
+            : (typeof buildActionBoardReviewText === 'function'
+                ? buildActionBoardReviewText()
+                : (reply || 'Brak zadań na tablicy.'));
         appendSkrybaMessage('assistant', msg);
         return msg;
     }

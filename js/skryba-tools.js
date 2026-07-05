@@ -14,7 +14,8 @@ const SKRYBA_READ_TOOLS = [
     'weekly_briefing',
     'surplus_hints',
     'month_close_status',
-    'savings_goal_status'
+    'savings_goal_status',
+    'todo_overview'
 ];
 
 const SKRYBA_ACTION_TOOLS = [
@@ -598,6 +599,15 @@ function buildSkrybaDailyBriefing(limit = 3) {
         push(4, `Ujemny bilans miesiąca: ${fmt(month.balancePln)}`);
     }
 
+    if (typeof skrybaToolTodoOverview === 'function') {
+        const todos = skrybaToolTodoOverview();
+        if (todos.urgentCount > 0) {
+            push(2, `Twoje zadania: ${todos.urgentCount} z terminem dziś lub wcześniej`);
+        } else if (todos.openCount > 0) {
+            push(4, `Otwarte zadania: ${todos.openCount}`);
+        }
+    }
+
     items.sort((a, b) => a.priority - b.priority);
     const selected = items.slice(0, limit);
     if (!selected.length) return { items: [], text: null };
@@ -834,6 +844,7 @@ function buildSkrybaFollowUpChips(context = {}) {
         add('Cel oszczędności');
     }
     if (context?.open_tasks) add('Otwórz zadania');
+    if (context?.todo_overview?.urgentCount > 0) add('Poranny przegląd');
 
     return chips.slice(0, 4);
 }
@@ -928,6 +939,9 @@ function runSkrybaTool(toolId, params = {}) {
         case 'surplus_hints': return skrybaToolSurplusHints(params);
         case 'month_close_status': return skrybaToolMonthCloseStatus();
         case 'savings_goal_status': return skrybaToolSavingsGoalStatus();
+        case 'todo_overview': return typeof skrybaToolTodoOverview === 'function'
+            ? skrybaToolTodoOverview(params)
+            : null;
         default: return null;
     }
 }
@@ -1313,6 +1327,15 @@ function detectSkrybaToolsFromText(text, referenceDate = new Date()) {
         tools.push('savings_goal_status');
     }
 
+    if (/(?:moje\s+)?zadani|list[aę]\s+zakup|do\s+zapłat|do\s+zaplat|co\s+mam\s+(?:na\s+)?(?:liście|liste)|płatnoś.*tydzie|platnos.*tydzie/.test(t)
+        && !/(?:dodaj|odhacz|przypomnij)/.test(t)) {
+        tools.push('todo_overview');
+        toolParams.todo_overview = {
+            kind: typeof parseSkrybaTodoListKind === 'function' ? parseSkrybaTodoListKind(text) : null,
+            scope: /tydzie[nń]|7\s*dni|najbliższ|najblizsz/.test(t) ? 'week' : null
+        };
+    }
+
     const categoryHints = typeof resolveSkrybaCategoryFromText === 'function'
         ? resolveSkrybaCategoryFromText(text)
         : detectSkrybaCategoryHints(text);
@@ -1543,6 +1566,23 @@ function formatSkrybaOfflineReply(tools, toolParams = {}) {
             `Cel oszczędności: ${goal.goalPct}% — teraz ${goal.currentRatePct}% (${status}). `
             + `Bilans miesiąca: ${fmt(goal.balancePln)}.`
         );
+    }
+
+    if (tools.includes('todo_overview') && typeof skrybaToolTodoOverview === 'function') {
+        const data = skrybaToolTodoOverview(toolParams.todo_overview || {});
+        if (!data.openCount) {
+            lines.push('Nie masz otwartych zadań na listach.');
+        } else if (data.items.length) {
+            const label = data.scope === 'week' ? 'Płatności w najbliższym tygodniu' : 'Twoje zadania';
+            lines.push(`${label} (${data.items.length}):`);
+            data.items.forEach((item, index) => {
+                const amount = item.amount ? `, ${fmt(item.amount)}` : '';
+                const due = item.dueDate ? `, termin ${item.dueDate}` : '';
+                lines.push(`${index + 1}. ${item.title} (${item.listName}${amount}${due})`);
+            });
+        } else {
+            lines.push(`Masz ${data.openCount} otwartych zadań — bez pozycji w tym zakresie.`);
+        }
     }
 
     if (tools.includes('filter_transactions')) {

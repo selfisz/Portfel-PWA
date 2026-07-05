@@ -132,6 +132,11 @@ function tryParseLocalSkrybaAction(text) {
     const t = String(text || '').trim();
     if (!t) return null;
 
+    const morningReview = typeof tryParseLocalMorningReview === 'function'
+        ? tryParseLocalMorningReview(t)
+        : null;
+    if (morningReview) return morningReview;
+
     const boardReview = typeof tryParseLocalActionBoardReview === 'function'
         ? tryParseLocalActionBoardReview(t)
         : null;
@@ -377,7 +382,7 @@ function buildSkrybaActionPreview(tool, params = {}) {
 
     if (tool === 'navigate') {
         const target = String(params.target || '').trim();
-        const allowed = ['dashboard', 'reports', 'investments', 'add', 'budgets', 'month_close', 'debts', 'categories', 'assistant'];
+        const allowed = ['dashboard', 'reports', 'investments', 'add', 'budgets', 'month_close', 'debts', 'categories', 'assistant', 'tasks'];
         if (!allowed.includes(target)) {
             return { ok: false, error: 'Nieznany cel nawigacji.' };
         }
@@ -444,6 +449,10 @@ function executeSkrybaNavigate(target) {
     if (target === 'assistant' && typeof openSettings === 'function') {
         openSettings('assistant');
         return { ok: true, message: 'Otwarto ustawienia asystenta.' };
+    }
+    if (target === 'tasks' && typeof openTasksView === 'function') {
+        openTasksView();
+        return { ok: true, message: 'Otwarto zadania.' };
     }
     return { ok: false, error: 'Nie udało się przejść do wybranego widoku.' };
 }
