@@ -190,8 +190,7 @@ function unionTransactions(...lists) {
 function mergeRemoteTransactions(localRaw, remoteRaw) {
     const localTx = localRaw ? getPersistedState(localRaw).transactions : [];
     const remoteTx = remoteRaw ? getPersistedState(remoteRaw).transactions : [];
-    const memoryTx = Array.isArray(appState?.transactions) ? appState.transactions : [];
-    return unionTransactions(localTx, remoteTx, memoryTx);
+    return unionTransactions(localTx, remoteTx);
 }
 
 function mergeAssetsById(...assetLists) {
@@ -229,22 +228,45 @@ function applyMigrations() {
 }
 
 function readStoredAppStateRaw() {
-    const stored = localStorage.getItem(getFinanceStorageKey());
-    if (stored) {
-        try {
-            return JSON.parse(stored);
-        } catch {
-            return null;
-        }
-    }
-    const backupRaw = localStorage.getItem(LOCAL_BACKUP_KEY);
-    if (!backupRaw) return null;
+    const key = getFinanceStorageKey();
+    if (!key) return null;
+    const stored = localStorage.getItem(key);
+    if (!stored) return null;
     try {
-        const payload = JSON.parse(backupRaw);
-        return payload?.data || payload;
+        return JSON.parse(stored);
     } catch {
         return null;
     }
+}
+
+function resetAppStateForAccountSwitch() {
+    appState = {
+        transactions: [],
+        loans: [],
+        creditCards: [],
+        creditCardMovements: [],
+        assets: [],
+        cashMovements: [],
+        assetSnapshots: [],
+        assetValueHistory: [],
+        categoryBudgets: {},
+        subCategoryBudgets: {},
+        categoryIcons: {
+            expense: { mains: {}, subs: {} },
+            income: { mains: {}, subs: {} }
+        },
+        reportPrefs: {},
+        categoryRules: [],
+        pendingRecurringConfirmations: [],
+        skippedRecurringMonths: {},
+        deletedAssetIds: []
+    };
+    categoryTree = typeof DEFAULT_CATEGORY_TREE !== 'undefined'
+        ? JSON.parse(JSON.stringify(DEFAULT_CATEGORY_TREE))
+        : categoryTree;
+    cloudSyncUnlocked = false;
+    if (typeof stopCloudSync === 'function') stopCloudSync();
+    if (typeof clearPendingCloudSync === 'function') clearPendingCloudSync();
 }
 
 function setSyncStatus(mode, txCount) {

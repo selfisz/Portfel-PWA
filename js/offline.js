@@ -16,7 +16,7 @@ function hasLocalFinanceData() {
             const key = localStorage.key(i);
             if (key?.startsWith(prefix) && localStorage.getItem(key)) return true;
         }
-        if (localStorage.getItem(LOCAL_BACKUP_KEY)) return true;
+        if (localStorage.getItem(getLocalBackupStorageKey())) return true;
     } catch {
         return false;
     }

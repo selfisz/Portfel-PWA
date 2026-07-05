@@ -344,8 +344,18 @@ async function handleAuthenticatedUser(user) {
         authReady = true;
         authDenyLock = false;
 
+        const previousUid = typeof configuredFirestoreUid !== 'undefined' ? configuredFirestoreUid : null;
+        const accountSwitched = !!(previousUid && previousUid !== user.uid);
+
         if (typeof setFinanceStorageKey === 'function') setFinanceStorageKey(user.uid);
         migrateLocalStorageToUidKey(user.uid);
+
+        if (accountSwitched) {
+            if (typeof stopCloudSync === 'function') stopCloudSync();
+            if (typeof resetAppStateForAccountSwitch === 'function') resetAppStateForAccountSwitch();
+            if (typeof bootstrapApp !== 'undefined') bootstrapApp._done = false;
+        }
+
         configureFirestoreRefs(user.uid);
 
         try {
@@ -392,13 +402,35 @@ function migrateLocalStorageToUidKey(uid) {
     if (!uid) return;
     const uidKey = `${STORAGE_KEY}_${uid}`;
     if (localStorage.getItem(uidKey)) return;
+
     const legacy = localStorage.getItem(STORAGE_KEY);
-    if (legacy) {
-        try {
-            localStorage.setItem(uidKey, legacy);
-        } catch (err) {
-            console.warn('migrateLocalStorageToUidKey', err);
+    if (!legacy) return;
+
+    const legacyOwner = localStorage.getItem(LEGACY_STORAGE_OWNER_KEY);
+    const prefix = `${STORAGE_KEY}_`;
+    let hasOtherUidKeys = false;
+    try {
+        for (let i = 0; i < localStorage.length; i += 1) {
+            const key = localStorage.key(i);
+            if (key?.startsWith(prefix) && key !== uidKey && localStorage.getItem(key)) {
+                hasOtherUidKeys = true;
+                break;
+            }
         }
+    } catch {
+        hasOtherUidKeys = false;
+    }
+
+    if (legacyOwner && legacyOwner !== uid) return;
+    if (!legacyOwner && hasOtherUidKeys) return;
+
+    try {
+        localStorage.setItem(uidKey, legacy);
+        if (!legacyOwner) {
+            localStorage.setItem(LEGACY_STORAGE_OWNER_KEY, uid);
+        }
+    } catch (err) {
+        console.warn('migrateLocalStorageToUidKey', err);
     }
 }
 

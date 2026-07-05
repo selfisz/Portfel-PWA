@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'app_finance_state';
+const LEGACY_STORAGE_OWNER_KEY = 'finanse_legacy_storage_owner_uid';
 let activeFinanceStorageKey = null;
 
 function setFinanceStorageKey(uid) {
@@ -8,8 +9,30 @@ function setFinanceStorageKey(uid) {
 function getFinanceStorageKey() {
     return activeFinanceStorageKey || STORAGE_KEY;
 }
-const THEME_KEY = 'theme_preference';
+
 const LOCAL_BACKUP_KEY = 'finanse_local_backup';
+const PENDING_CLOUD_SYNC_KEY = 'finanse_pending_cloud_sync';
+
+function getAccountUidFromStorage() {
+    const key = getFinanceStorageKey();
+    if (!key || key === STORAGE_KEY) return null;
+    const prefix = `${STORAGE_KEY}_`;
+    return key.startsWith(prefix) ? key.slice(prefix.length) : null;
+}
+
+function scopedAccountStorageKey(base) {
+    const uid = getAccountUidFromStorage();
+    return uid ? `${base}_${uid}` : base;
+}
+
+function getLocalBackupStorageKey() {
+    return scopedAccountStorageKey(LOCAL_BACKUP_KEY);
+}
+
+function getPendingCloudSyncStorageKey() {
+    return scopedAccountStorageKey(PENDING_CLOUD_SYNC_KEY);
+}
+const THEME_KEY = 'theme_preference';
 const MAX_CLOUD_BACKUP_SNAPSHOTS_MANUAL = 10;
 const MAX_CLOUD_BACKUP_SNAPSHOTS_AUTO = 10;
 const MAX_CLOUD_BACKUP_SNAPSHOTS = MAX_CLOUD_BACKUP_SNAPSHOTS_MANUAL + MAX_CLOUD_BACKUP_SNAPSHOTS_AUTO;
@@ -70,7 +93,6 @@ const MAX_CASH_MOVEMENTS = 1500;
 const MAX_FIRESTORE_PAYLOAD_BYTES = 900000;
 const TX_ARCHIVE_WARN_RATIO = 0.85;
 const ARCHIVED_TRANSACTIONS_KEY = 'finanse_archived_transactions';
-const PENDING_CLOUD_SYNC_KEY = 'finanse_pending_cloud_sync';
 const CLOUD_SYNC_BASE_RETRY_MS = 5000;
 const CLOUD_SYNC_MAX_RETRY_MS = 120000;
 const CLOUD_SYNC_MAX_ATTEMPTS = 8;

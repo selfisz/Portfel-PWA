@@ -13,7 +13,7 @@ function canPushPayloadToCloud(payload, options = {}) {
 
 function readPendingCloudSyncMeta() {
     try {
-        const raw = localStorage.getItem(PENDING_CLOUD_SYNC_KEY);
+        const raw = localStorage.getItem(getPendingCloudSyncStorageKey());
         if (!raw) return null;
         const meta = JSON.parse(raw);
         return meta && typeof meta === 'object' ? meta : { at: Date.now() };
@@ -23,14 +23,16 @@ function readPendingCloudSyncMeta() {
 }
 
 function hasPendingCloudSync() {
-    return !!localStorage.getItem(PENDING_CLOUD_SYNC_KEY);
+    return !!localStorage.getItem(getPendingCloudSyncStorageKey());
 }
 
 function markPendingCloudSync(extra = {}) {
     try {
-        localStorage.setItem(PENDING_CLOUD_SYNC_KEY, JSON.stringify({
+        const uid = typeof getCurrentAuthUser === 'function' ? getCurrentAuthUser()?.uid : null;
+        localStorage.setItem(getPendingCloudSyncStorageKey(), JSON.stringify({
             at: Date.now(),
             attempts: cloudSyncRetryAttempt,
+            uid: uid || null,
             ...extra
         }));
     } catch (err) {
@@ -43,7 +45,7 @@ function markPendingCloudSync(extra = {}) {
 }
 
 function clearPendingCloudSync() {
-    localStorage.removeItem(PENDING_CLOUD_SYNC_KEY);
+    localStorage.removeItem(getPendingCloudSyncStorageKey());
     cloudSyncRetryAttempt = 0;
     clearCloudSyncRetryTimer();
 }
@@ -125,6 +127,12 @@ function queueCloudSync(options = {}) {
 
 async function resumePendingCloudSync(options = {}) {
     if (!hasPendingCloudSync() && !options.force) return false;
+    const meta = readPendingCloudSyncMeta();
+    const currentUid = typeof getCurrentAuthUser === 'function' ? getCurrentAuthUser()?.uid : null;
+    if (meta?.uid && currentUid && meta.uid !== currentUid) {
+        clearPendingCloudSync();
+        return false;
+    }
     const payload = typeof getPersistedState === 'function' ? getPersistedState(appState) : null;
     if (!payload) return false;
     const ok = await runCloudSync(payload, { forceCloud: options.force === true });

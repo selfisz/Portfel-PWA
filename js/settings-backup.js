@@ -216,7 +216,7 @@ async function refreshBackupInfo() {
             autoHint.textContent = 'Automatyczna kopia wyłączona.';
         }
     }
-    const localRaw = localStorage.getItem(LOCAL_BACKUP_KEY);
+    const localRaw = localStorage.getItem(getLocalBackupStorageKey());
     if (localEl) {
         if (localRaw) {
             try {
@@ -256,7 +256,7 @@ function backupToPhone() {
     setSettingsButtonBusy(btn, true, 'Zapisywanie…');
     try {
         const payload = getExportPayload();
-        localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(payload));
+        localStorage.setItem(getLocalBackupStorageKey(), JSON.stringify(payload));
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -403,7 +403,7 @@ function handleBackupFileSelect(event) {
             }
             setSettingsButtonBusy(btn, true, 'Przywracanie…');
             const { importNote } = applyBackupPayload(payload);
-            localStorage.setItem(LOCAL_BACKUP_KEY, reader.result);
+            localStorage.setItem(getLocalBackupStorageKey(), reader.result);
             showSettingsToast(importNote ? `Przywrócono kopię z pliku (${importNote})` : 'Przywrócono kopię z pliku');
             refreshBackupInfo();
             hapticFeedback();
