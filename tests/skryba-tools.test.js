@@ -425,3 +425,39 @@ describe('tryAnswerSkrybaTransactionQuery — kwota', () => {
         expect(answer.filter.startDate).toBe('2026-06-01');
     });
 });
+
+describe('transakcje bez podkategorii — Skryba', () => {
+    beforeEach(() => {
+        globalThis.skrybaLastTransactionFilter = null;
+        globalThis.skrybaLastSearchResults = [];
+        globalThis.appState.transactions = [
+            { date: '2026-06-05', type: 'expense', amount: 40, mainCategory: 'Zakupy', subCategory: '[Bez podkategorii]', note: 'A' },
+            { date: '2026-06-06', type: 'expense', amount: 50, mainCategory: 'Zakupy', subCategory: 'Alko', note: 'B' },
+            { date: '2026-05-20', type: 'expense', amount: 30, mainCategory: 'Dom', subCategory: '[Bez podkategorii]', note: 'C' }
+        ];
+    });
+
+    it('wykrywa intencję braku podkategorii', () => {
+        expect(parseSkrybaMissingSubCategoryIntent('pokaż transakcje bez podkategorii')).toBe(true);
+        expect(parseSkrybaMissingSubCategoryIntent('ile wydałem na paliwo')).toBe(false);
+    });
+
+    it('filtruje transakcje bez podkategorii w czerwcu', () => {
+        const params = resolveSkrybaTransactionListParams('transakcje bez podkategorii w czerwcu', new Date('2026-06-15'));
+        expect(params.missingSubCategory).toBe(true);
+        expect(params.startDate).toBe('2026-06-01');
+        const items = skrybaGetFilteredTransactionItems(params);
+        expect(items).toHaveLength(1);
+        expect(items[0].note).toBe('A');
+    });
+
+    it('domyślnie bierze bieżący miesiąc gdy brak okresu', () => {
+        const params = resolveSkrybaTransactionListParams('pokaż transakcje bez podkategorii', new Date('2026-06-15'));
+        expect(params.startDate).toBe('2026-06-01');
+        expect(params.endDate).toBe('2026-06-30');
+        const answer = tryAnswerSkrybaTransactionQuery('pokaż transakcje bez podkategorii');
+        expect(answer?.items).toHaveLength(1);
+        expect(answer.intro).toMatch(/bez podkategorii/i);
+        expect(answer.intro).toMatch(/Kliknij pozycję/i);
+    });
+});

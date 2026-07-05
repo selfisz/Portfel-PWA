@@ -149,6 +149,7 @@ function buildSkrybaWelcomeChipsHtml() {
     const chips = [
         'Podsumowanie miesiąca',
         'Briefing tygodnia',
+        'Transakcje bez podkategorii',
         'Co z nadwyżką?',
         'Rozlicz miesiąc',
         'Otwórz analizę'

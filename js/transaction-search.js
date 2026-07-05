@@ -41,7 +41,18 @@ function filterTransactionItems(items, params = {}) {
         filtered = filtered.filter((t) => (Number(t.amount) || 0) < params.maxAmount);
     }
 
+    if (params.missingSubCategory && typeof isTransactionMissingSubCategory === 'function') {
+        filtered = filtered.filter((t) => isTransactionMissingSubCategory(t));
+    }
+
     return filtered;
+}
+
+function isTransactionMissingSubCategory(tx) {
+    if (!tx) return false;
+    if (tx.subCategory === '[Bez podkategorii]') return true;
+    if (tx.mainCategory === 'Różne') return true;
+    return false;
 }
 
 function searchTransactionItems(params = {}, options = {}) {

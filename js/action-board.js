@@ -54,10 +54,9 @@ function clearActionBoardTaskState(taskId) {
 }
 
 function isUncategorizedTransaction(tx) {
-    if (!tx) return false;
-    if (tx.subCategory === '[Bez podkategorii]') return true;
-    if (tx.mainCategory === 'Różne') return true;
-    return false;
+    return typeof isTransactionMissingSubCategory === 'function'
+        ? isTransactionMissingSubCategory(tx)
+        : (!tx ? false : (tx.subCategory === '[Bez podkategorii]' || tx.mainCategory === 'Różne'));
 }
 
 function getUncategorizedPriority(amount) {

@@ -738,6 +738,12 @@ async function handleSkrybaPendingCorrectionResult(routed) {
 
 function skrybaOpenTransactionDetails(index) {
     if (!Number.isFinite(index) || index < 0) return;
+    const filter = typeof skrybaLastTransactionFilter !== 'undefined' ? skrybaLastTransactionFilter : null;
+    if (filter?.missingSubCategory && typeof editTransaction === 'function') {
+        if (typeof closeSkrybaPanel === 'function') closeSkrybaPanel();
+        editTransaction(index);
+        return;
+    }
     const overlay = document.getElementById('transaction-details-overlay');
     if (overlay) overlay.dataset.skrybaContext = '1';
     if (typeof openTransactionDetails === 'function') openTransactionDetails(index);
@@ -847,6 +853,10 @@ function tryHandleLocalSkrybaTransactionQuery(text) {
         text: answer.intro,
         ...(meta ? { meta } : {})
     });
+    if (answer.filter?.missingSubCategory && typeof buildSkrybaFollowUpChips === 'function') {
+        const chips = buildSkrybaFollowUpChips({ filter_transactions: answer.filter });
+        if (typeof appendSkrybaFollowUpChips === 'function') appendSkrybaFollowUpChips(chips);
+    }
     skrybaPersistActiveThread();
     return true;
 }

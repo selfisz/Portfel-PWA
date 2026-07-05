@@ -143,6 +143,9 @@ function isLikelySkrybaYearAmount(amount, text) {
 function isSkrybaReadOnlyQuery(text) {
     const t = normalizeSkrybaHintText(text).trim();
     if (!t) return false;
+    if (typeof parseSkrybaMissingSubCategoryIntent === 'function' && parseSkrybaMissingSubCategoryIntent(text)) {
+        return true;
+    }
     if (/^(ile|kiedy|czy|jak|co|gdzie|poka[zż]|pokaz|wy[sś]wietl|suma|lista|por[oó]wnaj|transakcj)/.test(t)) return true;
     if (typeof isSkrybaTransactionFilterRefinement === 'function' && isSkrybaTransactionFilterRefinement(text)) {
         return true;
@@ -153,6 +156,12 @@ function isSkrybaReadOnlyQuery(text) {
     if (/\b(czynsz|rata|najem|przyjemnos|przyjemnoś|oplat\w*\s+mieszk)\b/.test(t)
         && !/^\d+(?:[.,]\d+)?\s*(?:zł|zl|pln)\b/.test(t)) return true;
     return false;
+}
+
+function parseSkrybaMissingSubCategoryIntent(text) {
+    const t = normalizeSkrybaHintText(text);
+    if (!t) return false;
+    return /bez\s+podkategor|brak\s+podkategor|nieprzypisan\w*\s+podkategor|tylko\s+glown\w*\s+kategor|bez\s+podkateg/.test(t);
 }
 
 function detectSkrybaCategoryHints(text) {

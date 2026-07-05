@@ -201,7 +201,8 @@ function skrybaToolFilterTransactions(params = {}) {
             type: params.type === 'income' || params.type === 'expense' ? params.type : null,
             mainCategory: params.mainCategory || null,
             subCategory: params.subCategory || null,
-            query: params.query || null
+            query: params.query || null,
+            missingSubCategory: !!params.missingSubCategory
         },
         count: items.length,
         sumExpensesPln: skrybaRoundPln(sumExpenses),
@@ -812,6 +813,9 @@ function buildSkrybaFollowUpChips(context = {}) {
         add('suma');
         add('pokaż więcej');
         add('Pokaż transakcje');
+        if (context.filter_transactions?.missingSubCategory) {
+            add('Transakcje bez podkategorii');
+        }
     }
     if (context?.month_summary) add('porównaj z poprzednim');
     if (context?.budget_status?.overCount > 0 || context?.budget_status?.warnCount > 0) {
@@ -1007,7 +1011,7 @@ function deriveSkrybaTransactionFilterFromContext(context, toolParams = {}) {
 }
 
 function hasScopedSkrybaTransactionFilter(filter) {
-    return !!(filter?.mainCategory || filter?.subCategory || filter?.query
+    return !!(filter?.missingSubCategory || filter?.mainCategory || filter?.subCategory || filter?.query
         || filter?.startDate || Number.isFinite(filter?.minAmount) || Number.isFinite(filter?.maxAmount));
 }
 
@@ -1025,6 +1029,9 @@ function extractSkrybaTransactionListParams(text, referenceDate = new Date()) {
         ? resolveSkrybaCategoryFromText(text)
         : detectSkrybaCategoryHints(text);
     const lower = String(text || '').toLowerCase();
+    const missingSubCategory = typeof parseSkrybaMissingSubCategoryIntent === 'function'
+        ? parseSkrybaMissingSubCategoryIntent(text)
+        : false;
     return {
         startDate: period?.startDate || null,
         endDate: period?.endDate || null,
@@ -1032,6 +1039,7 @@ function extractSkrybaTransactionListParams(text, referenceDate = new Date()) {
         mainCategory: hints?.mainCategory || null,
         subCategory: hints?.subCategory || null,
         query: hints?.query || null,
+        missingSubCategory,
         type: /wpływ|wplyw|zarobi|przychód|przychod/.test(lower) ? 'income' : 'expense',
         minAmount: amountFilter?.minAmount ?? bareAmount?.minAmount,
         maxAmount: amountFilter?.maxAmount ?? bareAmount?.maxAmount
@@ -1050,6 +1058,7 @@ function mergeSkrybaTransactionListParams(partial, base) {
     if (partial.subCategory) merged.subCategory = partial.subCategory;
     if (partial.query) merged.query = partial.query;
     if (partial.type) merged.type = partial.type;
+    if (partial.missingSubCategory) merged.missingSubCategory = true;
     if (Number.isFinite(partial.minAmount)) merged.minAmount = partial.minAmount;
     if (Number.isFinite(partial.maxAmount)) merged.maxAmount = partial.maxAmount;
     return merged;
@@ -1068,26 +1077,41 @@ function shouldMergeSkrybaTransactionFilter(text, partial, previous) {
     return addsPeriod || addsAmount;
 }
 
+function applySkrybaTransactionListDefaults(params, referenceDate = new Date()) {
+    const next = { ...params };
+    if (!next.missingSubCategory || next.startDate) return next;
+    const bounds = typeof skrybaMonthBounds === 'function'
+        ? skrybaMonthBounds(referenceDate.getFullYear(), referenceDate.getMonth())
+        : null;
+    if (!bounds) return next;
+    next.startDate = bounds.startDate;
+    next.endDate = bounds.endDate;
+    if (!next.label) next.label = 'ten miesiąc';
+    return next;
+}
+
 function resolveSkrybaTransactionListParams(text, referenceDate = new Date()) {
     const partial = extractSkrybaTransactionListParams(text, referenceDate);
     const previous = typeof skrybaLastTransactionFilter !== 'undefined'
         ? skrybaLastTransactionFilter
         : null;
-    if (shouldMergeSkrybaTransactionFilter(text, partial, previous)) {
-        return mergeSkrybaTransactionListParams(partial, previous);
-    }
-    return partial;
+    let resolved = shouldMergeSkrybaTransactionFilter(text, partial, previous)
+        ? mergeSkrybaTransactionListParams(partial, previous)
+        : partial;
+    resolved = applySkrybaTransactionListDefaults(resolved, referenceDate);
+    return resolved;
 }
 
 function hasSkrybaTransactionListFilter(params) {
     if (!params || typeof params !== 'object') return false;
-    return !!(params.mainCategory || params.subCategory || params.query
+    return !!(params.missingSubCategory || params.mainCategory || params.subCategory || params.query
         || params.startDate || Number.isFinite(params.minAmount) || Number.isFinite(params.maxAmount));
 }
 
 function formatSkrybaTransactionListIntro(params, summary, items) {
     const fmt = typeof formatPlnAmount === 'function' ? formatPlnAmount : (n) => `${Number(n).toFixed(2)} zł`;
     const scopeParts = [];
+    if (params.missingSubCategory) scopeParts.push('bez podkategorii');
     if (params.label) scopeParts.push(params.label);
     if (params.mainCategory) scopeParts.push(params.mainCategory);
     if (params.subCategory) scopeParts.push(params.subCategory);
@@ -1097,7 +1121,11 @@ function formatSkrybaTransactionListIntro(params, summary, items) {
     if (!items.length) {
         return `Nie znalazłem transakcji dla „${scope}” w tym okresie.`;
     }
-    return `${scope}: ${summary.count} pozycji, łącznie ${fmt(summary.sumExpensesPln)}.`;
+    const base = `${scope}: ${summary.count} pozycji, łącznie ${fmt(summary.sumExpensesPln)}.`;
+    if (params.missingSubCategory) {
+        return `${base} Kliknij pozycję, aby dodać podkategorię.`;
+    }
+    return base;
 }
 
 function inferSkrybaFilterFromAssistantText(text, monthKey = null) {
@@ -1287,9 +1315,24 @@ function detectSkrybaToolsFromText(text, referenceDate = new Date()) {
     const categoryHints = typeof resolveSkrybaCategoryFromText === 'function'
         ? resolveSkrybaCategoryFromText(text)
         : detectSkrybaCategoryHints(text);
+    const missingSubCategory = typeof parseSkrybaMissingSubCategoryIntent === 'function'
+        ? parseSkrybaMissingSubCategoryIntent(text)
+        : false;
     const wantsTx = /wyda[lł]em|wydalem|wydatki|ile\s+(wyda|koszt|bylo|było|poszlo|poszło|łącznie|lacznie)|ile\s+\w+\s+(w|na)|kosztowa[lł]|kosztowal|transakcj|tankowan|paliwo|zakup|czynsz|przyjemnos|przyjemnoś|rata\b|najem\b/.test(t);
 
-    if (period || wantsTx || categoryHints.mainCategory || categoryHints.query) {
+    if (missingSubCategory) {
+        tools.push('filter_transactions');
+        toolParams.filter_transactions = {
+            startDate: (period || defaultPeriod)?.startDate,
+            endDate: (period || defaultPeriod)?.endDate,
+            label: (period || defaultPeriod)?.label,
+            mainCategory: categoryHints.mainCategory,
+            subCategory: null,
+            query: categoryHints.query,
+            missingSubCategory: true,
+            type: /wpływ|wplyw|zarobiłem|zarobilem|przychód|przychod/.test(t) ? 'income' : 'expense'
+        };
+    } else if (period || wantsTx || categoryHints.mainCategory || categoryHints.query) {
         tools.push('filter_transactions');
         const amountFilter = typeof parseSkrybaAmountFilterFromText === 'function'
             ? parseSkrybaAmountFilterFromText(text)
