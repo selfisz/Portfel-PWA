@@ -512,12 +512,10 @@ function refreshTransactionDetailsPanel() {
     const content = document.getElementById('transaction-details-content');
     const viewBtn = document.getElementById('btn-transaction-details-view');
     const deleteBtn = document.getElementById('btn-transaction-details-delete');
-    const overlay = document.getElementById('transaction-details-overlay');
-    const monthCloseContext = overlay?.dataset.monthCloseContext === '1';
     if (title) title.textContent = getTransactionDetailTitle(tx);
     if (content) content.innerHTML = tx ? renderTransactionDetailsHtml(tx) : '';
     if (viewBtn) viewBtn.classList.add('hidden');
-    if (deleteBtn) deleteBtn.classList.toggle('hidden', !monthCloseContext);
+    if (deleteBtn) deleteBtn.classList.toggle('hidden', !tx);
 }
 
 function openTransactionDetails(index) {
