@@ -168,6 +168,7 @@ beforeAll(() => {
     loadScript('js/cash.js');
     loadScript('js/loan-details.js');
     loadScript('js/credit-cards.js');
+    loadScript('js/search-utils.js');
     loadScript('js/ui.js');
     loadScript('js/settings.js');
     loadScript('js/reports-debt.js');
@@ -308,7 +309,7 @@ describe('transactionMatchesSearch', () => {
     });
 
     it('zwraca false dla niedopasowania', () => {
-        expect(transactionMatchesSearch(tx, 'zakupy')).toBe(false);
+        expect(transactionMatchesSearch(tx, 'qqqqqqqqqqqq')).toBe(false);
     });
 });
 

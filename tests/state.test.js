@@ -76,6 +76,7 @@ beforeAll(() => {
   loadScript('js/portfolio.js');
   loadScript('js/state-limits.js');
   loadScript('js/state.js');
+  loadScript('js/recurring-confirm.js');
 
   // Bridge: helper functions dostępne dla testów przez V8 script scope
   runInContext(`
@@ -475,6 +476,7 @@ describe('checkAndProcessRecurringTransactions', () => {
   // Mock saveState żeby nie pisał do Firebase/DOM w testach
   beforeEach(() => {
     globalThis.saveState = () => {};
+    globalThis.renderRecurringConfirmOverlay = () => {};
   });
 
   it('nie zmienia nic gdy brak transakcji cyklicznych', () => {
@@ -485,16 +487,18 @@ describe('checkAndProcessRecurringTransactions', () => {
     expect(_getAppState().transactions).toHaveLength(1);
   });
 
-  it('dodaje cykliczną transakcję na bieżący miesiąc gdy jej brak', () => {
+  it('dodaje oczekujące potwierdzenie cyklicznej transakcji na bieżący miesiąc', () => {
     const pastMonth = '2024-01-15';
     _setAppState({ ..._getAppState(), transactions: [
       { amount: 500, type: 'expense', date: pastMonth, mainCategory: 'Wynagrodzenie', recurringId: 'rec-1' }
-    ]});
+    ], pendingRecurringConfirmations: [] });
     checkAndProcessRecurringTransactions();
-    const txs = _getAppState().transactions;
     const today = new Date();
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-    const addedThisMonth = txs.some((t) => t.recurringId === 'rec-1' && t.date.startsWith(currentMonth));
+    const pending = _getAppState().pendingRecurringConfirmations || [];
+    const addedThisMonth = pending.some(
+      (item) => item.recurringId === 'rec-1' && item.monthKey === currentMonth
+    );
     expect(addedThisMonth).toBe(true);
   });
 
@@ -510,71 +514,65 @@ describe('checkAndProcessRecurringTransactions', () => {
     expect(thisMonthCount).toBe(1);
   });
 
-  it('ustawia datę sklonowanej transakcji na 1. dzień bieżącego miesiąca', () => {
+  it('ustawia datę oczekującej transakcji na 1. dzień bieżącego miesiąca', () => {
     _setAppState({ ..._getAppState(), transactions: [
       { amount: 300, type: 'expense', date: '2024-01-10', mainCategory: 'Dom', recurringId: 'rec-3' }
-    ]});
+    ], pendingRecurringConfirmations: [] });
     checkAndProcessRecurringTransactions();
-    const txs = _getAppState().transactions;
     const today = new Date();
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-    const added = txs.find((t) => t.recurringId === 'rec-3' && t.date.startsWith(currentMonth));
-    expect(added?.date).toBe(`${currentMonth}-01`);
+    const pending = _getAppState().pendingRecurringConfirmations || [];
+    const added = pending.find((item) => item.recurringId === 'rec-3' && item.monthKey === currentMonth);
+    expect(added?.transaction?.date).toBe(`${currentMonth}-01`);
   });
 
   it('klonuje z najnowszego wpisu (po naprawie buga history[0])', () => {
     _setAppState({ ..._getAppState(), transactions: [
       { amount: 300, type: 'expense', date: '2024-01-10', mainCategory: 'Dom', recurringId: 'rec-4' },
-      // Nowszy wpis z zaktualizowaną kwotą
       { amount: 450, type: 'expense', date: '2024-02-10', mainCategory: 'Dom', recurringId: 'rec-4' }
-    ]});
+    ], pendingRecurringConfirmations: [] });
     checkAndProcessRecurringTransactions();
-    const txs = _getAppState().transactions;
     const today = new Date();
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-    const added = txs.find((t) => t.recurringId === 'rec-4' && t.date.startsWith(currentMonth));
-    // Powinna być sklonowana z nowszego wpisu (kwota 450, nie 300)
-    expect(added?.amount).toBe(450);
+    const pending = _getAppState().pendingRecurringConfirmations || [];
+    const added = pending.find((item) => item.recurringId === 'rec-4' && item.monthKey === currentMonth);
+    expect(added?.transaction?.amount).toBe(450);
   });
 
-  it('dodaje transakcję na początku tablicy (unshift)', () => {
+  it('dodaje wpis do kolejki pendingRecurringConfirmations', () => {
     _setAppState({ ..._getAppState(), transactions: [
       { amount: 100, type: 'expense', date: '2024-01-05', mainCategory: 'Dom', recurringId: 'rec-5' }
-    ]});
+    ], pendingRecurringConfirmations: [] });
     checkAndProcessRecurringTransactions();
-    const txs = _getAppState().transactions;
-    const today = new Date();
-    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-    expect(txs[0].date.startsWith(currentMonth)).toBe(true);
+    const pending = _getAppState().pendingRecurringConfirmations || [];
+    expect(pending.length).toBeGreaterThan(0);
+    expect(pending[0].recurringId).toBe('rec-5');
   });
 
   it('obsługuje wiele różnych recurringId niezależnie', () => {
     _setAppState({ ..._getAppState(), transactions: [
       { amount: 100, type: 'expense', date: '2024-01-01', mainCategory: 'Dom', recurringId: 'rec-a' },
       { amount: 200, type: 'expense', date: '2024-01-01', mainCategory: 'Zakupy', recurringId: 'rec-b' }
-    ]});
+    ], pendingRecurringConfirmations: [] });
     checkAndProcessRecurringTransactions();
-    const txs = _getAppState().transactions;
     const today = new Date();
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-    const addedA = txs.some((t) => t.recurringId === 'rec-a' && t.date.startsWith(currentMonth));
-    const addedB = txs.some((t) => t.recurringId === 'rec-b' && t.date.startsWith(currentMonth));
+    const pending = _getAppState().pendingRecurringConfirmations || [];
+    const addedA = pending.some((item) => item.recurringId === 'rec-a' && item.monthKey === currentMonth);
+    const addedB = pending.some((item) => item.recurringId === 'rec-b' && item.monthKey === currentMonth);
     expect(addedA).toBe(true);
     expect(addedB).toBe(true);
   });
 
   it('używa lokalnego czasu (nie UTC) dla bieżącego miesiąca', () => {
-    // Po naprawie: używamy getFullYear()/getMonth() zamiast toISOString()
-    // Weryfikujemy że wynik zgadza się z lokalnym miesiącem
     const today = new Date();
     const localMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
     _setAppState({ ..._getAppState(), transactions: [
       { amount: 50, type: 'expense', date: '2020-01-01', mainCategory: 'Dom', recurringId: 'rec-tz' }
-    ]});
+    ], pendingRecurringConfirmations: [] });
     checkAndProcessRecurringTransactions();
-    const added = _getAppState().transactions.find(
-      (t) => t.recurringId === 'rec-tz' && t.date !== '2020-01-01'
-    );
-    expect(added?.date).toBe(`${localMonth}-01`);
+    const pending = _getAppState().pendingRecurringConfirmations || [];
+    const added = pending.find((item) => item.recurringId === 'rec-tz' && item.monthKey === localMonth);
+    expect(added?.transaction?.date).toBe(`${localMonth}-01`);
   });
 });

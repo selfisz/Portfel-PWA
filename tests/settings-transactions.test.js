@@ -96,6 +96,7 @@ beforeAll(() => {
     globalThis.formatPlnAmount = (n) => `${Number(n).toFixed(2)} zł`;
     globalThis.formatTxDate = (d) => d || '';
     globalThis.renderCategoryIcon = (main) => `<span>${main}</span>`;
+    globalThis.isLightTheme = () => true;
 
     // URL / Blob (backupToPhone)
     globalThis.URL = { createObjectURL: () => 'blob:mock', revokeObjectURL: () => {} };
@@ -116,6 +117,7 @@ beforeAll(() => {
     loadScript('js/transactions.js');
     loadScript('js/notifications.js');
     loadScript('js/budget-ui.js');
+    loadScript('js/categories.js');
     loadScript('js/settings.js');
 
     runInContext(`

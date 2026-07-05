@@ -393,7 +393,7 @@ describe('estimateLoanPayoff', () => {
   it('zwraca endDate gdy jest w details', () => {
     const loan = { currentCapitalLeft: 50000, details: { endDate: '2030-12-01' } };
     const result = estimateLoanPayoff(loan);
-    expect(result.label).toBe('2030-12-01');
+    expect(result.label).toBe(formatTxDate('2030-12-01'));
     expect(result.detail).toBe('termin z umowy');
   });
 
