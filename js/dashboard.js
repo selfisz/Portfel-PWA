@@ -99,6 +99,10 @@ function addSelectedDashboardToBasket() {
         if (added > 0) showAppToast(`Dodano ${added} ${added === 1 ? 'transakcję' : 'transakcje'} do koszyka`);
         else showAppToast('Wybrane pozycje są już w koszyku', 'default');
     }
+    if (added > 0 && typeof openNotificationsPanel === 'function' && typeof setNotificationsPanelTab === 'function') {
+        openNotificationsPanel();
+        setNotificationsPanelTab('basket');
+    }
 }
 
 function getDashboardTxListSignature(listTx, searchQuery) {

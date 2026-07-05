@@ -219,7 +219,8 @@ function updateNotificationsBadge() {
     const boardCount = typeof getActionBoardTabCount === 'function'
         ? getActionBoardTabCount()
         : (typeof getActionBoardBadgeCount === 'function' ? getActionBoardBadgeCount() : 0);
-    const count = unread + boardCount;
+    const basketCount = typeof getBasketCount === 'function' ? getBasketCount() : 0;
+    const count = unread + boardCount + basketCount;
     badge.textContent = count > 9 ? '9+' : String(count);
     badge.classList.toggle('hidden', count === 0);
     const btn = document.getElementById('btn-notifications');
@@ -233,17 +234,23 @@ function getNotificationsPanelTab() {
 }
 
 function setNotificationsPanelTab(tab) {
-    notificationsPanelTab = tab === 'board' ? 'board' : 'alerts';
+    notificationsPanelTab = tab === 'board' ? 'board' : tab === 'basket' ? 'basket' : 'alerts';
     const alertsPanel = document.getElementById('notifications-tab-alerts');
     const boardPanel = document.getElementById('notifications-tab-board');
+    const basketPanel = document.getElementById('notifications-tab-basket');
     const btnAlerts = document.getElementById('btn-notif-tab-alerts');
     const btnBoard = document.getElementById('btn-notif-tab-board');
+    const btnBasket = document.getElementById('btn-notif-tab-basket');
     if (alertsPanel) alertsPanel.classList.toggle('hidden', notificationsPanelTab !== 'alerts');
     if (boardPanel) boardPanel.classList.toggle('hidden', notificationsPanelTab !== 'board');
+    if (basketPanel) basketPanel.classList.toggle('hidden', notificationsPanelTab !== 'basket');
     if (btnAlerts) btnAlerts.classList.toggle('active', notificationsPanelTab === 'alerts');
     if (btnBoard) btnBoard.classList.toggle('active', notificationsPanelTab === 'board');
+    if (btnBasket) btnBasket.classList.toggle('active', notificationsPanelTab === 'basket');
     if (notificationsPanelTab === 'board' && typeof renderActionBoardPanel === 'function') {
         renderActionBoardPanel();
+    } else if (notificationsPanelTab === 'basket' && typeof renderTxBasketPanel === 'function') {
+        renderTxBasketPanel();
     } else {
         renderNotificationsList();
     }
@@ -279,6 +286,7 @@ function renderNotificationsList() {
 function renderNotificationsPanel() {
     setNotificationsPanelTab(notificationsPanelTab);
     if (typeof updateActionBoardTabBadge === 'function') updateActionBoardTabBadge();
+    if (typeof updateTxBasketBadge === 'function') updateTxBasketBadge();
 }
 
 function openNotificationsPanel() {

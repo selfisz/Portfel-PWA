@@ -98,14 +98,13 @@ function summarizeTxBasket(txs) {
 
 function updateTxBasketBadge() {
     if (typeof document === 'undefined') return;
-    const badge = document.getElementById('tx-basket-badge');
-    const btn = document.getElementById('btn-tx-basket');
+    const tabBadge = document.getElementById('tx-basket-tab-badge');
     const count = getBasketCount();
-    if (badge) {
-        badge.textContent = count > 9 ? '9+' : String(count);
-        badge.classList.toggle('hidden', count === 0);
+    if (tabBadge) {
+        tabBadge.textContent = count > 9 ? '9+' : String(count);
+        tabBadge.classList.toggle('hidden', count === 0);
     }
-    if (btn) btn.classList.toggle('btn-icon--has-badge', count > 0);
+    if (typeof updateNotificationsBadge === 'function') updateNotificationsBadge();
 }
 
 function renderTxBasketPanel() {
@@ -163,25 +162,15 @@ function renderTxBasketPanel() {
     });
 }
 
-function openTxBasketPanel() {
-    if (typeof guardAppLockSensitiveAction === 'function' && !guardAppLockSensitiveAction()) return;
-    renderTxBasketPanel();
-    document.getElementById('tx-basket-overlay')?.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-}
-
-function closeTxBasketPanel() {
-    document.getElementById('tx-basket-overlay')?.classList.add('hidden');
-    if (!document.querySelector('.settings-overlay:not(.hidden), .notifications-overlay:not(.hidden), .reports-pdf-overlay:not(.hidden), .skryba-overlay:not(.hidden)')) {
-        document.body.style.overflow = '';
+function exportTxBasketPdf() {
+    const txs = getBasketTransactions();
+    if (!txs.length) {
+        if (typeof showAppToast === 'function') showAppToast('Koszyk jest pusty', 'error');
+        return;
     }
-}
-
-function toggleTxBasketPanel() {
-    const overlay = document.getElementById('tx-basket-overlay');
-    if (!overlay) return;
-    if (overlay.classList.contains('hidden')) openTxBasketPanel();
-    else closeTxBasketPanel();
+    if (typeof openPrintPreview !== 'function') return;
+    if (typeof closeNotificationsPanel === 'function') closeNotificationsPanel();
+    openPrintPreview(buildTxBasketPrintBody(), 'Koszyk PDF', { source: 'tx-basket' });
 }
 
 function confirmClearTxBasket() {
@@ -198,17 +187,6 @@ function buildTxBasketPrintBody() {
         return buildTransactionsPeriodSection(txs, title, true);
     }
     return `<h1 class="reports-pdf-title">${escapeHtml(title)}</h1><p>Brak generatora PDF.</p>`;
-}
-
-function exportTxBasketPdf() {
-    const txs = getBasketTransactions();
-    if (!txs.length) {
-        if (typeof showAppToast === 'function') showAppToast('Koszyk jest pusty', 'error');
-        return;
-    }
-    if (typeof openPrintPreview !== 'function') return;
-    closeTxBasketPanel();
-    openPrintPreview(buildTxBasketPrintBody(), 'Koszyk PDF', { source: 'tx-basket' });
 }
 
 function promptClearTxBasketAfterPrint() {

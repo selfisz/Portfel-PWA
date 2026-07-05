@@ -1001,7 +1001,7 @@ body.notifications-open {
 .notifications-subnav {
     flex-shrink: 0;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
     padding: 0 12px 10px;
     border-bottom: 1px solid var(--border);

@@ -385,7 +385,6 @@ function initPanelHeaders() {
         onClose: closePrintPreview,
         closeLabel: 'Wróć',
     }));
-    mountPanelHeader('panel-header-tx-basket', createPanelHeader('Koszyk raportów', { onClose: closeTxBasketPanel }));
 
     mountPanelHeader('panel-header-asset-details', createDetailsPanelHeader({
         titleId: 'asset-details-title',

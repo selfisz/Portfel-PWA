@@ -192,10 +192,6 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 14l-5-5 1.41-1.41L11 14.17l7.59-7.59L20 8l-9 9z"/></svg>
                 <span id="tasks-badge" class="notifications-badge hidden">0</span>
             </button>
-            <button type="button" id="btn-tx-basket" class="btn-icon btn-icon--basket" onclick="toggleTxBasketPanel()" aria-label="Koszyk raportów" aria-expanded="false">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm0 2l5 5h-5V4zM8 13h8v2H8v-2zm0 4h5v2H8v-2z"/></svg>
-                <span id="tx-basket-badge" class="notifications-badge hidden">0</span>
-            </button>
             <button type="button" id="btn-settings" class="btn-icon" onclick="openSettings()" aria-label="Ustawienia">
                 <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
             </button>
@@ -283,6 +279,7 @@
             <nav class="analysis-subnav notifications-subnav" aria-label="Panel powiadomień">
                 <button id="btn-notif-tab-alerts" type="button" class="analysis-subnav-btn active" onclick="setNotificationsPanelTab('alerts')">Powiadomienia</button>
                 <button id="btn-notif-tab-board" type="button" class="analysis-subnav-btn" onclick="setNotificationsPanelTab('board')">Tablica <span id="action-board-tab-badge" class="notifications-tab-badge hidden">0</span></button>
+                <button id="btn-notif-tab-basket" type="button" class="analysis-subnav-btn" onclick="setNotificationsPanelTab('basket')">Koszyk <span id="tx-basket-tab-badge" class="notifications-tab-badge hidden">0</span></button>
             </nav>
             <div id="notifications-tab-alerts" class="notifications-tab-panel">
                 <div class="notifications-panel-toolbar">
@@ -299,17 +296,13 @@
                     <button type="button" class="btn-submit btn-submit--form action-board-skryba-btn" onclick="startSkrybaActionBoardReview()">Przejdź ze Skrybą</button>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <div id="tx-basket-overlay" class="notifications-overlay hidden" onclick="if (event.target === this) closeTxBasketPanel()">
-        <div class="notifications-panel settings-panel tx-basket-panel" onclick="event.stopPropagation()">
-            <div id="panel-header-tx-basket"></div>
-            <p id="tx-basket-summary" class="tx-basket-summary">Brak transakcji w koszyku</p>
-            <div id="tx-basket-list" class="tx-basket-list"></div>
-            <div class="tx-basket-footer">
-                <button type="button" id="btn-tx-basket-clear" class="btn-cancel btn-cancel--form" onclick="confirmClearTxBasket()">Wyczyść wszystko</button>
-                <button type="button" id="btn-tx-basket-pdf" class="btn-submit btn-submit--form" onclick="exportTxBasketPdf()">PDF</button>
+            <div id="notifications-tab-basket" class="notifications-tab-panel hidden">
+                <p id="tx-basket-summary" class="tx-basket-summary">Brak transakcji w koszyku</p>
+                <div id="tx-basket-list" class="tx-basket-list notifications-list"></div>
+                <div class="tx-basket-footer action-board-footer">
+                    <button type="button" id="btn-tx-basket-clear" class="btn-cancel btn-cancel--form" onclick="confirmClearTxBasket()">Wyczyść wszystko</button>
+                    <button type="button" id="btn-tx-basket-pdf" class="btn-submit btn-submit--form" onclick="exportTxBasketPdf()">PDF</button>
+                </div>
             </div>
         </div>
     </div>

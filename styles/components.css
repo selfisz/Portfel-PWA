@@ -2733,23 +2733,18 @@ html:not([data-theme="dark"]) .grid-item.selected {
     accent-color: var(--accent);
 }
 
-.tx-basket-panel {
-    display: flex;
-    flex-direction: column;
-    max-height: 100dvh;
-}
-
 .tx-basket-summary {
     margin: 0 16px 12px;
     font-size: var(--text-xs);
     color: var(--text-muted);
     line-height: 1.4;
+    flex-shrink: 0;
 }
 
 .tx-basket-list {
     flex: 1;
     overflow-y: auto;
-    padding: 0 12px;
+    min-height: 0;
 }
 
 .tx-basket-list .tx-row--basket {
@@ -3208,7 +3203,6 @@ body.auth-locked > .bottom-nav,
 body.auth-locked > #module-split-banner,
 body.auth-locked > #offline-banner,
 body.auth-locked > #notifications-overlay,
-body.auth-locked > #tx-basket-overlay,
 body.auth-locked > #skryba-overlay,
 body.auth-locked > #settings-overlay {
     visibility: hidden;
@@ -3222,7 +3216,6 @@ body.app-lock-locked > #app-lock-restricted-banner,
 body.app-lock-locked > #module-split-banner,
 body.app-lock-locked > #offline-banner,
 body.app-lock-locked > #notifications-overlay,
-body.app-lock-locked > #tx-basket-overlay,
 body.app-lock-locked > #skryba-overlay,
 body.app-lock-locked > #settings-overlay {
     visibility: hidden;
@@ -3231,7 +3224,6 @@ body.app-lock-locked > #settings-overlay {
 
 body.app-lock-restricted #btn-skryba,
 body.app-lock-restricted #btn-tasks,
-body.app-lock-restricted #btn-tx-basket,
 body.app-lock-restricted #btn-settings,
 body.app-lock-restricted #btn-notifications,
 body.app-lock-restricted #sync-status {
@@ -3264,7 +3256,6 @@ body.welcome-mode > #app-lock-restricted-banner,
 body.welcome-mode > #module-split-banner,
 body.welcome-mode > #offline-banner,
 body.welcome-mode > #notifications-overlay,
-body.welcome-mode > #tx-basket-overlay,
 body.welcome-mode > #skryba-overlay,
 body.welcome-mode > #settings-overlay {
     visibility: hidden;
