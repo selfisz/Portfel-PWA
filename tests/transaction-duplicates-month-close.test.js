@@ -76,6 +76,32 @@ describe('transaction duplicates', () => {
         const tx = { date: '2025-06-10', type: 'expense', amount: 99, mainCategory: 'Zakupy', subCategory: 'Zakupy', note: '' };
         expect(findDuplicateCandidates(tx)).toHaveLength(0);
     });
+
+    it('openDuplicatePairReview pokazuje obie transakcje w overlay', () => {
+        const overlay = { classList: { remove: vi.fn(), add: vi.fn() } };
+        const body = { innerHTML: '' };
+        const title = { textContent: '' };
+        const actions = { classList: { add: vi.fn(), remove: vi.fn() }, innerHTML: '' };
+        globalThis.document.getElementById = (id) => {
+            if (id === 'duplicate-tx-overlay') return overlay;
+            if (id === 'duplicate-tx-body') return body;
+            if (id === 'duplicate-tx-title') return title;
+            return null;
+        };
+        globalThis.document.querySelector = (sel) => (
+            sel === '#duplicate-tx-overlay .duplicate-tx-actions' ? actions : null
+        );
+        globalThis.closeNotificationsPanel = vi.fn();
+
+        openDuplicatePairReview(0, 1, { taskId: 'duplicate|0|1', closeNotifications: true });
+
+        expect(overlay.classList.remove).toHaveBeenCalledWith('hidden');
+        expect(body.innerHTML).toMatch(/Transakcja 1/);
+        expect(body.innerHTML).toMatch(/Transakcja 2/);
+        expect(body.innerHTML).toMatch(/duplicate-review-transaction/);
+        expect(actions.innerHTML).toMatch(/Edytuj 1/);
+        expect(closeNotificationsPanel).toHaveBeenCalled();
+    });
 });
 
 describe('month close state', () => {

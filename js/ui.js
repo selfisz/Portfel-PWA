@@ -353,6 +353,15 @@ function initAppActionDelegation() {
             return;
         }
 
+        const duplicateReviewTx = e.target.closest('[data-action="duplicate-review-transaction"]');
+        if (duplicateReviewTx) {
+            const index = parseInt(duplicateReviewTx.dataset.txIndex, 10);
+            if (!Number.isNaN(index) && typeof duplicateReviewEdit === 'function') {
+                duplicateReviewEdit(index);
+            }
+            return;
+        }
+
         const closeOverlay = e.target.closest('[data-action="close-transaction-details"]');
         if (closeOverlay && e.target === closeOverlay) {
             if (typeof closeTransactionDetails === 'function') closeTransactionDetails();

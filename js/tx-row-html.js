@@ -38,7 +38,9 @@ function buildTransactionRowHtml(tx, options = {}) {
     if (clickMode === 'open' && globalIndex >= 0) {
         attrs += ` data-action="open-transaction" data-tx-index="${globalIndex}"`;
     } else if (clickMode === 'monthClose' && globalIndex >= 0) {
-        attrs += ` data-action="month-close-transaction" data-tx-index="${globalIndex}"`;
+        attrs += ` data-action="month-close-transaction" data-tx-index="${globalIndex}" onclick="monthCloseOpenTransactionDetails(${globalIndex})"`;
+    } else if (clickMode === 'duplicateReview' && globalIndex >= 0) {
+        attrs += ` data-action="duplicate-review-transaction" data-tx-index="${globalIndex}" onclick="duplicateReviewEdit(${globalIndex})"`;
     } else if (clickMode === 'skryba') {
         if (globalIndex >= 0) attrs += ` data-tx-index="${globalIndex}"`;
         else attrs += ' disabled';

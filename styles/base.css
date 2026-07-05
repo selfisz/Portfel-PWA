@@ -1134,6 +1134,24 @@ body.notifications-open {
     word-break: break-word;
 }
 
+.action-board-row-body--clickable {
+    cursor: pointer;
+    border-radius: var(--radius-xs);
+    padding: 2px 4px;
+    margin: -2px -4px;
+    transition: background 0.15s ease;
+}
+
+.action-board-row-body--clickable:hover,
+.action-board-row-body--clickable:focus-visible {
+    background: var(--accent-soft);
+    outline: none;
+}
+
+.action-board-row-body--clickable:focus-visible {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
 .action-board-row-actions {
     display: flex;
     align-items: center;

@@ -11776,6 +11776,32 @@ button.reports-debt-split-item strong {
     display: flex;
     gap: 10px;
     margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+.duplicate-tx-actions--review {
+    justify-content: stretch;
+}
+
+.duplicate-tx-actions--review .btn-outline.btn-sm,
+.duplicate-tx-actions--review .btn-cancel--form,
+.duplicate-tx-actions--review .btn-submit--form {
+    flex: 1 1 calc(50% - 5px);
+    min-width: 7.5rem;
+}
+
+.duplicate-tx-pair {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.duplicate-tx-pair-group .section-label {
+    margin-bottom: 8px;
+}
+
+.duplicate-tx-pair-group .reports-tx-row {
+    width: 100%;
 }
 
 .duplicate-tx-actions .btn-submit--form,

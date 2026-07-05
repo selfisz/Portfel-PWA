@@ -235,14 +235,23 @@ function renderActionBoardSection(priority, tasks) {
     return `<section class="action-board-section" aria-label="${escapeHtml(label)}">
         <h3 class="action-board-section-title action-board-section-title--p${priority}">${escapeHtml(label)} <span class="action-board-section-count">(${tasks.length})</span></h3>
         <div class="action-board-section-list">
-            ${tasks.map((task) => `
-                <article class="action-board-row action-board-row--p${task.priority}" data-task-id="${escapeHtml(task.id)}">
-                    <div class="action-board-row-body">
+            ${tasks.map((task) => {
+                const id = escapeHtml(task.id);
+                const duplicateClick = task.type === 'duplicate'
+                    ? ` onclick="actionBoardOpenDuplicate('${id}', ${task.payload.indexA}, ${task.payload.indexB})" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); actionBoardOpenDuplicate('${id}', ${task.payload.indexA}, ${task.payload.indexB}); }" role="button" tabindex="0"`
+                    : '';
+                const bodyClass = task.type === 'duplicate'
+                    ? ' action-board-row-body action-board-row-body--clickable'
+                    : ' action-board-row-body';
+                return `
+                <article class="action-board-row action-board-row--p${task.priority}" data-task-id="${id}">
+                    <div class="${bodyClass.trim()}"${duplicateClick}>
                         <strong class="action-board-row-title">${escapeHtml(task.title)}</strong>
                         <span class="action-board-row-text">${escapeHtml(task.body)}</span>
                     </div>
                     ${renderActionBoardTaskActions(task)}
-                </article>`).join('')}
+                </article>`;
+            }).join('')}
         </div>
     </section>`;
 }
@@ -325,6 +334,11 @@ function actionBoardDeleteDuplicate(index) {
         refreshActionBoard();
         if (typeof showAppToast === 'function') showAppToast('Usunięto transakcję');
     }
+}
+
+function actionBoardOpenDuplicate(taskId, indexA, indexB) {
+    if (typeof openDuplicatePairReview !== 'function') return;
+    openDuplicatePairReview(indexA, indexB, { taskId, closeNotifications: true });
 }
 
 function buildActionBoardReviewText() {

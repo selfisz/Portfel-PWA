@@ -29,6 +29,7 @@ describe('buildTransactionRowHtml', () => {
         const html = buildTransactionRowHtml(tx, { globalIndex: 2, clickMode: 'monthClose' });
         expect(html).toContain('data-action="month-close-transaction"');
         expect(html).toContain('data-tx-index="2"');
+        expect(html).toContain('onclick="monthCloseOpenTransactionDetails(2)"');
     });
 
     it('zwraca pusty string dla rozliczenia miesiąca bez indeksu', () => {
