@@ -97,3 +97,33 @@ describe('normalizePpkAssetFields', () => {
         expect(asset.ppkContributions).toBeUndefined();
     });
 });
+
+describe('PPK wpłaty do historii', () => {
+    it('powiększa saldo o sumę dodanej wpłaty', () => {
+        const asset = makePpkAsset({ amount: 1000, ppkContributions: [] });
+        const values = {
+            'asset-ppk-contrib-date': '2025-06-01',
+            'asset-ppk-contrib-own': '100',
+            'asset-ppk-contrib-employer': '50',
+            'asset-ppk-contrib-state': '10',
+            'asset-ppk-own-input': '',
+            'asset-ppk-employer-input': '',
+            'asset-ppk-state-input': '',
+            'asset-amount-input': '1000'
+        };
+        globalThis.getActiveAsset = () => asset;
+        globalThis.formatPlnAmount = (n) => `${Number(n).toFixed(2)} zł`;
+        globalThis.formatTxDate = (d) => d;
+        globalThis.escapeHtml = (s) => String(s ?? '');
+        globalThis.document = {
+            getElementById: (id) => {
+                if (id === 'asset-ppk-contrib-edit-list') return { innerHTML: '' };
+                return { value: values[id] ?? '', innerHTML: '' };
+            }
+        };
+
+        addPpkContributionEntry();
+        expect(asset.amount).toBe(1160);
+        expect(asset.ppkContributions).toHaveLength(1);
+    });
+});

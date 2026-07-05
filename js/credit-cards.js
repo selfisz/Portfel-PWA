@@ -644,7 +644,7 @@ function renderDashboardCreditCards() {
     const list = document.getElementById('dashboard-credit-cards-list');
     if (!section || !list) return;
 
-    const cards = getActiveCreditCards();
+    const cards = getActiveCreditCards().filter((card) => (card.currentBalance || 0) > 0);
     if (!cards.length) {
         section.classList.add('hidden');
         return;

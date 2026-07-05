@@ -243,6 +243,19 @@ function onAssetRetirementKindInputChange() {
     if (asset) populatePpkEditForm(asset);
 }
 
+function getPpkContributionTotal(entry) {
+    if (!entry) return 0;
+    return Math.round((entry.own + entry.employer + entry.state) * 100) / 100;
+}
+
+function applyPpkContributionDelta(asset, delta) {
+    if (!isPpkAsset(asset) || !delta) return;
+    const next = Math.round(((parseFloat(asset.amount) || 0) + delta) * 100) / 100;
+    asset.amount = Math.max(0, next);
+    const amountEl = document.getElementById('asset-amount-input');
+    if (amountEl) amountEl.value = asset.amount || '';
+}
+
 function addPpkContributionEntry() {
     const asset = typeof getActiveAsset === 'function' ? getActiveAsset() : null;
     if (!isPpkAsset(asset)) return;
@@ -257,6 +270,7 @@ function addPpkContributionEntry() {
 
     asset.ppkContributions = asset.ppkContributions || [];
     asset.ppkContributions.push(entry);
+    applyPpkContributionDelta(asset, getPpkContributionTotal(entry));
 
     document.getElementById('asset-ppk-contrib-own').value = '';
     document.getElementById('asset-ppk-contrib-employer').value = '';
@@ -269,7 +283,9 @@ function addPpkContributionEntry() {
 function removePpkContributionEntry(entryId) {
     const asset = typeof getActiveAsset === 'function' ? getActiveAsset() : null;
     if (!isPpkAsset(asset) || !entryId) return;
+    const removed = (asset.ppkContributions || []).find((entry) => entry.id === entryId);
     asset.ppkContributions = (asset.ppkContributions || []).filter((entry) => entry.id !== entryId);
+    if (removed) applyPpkContributionDelta(asset, -getPpkContributionTotal(removed));
     renderPpkContributionsEditList(asset);
     syncPpkBreakdownInputsFromHistory(asset);
 }

@@ -566,6 +566,27 @@ describe('renderDashboardCreditCards', () => {
         renderDashboardCreditCards();
         expect(section.classList.contains('hidden')).toBe(false);
     });
+
+    it('ukrywa karty ze spłaconym limitem na pulpicie', () => {
+        _setAppState({ ..._getAppState(), creditCards: [
+            { id: 'c1', name: 'Erste', limit: 8000, currentBalance: 0, archived: false },
+            { id: 'c2', name: 'mBank', limit: 5000, currentBalance: 0, archived: false }
+        ]});
+        const section = document.getElementById('dashboard-credit-cards');
+        renderDashboardCreditCards();
+        expect(section.classList.contains('hidden')).toBe(true);
+    });
+
+    it('pokazuje tylko karty z zadłużeniem', () => {
+        _setAppState({ ..._getAppState(), creditCards: [
+            { id: 'c1', name: 'Erste', limit: 8000, currentBalance: 0, archived: false },
+            { id: 'c2', name: 'mBank', limit: 5000, currentBalance: 1200, archived: false }
+        ]});
+        const list = document.getElementById('dashboard-credit-cards-list');
+        renderDashboardCreditCards();
+        expect(list.innerHTML).toContain('mBank');
+        expect(list.innerHTML).not.toContain('Erste');
+    });
 });
 
 // ===========================================================================

@@ -11094,6 +11094,7 @@ button.reports-debt-split-item strong {
 .obligation-edit-form .loan-form-row {
     gap: 10px;
     margin-bottom: 12px;
+    align-items: end;
 }
 
 .obligation-edit-form .loan-form-row .form-group {
