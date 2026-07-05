@@ -3266,6 +3266,7 @@ body.welcome-mode > #app-lock-restricted-banner,
 body.welcome-mode > #module-split-banner,
 body.welcome-mode > #offline-banner,
 body.welcome-mode > #notifications-overlay,
+body.welcome-mode > #tx-basket-overlay,
 body.welcome-mode > #skryba-overlay,
 body.welcome-mode > #settings-overlay {
     visibility: hidden;
