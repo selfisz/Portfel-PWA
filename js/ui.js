@@ -75,11 +75,14 @@ function showUndoToast(message, onUndo, durationMs = 5000) {
     appToastTimeout = setTimeout(hide, durationMs);
 }
 
-function openPrintPreview(bodyHtml, title = 'Podgląd') {
+let printPreviewContext = null;
+
+function openPrintPreview(bodyHtml, title = 'Podgląd', context = null) {
     const overlay = document.getElementById('reports-pdf-overlay');
     const content = document.getElementById('reports-pdf-content');
     const titleEl = document.getElementById('reports-pdf-title');
     if (!overlay || !content) return;
+    printPreviewContext = context || null;
     if (titleEl) titleEl.textContent = title;
     content.innerHTML = bodyHtml;
     overlay.classList.remove('hidden');
@@ -91,7 +94,15 @@ function closePrintPreview() {
     const overlay = document.getElementById('reports-pdf-overlay');
     if (!overlay) return;
     overlay.classList.add('hidden');
+    printPreviewContext = null;
     document.body.style.overflow = '';
+}
+
+function notifyPrintPreviewExported() {
+    const ctx = printPreviewContext;
+    if (ctx?.source === 'tx-basket' && typeof promptClearTxBasketAfterPrint === 'function') {
+        window.setTimeout(() => promptClearTxBasketAfterPrint(), 300);
+    }
 }
 
 function isIosLikeClient() {
@@ -194,17 +205,30 @@ function runPrintPreviewExport(html, title) {
     if (isIosLikeClient()) {
         if (printViaPopupWindow(html)) {
             showAppToast('Wybierz Drukuj lub Zapisz jako PDF', 'default');
+            notifyPrintPreviewExported();
             return;
         }
         sharePrintPreviewHtml(html, title).then((shared) => {
-            if (shared) return;
-            if (printViaHiddenFrame(html)) return;
+            if (shared) {
+                notifyPrintPreviewExported();
+                return;
+            }
+            if (printViaHiddenFrame(html)) {
+                notifyPrintPreviewExported();
+                return;
+            }
             showAppToast('Nie udało się otworzyć druku — spróbuj ponownie', 'error');
         });
         return;
     }
-    if (printViaHiddenFrame(html)) return;
-    if (printViaPopupWindow(html)) return;
+    if (printViaHiddenFrame(html)) {
+        notifyPrintPreviewExported();
+        return;
+    }
+    if (printViaPopupWindow(html)) {
+        notifyPrintPreviewExported();
+        return;
+    }
     showAppToast('Nie udało się otworzyć druku', 'error');
 }
 
@@ -361,6 +385,7 @@ function initPanelHeaders() {
         onClose: closePrintPreview,
         closeLabel: 'Wróć',
     }));
+    mountPanelHeader('panel-header-tx-basket', createPanelHeader('Koszyk raportów', { onClose: closeTxBasketPanel }));
 
     mountPanelHeader('panel-header-asset-details', createDetailsPanelHeader({
         titleId: 'asset-details-title',
@@ -516,94 +541,6 @@ function initOnboarding() {
     };
 }
 
-function attachSwipeDelete(row, index) {
-    const SWIPE_MAX = 88;
-    const SWIPE_DELETE = 64;
-    let startX = 0;
-    let currentX = 0;
-    let swiped = false;
-    let isDragging = false;
-    let activePointer = null;
-
-    const setOffset = (x) => {
-        row.style.transform = `translate3d(${x}px, 0, 0)`;
-    };
-
-    const resetRow = (animate = true) => {
-        row.classList.remove('swiping', 'is-dragging');
-        row.style.transition = animate ? 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)' : 'none';
-        setOffset(0);
-        if (animate) {
-            window.setTimeout(() => {
-                row.style.transition = '';
-                row.style.transform = '';
-            }, 280);
-        } else {
-            row.style.transition = '';
-            row.style.transform = '';
-        }
-    };
-
-    const finishSwipe = () => {
-        if (!isDragging) return;
-        isDragging = false;
-        activePointer = null;
-        row.style.transition = 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)';
-
-        if (currentX <= -SWIPE_DELETE) {
-            swiped = true;
-            row.classList.add('swiping');
-            setOffset(-SWIPE_MAX);
-            row.style.opacity = '0.55';
-            window.setTimeout(() => deleteTransaction(index), 180);
-            return;
-        }
-
-        resetRow(true);
-        startX = currentX = 0;
-    };
-
-    const onPointerDown = (e) => {
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
-        activePointer = e.pointerId;
-        isDragging = true;
-        swiped = false;
-        startX = e.clientX;
-        currentX = 0;
-        row.classList.add('is-dragging');
-        row.style.transition = 'none';
-        row.setPointerCapture(e.pointerId);
-    };
-
-    const onPointerMove = (e) => {
-        if (!isDragging || e.pointerId !== activePointer) return;
-        currentX = e.clientX - startX;
-        if (currentX > 0) currentX = 0;
-        if (currentX < -SWIPE_MAX) currentX = -SWIPE_MAX;
-        if (currentX < -10) row.classList.add('swiping');
-        else row.classList.remove('swiping');
-        setOffset(currentX);
-    };
-
-    const onPointerEnd = (e) => {
-        if (e.pointerId !== activePointer) return;
-        if (row.hasPointerCapture(e.pointerId)) row.releasePointerCapture(e.pointerId);
-        finishSwipe();
-    };
-
-    row.addEventListener('pointerdown', onPointerDown);
-    row.addEventListener('pointermove', onPointerMove);
-    row.addEventListener('pointerup', onPointerEnd);
-    row.addEventListener('pointercancel', onPointerEnd);
-
-    row.addEventListener('click', () => {
-        if (swiped) {
-            swiped = false;
-            return;
-        }
-        openTransactionDetails(index);
-    });
-}
 function getBasePath() {
     const parts = location.pathname.split('/').filter(Boolean);
     const repoIndex = parts.indexOf('Portfel-PWA');

@@ -16,6 +16,7 @@ function bootstrapApp() {
     scheduleMarketPriceRefresh();
     initNotifications();
     if (typeof initTasks === 'function') initTasks();
+    if (typeof initTxBasket === 'function') initTxBasket();
     if (typeof initSkrybaVoice === 'function') initSkrybaVoice();
     if (typeof initMonthClose === 'function') initMonthClose();
     checkModuleSplitThreshold();

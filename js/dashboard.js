@@ -1,5 +1,8 @@
 let dashboardTxVisibleCount = LIST_PAGE_SIZE;
 let dashboardTxListSignature = '';
+let dashboardSelectionActive = false;
+const dashboardSelectedFingerprints = new Set();
+let dashboardCurrentListTx = [];
 const CHART_DRILL_TX_MAX_SLICES = 16;
 
 function resetDashboardTxListPagination() {
@@ -10,6 +13,92 @@ function resetDashboardTxListPagination() {
 function showMoreDashboardTransactions() {
     dashboardTxVisibleCount += LIST_PAGE_SIZE;
     renderDashboard();
+}
+
+function updateDashboardSelectionUi(forecastMode, searchQuery) {
+    const hideSelection = forecastMode && !searchQuery;
+    const selectBtn = document.getElementById('btn-dashboard-select');
+    const selectionBar = document.getElementById('dashboard-tx-selection-bar');
+    const hintEl = document.getElementById('dashboard-tx-list-hint');
+    const addBtn = document.getElementById('btn-dashboard-add-to-basket');
+
+    if (selectBtn) {
+        selectBtn.classList.toggle('hidden', hideSelection);
+        selectBtn.textContent = dashboardSelectionActive ? 'Anuluj' : 'Zaznacz';
+        selectBtn.setAttribute('aria-pressed', dashboardSelectionActive ? 'true' : 'false');
+    }
+    if (selectionBar) selectionBar.classList.toggle('hidden', hideSelection || !dashboardSelectionActive);
+    if (hintEl && !hideSelection) {
+        hintEl.textContent = dashboardSelectionActive
+            ? 'Zaznacz transakcje do raportu PDF'
+            : 'Dotknij, aby edytować';
+    }
+    if (addBtn) {
+        const count = dashboardSelectedFingerprints.size;
+        addBtn.disabled = count === 0;
+        addBtn.textContent = count > 0 ? `Dodaj do koszyka (${count})` : 'Dodaj do koszyka';
+    }
+}
+
+function exitDashboardSelectionMode() {
+    dashboardSelectionActive = false;
+    dashboardSelectedFingerprints.clear();
+}
+
+function toggleDashboardSelectionMode() {
+    const forecastMode = document.getElementById('dashboard-period-select')?.value === 'next';
+    const searchQuery = document.getElementById('db-search')?.value.trim() || '';
+    if (forecastMode && !searchQuery) return;
+
+    if (dashboardSelectionActive) exitDashboardSelectionMode();
+    else dashboardSelectionActive = true;
+
+    updateDashboardSelectionUi(forecastMode, searchQuery);
+    renderDashboard();
+}
+
+function toggleDashboardTxSelection(fingerprint, selected) {
+    if (!fingerprint) return;
+    if (selected) dashboardSelectedFingerprints.add(fingerprint);
+    else dashboardSelectedFingerprints.delete(fingerprint);
+
+    const forecastMode = document.getElementById('dashboard-period-select')?.value === 'next';
+    const searchQuery = document.getElementById('db-search')?.value.trim() || '';
+    updateDashboardSelectionUi(forecastMode, searchQuery);
+
+    document.querySelectorAll('.tx-row-checkbox').forEach((cb) => {
+        if (cb.dataset.txFp !== fingerprint) return;
+        cb.checked = selected;
+        cb.closest('.tx-row')?.classList.toggle('tx-row--selected', selected);
+    });
+}
+
+function selectAllDashboardFiltered() {
+    dashboardCurrentListTx.forEach((tx) => {
+        const fp = typeof transactionFingerprint === 'function' ? transactionFingerprint(tx) : '';
+        if (fp) dashboardSelectedFingerprints.add(fp);
+    });
+    renderDashboard();
+}
+
+function deselectAllDashboardFiltered() {
+    dashboardSelectedFingerprints.clear();
+    renderDashboard();
+}
+
+function addSelectedDashboardToBasket() {
+    if (!dashboardSelectedFingerprints.size) return;
+    const selected = dashboardCurrentListTx.filter((tx) => {
+        const fp = typeof transactionFingerprint === 'function' ? transactionFingerprint(tx) : '';
+        return fp && dashboardSelectedFingerprints.has(fp);
+    });
+    const added = typeof addTransactionsToBasket === 'function' ? addTransactionsToBasket(selected) : 0;
+    exitDashboardSelectionMode();
+    renderDashboard();
+    if (typeof showAppToast === 'function') {
+        if (added > 0) showAppToast(`Dodano ${added} ${added === 1 ? 'transakcję' : 'transakcje'} do koszyka`);
+        else showAppToast('Wybrane pozycje są już w koszyku', 'default');
+    }
 }
 
 function getDashboardTxListSignature(listTx, searchQuery) {
@@ -689,6 +778,8 @@ function renderDashboard() {
             activeChartSubCategory
         ));
     }
+    dashboardCurrentListTx = listTx;
+    updateDashboardSelectionUi(forecastMode, searchQuery);
 
     const chartTx = dateFilteredTx.filter(t => t.type === chartViewType);
     const chartTypeLabel = chartViewType === 'income' ? 'wpływów' : 'wydatków';
@@ -858,9 +949,19 @@ function renderDashboard() {
             ? formatPlannedTransactionBadge()
             : '';
         const metaText = searchQuery ? `${formatTxDate(t.date)} · ${t.mainCategory}` : t.mainCategory;
+        const fp = typeof transactionFingerprint === 'function' ? transactionFingerprint(t) : '';
+        const isSelected = dashboardSelectionActive && fp && dashboardSelectedFingerprints.has(fp);
         const row = document.createElement('div');
         row.className = fromArchive ? 'tx-row tx-row--archive' : 'tx-row';
+        if (dashboardSelectionActive) {
+            row.classList.add('tx-row--selectable');
+            if (isSelected) row.classList.add('tx-row--selected');
+        }
+        const checkboxHtml = dashboardSelectionActive
+            ? `<label class="tx-row-select" onclick="event.stopPropagation()"><input type="checkbox" class="tx-row-checkbox" data-tx-fp="${escapeHtml(fp)}" ${isSelected ? 'checked' : ''} aria-label="Zaznacz transakcję"></label>`
+            : '';
         row.innerHTML = `
+            ${checkboxHtml}
             ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
             <div class="tx-info">
                 <div class="tx-title">${title}${isRec}${isCard}${archiveBadge}${plannedBadge}</div>
@@ -870,9 +971,19 @@ function renderDashboard() {
             <div class="tx-amount-col">
                 <div class="tx-amount ${t.type}">${t.type === 'expense' ? '-' : '+'}${t.amount.toFixed(2)} zł</div>
             </div>
-            ${fromArchive ? '' : '<span class="tx-chevron" aria-hidden="true">›</span>'}
-            ${fromArchive ? '' : '<div class="tx-swipe-hint">Usuń</div>'}`;
-        if (globalIndex >= 0) attachSwipeDelete(row, globalIndex);
+            ${dashboardSelectionActive || fromArchive ? '' : '<span class="tx-chevron" aria-hidden="true">›</span>'}`;
+        if (dashboardSelectionActive && fp) {
+            const checkbox = row.querySelector('.tx-row-checkbox');
+            checkbox?.addEventListener('change', (e) => {
+                e.stopPropagation();
+                toggleDashboardTxSelection(fp, checkbox.checked);
+            });
+            row.addEventListener('click', () => {
+                toggleDashboardTxSelection(fp, !dashboardSelectedFingerprints.has(fp));
+            });
+        } else if (globalIndex >= 0) {
+            row.addEventListener('click', () => openTransactionDetails(globalIndex));
+        }
         list.appendChild(row);
     });
 

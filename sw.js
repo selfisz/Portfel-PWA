@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanse-pwa-v362';
+const CACHE_NAME = 'finanse-pwa-v364';
 
 const FIREBASE_CDN = [
   'https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js',
@@ -80,6 +80,7 @@ const ASSETS = [
   'js/reports-calendar.js',
   'js/reports-debt-calculations.js',
   'js/reports-debt.js',
+  'js/tx-basket.js',
   'js/reports-assets.js',
   'js/reports-analysis-chart.js',
   'js/reports-day-month-summary.js',
