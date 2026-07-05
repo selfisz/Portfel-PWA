@@ -211,6 +211,10 @@ function legacyMigrationStorageKey(uid) {
 
 async function migrateLegacyUserDataIfNeeded(uid) {
     if (!uid || !stateRef) return;
+    if (typeof isDemoFinanceUid === 'function' && isDemoFinanceUid(uid)) {
+        localStorage.setItem(legacyMigrationStorageKey(uid), '1');
+        return;
+    }
     if (localStorage.getItem(legacyMigrationStorageKey(uid)) === '1') return;
 
     try {

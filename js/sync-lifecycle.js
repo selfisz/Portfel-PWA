@@ -35,22 +35,34 @@ function startCloudSnapshotSync() {
         clearCloudSnapshotSyncTimeout();
     };
 
-    if (getTransactionCount(appState) < 100) {
+    const demoSession = typeof isDemoFinanceSession === 'function' && isDemoFinanceSession();
+
+    if (demoSession && typeof hydrateDemoFinanceFromServer === 'function') {
+        hydrateDemoFinanceFromServer().then((hydrated) => {
+            if (hydrated) clearSyncTimeout();
+        }).catch((err) => {
+            console.warn('hydrateDemoFinanceFromServer', err);
+        });
+    } else if (getTransactionCount(appState) < 100) {
         autoRecoverFromCloudBackupIfNeeded().then((recovered) => {
             if (recovered) clearSyncTimeout();
         });
     }
 
-    stateSnapshotUnsubscribe = stateRef.onSnapshot((docSnap) => {
+    stateSnapshotUnsubscribe = stateRef.onSnapshot({ includeMetadataChanges: true }, (docSnap) => {
+        if (demoSession && docSnap.metadata.fromCache) return;
         clearSyncTimeout();
         if (docSnap.exists) {
-            syncFromRemoteData(docSnap.data());
+            syncFromRemoteData(docSnap.data(), { fromCache: docSnap.metadata.fromCache === true });
             return;
         }
         cloudSyncUnlocked = true;
         const count = getTransactionCount(appState);
-        if (count > 0) saveState({ forceCloud: true });
-        else setSyncStatus('online', 0);
+        if (count > 0 && typeof isDemoFinanceCloudWriteAllowed === 'function' && isDemoFinanceCloudWriteAllowed()) {
+            saveState({ forceCloud: true });
+        } else if (count === 0) {
+            setSyncStatus('online', 0);
+        }
     }, (error) => {
         console.error('Błąd synchronizacji', error);
         clearSyncTimeout();

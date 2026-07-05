@@ -245,13 +245,30 @@ describe('izolacja kont — demo i chmura', () => {
             assets: [{ id: 'asset-demo-ppk', type: 'retirement', name: 'PPK — konto demo', amount: 1000 }]
         };
 
-        syncFromRemoteData(remote);
+        syncFromRemoteData(remote, { fromCache: false });
 
         expect(appState.loans).toHaveLength(1);
         expect(appState.loans[0].id).toBe('loan-demo-hipoteka');
         expect(appState.assets).toHaveLength(1);
         expect(appState.assets[0].id).toBe('asset-demo-ppk');
-        expect(shouldPreferRemoteFinanceState()).toBe(false);
+        expect(isDemoFinanceCloudWriteAllowed()).toBe(true);
+    });
+
+    it('syncFromRemoteData na demo ignoruje snapshot z cache Firestore', () => {
+        setFinanceStorageKey(DEMO_ACCOUNT_UID);
+        runInContext(`
+            appState.loans = [{ id: 'loan-main-real', name: 'Moja hipoteka' }];
+            appState.assets = [{ id: 'asset-real', name: 'XTB' }];
+        `);
+
+        syncFromRemoteData({
+            transactions: [{ amount: 10, type: 'expense', date: '2024-01-02', mainCategory: 'Dom', subCategory: 'B' }],
+            loans: [{ id: 'loan-demo-hipoteka', name: 'demo', totalAmount: 1, currentCapitalLeft: 1 }],
+            assets: [{ id: 'asset-demo-ppk', type: 'retirement', name: 'PPK demo', amount: 1 }]
+        }, { fromCache: true });
+
+        expect(appState.loans[0].id).toBe('loan-main-real');
+        expect(appState.assets[0].id).toBe('asset-real');
     });
 
     it('stripForeignDemoFinancePayload usuwa obce kredyty i aktywa z zapisu demo', () => {

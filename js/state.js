@@ -20,7 +20,9 @@ let appState = {
     categoryRules: [],
     pendingRecurringConfirmations: [],
     skippedRecurringMonths: {},
-    deletedAssetIds: []
+    deletedAssetIds: [],
+    todoLists: [],
+    todos: []
 };
 
 let formState = {
@@ -47,6 +49,22 @@ let reportsDebtCalendarMonth = null;
 let reportsLastPeriod = null;
 let cloudSyncUnlocked = false;
 let preferRemoteFinanceState = false;
+let demoFinanceHydratedFromServer = false;
+
+function isDemoFinanceSession() {
+    if (typeof isDemoFinanceUid !== 'function') return false;
+    const uid = getAccountUidFromStorage()
+        || (typeof getCurrentAuthUser === 'function' ? getCurrentAuthUser()?.uid : null);
+    return isDemoFinanceUid(uid);
+}
+
+function isDemoFinanceCloudWriteAllowed() {
+    return !isDemoFinanceSession() || demoFinanceHydratedFromServer;
+}
+
+function shouldSkipLocalFinanceBootstrap() {
+    return shouldPreferRemoteFinanceState() || isDemoFinanceSession();
+}
 
 function markPreferRemoteFinanceState() {
     preferRemoteFinanceState = true;
@@ -87,6 +105,7 @@ function beginFinanceSessionForUid(uid) {
             sessionStorage.setItem(FINANCE_SESSION_UID_KEY, uid);
         }
         if (typeof isDemoFinanceUid === 'function' && isDemoFinanceUid(uid)) {
+            demoFinanceHydratedFromServer = false;
             markPreferRemoteFinanceState();
             clearAccountScopedFinanceCache();
         }
@@ -108,14 +127,65 @@ function isDemoScopedFinanceId(id, prefix) {
 
 function stripForeignDemoFinancePayload(payload) {
     if (!payload || typeof payload !== 'object') return payload;
-    const uid = typeof getAccountUidFromStorage === 'function' ? getAccountUidFromStorage() : null;
-    if (typeof isDemoFinanceUid !== 'function' || !isDemoFinanceUid(uid)) return payload;
+    if (!isDemoFinanceSession()) return payload;
     return {
         ...payload,
         loans: (payload.loans || []).filter((loan) => isDemoScopedFinanceId(loan?.id, 'loan-demo-')),
         creditCards: (payload.creditCards || []).filter((card) => isDemoScopedFinanceId(card?.id, 'card-demo-')),
-        assets: (payload.assets || []).filter((asset) => isDemoScopedFinanceId(asset?.id, 'asset-demo-'))
+        assets: (payload.assets || []).filter((asset) => isDemoScopedFinanceId(asset?.id, 'asset-demo-')),
+        creditCardMovements: (payload.creditCardMovements || []).filter((move) => (
+            isDemoScopedFinanceId(move?.cardId, 'card-demo-')
+        ))
     };
+}
+
+function finalizeFinanceRemoteApply(remoteData) {
+    const localRaw = readLocalRawBeforeSync();
+    const localPersisted = localRaw ? getPersistedState(localRaw) : getPersistedState(appState);
+    const memoryPersisted = getPersistedState(appState);
+    const remotePersisted = getPersistedState(remoteData);
+    let payload = stripForeignDemoFinancePayload(getPersistedState(remoteData));
+    if (typeof mergeTodoFieldsIntoFinancePayload === 'function') {
+        payload = mergeTodoFieldsIntoFinancePayload(payload, remotePersisted, localPersisted, memoryPersisted);
+    }
+    applyRemoteAppState(payload);
+    if (typeof repairMissingCashMovementsFromTransactions === 'function') {
+        repairMissingCashMovementsFromTransactions();
+    }
+    checkAndProcessRecurringTransactions();
+    try {
+        localStorage.setItem(getFinanceStorageKey(), JSON.stringify(getPersistedState(appState)));
+    } catch (err) {
+        console.error('finalizeFinanceRemoteApply localStorage', err);
+    }
+    cloudSyncUnlocked = true;
+    if (isDemoFinanceSession()) {
+        demoFinanceHydratedFromServer = true;
+    }
+    clearPreferRemoteFinanceState();
+    const finalCount = getTransactionCount(appState);
+    setSyncStatus('online', finalCount);
+    try {
+        refreshCurrentView();
+    } catch (err) {
+        console.error('refreshCurrentView', err);
+    }
+    if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
+    return finalCount;
+}
+
+async function hydrateDemoFinanceFromServer() {
+    if (!isDemoFinanceSession() || !stateRef || typeof stateRef.get !== 'function') return false;
+    if (demoFinanceHydratedFromServer) return true;
+    try {
+        const snap = await stateRef.get({ source: 'server' });
+        if (!snap.exists) return false;
+        finalizeFinanceRemoteApply(snap.data());
+        return true;
+    } catch (err) {
+        console.warn('hydrateDemoFinanceFromServer', err);
+        return false;
+    }
 }
 function getPersistedState(raw = appState) {
     const data = raw ?? appState ?? {};
@@ -159,7 +229,13 @@ function getPersistedState(raw = appState) {
         skippedRecurringMonths: data.skippedRecurringMonths && typeof data.skippedRecurringMonths === 'object'
             ? data.skippedRecurringMonths
             : {},
-        deletedAssetIds: Array.isArray(data.deletedAssetIds) ? data.deletedAssetIds : []
+        deletedAssetIds: Array.isArray(data.deletedAssetIds) ? data.deletedAssetIds : [],
+        todoLists: typeof normalizeTodoListsArray === 'function'
+            ? normalizeTodoListsArray(data.todoLists)
+            : (Array.isArray(data.todoLists) ? data.todoLists : []),
+        todos: typeof normalizeTodosArray === 'function'
+            ? normalizeTodosArray(data.todos)
+            : (Array.isArray(data.todos) ? data.todos : [])
     };
     return persisted;
 }
@@ -330,12 +406,15 @@ function resetAppStateForAccountSwitch() {
         categoryRules: [],
         pendingRecurringConfirmations: [],
         skippedRecurringMonths: {},
-        deletedAssetIds: []
+        deletedAssetIds: [],
+        todoLists: [],
+        todos: []
     };
     categoryTree = typeof DEFAULT_CATEGORY_TREE !== 'undefined'
         ? JSON.parse(JSON.stringify(DEFAULT_CATEGORY_TREE))
         : categoryTree;
     cloudSyncUnlocked = false;
+    demoFinanceHydratedFromServer = false;
     if (typeof stopCloudSync === 'function') stopCloudSync();
     if (typeof clearPendingCloudSync === 'function') clearPendingCloudSync();
 }
@@ -364,34 +443,22 @@ function readLocalRawBeforeSync() {
     }
 }
 
-function syncFromRemoteData(remoteData) {
+function syncFromRemoteData(remoteData, options = {}) {
+    const fromCache = options.fromCache === true;
+
+    if (isDemoFinanceSession()) {
+        if (fromCache) return getTransactionCount(appState);
+        if (!remoteData || typeof remoteData !== 'object') return getTransactionCount(appState);
+        return finalizeFinanceRemoteApply(remoteData);
+    }
+
     const remoteAuthoritative = shouldPreferRemoteFinanceState();
     const localRawBeforeSync = remoteAuthoritative ? null : readLocalRawBeforeSync();
     const localTxCount = getTransactionCount(localRawBeforeSync ?? appState);
     const remoteTxCount = getTransactionCount(remoteData);
 
     if (remoteAuthoritative && (remoteTxCount > 0 || hasFinancePortfolio(remoteData))) {
-        applyRemoteAppState(remoteData);
-        if (typeof repairMissingCashMovementsFromTransactions === 'function') {
-            repairMissingCashMovementsFromTransactions();
-        }
-        checkAndProcessRecurringTransactions();
-        try {
-            localStorage.setItem(getFinanceStorageKey(), JSON.stringify(getPersistedState(appState)));
-        } catch (err) {
-            console.error('syncFromRemoteData localStorage', err);
-        }
-        cloudSyncUnlocked = true;
-        clearPreferRemoteFinanceState();
-        const finalCount = getTransactionCount(appState);
-        setSyncStatus('online', finalCount);
-        try {
-            refreshCurrentView();
-        } catch (err) {
-            console.error('refreshCurrentView', err);
-        }
-        if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
-        return finalCount;
+        return finalizeFinanceRemoteApply(remoteData);
     }
 
     if (remoteTxCount === 0 && localTxCount > 0) {
@@ -416,7 +483,13 @@ function syncFromRemoteData(remoteData) {
             remotePersisted.cashMovements,
             localPersisted.cashMovements,
             memoryPersisted.cashMovements
-        )
+        ),
+        todoLists: typeof mergeTodoListsById === 'function'
+            ? mergeTodoListsById(remotePersisted.todoLists, localPersisted.todoLists, memoryPersisted.todoLists)
+            : (localPersisted.todoLists?.length ? localPersisted.todoLists : memoryPersisted.todoLists),
+        todos: typeof mergeTodosById === 'function'
+            ? mergeTodosById(remotePersisted.todos, localPersisted.todos, memoryPersisted.todos)
+            : (localPersisted.todos?.length ? localPersisted.todos : memoryPersisted.todos)
     };
 
     applyRemoteAppState(mergedRemote, localLoans, localCreditCards);
@@ -444,6 +517,7 @@ function syncFromRemoteData(remoteData) {
 }
 
 async function autoRecoverFromCloudBackupIfNeeded() {
+    if (isDemoFinanceSession()) return false;
     if (getTransactionCount(appState) >= 100) return false;
     try {
         const payload = typeof getCloudBackupPayload === 'function'
@@ -484,6 +558,7 @@ function applyRemoteAppState(raw, extraLoanSources = [], extraCreditCardSources 
     if (typeof enforceAppStateLimits === 'function') {
         enforceAppStateLimits({ silent: true });
     }
+    if (typeof ensureTodoListsInitialized === 'function') ensureTodoListsInitialized();
     return hadUiFields;
 }
 
@@ -492,6 +567,7 @@ function normalizeAppState(raw) {
 }
 
 function loadLocalFinanceState() {
+    if (isDemoFinanceSession() || shouldSkipLocalFinanceBootstrap()) return false;
     const localRaw = readStoredAppStateRaw();
     if (!localRaw) return false;
 
@@ -509,14 +585,14 @@ function loadLocalFinanceState() {
 
 function initData() {
     if (!stateRef || typeof stateRef.onSnapshot !== 'function') {
-        if (!shouldPreferRemoteFinanceState() && loadLocalFinanceState()) {
+        if (!shouldSkipLocalFinanceBootstrap() && loadLocalFinanceState()) {
             setSyncStatus('offline', getTransactionCount(appState));
         }
         if (typeof initOfflineListeners === 'function') initOfflineListeners();
         return;
     }
 
-    if (!shouldPreferRemoteFinanceState() && loadLocalFinanceState()) {
+    if (!shouldSkipLocalFinanceBootstrap() && loadLocalFinanceState()) {
         /* local snapshot loaded — cloud sync continues below */
     }
 
@@ -549,6 +625,10 @@ function saveState(options = {}) {
         return;
     }
     if (typeof refreshStorageUsageUI === 'function') refreshStorageUsageUI();
+    if (!isDemoFinanceCloudWriteAllowed()) {
+        setSyncStatus('offline', payload.transactions.length);
+        return;
+    }
     if (payloadBytes > MAX_FIRESTORE_PAYLOAD_BYTES) {
         setSyncStatus('offline', payload.transactions.length);
         if (typeof showAppToast === 'function') {
@@ -582,6 +662,9 @@ function refreshCurrentView() {
     if (reports?.classList.contains('active')) renderReports();
     if (investments?.classList.contains('active') && typeof renderAssets === 'function') renderAssets();
     if (loans?.classList.contains('active')) renderLoans();
+    if (document.getElementById('view-tasks')?.classList.contains('active') && typeof renderTasksView === 'function') {
+        renderTasksView();
+    }
 }
 
 function checkAndProcessRecurringTransactions() {
