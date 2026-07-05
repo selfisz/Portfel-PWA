@@ -986,8 +986,17 @@ body.notifications-open {
 
 .notifications-subnav {
     flex-shrink: 0;
-    padding: 0 12px 8px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 0 12px 10px;
     border-bottom: 1px solid var(--border);
+}
+
+.notifications-subnav .analysis-subnav-btn {
+    font-size: var(--text-xs);
+    min-height: 40px;
+    padding: 10px 8px;
 }
 
 .notifications-tab-badge {
