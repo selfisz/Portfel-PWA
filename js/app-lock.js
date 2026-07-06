@@ -508,16 +508,23 @@ function lockAppNow() {
 
 function scheduleAppLockIdleCheck() {
     if (appLockIdleTimer) window.clearTimeout(appLockIdleTimer);
-    if (!isAppLockEnabled() || appLockOverlayVisible || appLockRestricted) return;
-    const remaining = APP_LOCK_IDLE_MS - (Date.now() - getAppLockLastActivityTs());
+    if (appLockOverlayVisible || appLockRestricted) return;
+    const last = getAppLockLastActivityTs();
+    const remaining = APP_LOCK_IDLE_MS - (Date.now() - (last || Date.now()));
     const delay = Math.max(1000, remaining);
     appLockIdleTimer = window.setTimeout(() => {
-        if (!isAppLockEnabled() || appLockOverlayVisible || appLockRestricted) return;
-        if (document.visibilityState === 'visible' && shouldLockDueToIdle()) {
-            activateAppLockState({ force: true });
-        } else {
+        if (appLockOverlayVisible || appLockRestricted) return;
+        if (document.visibilityState !== 'visible') {
             scheduleAppLockIdleCheck();
+            return;
         }
+        if (!shouldRunEphemeralIdleReset()
+            && !(isAppLockEnabled() && shouldLockDueToIdle())) {
+            scheduleAppLockIdleCheck();
+            return;
+        }
+        runUiIdleActions();
+        scheduleAppLockIdleCheck();
     }, delay);
 }
 
@@ -526,7 +533,7 @@ function bindAppLockActivityListeners() {
     bindAppLockActivityListeners._done = true;
 
     const onActivity = () => {
-        if (!isAppLockEnabled() || appLockOverlayVisible || appLockRestricted) return;
+        if (appLockOverlayVisible || appLockRestricted) return;
         touchAppLockActivity();
         scheduleAppLockIdleCheck();
     };
@@ -536,10 +543,12 @@ function bindAppLockActivityListeners() {
     });
 
     document.addEventListener('visibilitychange', () => {
-        if (!isAppLockEnabled()) return;
-        if (document.visibilityState === 'hidden') return;
-        if (shouldLockDueToIdle()) {
-            activateAppLockState({ force: true });
+        if (document.visibilityState === 'hidden') {
+            if (!appLockOverlayVisible && !appLockRestricted) touchAppLockActivity();
+            return;
+        }
+        if (shouldRunEphemeralIdleReset() || (isAppLockEnabled() && shouldLockDueToIdle())) {
+            runUiIdleActions();
             return;
         }
         if (!appLockRestricted) {
@@ -549,7 +558,7 @@ function bindAppLockActivityListeners() {
     });
 
     window.addEventListener('pagehide', () => {
-        if (!isAppLockEnabled() || appLockOverlayVisible || appLockRestricted) return;
+        if (appLockOverlayVisible || appLockRestricted) return;
         touchAppLockActivity();
     });
 }
@@ -863,4 +872,6 @@ function initAppLock() {
     initAppLockPinPads();
     bindAppLockActivityListeners();
     refreshAppLockSettingsUI();
+    touchAppLockActivity();
+    scheduleAppLockIdleCheck();
 }

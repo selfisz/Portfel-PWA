@@ -19,6 +19,7 @@ beforeAll(() => {
         removeItem(key) { delete this._data[key]; },
         clear() { this._data = {}; }
     };
+    loadScript('js/ui-idle-reset.js');
     loadScript('js/app-lock.js');
 });
 
