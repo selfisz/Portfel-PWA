@@ -41,7 +41,6 @@ function stopCloudSync() {
         stateSnapshotUnsubscribe = null;
     }
     clearCloudSnapshotSyncTimeout();
-    cloudAutoRecoverChecked = false;
 }
 
 function startCloudSnapshotSync() {

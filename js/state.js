@@ -63,7 +63,7 @@ function isDemoFinanceCloudWriteAllowed() {
 }
 
 function shouldSkipLocalFinanceBootstrap() {
-    return shouldPreferRemoteFinanceState() || isDemoFinanceSession();
+    return isDemoFinanceSession();
 }
 
 function markPreferRemoteFinanceState() {
@@ -100,17 +100,19 @@ function beginFinanceSessionForUid(uid) {
     if (!uid) return;
     try {
         const prev = sessionStorage.getItem(FINANCE_SESSION_UID_KEY);
-        if (prev !== uid) {
+        if (prev && prev !== uid) {
             markPreferRemoteFinanceState();
-            sessionStorage.setItem(FINANCE_SESSION_UID_KEY, uid);
         }
+        sessionStorage.setItem(FINANCE_SESSION_UID_KEY, uid);
         if (typeof isDemoFinanceUid === 'function' && isDemoFinanceUid(uid)) {
             demoFinanceHydratedFromServer = false;
             markPreferRemoteFinanceState();
             clearAccountScopedFinanceCache();
         }
     } catch {
-        markPreferRemoteFinanceState();
+        if (typeof isDemoFinanceUid === 'function' && isDemoFinanceUid(uid)) {
+            markPreferRemoteFinanceState();
+        }
     }
 }
 
@@ -458,18 +460,29 @@ function syncFromRemoteData(remoteData, options = {}) {
         return finalizeFinanceRemoteApply(remoteData);
     }
 
-    const remoteAuthoritative = shouldPreferRemoteFinanceState();
-    const localRawBeforeSync = remoteAuthoritative ? null : readLocalRawBeforeSync();
+    const localRawBeforeSync = readLocalRawBeforeSync();
     const localTxCount = getTransactionCount(localRawBeforeSync ?? appState);
     const remoteTxCount = getTransactionCount(remoteData);
+    const pendingLocalSync = typeof hasPendingCloudSync === 'function' && hasPendingCloudSync();
 
-    if (remoteAuthoritative && (remoteTxCount > 0 || hasFinancePortfolio(remoteData))) {
+    if (shouldPreferRemoteFinanceState()
+        && !pendingLocalSync
+        && localTxCount === 0
+        && (remoteTxCount > 0 || hasFinancePortfolio(remoteData))) {
         return finalizeFinanceRemoteApply(remoteData);
     }
 
     if (remoteTxCount === 0 && localTxCount > 0) {
+        if (getTransactionCount(appState) === 0) {
+            loadLocalFinanceState();
+        }
         cloudSyncUnlocked = true;
         setSyncStatus('online', localTxCount);
+        try {
+            refreshCurrentView();
+        } catch (err) {
+            console.error('refreshCurrentView', err);
+        }
         return localTxCount;
     }
 

@@ -116,4 +116,19 @@ describe('sync-lifecycle', () => {
         reconnectCloudSnapshotSync();
         expect(unsubscribe).not.toHaveBeenCalled();
     });
+
+    it('stopCloudSync nie resetuje cloudAutoRecoverChecked', () => {
+        runInContext(`appState = { transactions: [], loans: [], creditCards: [], assets: [], cashMovements: [] };`);
+        globalThis.isDemoFinanceSession = () => false;
+        globalThis.hasPendingCloudSync = () => false;
+        const autoRecoverSpy = vi.fn(() => Promise.resolve(false));
+        globalThis.autoRecoverFromCloudBackupIfNeeded = autoRecoverSpy;
+
+        startCloudSnapshotSync();
+        expect(autoRecoverSpy).toHaveBeenCalledTimes(1);
+
+        stopCloudSync();
+        startCloudSnapshotSync();
+        expect(autoRecoverSpy).toHaveBeenCalledTimes(1);
+    });
 });
