@@ -15,6 +15,7 @@ function bootstrapApp() {
     if (typeof initSyncLifecycleListeners === 'function') initSyncLifecycleListeners();
     scheduleMarketPriceRefresh();
     initNotifications();
+    if (typeof initHubUi === 'function') initHubUi();
     if (typeof initTasks === 'function') initTasks();
     if (typeof initTxBasket === 'function') initTxBasket();
     if (typeof initSkrybaVoice === 'function') initSkrybaVoice();
