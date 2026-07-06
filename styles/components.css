@@ -9638,6 +9638,37 @@ button.reports-debt-split-item strong {
     margin-bottom: 0;
 }
 
+.reports-assets-investments-card h2,
+.reports-assets-all-card h2 {
+    margin-bottom: 10px;
+}
+
+.reports-assets-inv-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 10px 12px;
+    margin-bottom: 4px;
+    border-radius: var(--radius-md);
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+.reports-assets-inv-stat strong {
+    color: var(--text);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.reports-assets-all-scroll {
+    max-height: min(52vh, 400px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
 #view-reports .reports-debts-hero-card,
 #view-reports .reports-assets-hero-card {
     margin-bottom: 0;

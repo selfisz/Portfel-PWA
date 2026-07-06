@@ -394,33 +394,58 @@ function renderReportsAssetsInvestments(aCtx) {
     const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
     const gainClass = totalGain >= 0 ? 'income' : 'expense';
 
-    const rows = investments.map((asset) => {
-        const value = getAssetValuePln(asset);
-        const gain = typeof getAssetGainPln === 'function' ? getAssetGainPln(asset) : 0;
-        const gainPct = typeof getAssetGainPct === 'function' ? getAssetGainPct(asset) : 0;
-        const name = typeof getAssetDisplayName === 'function' ? getAssetDisplayName(asset) : asset.name;
-        const assetId = escapeHtml(asset.id);
-        const rowGainClass = gain >= 0 ? 'income' : 'expense';
-        return `<div class="assets-analysis-row asset-clickable" role="button" tabindex="0"
-            onclick="openAssetDetails('${assetId}')" onkeydown="if (event.key === 'Enter') openAssetDetails('${assetId}')">
-            <div class="assets-analysis-info">
-                <strong>${escapeHtml(name)}</strong>
-                <span class="reports-hint">${formatPlnAmount(value)}</span>
-            </div>
-            <div class="assets-analysis-amounts">
-                <span class="${rowGainClass}">${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%</span>
-                <strong class="${rowGainClass}">${gain >= 0 ? '+' : ''}${formatPlnAmount(gain)}</strong>
-            </div>
-        </div>`;
-    }).join('');
+    const rows = typeof renderAssetsPortfolioRow === 'function'
+        ? investments.map((asset) => renderAssetsPortfolioRow(asset)).join('')
+        : investments.map((asset) => {
+            const value = getAssetValuePln(asset);
+            const gain = typeof getAssetGainPln === 'function' ? getAssetGainPln(asset) : 0;
+            const gainPct = typeof getAssetGainPct === 'function' ? getAssetGainPct(asset) : 0;
+            const name = typeof getAssetDisplayName === 'function' ? getAssetDisplayName(asset) : asset.name;
+            const assetId = escapeHtml(asset.id);
+            const rowGainClass = gain >= 0 ? 'income' : 'expense';
+            return `<div class="assets-portfolio-row asset-clickable" role="button" tabindex="0"
+                onclick="openAssetDetails('${assetId}')" onkeydown="if (event.key === 'Enter') openAssetDetails('${assetId}')">
+                <div class="assets-portfolio-row-main">
+                    <strong class="assets-portfolio-row-name">${escapeHtml(name)}</strong>
+                    <span class="assets-portfolio-row-meta">${formatPlnAmount(value)}</span>
+                </div>
+                <div class="assets-portfolio-row-values">
+                    <span class="assets-portfolio-row-pl ${rowGainClass}">${gain >= 0 ? '+' : ''}${formatPlnAmount(gain)} (${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%)</span>
+                </div>
+            </div>`;
+        }).join('');
 
     el.innerHTML = `
-        <div class="assets-analysis-total">
-            <div><span class="label">Wartość</span><strong>${formatPlnAmount(totalValue)}</strong></div>
-            <div><span class="label">Koszt</span><strong>${formatPlnAmount(totalCost)}</strong></div>
-            <div><span class="label">P/L</span><strong class="${gainClass}">${totalGainPct >= 0 ? '+' : ''}${totalGainPct.toFixed(1)}% (${totalGain >= 0 ? '+' : ''}${formatPlnAmount(totalGain)})</strong></div>
+        <div class="reports-assets-inv-summary">
+            <span class="reports-assets-inv-stat">Wartość <strong>${formatPlnAmount(totalValue)}</strong></span>
+            <span class="reports-assets-inv-stat">Koszt <strong>${formatPlnAmount(totalCost)}</strong></span>
+            <span class="reports-assets-inv-stat">P/L <strong class="${gainClass}">${totalGainPct >= 0 ? '+' : ''}${totalGainPct.toFixed(1)}% · ${totalGain >= 0 ? '+' : ''}${formatPlnAmount(totalGain)}</strong></span>
         </div>
-        ${rows}`;
+        <div class="assets-portfolio-panel-rows">${rows}</div>`;
+}
+
+function buildReportsAssetListRowHtml(asset, portfolioTotal) {
+    const value = getAssetValuePln(asset);
+    const pct = portfolioTotal > 0 ? Math.round((value / portfolioTotal) * 100) : 0;
+    const typeLabel = typeof ASSET_TYPE_LABELS !== 'undefined'
+        ? (ASSET_TYPE_LABELS[asset.type] || 'Aktywo')
+        : 'Aktywo';
+    const horizon = typeof getAssetHorizon === 'function' && typeof ASSET_HORIZON_LABELS !== 'undefined'
+        ? ASSET_HORIZON_LABELS[getAssetHorizon(asset)]
+        : '';
+    const name = typeof getAssetDisplayName === 'function' ? getAssetDisplayName(asset) : asset.name;
+    const assetId = escapeHtml(asset.id);
+    const meta = [typeLabel, horizon, `${pct}%`].filter(Boolean).join(' · ');
+    return `<div class="assets-portfolio-row asset-clickable" role="button" tabindex="0"
+        onclick="openAssetDetails('${assetId}')" onkeydown="if (event.key === 'Enter') openAssetDetails('${assetId}')">
+        <div class="assets-portfolio-row-main">
+            <strong class="assets-portfolio-row-name">${escapeHtml(name)}</strong>
+            <span class="assets-portfolio-row-meta">${escapeHtml(meta)}</span>
+        </div>
+        <div class="assets-portfolio-row-values">
+            <strong class="assets-portfolio-row-value">${formatPlnAmount(value)}</strong>
+        </div>
+    </div>`;
 }
 
 function renderReportsAssetsRetirement(aCtx) {
@@ -466,28 +491,7 @@ function renderReportsAssetsList(aCtx) {
     const total = aCtx?.totalAssets ?? getPortfolioValuePln();
     const sorted = [...assets].sort((a, b) => getAssetValuePln(b) - getAssetValuePln(a));
 
-    el.innerHTML = sorted.map((asset) => {
-        const value = getAssetValuePln(asset);
-        const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-        const typeLabel = typeof ASSET_TYPE_LABELS !== 'undefined'
-            ? (ASSET_TYPE_LABELS[asset.type] || 'Aktywo')
-            : 'Aktywo';
-        const horizon = typeof getAssetHorizon === 'function' && typeof ASSET_HORIZON_LABELS !== 'undefined'
-            ? ASSET_HORIZON_LABELS[getAssetHorizon(asset)]
-            : '';
-        const name = typeof getAssetDisplayName === 'function' ? getAssetDisplayName(asset) : asset.name;
-        const assetId = escapeHtml(asset.id);
-        return `<div class="analysis-loan-click asset-clickable" role="button" tabindex="0"
-            onclick="openAssetDetails('${assetId}')" onkeydown="if (event.key === 'Enter') openAssetDetails('${assetId}')">
-            <div class="analysis-subsection-label">${escapeHtml(name)}</div>
-            <div class="loan-report-grid">
-                <div><span class="label">Wartość</span><strong>${formatPlnAmount(value)}</strong></div>
-                <div><span class="label">Udział</span><strong>${pct}%</strong></div>
-                <div><span class="label">Typ</span><strong>${escapeHtml(typeLabel)}</strong></div>
-                <div><span class="label">Horyzont</span><strong>${escapeHtml(horizon)}</strong></div>
-            </div>
-        </div>`;
-    }).join('');
+    el.innerHTML = `<div class="assets-portfolio-panel-rows">${sorted.map((asset) => buildReportsAssetListRowHtml(asset, total)).join('')}</div>`;
 }
 
 function renderReportsAssetsDebtLink(aCtx) {
