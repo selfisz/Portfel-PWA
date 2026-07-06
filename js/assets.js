@@ -163,6 +163,7 @@ function togglePortfolioGroupSummary(groupId) {
 
 function getAssetHorizon(asset) {
     const a = normalizeAsset(asset);
+    if (a.type === 'retirement' && a.retirementKind === 'KZP') return 'short';
     if (a.type === 'retirement') return 'long';
     if (a.type === 'investment' && a.brokerAccount === 'ikze') return 'long';
     return 'short';
@@ -304,6 +305,12 @@ function toggleAssetSummaryInclude(assetId) {
 }
 
 function setAllAssetsSummaryInclude(included) {
+    if (!appState.reportPrefs || typeof appState.reportPrefs !== 'object') appState.reportPrefs = {};
+    if (included) {
+        appState.reportPrefs.excludedPortfolioGroups = [];
+    } else {
+        appState.reportPrefs.excludedPortfolioGroups = ASSET_PORTFOLIO_GROUPS.map((group) => group.id);
+    }
     getActiveAssets().forEach((asset) => {
         const currentlyIncluded = asset.includeInSummary !== false;
         if (currentlyIncluded === included) return;
@@ -454,8 +461,8 @@ function renderAssetsHorizonSection(horizon, assets) {
         sectionAssets.filter((asset) => asset.includeInSummary !== false)
     );
     const hint = horizon === 'short'
-        ? 'Gotówka, lokaty, inwestycje, inne'
-        : 'PPK, IKZE, emerytura, KZP';
+        ? 'Gotówka, lokaty, inwestycje, KZP, inne'
+        : 'PPK, IKZE, emerytura';
 
     return `<section class="assets-horizon-section">
         <div class="assets-horizon-head">

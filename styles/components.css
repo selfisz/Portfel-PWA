@@ -9663,12 +9663,6 @@ button.reports-debt-split-item strong {
     font-variant-numeric: tabular-nums;
 }
 
-.reports-assets-all-scroll {
-    max-height: min(52vh, 400px);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-}
-
 #view-reports .reports-debts-hero-card,
 #view-reports .reports-assets-hero-card {
     margin-bottom: 0;

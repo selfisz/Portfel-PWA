@@ -191,8 +191,12 @@ describe('getAssetDisplayName', () => {
 // getAssetHorizon
 // ===========================================================================
 describe('getAssetHorizon', () => {
-  it('retirement → "long"', () => {
+  it('retirement PPK → "long"', () => {
     expect(getAssetHorizon({ id: 'x', type: 'retirement', retirementKind: 'PPK', amount: 1000 })).toBe('long');
+  });
+
+  it('retirement KZP → "short" (środki operacyjne)', () => {
+    expect(getAssetHorizon({ id: 'x', type: 'retirement', retirementKind: 'KZP', amount: 500 })).toBe('short');
   });
 
   it('investment → "short"', () => {

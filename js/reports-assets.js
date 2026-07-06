@@ -365,8 +365,8 @@ function renderReportsAssetsHorizon() {
     el.innerHTML = slices.map((slice) => {
         const pct = Math.round((slice.amount / total) * 100);
         const hint = slice.horizon === 'short'
-            ? 'Gotówka, Cele, akcje, lokaty'
-            : 'PPK, IKZE, emerytura, KZP';
+            ? 'Gotówka, Cele, akcje, lokaty, KZP'
+            : 'PPK, IKZE, emerytura';
         return `<div class="assets-analysis-horizon-row">
             <div class="assets-analysis-horizon-head">
                 <strong>${escapeHtml(slice.label)}</strong>
@@ -378,11 +378,20 @@ function renderReportsAssetsHorizon() {
     }).join('');
 }
 
+function getReportsLongHorizonAssets(assets) {
+    return assets.filter((asset) => {
+        if (asset.type === 'retirement') return asset.retirementKind !== 'KZP';
+        if (asset.type === 'investment' && asset.brokerAccount === 'ikze') return true;
+        return false;
+    });
+}
+
 function renderReportsAssetsInvestments(aCtx) {
     const el = document.getElementById('reports-assets-investments');
     if (!el) return;
 
-    const investments = (aCtx?.assets ?? getAnalysisSummaryAssets()).filter((a) => a.type === 'investment');
+    const investments = (aCtx?.assets ?? getAnalysisSummaryAssets())
+        .filter((a) => a.type === 'investment' && a.brokerAccount !== 'ikze');
     if (!investments.length) {
         el.innerHTML = '<p class="reports-hint">Brak inwestycji w sumie.</p>';
         return;
@@ -452,14 +461,20 @@ function renderReportsAssetsRetirement(aCtx) {
     const el = document.getElementById('reports-assets-retirement');
     if (!el) return;
 
-    const retirement = (aCtx?.assets ?? getAnalysisSummaryAssets()).filter((a) => a.type === 'retirement');
-    if (!retirement.length) {
+    const assets = aCtx?.assets ?? getAnalysisSummaryAssets();
+    const longHorizon = getReportsLongHorizonAssets(assets);
+    if (!longHorizon.length) {
         el.innerHTML = '<p class="reports-hint">Brak produktów emerytalnych w sumie.</p>';
         return;
     }
 
-    const total = retirement.reduce((s, a) => s + getAssetValuePln(a), 0);
-    el.innerHTML = retirement.map((asset) => {
+    const total = longHorizon.reduce((s, a) => s + getAssetValuePln(a), 0);
+    const sorted = [...longHorizon].sort((a, b) => getAssetValuePln(b) - getAssetValuePln(a));
+    el.innerHTML = `<div class="assets-portfolio-panel-rows">${sorted.map((asset) => {
+        if (asset.type === 'investment' && asset.brokerAccount === 'ikze'
+            && typeof renderAssetsPortfolioRow === 'function') {
+            return renderAssetsPortfolioRow(asset);
+        }
         const kind = typeof RETIREMENT_KIND_LABELS !== 'undefined'
             ? (RETIREMENT_KIND_LABELS[asset.retirementKind] || asset.retirementKind)
             : asset.retirementKind;
@@ -467,15 +482,17 @@ function renderReportsAssetsRetirement(aCtx) {
         const value = getAssetValuePln(asset);
         const pct = total > 0 ? Math.round((value / total) * 100) : 0;
         const assetId = escapeHtml(asset.id);
-        return `<div class="assets-analysis-row asset-clickable" role="button" tabindex="0"
+        return `<div class="assets-portfolio-row asset-clickable" role="button" tabindex="0"
             onclick="openAssetDetails('${assetId}')" onkeydown="if (event.key === 'Enter') openAssetDetails('${assetId}')">
-            <div class="assets-analysis-info">
-                <strong>${escapeHtml(name)}</strong>
-                <span class="reports-hint">${escapeHtml(kind || 'Emerytura')} · ${pct}%</span>
+            <div class="assets-portfolio-row-main">
+                <strong class="assets-portfolio-row-name">${escapeHtml(name)}</strong>
+                <span class="assets-portfolio-row-meta">${escapeHtml(kind || 'Emerytura')} · ${pct}%</span>
             </div>
-            <strong>${formatPlnAmount(value)}</strong>
+            <div class="assets-portfolio-row-values">
+                <strong class="assets-portfolio-row-value">${formatPlnAmount(value)}</strong>
+            </div>
         </div>`;
-    }).join('');
+    }).join('')}</div>`;
 }
 
 function renderReportsAssetsList(aCtx) {
