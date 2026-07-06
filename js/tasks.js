@@ -254,12 +254,6 @@ function getTodoListIcon(list) {
     return TODO_LIST_ICONS[list?.kind] || TODO_LIST_ICONS.custom;
 }
 
-function addDaysToIsoDate(baseDate, offsetDays) {
-    const date = baseDate instanceof Date ? new Date(baseDate) : new Date();
-    date.setDate(date.getDate() + offsetDays);
-    return localIsoDate(date);
-}
-
 function getTodayTabTodos(includeDone = tasksShowDone) {
     ensureTodoListsInitialized();
     const tomorrow = typeof getTomorrowIsoDate === 'function' ? getTomorrowIsoDate() : null;
@@ -1336,7 +1330,10 @@ function configureTodoEditorForList(list, item = null) {
 function applyTasksDueChip(offsetDays) {
     const dueInput = document.getElementById('tasks-edit-due');
     if (!dueInput) return;
-    dueInput.value = addDaysToIsoDate(new Date(), offsetDays);
+    const todayIso = localIsoDate(new Date());
+    dueInput.value = typeof addDaysToIsoDate === 'function'
+        ? addDaysToIsoDate(todayIso, offsetDays)
+        : todayIso;
     document.querySelectorAll('.tasks-due-chip').forEach((chip) => {
         chip.classList.toggle('active', Number(chip.dataset.dueOffset) === offsetDays);
     });
@@ -1366,13 +1363,19 @@ function openTodoItemCreate(listId) {
     if (amountInput) amountInput.value = '';
     if (noteInput) noteInput.value = '';
     if (dueInput) {
-        if (list.kind === 'reminders') dueInput.value = addDaysToIsoDate(new Date(), 1);
-        else if (list.kind === 'payments' || list.kind === 'finance') dueInput.value = localIsoDate(new Date());
+        const todayIso = localIsoDate(new Date());
+        if (list.kind === 'reminders') {
+            dueInput.value = typeof getTomorrowIsoDate === 'function'
+                ? getTomorrowIsoDate()
+                : (typeof addDaysToIsoDate === 'function' ? addDaysToIsoDate(todayIso, 1) : todayIso);
+        } else if (list.kind === 'payments' || list.kind === 'finance') dueInput.value = todayIso;
         else dueInput.value = '';
     }
     document.querySelectorAll('.tasks-due-chip').forEach((chip) => chip.classList.remove('active'));
     if (list.kind === 'reminders' && dueInput?.value) {
-        const tomorrow = addDaysToIsoDate(new Date(), 1);
+        const tomorrow = typeof getTomorrowIsoDate === 'function'
+            ? getTomorrowIsoDate()
+            : addDaysToIsoDate(localIsoDate(new Date()), 1);
         if (dueInput.value === tomorrow) {
             document.querySelector('.tasks-due-chip[data-due-offset="1"]')?.classList.add('active');
         }

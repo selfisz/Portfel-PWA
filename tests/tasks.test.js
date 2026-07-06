@@ -323,4 +323,29 @@ describe('moduł zadań', () => {
         evaluateTaskDueReminders();
         expect(created[0]?.title).toBe('Dziś termin: test');
     });
+
+    it('chipy Dziś/Jutro ustawiają datę (addDaysToIsoDate z notifications.js)', () => {
+        globalThis.addDaysToIsoDate = (isoDate, days) => {
+            if (!isoDate) return '';
+            const d = new Date(`${isoDate}T12:00:00`);
+            d.setDate(d.getDate() + days);
+            return localIsoDate(d);
+        };
+        const dueInput = { value: '2026-07-06' };
+        globalThis.document = {
+            getElementById: (id) => (id === 'tasks-edit-due' ? dueInput : null),
+            querySelectorAll: (sel) => {
+                if (sel !== '.tasks-due-chip') return [];
+                return [0, 1, 7].map((offset) => ({
+                    dataset: { dueOffset: String(offset) },
+                    classList: { toggle: () => {} }
+                }));
+            },
+            addEventListener: () => {}
+        };
+        applyTasksDueChip(0);
+        expect(dueInput.value).toBe('2026-07-05');
+        applyTasksDueChip(1);
+        expect(dueInput.value).toBe('2026-07-06');
+    });
 });
