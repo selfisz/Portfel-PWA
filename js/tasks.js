@@ -13,11 +13,22 @@ const DEFAULT_TODO_LISTS = [
     { id: 'todo-list-reminders', name: 'Przypomnienia', kind: 'reminders', sortOrder: 3, builtIn: true, archived: false }
 ];
 
-let tasksActiveFilter = 'all';
+const TODO_LIST_ICONS = {
+    shopping: '🛒',
+    payments: '💳',
+    finance: '📋',
+    reminders: '🔔',
+    custom: '📁'
+};
+
+const TASKS_HUB_FILTERS = new Set(['today', 'lists', 'all']);
+
+let tasksActiveFilter = 'today';
 let tasksShowDone = false;
-let tasksNewListFormOpen = false;
 let tasksListEditorOpen = false;
 let tasksEditingItemId = null;
+let tasksCreatingListId = null;
+let tasksOtherListsExpanded = false;
 
 const DASHBOARD_TASKS_PAGE_SIZE = 5;
 let dashboardTasksVisibleCount = DASHBOARD_TASKS_PAGE_SIZE;
@@ -223,10 +234,65 @@ function ensureTodoListForKind(kind) {
     return list;
 }
 
+function isTasksHubTab(filter = tasksActiveFilter) {
+    return TASKS_HUB_FILTERS.has(filter);
+}
+
+function isTasksListView(filter = tasksActiveFilter) {
+    return !isTasksHubTab(filter) && !!getTodoListById(filter);
+}
+
+function getBuiltInTodoLists() {
+    return getVisibleTodoLists().filter((list) => list.builtIn);
+}
+
+function getCustomTodoLists() {
+    return getVisibleTodoLists().filter((list) => !list.builtIn);
+}
+
+function getTodoListIcon(list) {
+    return TODO_LIST_ICONS[list?.kind] || TODO_LIST_ICONS.custom;
+}
+
+function addDaysToIsoDate(baseDate, offsetDays) {
+    const date = baseDate instanceof Date ? new Date(baseDate) : new Date();
+    date.setDate(date.getDate() + offsetDays);
+    return localIsoDate(date);
+}
+
+function getTodayTabTodos(includeDone = tasksShowDone) {
+    ensureTodoListsInitialized();
+    const tomorrow = typeof getTomorrowIsoDate === 'function' ? getTomorrowIsoDate() : null;
+    return appState.todos
+        .filter((item) => {
+            if (!includeDone && item.done) return false;
+            if (!item.dueDate || !tomorrow) return false;
+            return item.dueDate <= tomorrow;
+        })
+        .sort(compareDashboardTodoItems);
+}
+
+function getListOpenCount(listId) {
+    return appState.todos.filter((item) => !item.done && item.listId === listId).length;
+}
+
+function getListTileMeta(list) {
+    const open = appState.todos.filter((item) => !item.done && item.listId === list.id);
+    const count = open.length;
+    if (!count) return 'Pusto';
+    if (list.kind === 'payments') {
+        const total = open.reduce((sum, item) => sum + (Number.isFinite(item.amount) ? item.amount : 0), 0);
+        if (total > 0 && typeof formatPlnAmount === 'function') {
+            return `${count} · ${formatPlnAmount(total)}`;
+        }
+    }
+    return count === 1 ? '1 pozycja' : `${count} pozycji`;
+}
+
 function resolveTasksActiveListId() {
-    if (tasksActiveFilter === 'all') return null;
+    if (isTasksHubTab()) return null;
     if (!getTodoListById(tasksActiveFilter)) {
-        tasksActiveFilter = 'all';
+        tasksActiveFilter = 'today';
         return null;
     }
     return tasksActiveFilter;
@@ -238,17 +304,6 @@ function getQuickAddTargetListId() {
     return getTodoListByKind('finance')?.id
         || getVisibleTodoLists()[0]?.id
         || DEFAULT_TODO_LISTS[0].id;
-}
-
-function getQuickAddPlaceholder() {
-    const listId = getQuickAddTargetListId();
-    const list = getTodoListById(listId);
-    if (!list) return 'Dodaj zadanie…';
-    if (list.kind === 'shopping') return 'Dodaj na listę zakupów…';
-    if (list.kind === 'payments') return 'Dodaj płatność…';
-    if (list.kind === 'finance') return 'Dodaj zadanie finansowe…';
-    if (list.kind === 'reminders') return 'Dodaj przypomnienie…';
-    return `Dodaj do „${list.name}”…`;
 }
 
 function sortTodoItems(items) {
@@ -265,7 +320,11 @@ function getFilteredTodos(options = {}) {
     const includeDone = options.includeDone ?? tasksShowDone;
     const listId = options.listId !== undefined ? options.listId : resolveTasksActiveListId();
     ensureTodoListsInitialized();
-    const items = appState.todos.filter((item) => {
+    let items = appState.todos;
+    if (options.todayTab === true || (options.listId === undefined && tasksActiveFilter === 'today')) {
+        return getTodayTabTodos(includeDone);
+    }
+    items = items.filter((item) => {
         if (!includeDone && item.done) return false;
         if (listId && item.listId !== listId) return false;
         return true;
@@ -825,7 +884,7 @@ function archiveTodoList(listId) {
     if (!list) return false;
     list.archived = true;
     appState.todos = appState.todos.filter((item) => item.listId !== listId);
-    if (tasksActiveFilter === listId) tasksActiveFilter = 'all';
+    if (tasksActiveFilter === listId) tasksActiveFilter = 'lists';
     tasksListEditorOpen = false;
     if (typeof saveState === 'function') saveState({ silentLimits: true });
     renderTasksView();
@@ -848,15 +907,21 @@ function createTodoList(name) {
     appState.todoLists.push(list);
     if (typeof saveState === 'function') saveState({ silentLimits: true });
     tasksActiveFilter = list.id;
-    tasksNewListFormOpen = false;
+    tasksOtherListsExpanded = true;
+    tasksListEditorOpen = false;
     renderTasksView();
+    window.setTimeout(() => openTodoItemCreate(list.id), 80);
     return list;
 }
 
 function setTasksListFilter(filter) {
-    tasksActiveFilter = filter === 'all' ? 'all' : String(filter || 'all');
-    if (tasksActiveFilter !== 'all' && !getTodoListById(tasksActiveFilter)) {
-        tasksActiveFilter = 'all';
+    const next = filter === 'all' || filter === 'today' || filter === 'lists'
+        ? filter
+        : String(filter || 'today');
+    if (!isTasksHubTab(next) && !getTodoListById(next)) {
+        tasksActiveFilter = 'today';
+    } else {
+        tasksActiveFilter = next;
     }
     tasksListEditorOpen = false;
     renderTasksView();
@@ -870,25 +935,125 @@ function toggleTasksShowDone() {
 function formatTodoItemMeta(item) {
     const parts = [];
     const list = getTodoListById(item.listId);
-    if (tasksActiveFilter === 'all' && list) parts.push(list.name);
+    if (isTasksHubTab() && list) parts.push(list.name);
     if (item.dueDate && typeof formatTxDate === 'function') parts.push(formatTxDate(item.dueDate));
     if (Number.isFinite(item.amount) && typeof formatPlnAmount === 'function') {
         parts.push(formatPlnAmount(item.amount));
     }
+    const dueLabel = item.dueDate ? formatTaskDueLabel(item.dueDate) : '';
+    if (dueLabel) parts.push(dueLabel);
     return parts.join(' · ');
 }
 
-function buildTasksSubnavHtml() {
-    const lists = getVisibleTodoLists();
-    const buttons = [
-        `<button type="button" class="analysis-subnav-btn${tasksActiveFilter === 'all' ? ' active' : ''}" onclick="setTasksListFilter('all')">Wszystko</button>`
+function buildTasksListTileHtml(list) {
+    return `<button type="button" class="tasks-list-tile" onclick="setTasksListFilter('${escapeHtml(list.id)}')">
+        <span class="tasks-list-tile-icon" aria-hidden="true">${getTodoListIcon(list)}</span>
+        <span class="tasks-list-tile-body">
+            <span class="tasks-list-tile-title">${escapeHtml(list.name)}</span>
+            <span class="tasks-list-tile-meta">${escapeHtml(getListTileMeta(list))}</span>
+        </span>
+        <span class="tasks-list-tile-chevron" aria-hidden="true">›</span>
+    </button>`;
+}
+
+function renderTasksSegmentNav() {
+    const nav = document.getElementById('tasks-segment-nav');
+    if (!nav) return;
+    if (!isTasksHubTab()) {
+        nav.classList.add('hidden');
+        nav.replaceChildren();
+        return;
+    }
+    nav.classList.remove('hidden');
+    const tabs = [
+        { id: 'today', label: 'Na dziś' },
+        { id: 'lists', label: 'Listy' },
+        { id: 'all', label: 'Wszystko' }
     ];
-    lists.forEach((list) => {
-        const active = tasksActiveFilter === list.id ? ' active' : '';
-        buttons.push(`<button type="button" class="analysis-subnav-btn${active}" onclick="setTasksListFilter('${escapeHtml(list.id)}')">${escapeHtml(list.name)}</button>`);
-    });
-    buttons.push(`<button type="button" class="analysis-subnav-btn analysis-subnav-btn--add" onclick="toggleTasksNewListForm()" title="Nowa lista">+</button>`);
-    return buttons.join('');
+    nav.innerHTML = tabs.map((tab) => {
+        const active = tasksActiveFilter === tab.id ? ' active' : '';
+        return `<button type="button" class="tasks-segment-btn${active}" onclick="setTasksListFilter('${tab.id}')">${tab.label}</button>`;
+    }).join('');
+}
+
+function renderTasksListHeader() {
+    const header = document.getElementById('tasks-list-header');
+    const title = document.getElementById('tasks-list-title');
+    const listId = resolveTasksActiveListId();
+    const list = listId ? getTodoListById(listId) : null;
+    if (!header || !title) return;
+    if (!list) {
+        header.classList.add('hidden');
+        title.textContent = '';
+        return;
+    }
+    header.classList.remove('hidden');
+    title.textContent = list.name;
+}
+
+function renderTasksListsHub() {
+    const hub = document.getElementById('tasks-lists-hub');
+    if (!hub) return;
+    if (tasksActiveFilter !== 'lists') {
+        hub.classList.add('hidden');
+        hub.replaceChildren();
+        return;
+    }
+    hub.classList.remove('hidden');
+    const builtIn = getBuiltInTodoLists();
+    const custom = getCustomTodoLists();
+    if (custom.length) tasksOtherListsExpanded = true;
+    let html = builtIn.map(buildTasksListTileHtml).join('');
+    html += `<div class="tasks-other-lists">
+        <button type="button" class="tasks-other-lists-toggle" onclick="toggleTasksOtherLists()" aria-expanded="${tasksOtherListsExpanded ? 'true' : 'false'}">
+            <span>Inne listy${custom.length ? ` (${custom.length})` : ''}</span>
+            <span aria-hidden="true">${tasksOtherListsExpanded ? '▾' : '▸'}</span>
+        </button>`;
+    if (tasksOtherListsExpanded) {
+        html += `<div class="tasks-other-lists-body">
+            ${custom.map(buildTasksListTileHtml).join('')}
+            <form class="tasks-new-list-inline" onsubmit="handleTasksNewListSubmit(event)">
+                <input type="text" id="tasks-new-list-input" placeholder="Nazwa nowej listy" maxlength="40" autocomplete="off">
+                <button type="submit" class="btn-submit btn-submit--form">Utwórz</button>
+            </form>
+        </div>`;
+    }
+    html += '</div>';
+    hub.innerHTML = html;
+}
+
+function renderTasksFab() {
+    const fab = document.getElementById('tasks-fab');
+    if (!fab) return;
+    const show = tasksActiveFilter !== 'lists';
+    fab.classList.toggle('hidden', !show);
+}
+
+function updateTasksToolbarHint() {
+    const hint = document.getElementById('tasks-hint');
+    if (!hint) return;
+    if (isTasksListView()) {
+        const list = getTodoListById(tasksActiveFilter);
+        if (list?.kind === 'shopping') {
+            hint.textContent = 'Pozycje na zakupy — odhacz po zrobieniu zakupów.';
+            return;
+        }
+        if (list?.kind === 'reminders') {
+            hint.textContent = 'Przypomnienia z terminem — dodaj przez +.';
+            return;
+        }
+        hint.textContent = `Zadania na liście „${list?.name || ''}”.`;
+        return;
+    }
+    if (tasksActiveFilter === 'all') {
+        hint.textContent = 'Wszystkie otwarte zadania ze wszystkich list.';
+        return;
+    }
+    if (tasksActiveFilter === 'lists') {
+        hint.textContent = 'Wybierz listę, aby zobaczyć lub dodać zadania.';
+        return;
+    }
+    hint.textContent = 'Zadania na dziś i jutro — odhacz, gdy gotowe.';
 }
 
 function getActiveShoppingList() {
@@ -1015,10 +1180,11 @@ function renderTasksListActions() {
     const wrap = document.getElementById('tasks-list-actions');
     const panel = document.getElementById('tasks-list-edit-panel');
     const nameInput = document.getElementById('tasks-list-edit-name');
+    const deleteBtn = document.getElementById('tasks-list-delete-btn');
     const listId = resolveTasksActiveListId();
     const list = listId ? getTodoListById(listId) : null;
     if (!wrap) return;
-    wrap.classList.toggle('hidden', !list);
+    wrap.classList.toggle('hidden', !list || !tasksListEditorOpen);
     if (!list) {
         tasksListEditorOpen = false;
         panel?.classList.add('hidden');
@@ -1026,45 +1192,49 @@ function renderTasksListActions() {
     }
     if (nameInput && tasksListEditorOpen) nameInput.value = list.name;
     panel?.classList.toggle('hidden', !tasksListEditorOpen);
-    const toggleBtn = document.getElementById('tasks-list-edit-toggle');
-    if (toggleBtn) {
-        toggleBtn.textContent = tasksListEditorOpen ? 'Zamknij edycję listy' : 'Edytuj nazwę listy';
-    }
+    deleteBtn?.classList.toggle('hidden', !!list.builtIn);
 }
 
 function renderTasksView() {
-    const subnav = document.getElementById('tasks-subnav');
     const list = document.getElementById('tasks-items-list');
-    const input = document.getElementById('tasks-quick-add-input');
-    const newListWrap = document.getElementById('tasks-new-list-form');
-    const newListPanel = document.getElementById('tasks-new-list-panel');
     const showDoneBtn = document.getElementById('tasks-toggle-done-btn');
-    if (!subnav || !list) return;
+    if (!list) return;
 
     ensureTodoListsInitialized();
-    if (tasksActiveFilter !== 'all' && !getTodoListById(tasksActiveFilter)) {
-        tasksActiveFilter = 'all';
+    if (!isTasksHubTab() && !getTodoListById(tasksActiveFilter)) {
+        tasksActiveFilter = 'today';
     }
-    subnav.innerHTML = buildTasksSubnavHtml();
+
+    renderTasksSegmentNav();
+    renderTasksListHeader();
+    renderTasksListsHub();
     renderTasksListActions();
     renderTasksShoppingExport();
+    renderTasksFab();
+    updateTasksToolbarHint();
 
-    const items = getFilteredTodos();
-    if (!items.length) {
-        const listName = resolveTasksActiveListId()
-            ? getTodoListById(resolveTasksActiveListId())?.name
-            : 'wszystkich list';
-        list.innerHTML = `<p class="tasks-empty">Brak zadań${listName ? ` na ${escapeHtml(listName)}` : ''}.</p>`;
+    const onListsHub = tasksActiveFilter === 'lists';
+    list.classList.toggle('hidden', onListsHub);
+    if (onListsHub) {
+        list.replaceChildren();
     } else {
-        list.innerHTML = items.map(buildTasksItemRowHtml).join('');
+        const items = getFilteredTodos();
+        if (!items.length) {
+            let emptyLabel = 'Brak zadań.';
+            if (tasksActiveFilter === 'today') {
+                emptyLabel = 'Brak pilnych zadań na dziś i jutro.';
+            } else if (isTasksListView()) {
+                const listName = getTodoListById(tasksActiveFilter)?.name;
+                emptyLabel = listName ? `Brak zadań na liście „${listName}”.` : 'Brak zadań.';
+            }
+            list.innerHTML = `<p class="tasks-empty">${escapeHtml(emptyLabel)}</p>`;
+        } else {
+            list.innerHTML = items.map(buildTasksItemRowHtml).join('');
+        }
     }
 
-    if (input) {
-        input.placeholder = getQuickAddPlaceholder();
-    }
-    if (newListWrap) newListWrap.classList.toggle('hidden', !tasksNewListFormOpen);
-    if (newListPanel) newListPanel.classList.toggle('hidden', !tasksNewListFormOpen);
     if (showDoneBtn) {
+        showDoneBtn.classList.toggle('hidden', onListsHub);
         showDoneBtn.textContent = tasksShowDone ? 'Ukryj zrobione' : 'Pokaż zrobione';
         showDoneBtn.setAttribute('aria-pressed', tasksShowDone ? 'true' : 'false');
     }
@@ -1095,78 +1265,190 @@ function updateTasksBadge() {
 function openTasksView(listFilter = null) {
     if (typeof guardAppLockSensitiveAction === 'function' && !guardAppLockSensitiveAction()) return;
     ensureTodoListsInitialized();
-    if (listFilter && getTodoListById(listFilter)) {
+    if (listFilter === 'all' || listFilter === 'today' || listFilter === 'lists') {
         tasksActiveFilter = listFilter;
-    } else if (tasksActiveFilter !== 'all' && !getTodoListById(tasksActiveFilter)) {
-        tasksActiveFilter = 'all';
+    } else if (listFilter && getTodoListById(listFilter)) {
+        tasksActiveFilter = listFilter;
+    } else {
+        tasksActiveFilter = 'today';
     }
+    tasksListEditorOpen = false;
     if (typeof switchView === 'function') switchView('tasks', 'Zadania', null);
 }
 
-function handleTasksQuickAdd(event) {
-    event?.preventDefault?.();
-    const input = document.getElementById('tasks-quick-add-input');
-    if (!input) return;
-    const title = input.value.trim();
-    if (!title) return;
-    addTodoItem({ title, listId: getQuickAddTargetListId(), source: 'user' });
-    input.value = '';
-    input.focus();
+function handleTasksFabClick() {
+    const listId = resolveTasksActiveListId();
+    if (listId) {
+        openTodoItemCreate(listId);
+        return;
+    }
+    openTasksListPicker();
 }
 
-function toggleTasksNewListForm() {
-    tasksNewListFormOpen = !tasksNewListFormOpen;
-    renderTasksView();
-    if (tasksNewListFormOpen) {
-        window.setTimeout(() => document.getElementById('tasks-new-list-input')?.focus(), 50);
+function openTasksListPicker() {
+    const overlay = document.getElementById('tasks-list-picker-overlay');
+    const grid = document.getElementById('tasks-list-picker-grid');
+    if (!overlay || !grid) return;
+    const lists = getVisibleTodoLists();
+    grid.innerHTML = lists.map((list) => `
+        <button type="button" class="tasks-list-picker-btn" onclick="selectTasksListForCreate('${escapeHtml(list.id)}')">
+            <span class="tasks-list-picker-btn-icon" aria-hidden="true">${getTodoListIcon(list)}</span>
+            <span>${escapeHtml(list.name)}</span>
+        </button>
+    `).join('');
+    overlay.classList.remove('hidden');
+}
+
+function closeTasksListPicker() {
+    document.getElementById('tasks-list-picker-overlay')?.classList.add('hidden');
+}
+
+function selectTasksListForCreate(listId) {
+    closeTasksListPicker();
+    openTodoItemCreate(listId);
+}
+
+function updateTodoEditorPanelTitle(mode, list) {
+    const titleEl = document.getElementById('tasks-edit-panel-title');
+    if (!titleEl) return;
+    if (mode === 'create') {
+        titleEl.textContent = list ? `Dodaj: ${list.name}` : 'Dodaj zadanie';
+        return;
     }
+    titleEl.textContent = 'Edytuj zadanie';
+}
+
+function configureTodoEditorForList(list, item = null) {
+    const kind = list?.kind || 'custom';
+    const dueWrap = document.getElementById('tasks-edit-due-wrap');
+    const amountWrap = document.getElementById('tasks-edit-amount-wrap');
+    const noteWrap = document.getElementById('tasks-edit-note-wrap');
+    const dueChips = document.getElementById('tasks-edit-due-chips');
+    const submitBtn = document.getElementById('tasks-edit-submit-btn');
+    dueWrap?.classList.toggle('hidden', kind === 'shopping');
+    amountWrap?.classList.toggle('hidden', kind !== 'payments');
+    noteWrap?.classList.remove('hidden');
+    const showDueChips = kind === 'reminders' || kind === 'payments' || kind === 'finance';
+    dueChips?.classList.toggle('hidden', !showDueChips);
+    if (submitBtn) submitBtn.textContent = item ? 'Zapisz' : 'Dodaj';
+}
+
+function applyTasksDueChip(offsetDays) {
+    const dueInput = document.getElementById('tasks-edit-due');
+    if (!dueInput) return;
+    dueInput.value = addDaysToIsoDate(new Date(), offsetDays);
+    document.querySelectorAll('.tasks-due-chip').forEach((chip) => {
+        chip.classList.toggle('active', Number(chip.dataset.dueOffset) === offsetDays);
+    });
+}
+
+function initTasksDueChips() {
+    document.querySelectorAll('.tasks-due-chip').forEach((chip) => {
+        if (chip.dataset.bound === '1') return;
+        chip.dataset.bound = '1';
+        chip.addEventListener('click', () => {
+            applyTasksDueChip(Number(chip.dataset.dueOffset || 0));
+        });
+    });
+}
+
+function openTodoItemCreate(listId) {
+    const list = getTodoListById(listId);
+    if (!list) return;
+    tasksEditingItemId = null;
+    tasksCreatingListId = list.id;
+    const overlay = document.getElementById('tasks-item-edit-overlay');
+    const titleInput = document.getElementById('tasks-edit-title');
+    const dueInput = document.getElementById('tasks-edit-due');
+    const amountInput = document.getElementById('tasks-edit-amount');
+    const noteInput = document.getElementById('tasks-edit-note');
+    if (titleInput) titleInput.value = '';
+    if (amountInput) amountInput.value = '';
+    if (noteInput) noteInput.value = '';
+    if (dueInput) {
+        if (list.kind === 'reminders') dueInput.value = addDaysToIsoDate(new Date(), 1);
+        else if (list.kind === 'payments' || list.kind === 'finance') dueInput.value = localIsoDate(new Date());
+        else dueInput.value = '';
+    }
+    document.querySelectorAll('.tasks-due-chip').forEach((chip) => chip.classList.remove('active'));
+    if (list.kind === 'reminders' && dueInput?.value) {
+        const tomorrow = addDaysToIsoDate(new Date(), 1);
+        if (dueInput.value === tomorrow) {
+            document.querySelector('.tasks-due-chip[data-due-offset="1"]')?.classList.add('active');
+        }
+    }
+    configureTodoEditorForList(list);
+    updateTodoEditorPanelTitle('create', list);
+    overlay?.classList.remove('hidden');
+    window.setTimeout(() => titleInput?.focus(), 50);
+}
+
+function toggleTasksOtherLists() {
+    tasksOtherListsExpanded = !tasksOtherListsExpanded;
+    renderTasksView();
 }
 
 function handleTasksNewListSubmit(event) {
     event?.preventDefault?.();
     const input = document.getElementById('tasks-new-list-input');
     if (!input) return;
-    const list = createTodoList(input.value);
-    if (list) input.value = '';
+    const created = createTodoList(input.value);
+    if (created) {
+        input.value = '';
+        tasksOtherListsExpanded = true;
+    }
 }
 
 function openTodoItemEditor(id) {
     const item = getTodoItemById(id);
     if (!item) return;
     tasksEditingItemId = id;
+    tasksCreatingListId = null;
     const overlay = document.getElementById('tasks-item-edit-overlay');
     const titleInput = document.getElementById('tasks-edit-title');
     const dueInput = document.getElementById('tasks-edit-due');
     const amountInput = document.getElementById('tasks-edit-amount');
     const noteInput = document.getElementById('tasks-edit-note');
-    const dueWrap = document.getElementById('tasks-edit-due-wrap');
-    const amountWrap = document.getElementById('tasks-edit-amount-wrap');
     const list = getTodoListById(item.listId);
-    const kind = list?.kind || 'custom';
     if (titleInput) titleInput.value = item.title;
     if (dueInput) dueInput.value = item.dueDate || '';
     if (amountInput) amountInput.value = Number.isFinite(item.amount) ? String(item.amount) : '';
     if (noteInput) noteInput.value = item.note || '';
-    dueWrap?.classList.toggle('hidden', kind === 'shopping');
-    amountWrap?.classList.toggle('hidden', kind !== 'payments');
+    document.querySelectorAll('.tasks-due-chip').forEach((chip) => chip.classList.remove('active'));
+    configureTodoEditorForList(list, item);
+    updateTodoEditorPanelTitle('edit', list);
     overlay?.classList.remove('hidden');
     window.setTimeout(() => titleInput?.focus(), 50);
 }
 
 function closeTodoItemEditor() {
     tasksEditingItemId = null;
+    tasksCreatingListId = null;
     document.getElementById('tasks-item-edit-overlay')?.classList.add('hidden');
 }
 
 function saveTodoItemEditor(event) {
     event?.preventDefault?.();
-    if (!tasksEditingItemId) return;
-    const updated = updateTodoItem(tasksEditingItemId, {
+    const payload = {
         title: document.getElementById('tasks-edit-title')?.value,
         dueDate: document.getElementById('tasks-edit-due')?.value,
         amount: document.getElementById('tasks-edit-amount')?.value,
         note: document.getElementById('tasks-edit-note')?.value
-    });
+    };
+    if (tasksCreatingListId) {
+        const created = addTodoItem({
+            title: payload.title,
+            listId: tasksCreatingListId,
+            dueDate: payload.dueDate || undefined,
+            amount: payload.amount || undefined,
+            note: payload.note || undefined,
+            source: 'user'
+        });
+        if (created) closeTodoItemEditor();
+        return;
+    }
+    if (!tasksEditingItemId) return;
+    const updated = updateTodoItem(tasksEditingItemId, payload);
     if (updated) closeTodoItemEditor();
 }
 
@@ -1208,6 +1490,7 @@ function deleteActiveTodoList() {
 
 function initTasks() {
     ensureTodoListsInitialized();
+    initTasksDueChips();
     updateTasksBadge();
 }
 

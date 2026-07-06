@@ -258,9 +258,9 @@ describe('moduł zadań', () => {
         ensureTodoListsInitialized();
         tasksActiveFilter = 'todo-list-usunieta';
         const shopping = getTodoListByKind('shopping');
-        addTodoItem({ title: 'Chleb', listId: shopping.id });
+        addTodoItem({ title: 'Chleb', listId: shopping.id, dueDate: '2026-07-05' });
         expect(getFilteredTodos()).toHaveLength(1);
-        expect(tasksActiveFilter).toBe('all');
+        expect(tasksActiveFilter).toBe('today');
     });
 
     it('buduje tekst eksportu listy zakupów', () => {
