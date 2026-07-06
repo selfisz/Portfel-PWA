@@ -1,5 +1,24 @@
 let stateSnapshotUnsubscribe = null;
 let cloudSnapshotSyncTimeout = null;
+let cloudAutoRecoverChecked = false;
+
+function shouldAttemptCloudAutoRecover() {
+    if (cloudAutoRecoverChecked) return false;
+    if (typeof isDemoFinanceSession === 'function' && isDemoFinanceSession()) return false;
+    if (typeof hasPendingCloudSync === 'function' && hasPendingCloudSync()) return false;
+    if (typeof isAutoCloudRecoverDone === 'function' && isAutoCloudRecoverDone()) return false;
+    const memoryCount = typeof getTransactionCount === 'function' ? getTransactionCount(appState) : 0;
+    if (memoryCount > 0) return false;
+    const storedRaw = typeof readStoredAppStateRaw === 'function' ? readStoredAppStateRaw() : null;
+    const storedCount = storedRaw && typeof getTransactionCount === 'function'
+        ? getTransactionCount(storedRaw)
+        : 0;
+    return storedCount === 0;
+}
+
+function markCloudAutoRecoverChecked() {
+    cloudAutoRecoverChecked = true;
+}
 
 function clearCloudSnapshotSyncTimeout() {
     if (cloudSnapshotSyncTimeout) {
@@ -22,6 +41,7 @@ function stopCloudSync() {
         stateSnapshotUnsubscribe = null;
     }
     clearCloudSnapshotSyncTimeout();
+    cloudAutoRecoverChecked = false;
 }
 
 function startCloudSnapshotSync() {
@@ -43,7 +63,8 @@ function startCloudSnapshotSync() {
         }).catch((err) => {
             console.warn('hydrateDemoFinanceFromServer', err);
         });
-    } else if (getTransactionCount(appState) < 100) {
+    } else if (shouldAttemptCloudAutoRecover()) {
+        markCloudAutoRecoverChecked();
         autoRecoverFromCloudBackupIfNeeded().then((recovered) => {
             if (recovered) clearSyncTimeout();
         });
@@ -71,7 +92,8 @@ function startCloudSnapshotSync() {
         const count = getTransactionCount(appState);
         if (count > 0) setSyncStatus('offline', count);
         else settleCloudSyncIndicator();
-        if (count < 100) {
+        if (shouldAttemptCloudAutoRecover()) {
+            markCloudAutoRecoverChecked();
             autoRecoverFromCloudBackupIfNeeded().finally(() => {
                 clearSyncTimeout();
                 settleCloudSyncIndicator();

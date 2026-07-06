@@ -527,17 +527,37 @@ function syncFromRemoteData(remoteData, options = {}) {
 
 async function autoRecoverFromCloudBackupIfNeeded() {
     if (isDemoFinanceSession()) return false;
-    if (getTransactionCount(appState) >= 100) return false;
+    if (typeof hasPendingCloudSync === 'function' && hasPendingCloudSync()) return false;
+
+    const memoryCount = getTransactionCount(appState);
+    const storedRaw = readStoredAppStateRaw();
+    const storedCount = storedRaw ? getTransactionCount(storedRaw) : 0;
+    if (memoryCount > 0 || storedCount > 0) {
+        markAutoCloudRecoverDone();
+        return false;
+    }
+    if (hasFinancePortfolio(appState) || (storedRaw && hasFinancePortfolio(storedRaw))) {
+        markAutoCloudRecoverDone();
+        return false;
+    }
+    if (isAutoCloudRecoverDone()) return false;
+
     try {
         const payload = typeof getCloudBackupPayload === 'function'
             ? await getCloudBackupPayload()
             : null;
         if (!payload) return false;
 
-        const backupCount = payload.transactionCount || getTransactionCount(payload.data || payload);
-        if (backupCount <= getTransactionCount(appState)) return false;
+        const backupData = payload.data || payload;
+        const backupActiveCount = getTransactionCount(backupData);
+        const backupArchivedCount = Array.isArray(payload.archivedTransactions)
+            ? payload.archivedTransactions.length
+            : 0;
+        const backupCount = backupActiveCount + backupArchivedCount;
+        if (backupCount <= 0) return false;
 
         await applyBackupPayload(payload);
+        markAutoCloudRecoverDone();
         if (typeof showSettingsToast === 'function') {
             showSettingsToast(`Przywrócono ${backupCount} transakcji z kopii w chmurze`);
         }
@@ -546,6 +566,27 @@ async function autoRecoverFromCloudBackupIfNeeded() {
         console.error('autoRecoverFromCloudBackupIfNeeded', err);
         return false;
     }
+}
+
+function autoCloudRecoverDoneStorageKey() {
+    const uid = typeof auth !== 'undefined' && auth?.currentUser?.uid
+        ? auth.currentUser.uid
+        : '';
+    return uid ? `${AUTO_CLOUD_RECOVER_DONE_KEY}_${uid}` : AUTO_CLOUD_RECOVER_DONE_KEY;
+}
+
+function isAutoCloudRecoverDone() {
+    try {
+        return localStorage.getItem(autoCloudRecoverDoneStorageKey()) === '1';
+    } catch {
+        return false;
+    }
+}
+
+function markAutoCloudRecoverDone() {
+    try {
+        localStorage.setItem(autoCloudRecoverDoneStorageKey(), '1');
+    } catch { /* ignore */ }
 }
 
 function applyRemoteAppState(raw, extraLoanSources = [], extraCreditCardSources = []) {

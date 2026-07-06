@@ -576,3 +576,52 @@ describe('checkAndProcessRecurringTransactions', () => {
     expect(added?.transaction?.date).toBe(`${localMonth}-01`);
   });
 });
+
+describe('autoRecoverFromCloudBackupIfNeeded', () => {
+  beforeEach(() => {
+    globalThis.auth = { currentUser: { uid: 'user-1' } };
+    globalThis.hasPendingCloudSync = () => false;
+    globalThis.isDemoFinanceSession = () => false;
+    globalThis.applyBackupPayload = vi.fn(() => Promise.resolve());
+    globalThis.getCloudBackupPayload = vi.fn();
+    localStorage.removeItem('finanse_auto_cloud_recover_done_user-1');
+  });
+
+  it('nie nadpisuje gdy lokalnie są transakcje', async () => {
+    _setAppState({ ..._getAppState(), transactions: [
+      { amount: 10, type: 'expense', date: '2026-01-01', mainCategory: 'Dom', subCategory: 'A' }
+    ]});
+    globalThis.getCloudBackupPayload = vi.fn().mockResolvedValue({
+      transactionCount: 999,
+      data: { transactions: [{ amount: 1, type: 'expense', date: '2026-01-01', mainCategory: 'Dom', subCategory: 'A' }] }
+    });
+    const recovered = await autoRecoverFromCloudBackupIfNeeded();
+    expect(recovered).toBe(false);
+    expect(globalThis.applyBackupPayload).not.toHaveBeenCalled();
+    expect(isAutoCloudRecoverDone()).toBe(true);
+  });
+
+  it('nie przywraca gdy backup ma więcej przez archiwum a lokalnie są aktywne tx', async () => {
+    _setAppState({ ..._getAppState(), transactions: [
+      { amount: 10, type: 'expense', date: '2026-01-01', mainCategory: 'Dom', subCategory: 'A' }
+    ]});
+    globalThis.getCloudBackupPayload = vi.fn().mockResolvedValue({
+      transactionCount: 15,
+      archivedTransactions: new Array(10).fill({ amount: 1, type: 'expense', date: '2025-01-01', mainCategory: 'Dom', subCategory: 'A' }),
+      data: { transactions: [{ amount: 1, type: 'expense', date: '2026-01-01', mainCategory: 'Dom', subCategory: 'A' }] }
+    });
+    const recovered = await autoRecoverFromCloudBackupIfNeeded();
+    expect(recovered).toBe(false);
+    expect(globalThis.applyBackupPayload).not.toHaveBeenCalled();
+    expect(globalThis.getCloudBackupPayload).not.toHaveBeenCalled();
+  });
+
+  it('przywraca tylko przy pustym lokalnym stanie', async () => {
+    globalThis.getCloudBackupPayload = vi.fn().mockResolvedValue({
+      data: { transactions: [{ amount: 10, type: 'expense', date: '2026-01-01', mainCategory: 'Dom', subCategory: 'A' }] }
+    });
+    const recovered = await autoRecoverFromCloudBackupIfNeeded();
+    expect(recovered).toBe(true);
+    expect(globalThis.applyBackupPayload).toHaveBeenCalled();
+  });
+});

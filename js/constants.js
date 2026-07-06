@@ -90,6 +90,7 @@ const NOTIFICATION_ALERT_STATE_KEY = 'finanse_budget_alert_state';
 const NOTIFICATION_INSIGHT_STATE_KEY = 'finanse_insight_alert_state';
 const NOTIFICATION_DAILY_DIGEST_DATE_KEY = 'finanse_notif_daily_digest_date';
 const NOTIFICATION_TEST_SHOWN_KEY = 'finanse_notif_test_shown';
+const AUTO_CLOUD_RECOVER_DONE_KEY = 'finanse_auto_cloud_recover_done';
 const ACTION_BOARD_DISMISSED_KEY = 'finanse_action_board_dismissed';
 const ACTION_BOARD_UNCATEGORIZED_MIN_PLN = 50;
 const ACTION_BOARD_DUPLICATE_LOOKBACK_DAYS = 60;
