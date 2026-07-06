@@ -205,6 +205,28 @@ describe('normalizeCreditCard', () => {
   });
 });
 
+describe('getCreditCardRepaymentFullAmount', () => {
+  it('zwraca bieżące zadłużenie karty', () => {
+    _setAppState({
+      ..._getAppState(),
+      creditCards: [normalizeCreditCard({ id: 'c1', name: 'mBank', limit: 5000, currentBalance: 1234.5 })]
+    });
+    expect(getCreditCardRepaymentFullAmount('c1')).toBe(1234.5);
+  });
+
+  it('zwraca 0 dla nieistniejącej karty', () => {
+    expect(getCreditCardRepaymentFullAmount('brak')).toBe(0);
+  });
+});
+
+describe('formatCreditCardAmountInputValue', () => {
+  it('formatuje kwotę do pola input', () => {
+    expect(formatCreditCardAmountInputValue(1500)).toBe('1500');
+    expect(formatCreditCardAmountInputValue(1234.5)).toBe('1234.50');
+    expect(formatCreditCardAmountInputValue(0)).toBe('');
+  });
+});
+
 // ===========================================================================
 // credit-cards.js — normalizeCreditCardMovement
 // ===========================================================================

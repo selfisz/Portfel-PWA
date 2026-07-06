@@ -11856,6 +11856,41 @@ button.reports-debt-split-item strong {
     margin-bottom: 6px;
 }
 
+.obligation-amount-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.obligation-amount-row input[type="number"] {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    box-sizing: border-box;
+}
+
+.obligation-amount-chip {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--input-bg);
+    color: var(--accent);
+    font-family: inherit;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    min-height: 44px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.obligation-amount-chip:active {
+    background: color-mix(in srgb, var(--accent) 12%, var(--card-bg));
+}
+
 .obligation-edit-form .loan-form-row {
     gap: 10px;
     margin-bottom: 12px;

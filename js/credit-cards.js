@@ -254,6 +254,52 @@ let draftCreditCard = null;
 let creditCardDetailsMode = 'view';
 let creditCardQuickAction = { cardId: null, type: 'repayment' };
 
+function getCreditCardRepaymentFullAmount(cardId) {
+    const card = getCreditCardById(cardId);
+    if (!card) return 0;
+    return Math.max(0, Number(card.currentBalance) || 0);
+}
+
+function formatCreditCardAmountInputValue(amount) {
+    const value = Math.max(0, Number(amount) || 0);
+    if (!value) return '';
+    const rounded = Math.round(value * 100) / 100;
+    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+}
+
+function setCreditCardAmountInputValue(inputId, amount) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    input.value = formatCreditCardAmountInputValue(amount);
+    input.focus?.();
+}
+
+function updateCreditCardFullAmountButton(buttonId, cardId, type = 'repayment') {
+    const button = document.getElementById(buttonId);
+    if (!button) return;
+    const show = type === 'repayment' && getCreditCardRepaymentFullAmount(cardId) > 0;
+    button.classList.toggle('hidden', !show);
+}
+
+function fillCreditCardQuickFullAmount() {
+    const { cardId, type } = creditCardQuickAction;
+    if (!cardId || type !== 'repayment') return;
+    const amount = getCreditCardRepaymentFullAmount(cardId);
+    if (amount <= 0) return;
+    setCreditCardAmountInputValue('credit-card-quick-amount', amount);
+    if (typeof hapticFeedback === 'function') hapticFeedback();
+}
+
+function fillAddCreditCardFullAmount() {
+    const type = document.getElementById('add-credit-card-type')?.value || 'repayment';
+    if (type !== 'repayment') return;
+    const cardId = document.getElementById('add-credit-card-select')?.value;
+    const amount = getCreditCardRepaymentFullAmount(cardId);
+    if (amount <= 0) return;
+    setCreditCardAmountInputValue('add-credit-card-amount', amount);
+    if (typeof hapticFeedback === 'function') hapticFeedback();
+}
+
 function openCreditCardQuickAction(cardId, type) {
     const card = getCreditCardById(cardId);
     if (!card) return;
@@ -276,6 +322,7 @@ function openCreditCardQuickAction(cardId, type) {
     if (amountInput) {
         amountInput.value = '';
     }
+    updateCreditCardFullAmountButton('credit-card-quick-full-btn', cardId, type);
 
     document.getElementById('credit-card-quick-overlay')?.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
@@ -606,6 +653,8 @@ function populateAddCreditCardForm() {
     if (dateInput && !dateInput.value) {
         dateInput.value = localIsoDate(new Date());
     }
+    const cardId = document.getElementById('add-credit-card-select')?.value;
+    updateCreditCardFullAmountButton('add-credit-card-full-btn', cardId, type);
 }
 
 function saveCreditCardMovementFromAdd() {
