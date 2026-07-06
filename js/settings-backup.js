@@ -435,6 +435,28 @@ async function refreshBackupInfo() {
         }
     }
 }
+function formatCloudBackupError(err) {
+    const code = String(err?.code || '');
+    const message = String(err?.message || '');
+    if (code === 'permission-denied') {
+        return 'Brak dostępu do chmury — wyloguj się i zaloguj ponownie.';
+    }
+    if (code === 'unavailable' || code === 'deadline-exceeded') {
+        return 'Brak połączenia z chmurą — sprawdź internet i spróbuj ponownie.';
+    }
+    if (code === 'resource-exhausted' || /too large|exceeds the maximum/i.test(message)) {
+        return 'Kopia jest za duża dla chmury. Użyj „Kopia na telefon”.';
+    }
+    if (message === 'Firestore timeout') {
+        return 'Przekroczono czas wysyłki — sprawdź internet i spróbuj ponownie.';
+    }
+    if (message.includes('Chmura niedostępna') || message.includes('Brak internetu')
+        || message.includes('za duża dla chmury')) {
+        return message;
+    }
+    return 'Nie udało się wysłać kopii';
+}
+
 async function backupToCloud() {
     if (!isCloudBackupAvailable()) {
         showSettingsToast('Chmura niedostępna — zaloguj się ponownie', 'error');
@@ -447,15 +469,28 @@ async function backupToCloud() {
     try {
         updateBackupProgress('prepare', `${count} trans.`);
         await yieldToMain();
+        if (auth?.currentUser?.getIdToken) {
+            await auth.currentUser.getIdToken(true);
+        }
+        await ensureCloudBackupsReady();
         const payload = getExportPayload();
-        updateBackupProgress('upload');
+        const payloadKb = typeof estimateJsonBytes === 'function'
+            ? Math.round(estimateJsonBytes(payload) / 1024)
+            : null;
+        updateBackupProgress('upload', payloadKb ? `~${payloadKb} KB` : '');
         await saveCloudBackupSnapshot(payload, { source: 'manual' });
         finishBackupProgress('Kopia wysłana do chmury', `${count} trans.`, 'export');
         refreshBackupInfo();
         hapticFeedback();
     } catch (err) {
-        failBackupProgress('Nie udało się wysłać kopii', 'export');
-        console.error(err);
+        const detail = document.getElementById('backup-restore-progress-detail');
+        const message = formatCloudBackupError(err);
+        failBackupProgress(message, 'export');
+        if (detail && err?.code) {
+            detail.textContent = String(err.code);
+            detail.classList.remove('hidden');
+        }
+        console.error('backupToCloud', err);
     }
 }
 

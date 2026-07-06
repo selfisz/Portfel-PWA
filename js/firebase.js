@@ -155,19 +155,38 @@ async function pruneCloudBackupSnapshots() {
     }
 }
 
-async function saveCloudBackupSnapshot(payload, options = {}) {
-    if (!cloudBackupSnapshotsRef || !cloudBackupRef) {
-        throw new Error('Chmura niedostępna — zaloguj się ponownie');
-    }
-    await ensureLegacyCloudBackupMigrated();
+function prepareCloudBackupSnapshotPayload(payload, options = {}) {
     const backupSource = options.source === 'auto' ? 'auto' : 'manual';
-    const snapshotPayload = {
+    const raw = {
         ...payload,
         exportedAt: payload.exportedAt || new Date().toISOString(),
         backupSource
     };
-    await cloudBackupSnapshotsRef.add(snapshotPayload);
-    await cloudBackupRef.set(snapshotPayload);
+    const sanitized = typeof sanitizeFirestorePayload === 'function'
+        ? sanitizeFirestorePayload(raw)
+        : raw;
+    const bytes = typeof estimateJsonBytes === 'function'
+        ? estimateJsonBytes(sanitized)
+        : JSON.stringify(sanitized).length;
+    if (bytes > MAX_CLOUD_BACKUP_BYTES) {
+        const kb = Math.round(bytes / 1024);
+        const maxKb = Math.round(MAX_CLOUD_BACKUP_BYTES / 1024);
+        throw new Error(`Kopia jest za duża dla chmury (${kb} KB, max ${maxKb} KB). Użyj „Kopia na telefon”.`);
+    }
+    return sanitized;
+}
+
+async function saveCloudBackupSnapshot(payload, options = {}) {
+    if (!cloudBackupSnapshotsRef || !cloudBackupRef) {
+        throw new Error('Chmura niedostępna — zaloguj się ponownie');
+    }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        throw new Error('Brak internetu — połącz się z siecią i spróbuj ponownie.');
+    }
+    await ensureLegacyCloudBackupMigrated();
+    const snapshotPayload = prepareCloudBackupSnapshotPayload(payload, options);
+    await withFirestoreTimeout(cloudBackupSnapshotsRef.add(snapshotPayload), 45000);
+    await withFirestoreTimeout(cloudBackupRef.set(snapshotPayload), 45000);
     await pruneCloudBackupSnapshots();
 }
 
