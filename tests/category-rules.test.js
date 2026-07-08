@@ -92,3 +92,56 @@ describe('mergeCategoryRulesById', () => {
         expect(merged.map((r) => r.id).sort()).toEqual(['r1', 'r2']);
     });
 });
+
+describe('applyCategoryRulesToTransaction', () => {
+    it('nie nadpisuje kategorii gdy notatka jest pusta', () => {
+        addCategoryRule({
+            pattern: 'zakupy',
+            type: 'expense',
+            mainCategory: 'Zakupy',
+            subCategory: 'Alko'
+        });
+        const tx = {
+            type: 'expense',
+            mainCategory: 'Zakupy',
+            subCategory: 'Zakupy',
+            note: ''
+        };
+        const ruled = applyCategoryRulesToTransaction(tx);
+        expect(ruled.subCategory).toBe('Zakupy');
+    });
+
+    it('dopasowuje tylko po notatce, nie po wybranej kategorii', () => {
+        addCategoryRule({
+            pattern: 'biedronka',
+            type: 'expense',
+            mainCategory: 'Zakupy',
+            subCategory: 'Zakupy'
+        });
+        const tx = {
+            type: 'expense',
+            mainCategory: 'Zakupy',
+            subCategory: 'Alko',
+            note: ''
+        };
+        expect(applyCategoryRulesToTransaction(tx).subCategory).toBe('Alko');
+    });
+
+    it('stosuje regułę gdy wzorzec jest w notatce', () => {
+        addCategoryRule({
+            pattern: 'biedronka',
+            type: 'expense',
+            mainCategory: 'Zakupy',
+            subCategory: 'Zakupy'
+        });
+        const tx = {
+            type: 'expense',
+            mainCategory: 'Dom',
+            subCategory: 'Czynsz',
+            note: 'Biedronka centrum'
+        };
+        const ruled = applyCategoryRulesToTransaction(tx);
+        expect(ruled.mainCategory).toBe('Zakupy');
+        expect(ruled.subCategory).toBe('Zakupy');
+    });
+});

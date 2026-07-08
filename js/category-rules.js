@@ -50,7 +50,8 @@ function categoryRuleMatches(rule, text) {
 function applyCategoryRulesToTransaction(tx) {
     if (!tx) return tx;
     const rules = getCategoryRules().filter((rule) => rule.type === tx.type);
-    const text = `${tx.note || ''} ${tx.mainCategory || ''} ${tx.subCategory || ''}`;
+    const text = String(tx.note || '').trim();
+    if (!text) return tx;
     for (const rule of rules) {
         if (!categoryRuleMatches(rule, text)) continue;
         if (!isAssistantCategoryPairValid(rule.type, rule.mainCategory, rule.subCategory)) continue;

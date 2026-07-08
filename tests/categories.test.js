@@ -37,6 +37,12 @@ beforeAll(() => {
   globalThis.appState = { categoryIcons: { expense: { mains: {}, subs: {} }, income: { mains: {}, subs: {} } } };
   globalThis.selectMainCategoryForm = () => {};
   globalThis.renderMainCategoriesForm = () => {};
+  globalThis.selectAddFormCategoryPair = () => {};
+  globalThis.normalizeFormSubCategoryForMain = (type, mainCategory, subCategory) => {
+    const subs = (categoryTree?.[type] || {})[mainCategory] || [];
+    if (!subs.length) return '[Bez podkategorii]';
+    return subCategory || '';
+  };
   globalThis.activeChartCategory = null;
   globalThis.chartViewType = 'expense';
 
@@ -369,6 +375,12 @@ describe('addRecentCategory', () => {
     expect(recents[0]).toMatchObject({ type: 'expense', mainCategory: 'Dom', subCategory: 'Czynsz' });
   });
 
+  it('normalizuje podkategorię przy zapisie ostatniej kategorii', () => {
+    addRecentCategory('expense', 'Zakupy', 'Zakupy');
+    const recents = getRecentCategories('expense');
+    expect(recents[0].subCategory).toBe('Zakupy');
+  });
+
   it('dodaje na początku (unshift)', () => {
     addRecentCategory('expense', 'Dom', 'Czynsz');
     addRecentCategory('expense', 'Zakupy', 'Zakupy');
@@ -487,5 +499,20 @@ describe('getChartSliceColors', () => {
 
   it('zwraca pustą tablicę dla pustych labels', () => {
     expect(getChartSliceColors([], 'expense')).toEqual([]);
+  });
+});
+
+describe('resolveRecentCategoryPair', () => {
+  it('uzupełnia brakującą podkategorię dla kategorii bez podkategorii', () => {
+    const resolved = resolveRecentCategoryPair({ type: 'income', mainCategory: 'Inne' });
+    expect(resolved).toMatchObject({
+      mainCategory: 'Inne',
+      subCategory: '[Bez podkategorii]'
+    });
+  });
+
+  it('zachowuje poprawną podkategorię Zakupy', () => {
+    const resolved = resolveRecentCategoryPair({ type: 'expense', mainCategory: 'Zakupy', subCategory: 'Zakupy' });
+    expect(resolved?.subCategory).toBe('Zakupy');
   });
 });

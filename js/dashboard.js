@@ -680,6 +680,30 @@ function renderUpcomingLoanInstallments() {
     }).join('');
 }
 
+function formatDashboardSnapshotMonthLabel(monthKey) {
+    if (!monthKey) return '';
+    const [y, m] = monthKey.split('-').map(Number);
+    if (!y || !m) return '';
+    const label = new Date(y, m - 1, 1).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function buildDashboardWealthChangeHtml(monthChange) {
+    if (!monthChange) return '';
+    const changeClass = monthChange.netWorth >= 0 ? 'snapshot-delta-positive' : 'snapshot-delta-negative';
+    const delta = monthChange.pctNet != null
+        ? formatSnapshotDelta(monthChange.netWorth, monthChange.pctNet)
+        : formatSnapshotDelta(monthChange.netWorth);
+    const prevLabel = formatDashboardSnapshotMonthLabel(monthChange.prevMonthKey);
+    const hint = prevLabel
+        ? `Zmiana ${NET_WORTH_LABEL.toLowerCase()} vs ${prevLabel}`
+        : `Zmiana ${NET_WORTH_LABEL.toLowerCase()} vs poprzedni miesiąc`;
+    return `<div class="dashboard-wealth-change">
+        <span class="dashboard-wealth-change-label">${hint}</span>
+        <strong class="dashboard-wealth-change-value ${changeClass}">${delta}</strong>
+    </div>`;
+}
+
 function renderDashboardWealth() {
     const section = document.getElementById('dashboard-wealth');
     const el = document.getElementById('dashboard-wealth-content');
@@ -696,10 +720,7 @@ function renderDashboardWealth() {
     const net = assets - debt;
     const monthChange = typeof getSnapshotMonthChange === 'function' ? getSnapshotMonthChange() : null;
     const operational = typeof getOperationalCashPln === 'function' ? getOperationalCashPln() : 0;
-    const changeClass = monthChange?.netWorth >= 0 ? 'snapshot-delta-positive' : 'snapshot-delta-negative';
-    const changePctHtml = monthChange?.pctNet != null
-        ? `<p class="dashboard-wealth-hint dashboard-wealth-change-pct ${changeClass}">${formatSnapshotDelta(monthChange.netWorth, monthChange.pctNet)} ${NET_WORTH_LABEL.toLowerCase()} m/m</p>`
-        : (monthChange ? `<p class="dashboard-wealth-hint dashboard-wealth-change-pct ${changeClass}">${formatSnapshotDelta(monthChange.netWorth)} ${NET_WORTH_LABEL.toLowerCase()} m/m</p>` : '');
+    const changeHtml = buildDashboardWealthChangeHtml(monthChange);
 
     el.innerHTML = `
         <div class="dashboard-wealth-grid">
@@ -708,7 +729,7 @@ function renderDashboardWealth() {
             <div><span class="label">Gotówka oper.</span><strong>${formatPlnAmount(operational)}</strong></div>
             <div><span class="label">Zobowiązania</span><strong class="expense">${formatPlnAmount(debt)}</strong></div>
         </div>
-        ${changePctHtml}`;
+        ${changeHtml}`;
 }
 
 function renderDashboard() {

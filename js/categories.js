@@ -375,8 +375,23 @@ function getRecentCards() {
     return getRecentEntriesForScope('card').filter((entry) => entry.cardId);
 }
 
+function resolveRecentCategoryPair(entry, type = formState.currentType) {
+    const mainCategory = entry?.mainCategory;
+    if (!mainCategory) return null;
+    const txType = entry.type || type || 'expense';
+    let subCategory = entry.subCategory;
+    if (typeof normalizeFormSubCategoryForMain === 'function') {
+        subCategory = normalizeFormSubCategoryForMain(txType, mainCategory, subCategory);
+    } else if (!subCategory) {
+        subCategory = '[Bez podkategorii]';
+    }
+    return { mainCategory, subCategory, type: txType };
+}
+
 function addRecentCategory(type, mainCategory, subCategory) {
-    pushRecentFormEntry({ type, mainCategory, subCategory });
+    const resolved = resolveRecentCategoryPair({ type, mainCategory, subCategory }, type);
+    if (!resolved) return;
+    pushRecentFormEntry(resolved);
 }
 
 function addRecentLoan(loanId) {
@@ -466,9 +481,16 @@ function renderRecentCategoryChips() {
             chip.classList.add('selected');
         }
         chip.onclick = () => {
-            formState.selectedMainCategory = recent.mainCategory;
-            formState.selectedSubCategory = recent.subCategory;
-            renderMainCategoriesForm();
+            const resolved = resolveRecentCategoryPair(recent);
+            if (!resolved) return;
+            if (typeof selectAddFormCategoryPair === 'function') {
+                selectAddFormCategoryPair(resolved.mainCategory, resolved.subCategory);
+            } else {
+                formState.selectedMainCategory = resolved.mainCategory;
+                formState.selectedSubCategory = resolved.subCategory;
+                renderMainCategoriesForm();
+            }
+            focusAmountField();
         };
         row.appendChild(chip);
     });
