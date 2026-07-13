@@ -49,6 +49,33 @@ function sumCardRepaymentsInRange(start, end) {
         .reduce((s, m) => s + m.amount, 0);
 }
 
+function isLoanOverpaymentTransaction(loan, tx) {
+    if (!loan || !tx) return false;
+    if (tx.loanPaymentKind === 'overpayment') return true;
+    if (tx.loanPaymentKind === 'installment') return false;
+    const note = (tx.note || '').toLowerCase();
+    if (/nadpłat|nadplat/.test(note)) return true;
+    if (/spłata kapitału|splata kapitalu/.test(note)) return true;
+    const inst = loan.nextInstallmentAmount || 0;
+    const amount = tx.amount || 0;
+    if (inst > 0 && amount > inst * 1.05 && !/rata/.test(note)) return true;
+    return false;
+}
+
+function sumLoanInstallmentPaymentsForLoanInRange(loan, start, end) {
+    if (!loan) return 0;
+    return getTransactionsInRange(start, end)
+        .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
+        .filter((t) => !isLoanOverpaymentTransaction(loan, t))
+        .reduce((s, t) => {
+            const inst = loan.nextInstallmentAmount || 0;
+            if (inst > 0 && typeof classifyLoanPaymentAmount === 'function') {
+                return s + classifyLoanPaymentAmount(loan, t.amount).regular;
+            }
+            return s + t.amount;
+        }, 0);
+}
+
 function sumLoanPaymentsForLoanInRange(loan, start, end) {
     if (!loan) return 0;
     return getTransactionsInRange(start, end)
@@ -84,7 +111,7 @@ function sumScheduledDebtPaymentsInRange(startDate, endDate) {
 
 function sumDebtInstallmentPaymentsInRange(startDate, endDate) {
     const loanPaid = getActiveLoans().reduce(
-        (sum, loan) => sum + sumLoanPaymentsForLoanInRange(loan, startDate, endDate),
+        (sum, loan) => sum + sumLoanInstallmentPaymentsForLoanInRange(loan, startDate, endDate),
         0
     );
     const cardPaid = sumCardRepaymentsInRange(startDate, endDate);

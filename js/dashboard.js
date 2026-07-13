@@ -636,9 +636,11 @@ function renderUpcomingLoanInstallments() {
             name: getLoanDisplayName(loan),
             amount: loan.nextInstallmentAmount,
             scheduledAmount: loan.nextInstallmentAmount,
-            paidAmount: typeof sumLoanPaymentsForLoanInRange === 'function'
-                ? sumLoanPaymentsForLoanInRange(loan, startDate, endDate)
-                : 0,
+            paidAmount: typeof sumLoanInstallmentPaymentsForLoanInRange === 'function'
+                ? sumLoanInstallmentPaymentsForLoanInRange(loan, startDate, endDate)
+                : (typeof sumLoanPaymentsForLoanInRange === 'function'
+                    ? sumLoanPaymentsForLoanInRange(loan, startDate, endDate)
+                    : 0),
             sortKey: loan.nextInstallmentDue || '9999-99-99'
         }));
     const installmentSummary = typeof getDebtInstallmentRemainingSummary === 'function'

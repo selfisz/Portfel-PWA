@@ -408,6 +408,8 @@ function registerLoanPayment(loanId, amount, date, note, options = {}) {
         note: note || 'Spłata kapitału',
         affectsCash: true
     };
+    if (options.treatAsOverpayment) tx.loanPaymentKind = 'overpayment';
+    else if (options.advanceDueDate) tx.loanPaymentKind = 'installment';
     if (cashMovement) tx.cashMovementId = cashMovement.id;
     appState.transactions.unshift(tx);
 

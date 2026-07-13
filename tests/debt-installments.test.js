@@ -59,7 +59,14 @@ beforeAll(() => {
     globalThis.isLegacyTestLoan = () => false;
     globalThis.categoryTree = { expense: { Długi: ['Raty', 'Kredyt hipoteczny'] } };
 
+    globalThis.classifyLoanPaymentAmount = (loan, amount) => {
+        const inst = loan.nextInstallmentAmount || 0;
+        if (!inst || amount <= inst * 1.05) return { regular: amount, over: 0 };
+        return { regular: inst, over: amount - inst };
+    };
+
     loadScript('js/portfolio.js');
+    loadScript('js/reports-debt-calculations.js');
     loadScript('js/reports-debt.js');
 });
 
@@ -88,6 +95,22 @@ describe('getDebtInstallmentRemainingSummary', () => {
         const summary = getDebtInstallmentRemainingSummary('2026-06-01', '2026-06-30', { loansOnly: true });
         expect(summary.remaining).toBe(1200);
         expect(getDebtInstallmentRemainingSummary('2026-06-01', '2026-06-30').remaining).toBe(1200);
+    });
+
+    it('nadpłata nie zaspokaja raty w bieżącym miesiącu', () => {
+        appState.transactions = [{
+            date: '2026-06-10',
+            type: 'expense',
+            amount: 5000,
+            mainCategory: 'Długi',
+            subCategory: 'Raty',
+            note: 'Spłata kapitału',
+            loanPaymentKind: 'overpayment'
+        }];
+        const summary = getDebtInstallmentRemainingSummary('2026-06-01', '2026-06-30', { loansOnly: true });
+        expect(summary.remaining).toBe(1200);
+        const rows = collectDebtInstallmentRows({ startDate: '2026-06-01', endDate: '2026-06-30' });
+        expect(rows.some((row) => row.kind === 'loan' && row.id === 'loan-1')).toBe(true);
     });
 });
 

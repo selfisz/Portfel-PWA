@@ -1210,7 +1210,7 @@ function collectDebtInstallmentRows(bounds = null) {
     loanScheduled.forEach((scheduledTotal, loanId) => {
         const loan = getLoanById(loanId);
         if (!loan) return;
-        const paid = sumLoanPaymentsForLoanInRange(loan, startDate, endDate);
+        const paid = sumLoanInstallmentPaymentsForLoanInRange(loan, startDate, endDate);
         const remaining = Math.max(0, Math.round((scheduledTotal - paid) * 100) / 100);
         if (remaining <= 0) return;
         const due = loanDueDates.get(loanId) || loan.nextInstallmentDue || '';
