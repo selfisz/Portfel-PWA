@@ -6168,30 +6168,27 @@ html[data-theme="dark"] .welcome-action-btn {
     }
 }
 
-.analysis-section-tabs {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 5px;
-    margin: 0 0 14px;
-    position: sticky;
-    top: calc(var(--header-height, 52px) + var(--safe-top));
-    z-index: 40;
-    padding: 4px 0 6px;
-    background: var(--bg);
-}
-
-@media (max-width: 380px) {
-    .analysis-section-tabs .analysis-subnav-btn {
-        font-size: var(--text-3xs);
-        padding: 7px 2px;
-        min-height: 32px;
-    }
-}
-
 .analysis-subnav {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 5px;
     margin-bottom: 10px;
+}
+
+.analysis-subnav.analysis-section-tabs {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    margin: 0 0 14px;
+    position: sticky;
+    top: calc(var(--header-height, 52px) + var(--safe-top));
+    z-index: 40;
+}
+
+@media (max-width: 380px) {
+    .analysis-subnav.analysis-section-tabs .analysis-subnav-btn {
+        font-size: var(--text-3xs);
+        padding: 7px 2px;
+        min-height: 32px;
+    }
 }
 
 .analysis-subnav-btn {

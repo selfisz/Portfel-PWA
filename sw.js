@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanse-pwa-v383';
+const CACHE_NAME = 'finanse-pwa-v384';
 
 const FIREBASE_CDN = [
   'https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js',
