@@ -1596,12 +1596,12 @@
                 <button type="button" class="toggle-btn loans-chip analysis-compare-exit-btn" onclick="exitCompareMode()">Przywróć widok okresu</button>
             </div>
 
-            <nav id="analysis-tab-grid" class="analysis-tab-grid" aria-label="Sekcje analizy">
-                <button id="btn-analysis-overview" type="button" class="analysis-tab active" onclick="setAnalysisSection('overview')">Przegląd</button>
-                <button id="btn-analysis-expenses" type="button" class="analysis-tab" onclick="setAnalysisSection('expenses')">Wydatki</button>
-                <button id="btn-analysis-assets" type="button" class="analysis-tab" onclick="setAnalysisSection('assets')">Majątek</button>
-                <button id="btn-analysis-debts" type="button" class="analysis-tab" onclick="setAnalysisSection('debts')">Długi</button>
-                <button id="btn-analysis-advanced" type="button" class="analysis-tab analysis-tab--wide" onclick="setAnalysisSection('advanced')">Więcej</button>
+            <nav id="analysis-tab-grid" class="analysis-subnav analysis-section-tabs" aria-label="Sekcje analizy">
+                <button id="btn-analysis-overview" type="button" class="analysis-subnav-btn active" onclick="setAnalysisSection('overview')">Przegląd</button>
+                <button id="btn-analysis-expenses" type="button" class="analysis-subnav-btn" onclick="setAnalysisSection('expenses')">Wydatki</button>
+                <button id="btn-analysis-assets" type="button" class="analysis-subnav-btn" onclick="setAnalysisSection('assets')">Majątek</button>
+                <button id="btn-analysis-debts" type="button" class="analysis-subnav-btn" onclick="setAnalysisSection('debts')">Długi</button>
+                <button id="btn-analysis-advanced" type="button" class="analysis-subnav-btn" onclick="setAnalysisSection('advanced')">Więcej</button>
             </nav>
 
             <div id="analysis-sections-body" class="analysis-sections-body">
