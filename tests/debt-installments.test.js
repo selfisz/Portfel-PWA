@@ -112,6 +112,55 @@ describe('getDebtInstallmentRemainingSummary', () => {
         const rows = collectDebtInstallmentRows({ startDate: '2026-06-01', endDate: '2026-06-30' });
         expect(rows.some((row) => row.kind === 'loan' && row.id === 'loan-1')).toBe(true);
     });
+
+    it('duża nadpłata bez loanPaymentKind nie liczy się jako rata', () => {
+        appState.transactions = [{
+            date: '2026-06-10',
+            type: 'expense',
+            amount: 5000,
+            mainCategory: 'Długi',
+            subCategory: 'Raty',
+            note: 'Spłata kapitału'
+        }];
+        const summary = getDebtInstallmentRemainingSummary('2026-06-01', '2026-06-30', { loansOnly: true });
+        expect(summary.remaining).toBe(1200);
+    });
+
+    it('mBank nadpłata nie chowa raty gdy drugi kredyt ma tę samą podkategorię', () => {
+        appState.loans.push({
+            id: 'loan-mbank-consolidation',
+            name: 'Kredyt mBank (konsolidacja)',
+            subCategory: 'Remont',
+            currentCapitalLeft: 15000,
+            nextInstallmentAmount: 604.60,
+            nextInstallmentDue: '2026-06-27',
+            interestRate: 7.9
+        });
+        globalThis.getScheduledDebtPaymentsOnDate = (dateStr) => {
+            const items = [];
+            if (dateStr === '2026-06-15') {
+                items.push({ type: 'loan', id: 'loan-1', name: 'Alior', amount: 1200, estimated: false });
+            }
+            if (dateStr === '2026-06-27') {
+                items.push({ type: 'loan', id: 'loan-mbank-consolidation', name: 'mBank', amount: 604.60, estimated: false });
+            }
+            return items;
+        };
+        appState.transactions = [{
+            date: '2026-06-10',
+            type: 'expense',
+            amount: 3000,
+            mainCategory: 'Długi',
+            subCategory: 'Remont',
+            note: 'Spłata kapitału',
+            loanPaymentKind: 'overpayment',
+            loanId: 'loan-mbank-consolidation'
+        }];
+        const rows = collectDebtInstallmentRows({ startDate: '2026-06-01', endDate: '2026-06-30' });
+        const mbank = rows.find((row) => row.id === 'loan-mbank-consolidation');
+        expect(mbank).toBeTruthy();
+        expect(mbank.amount).toBe(604.60);
+    });
 });
 
 describe('collectDebtInstallmentRows', () => {
