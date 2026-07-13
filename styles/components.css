@@ -6171,13 +6171,17 @@ html[data-theme="dark"] .welcome-action-btn {
 .analysis-tab-grid {
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 6px;
+    gap: 4px;
     margin: 0 0 14px;
     position: sticky;
     top: calc(var(--header-height, 52px) + var(--safe-top));
     z-index: 40;
-    padding: 4px 0 6px;
-    background: var(--bg);
+    padding: 4px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
 }
 
 #btn-analysis-overview { grid-column: span 2; }
@@ -6187,9 +6191,9 @@ html[data-theme="dark"] .welcome-action-btn {
 #btn-analysis-advanced { grid-column: span 3; }
 
 .analysis-tab {
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--card-bg);
+    border: none;
+    border-radius: var(--radius-xs);
+    background: transparent;
     color: var(--text-muted);
     padding: 9px 4px;
     font-size: var(--text-2xs);
@@ -6199,12 +6203,13 @@ html[data-theme="dark"] .welcome-action-btn {
     text-align: center;
     line-height: 1.2;
     min-height: 38px;
+    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .analysis-tab.active {
     background: var(--accent);
-    border-color: var(--accent);
     color: #fff;
+    box-shadow: 0 4px 14px var(--accent-soft);
 }
 
 .analysis-tab:active {
