@@ -276,13 +276,12 @@ describe('mergeLoansById', () => {
     expect(result).toHaveLength(2);
   });
 
-  it('zachowuje wersję z wyższym score (suma totalAmount + capitalLeft) przy duplikatach', () => {
+  it('przy duplikatach preferuje późniejszą wersję (np. lokalną po synchronizacji)', () => {
     const old = [{ id: 'l1', totalAmount: 100000, currentCapitalLeft: 80000 }];
     const newer = [{ id: 'l1', totalAmount: 100000, currentCapitalLeft: 60000 }];
     const result = mergeLoansById(old, newer);
     expect(result).toHaveLength(1);
-    // newer.score = 100000+60000=160000 < old.score = 100000+80000=180000 → zachowuje old
-    expect(result[0].currentCapitalLeft).toBe(80000);
+    expect(result[0].currentCapitalLeft).toBe(60000);
   });
 
   it('pomija null i niepoprawne elementy', () => {

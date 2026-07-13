@@ -73,14 +73,7 @@ function mergeLoansById(...loanLists) {
         if (isLegacyTestLoan(raw)) return;
         const loan = normalizeLoan(raw);
         if (!loan.id || isLegacyTestLoan(loan)) return;
-        const prev = map.get(loan.id);
-        if (!prev) {
-            map.set(loan.id, loan);
-            return;
-        }
-        const prevScore = (prev.totalAmount || 0) + (prev.currentCapitalLeft || 0);
-        const nextScore = (loan.totalAmount || 0) + (loan.currentCapitalLeft || 0);
-        map.set(loan.id, nextScore >= prevScore ? loan : prev);
+        map.set(loan.id, loan);
     });
     return [...map.values()];
 }
