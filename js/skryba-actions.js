@@ -325,10 +325,17 @@ function buildSkrybaActionPreview(tool, params = {}) {
         if (amount <= 0) return { ok: false, error: 'Podaj kwotę spłaty.' };
         const resolvedLoan = resolved.loan;
         const name = typeof getLoanDisplayName === 'function' ? getLoanDisplayName(resolvedLoan) : resolvedLoan.name;
-        const nextCapital = Math.max(0, (resolvedLoan.currentCapitalLeft || 0) - amount);
+        const previewNote = `Spłata ${name}`;
+        const allocation = typeof splitLoanPaymentAllocation === 'function'
+            ? splitLoanPaymentAllocation(resolvedLoan, amount, previewNote, { treatAsOverpayment: true })
+            : { principal: amount, interest: 0 };
+        const nextCapital = Math.max(0, (resolvedLoan.currentCapitalLeft || 0) - allocation.principal);
+        const splitHint = allocation.interest > 0
+            ? ` · kapitał −${fmt(allocation.principal)}, odsetki ${fmt(allocation.interest)}`
+            : '';
         return {
             ok: true,
-            summary: `Spłata ${name}: ${fmt(amount)} · kapitał ${fmt(resolvedLoan.currentCapitalLeft)} → ${fmt(nextCapital)} · gotówka −${fmt(amount)}`,
+            summary: `Spłata ${name}: ${fmt(amount)}${splitHint} · poz. kapitał ${fmt(resolvedLoan.currentCapitalLeft)} → ${fmt(nextCapital)} · gotówka −${fmt(amount)}`,
             resolvedParams: { loanId: resolvedLoan.id, amount, date: params.date || today }
         };
     }
@@ -502,7 +509,7 @@ function executeSkrybaAction(tool, params = {}) {
         if (!loan) return { ok: false, error: 'Nie znaleziono kredytu.' };
         const name = typeof getLoanDisplayName === 'function' ? getLoanDisplayName(loan) : loan.name;
         const updated = typeof registerLoanPayment === 'function'
-            ? registerLoanPayment(loanId, amount, date || today, `Spłata ${name}`)
+            ? registerLoanPayment(loanId, amount, date || today, `Spłata ${name}`, { treatAsOverpayment: true })
             : null;
         if (!updated) return { ok: false, error: 'Nie udało się zarejestrować spłaty (sprawdź gotówkę).' };
         refreshAfterSkrybaAction();

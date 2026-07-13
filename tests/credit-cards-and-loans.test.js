@@ -412,10 +412,40 @@ describe('registerLoanPayment', () => {
     ]});
   });
 
-  it('zmniejsza currentCapitalLeft o kwotę spłaty', () => {
+  it('zmniejsza currentCapitalLeft o część kapitałową spłaty (odsetki osobno)', () => {
     const result = registerLoanPayment('loan-1', 5000, '2024-01-15', 'Spłata');
     expect(result).toBeTruthy();
+    // rata 2000: kapitał ~104.17 + nadpłata 3000
+    expect(result.currentCapitalLeft).toBeCloseTo(346895.83, 2);
+    expect(result.details.interestPaid).toBeCloseTo(1895.83, 2);
+    expect(result.details.capitalPaid).toBeCloseTo(3104.17, 2);
+  });
+
+  it('przy racie odejmuje tylko część kapitałową', () => {
+    const result = registerLoanPayment('loan-1', 2000, '2024-01-15', 'Rata');
+    expect(result).toBeTruthy();
+    expect(result.currentCapitalLeft).toBeCloseTo(349895.83, 2);
+    expect(result.details.interestPaid).toBeCloseTo(1895.83, 2);
+    expect(result.details.capitalPaid).toBeCloseTo(104.17, 2);
+  });
+
+  it('przy oprocentowaniu 0% odejmuje całą kwotę od kapitału', () => {
+    _setAppState({ ..._getAppState(), loans: [
+      { id: 'loan-0', name: 'Kredyt 0%', subCategory: 'Raty',
+        totalAmount: 10000, currentCapitalLeft: 8000, interestRate: 0,
+        nextInstallmentAmount: 500, archived: false, includeInSummary: true }
+    ]});
+    const result = registerLoanPayment('loan-0', 500, '2024-01-15', 'Rata');
+    expect(result.currentCapitalLeft).toBe(7500);
+    expect(result.details.interestPaid || 0).toBe(0);
+  });
+
+  it('formularz nadpłaty (treatAsOverpayment) odejmuje całą kwotę od kapitału', () => {
+    const result = registerLoanPayment('loan-1', 5000, '2024-01-15', 'Spłata kapitału', { treatAsOverpayment: true });
+    expect(result).toBeTruthy();
     expect(result.currentCapitalLeft).toBe(345000);
+    expect(result.details.capitalPaid).toBe(5000);
+    expect(result.details.interestPaid || 0).toBe(0);
   });
 
   it('zwraca null gdy loan nie istnieje', () => {
