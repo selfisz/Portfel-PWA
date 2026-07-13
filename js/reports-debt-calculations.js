@@ -62,18 +62,27 @@ function isLoanOverpaymentTransaction(loan, tx) {
     return false;
 }
 
+function isLoanInstallmentPaymentTransaction(loan, tx) {
+    if (!loan || !tx) return false;
+    if (isLoanOverpaymentTransaction(loan, tx)) return false;
+    if (tx.loanPaymentKind === 'installment') return true;
+    const note = (tx.note || '').toLowerCase();
+    if (/rata/.test(note)) return true;
+    const inst = loan.nextInstallmentAmount || 0;
+    const amount = tx.amount || 0;
+    if (inst > 0 && amount > 0 && amount <= inst * 1.05) return true;
+    return false;
+}
+
 function sumLoanInstallmentPaymentsForLoanInRange(loan, start, end) {
     if (!loan) return 0;
+    const belongs = typeof transactionBelongsToLoan === 'function'
+        ? transactionBelongsToLoan
+        : transactionMatchesLoan;
     return getTransactionsInRange(start, end)
-        .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
-        .filter((t) => !isLoanOverpaymentTransaction(loan, t))
-        .reduce((s, t) => {
-            const inst = loan.nextInstallmentAmount || 0;
-            if (inst > 0 && typeof classifyLoanPaymentAmount === 'function') {
-                return s + classifyLoanPaymentAmount(loan, t.amount).regular;
-            }
-            return s + t.amount;
-        }, 0);
+        .filter((t) => t.type === 'expense' && belongs(t, loan))
+        .filter((t) => isLoanInstallmentPaymentTransaction(loan, t))
+        .reduce((s, t) => s + t.amount, 0);
 }
 
 function sumLoanPaymentsForLoanInRange(loan, start, end) {

@@ -294,6 +294,23 @@ describe('mergeLoansById', () => {
   });
 });
 
+describe('transactionBelongsToLoan', () => {
+  it('wiąże wpłatę po loanId gdy jest ustawione', () => {
+    const loan = { id: 'loan-mbank', subCategory: 'Remont' };
+    const tx = { type: 'expense', mainCategory: 'Długi', subCategory: 'Remont', loanId: 'loan-mbank' };
+    expect(transactionBelongsToLoan(tx, loan)).toBe(true);
+  });
+
+  it('nie przypisuje wspólnej podkategorii do wielu kredytów bez loanId', () => {
+    globalThis.appState.loans = [
+      { id: 'loan-mbank', subCategory: 'Remont', totalAmount: 10000, currentCapitalLeft: 5000, archived: false },
+      { id: 'loan-velo', subCategory: 'Remont', totalAmount: 8000, currentCapitalLeft: 4000, archived: false }
+    ];
+    const tx = { type: 'expense', mainCategory: 'Długi', subCategory: 'Remont' };
+    expect(transactionBelongsToLoan(tx, { id: 'loan-mbank', subCategory: 'Remont' })).toBe(false);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // isLoanConfigured / isLoanActive / isLoanArchived
 // ---------------------------------------------------------------------------

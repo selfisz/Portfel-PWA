@@ -332,3 +332,15 @@ function transactionMatchesLoan(t, loan) {
     if (!subs) return true;
     return subs.includes(t.subCategory);
 }
+
+function transactionBelongsToLoan(t, loan) {
+    if (!t || !loan || t.type !== 'expense' || t.mainCategory !== 'Długi') return false;
+    if (t.loanId) return t.loanId === loan.id;
+    if (!transactionMatchesLoan(t, loan)) return false;
+    const peers = getActiveLoans().filter((l) => {
+        if (l.id === loan.id) return false;
+        const subs = getLoanPaymentSubcategories(l);
+        return subs && t.subCategory && subs.includes(t.subCategory);
+    });
+    return peers.length === 0;
+}
