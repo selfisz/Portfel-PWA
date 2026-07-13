@@ -437,7 +437,7 @@ function saveLoanPaymentFromAdd() {
         if (!confirm(`Kwota (${formatPlnAmount(amount)}) jest większa niż kapitał (${formatPlnAmount(loan.currentCapitalLeft)}). Kontynuować?`)) return;
     }
 
-    const updated = registerLoanPayment(loanId, amount, date, note);
+    const updated = registerLoanPayment(loanId, amount, date, note, { treatAsOverpayment: true });
     if (!updated) return;
 
     addRecentLoan(loanId);

@@ -327,7 +327,7 @@ function buildSkrybaActionPreview(tool, params = {}) {
         const name = typeof getLoanDisplayName === 'function' ? getLoanDisplayName(resolvedLoan) : resolvedLoan.name;
         const previewNote = `Spłata ${name}`;
         const allocation = typeof splitLoanPaymentAllocation === 'function'
-            ? splitLoanPaymentAllocation(resolvedLoan, amount, previewNote)
+            ? splitLoanPaymentAllocation(resolvedLoan, amount, previewNote, { treatAsOverpayment: true })
             : { principal: amount, interest: 0 };
         const nextCapital = Math.max(0, (resolvedLoan.currentCapitalLeft || 0) - allocation.principal);
         const splitHint = allocation.interest > 0
@@ -509,7 +509,7 @@ function executeSkrybaAction(tool, params = {}) {
         if (!loan) return { ok: false, error: 'Nie znaleziono kredytu.' };
         const name = typeof getLoanDisplayName === 'function' ? getLoanDisplayName(loan) : loan.name;
         const updated = typeof registerLoanPayment === 'function'
-            ? registerLoanPayment(loanId, amount, date || today, `Spłata ${name}`)
+            ? registerLoanPayment(loanId, amount, date || today, `Spłata ${name}`, { treatAsOverpayment: true })
             : null;
         if (!updated) return { ok: false, error: 'Nie udało się zarejestrować spłaty (sprawdź gotówkę).' };
         refreshAfterSkrybaAction();

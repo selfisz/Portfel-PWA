@@ -440,6 +440,14 @@ describe('registerLoanPayment', () => {
     expect(result.details.interestPaid || 0).toBe(0);
   });
 
+  it('formularz nadpłaty (treatAsOverpayment) odejmuje całą kwotę od kapitału', () => {
+    const result = registerLoanPayment('loan-1', 5000, '2024-01-15', 'Spłata kapitału', { treatAsOverpayment: true });
+    expect(result).toBeTruthy();
+    expect(result.currentCapitalLeft).toBe(345000);
+    expect(result.details.capitalPaid).toBe(5000);
+    expect(result.details.interestPaid || 0).toBe(0);
+  });
+
   it('zwraca null gdy loan nie istnieje', () => {
     expect(registerLoanPayment('brak-id', 1000, '2024-01-01', 'Test')).toBeNull();
   });

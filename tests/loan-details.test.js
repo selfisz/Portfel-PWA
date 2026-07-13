@@ -518,6 +518,12 @@ describe('splitLoanPaymentAllocation', () => {
     expect(split).toEqual({ principal: 500, interest: 0 });
   });
 
+  it('treatAsOverpayment wymusza całą kwotę na kapitał', () => {
+    const split = splitLoanPaymentAllocation(pekaoLike, 4128.37, 'Rata', { treatAsOverpayment: true });
+    expect(split.principal).toBe(4128.37);
+    expect(split.interest).toBe(0);
+  });
+
   it('kredyt mBank konsolidacja — rata z odsetkami', () => {
     const mbank = { currentCapitalLeft: 21261.39, interestRate: 7.9, nextInstallmentAmount: 682.13 };
     const split = splitLoanPaymentAllocation(mbank, 682.13, 'Rata');
