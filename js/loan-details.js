@@ -44,6 +44,50 @@ function normalizeLoanDetails(raw) {
     return details;
 }
 
+function roundLoanMoney(value) {
+    return Math.round(Math.max(0, Number(value) || 0) * 100) / 100;
+}
+
+function splitInstallmentInterestPrincipal(loan, amount) {
+    const capital = Math.max(0, parseFloat(loan?.currentCapitalLeft) || 0);
+    const rate = Math.max(0, parseFloat(loan?.interestRate) || 0);
+    const amt = Math.max(0, parseFloat(amount) || 0);
+    if (!amt) return { principal: 0, interest: 0 };
+    if (!rate) {
+        return { principal: roundLoanMoney(Math.min(amt, capital)), interest: 0 };
+    }
+    const monthlyInterest = capital * (rate / 100 / 12);
+    const interest = roundLoanMoney(Math.min(amt, monthlyInterest));
+    const principal = roundLoanMoney(Math.max(0, Math.min(amt - interest, capital)));
+    return { principal, interest };
+}
+
+function splitLoanPaymentAllocation(loan, amount, note = '', options = {}) {
+    const capital = Math.max(0, parseFloat(loan?.currentCapitalLeft) || 0);
+    const rate = Math.max(0, parseFloat(loan?.interestRate) || 0);
+    const amt = Math.max(0, parseFloat(amount) || 0);
+    if (!amt) return { principal: 0, interest: 0 };
+
+    const treatAsOverpayment = !!(options.treatAsOverpayment || /nadpłat|nadplat/i.test(note || ''));
+    if (rate === 0 || treatAsOverpayment) {
+        return { principal: roundLoanMoney(Math.min(amt, capital)), interest: 0 };
+    }
+
+    const installment = Math.max(0, parseFloat(loan?.nextInstallmentAmount) || 0);
+    if (installment > 0 && amt > roundLoanMoney(installment * 1.05)) {
+        const regular = splitInstallmentInterestPrincipal(loan, installment);
+        const overAmount = roundLoanMoney(amt - installment);
+        const remainingCapital = Math.max(0, capital - regular.principal);
+        const overPrincipal = roundLoanMoney(Math.min(overAmount, remainingCapital));
+        return {
+            principal: roundLoanMoney(regular.principal + overPrincipal),
+            interest: regular.interest
+        };
+    }
+
+    return splitInstallmentInterestPrincipal(loan, amt);
+}
+
 const PEKAO_CONTRACT_NUMBER = '00621649687/2/KH/25082025';
 const GHOST_MORTGAGE_CAPITAL_CEILING = 550000;
 const LEGACY_TEST_CAPITAL = 412500;

@@ -478,3 +478,50 @@ describe('syncMbankConsolidationLoanFields', () => {
     expect(globalThis.appState.loans[0].totalAmount).toBe(snapshot.totalAmount);
   });
 });
+
+// ---------------------------------------------------------------------------
+// splitLoanPaymentAllocation
+// ---------------------------------------------------------------------------
+describe('splitLoanPaymentAllocation', () => {
+  const pekaoLike = {
+    currentCapitalLeft: 661159.25,
+    interestRate: 6.19,
+    nextInstallmentAmount: 4128.37
+  };
+
+  it('dzieli ratę hipoteczną na kapitał i odsetki', () => {
+    const split = splitLoanPaymentAllocation(pekaoLike, 4128.37, 'Rata');
+    expect(split.interest).toBeCloseTo(3410.48, 1);
+    expect(split.principal).toBeCloseTo(717.89, 1);
+    expect(split.principal + split.interest).toBeCloseTo(4128.37, 2);
+  });
+
+  it('nadpłata w notatce idzie w całości na kapitał', () => {
+    const split = splitLoanPaymentAllocation(pekaoLike, 10000, 'Nadpłata');
+    expect(split.principal).toBe(10000);
+    expect(split.interest).toBe(0);
+  });
+
+  it('kwota > 105% raty: rata z odsetkami + reszta jako kapitał', () => {
+    const split = splitLoanPaymentAllocation(pekaoLike, 6000, 'Spłata');
+    const regular = splitLoanPaymentAllocation(pekaoLike, 4128.37, 'Rata');
+    expect(split.interest).toBeCloseTo(regular.interest, 2);
+    expect(split.principal).toBeCloseTo(regular.principal + (6000 - 4128.37), 2);
+  });
+
+  it('przy oprocentowaniu 0% cała kwota to kapitał', () => {
+    const split = splitLoanPaymentAllocation(
+      { currentCapitalLeft: 8000, interestRate: 0, nextInstallmentAmount: 500 },
+      500,
+      'Rata'
+    );
+    expect(split).toEqual({ principal: 500, interest: 0 });
+  });
+
+  it('kredyt mBank konsolidacja — rata z odsetkami', () => {
+    const mbank = { currentCapitalLeft: 21261.39, interestRate: 7.9, nextInstallmentAmount: 682.13 };
+    const split = splitLoanPaymentAllocation(mbank, 682.13, 'Rata');
+    expect(split.interest).toBeCloseTo(139.97, 1);
+    expect(split.principal).toBeCloseTo(542.16, 1);
+  });
+});

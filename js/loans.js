@@ -377,9 +377,20 @@ function registerLoanPayment(loanId, amount, date, note, options = {}) {
         if (!cashMovement) return null;
     }
 
+    const allocation = typeof splitLoanPaymentAllocation === 'function'
+        ? splitLoanPaymentAllocation(loan, amount, note, options)
+        : { principal: amount, interest: 0 };
+    const principalReduction = allocation.principal;
+    const interestPortion = allocation.interest;
+
+    const details = normalizeLoanDetails(loan.details);
+    if (principalReduction > 0) details.capitalPaid = roundLoanMoney(details.capitalPaid + principalReduction);
+    if (interestPortion > 0) details.interestPaid = roundLoanMoney(details.interestPaid + interestPortion);
+
     const updates = {
         ...loan,
-        currentCapitalLeft: Math.max(0, loan.currentCapitalLeft - amount)
+        currentCapitalLeft: Math.max(0, loan.currentCapitalLeft - principalReduction),
+        details
     };
     if (advanceDueDate && loan.nextInstallmentDue) {
         updates.nextInstallmentDue = advanceLoanDueDate(loan.nextInstallmentDue);
