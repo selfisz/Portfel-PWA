@@ -467,15 +467,34 @@ describe('syncMbankConsolidationLoanFields', () => {
     expect(changed).toBe(false);
   });
 
-  it('aktualizuje pole gdy różni się od snapshota', () => {
+  it('migruje przestarzałe wartości seed do aktualnego snapshota', () => {
     const snapshot = getMbankConsolidationLoanSnapshot();
     globalThis.appState = {
-      loans: [{ ...snapshot, totalAmount: 99999 }],
+      loans: [{
+        ...snapshot,
+        currentCapitalLeft: 21261.39,
+        nextInstallmentAmount: 682.13,
+        details: { ...snapshot.details, remainingInstallments: 35, capitalPaid: 0 }
+      }],
       transactions: []
     };
     const changed = syncMbankConsolidationLoanFields();
     expect(changed).toBe(true);
-    expect(globalThis.appState.loans[0].totalAmount).toBe(snapshot.totalAmount);
+    expect(globalThis.appState.loans[0].currentCapitalLeft).toBe(15719.23);
+    expect(globalThis.appState.loans[0].nextInstallmentAmount).toBe(604.60);
+    expect(globalThis.appState.loans[0].details.remainingInstallments).toBe(26);
+  });
+
+  it('nie nadpisuje ręcznie edytowanych kwot', () => {
+    const snapshot = getMbankConsolidationLoanSnapshot();
+    globalThis.appState = {
+      loans: [{ ...snapshot, currentCapitalLeft: 15000, nextInstallmentAmount: 600 }],
+      transactions: []
+    };
+    const changed = syncMbankConsolidationLoanFields();
+    expect(changed).toBe(false);
+    expect(globalThis.appState.loans[0].currentCapitalLeft).toBe(15000);
+    expect(globalThis.appState.loans[0].nextInstallmentAmount).toBe(600);
   });
 });
 
