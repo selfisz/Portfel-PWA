@@ -308,14 +308,15 @@ function getMbankConsolidationLoanSnapshot() {
         name: 'Kredyt mBank (konsolidacja)',
         subCategory: 'Remont',
         totalAmount: 31800,
-        currentCapitalLeft: 21261.39,
+        currentCapitalLeft: 15719.23,
         interestRate: 7.9,
-        nextInstallmentAmount: 682.13,
+        nextInstallmentAmount: 604.60,
         nextInstallmentDue: '2026-07-27',
         details: {
             bank: 'mBank',
             contractNumber: '57887190/2026',
-            remainingInstallments: 35,
+            capitalPaid: 16080.77,
+            remainingInstallments: 26,
             rateModel: 'Zmienne',
             overpaymentNotes: 'Dzień spłaty: 27. dzień każdego miesiąca.'
         }
@@ -337,6 +338,10 @@ function ensureMbankConsolidationLoan() {
     return true;
 }
 
+const MBANK_LEGACY_SEED_CAPITAL = 21261.39;
+const MBANK_LEGACY_SEED_INSTALLMENT = 682.13;
+const MBANK_LEGACY_SEED_REMAINING_INSTALLMENTS = 35;
+
 function syncMbankConsolidationLoanFields() {
     migrateLoansArray();
     const idx = findMbankConsolidationLoanIndex();
@@ -346,28 +351,46 @@ function syncMbankConsolidationLoanFields() {
     const loan = normalizeLoan(appState.loans[idx]);
     let changed = false;
 
-    ['name', 'subCategory', 'totalAmount', 'currentCapitalLeft', 'interestRate', 'nextInstallmentAmount', 'nextInstallmentDue'].forEach((key) => {
-        const current = loan[key];
-        const target = snapshot[key];
-        if (typeof target === 'number') {
-            if (Math.abs((current || 0) - target) > 0.01) {
-                loan[key] = target;
-                changed = true;
-            }
-        } else if (current !== target) {
-            loan[key] = target;
+    ['name', 'subCategory'].forEach((key) => {
+        if (loan[key] !== snapshot[key]) {
+            loan[key] = snapshot[key];
             changed = true;
         }
     });
 
-    const details = { ...(loan.details || {}), ...snapshot.details };
-    const currentKeys = Object.keys(details).sort();
-    const prevKeys = Object.keys(loan.details || {}).sort();
-    const detailsChanged = currentKeys.length !== prevKeys.length
-        || currentKeys.some((k) => details[k] !== (loan.details || {})[k]);
-    if (detailsChanged) {
-        loan.details = details;
-        changed = true;
+    if (!loan.details) loan.details = {};
+    ['bank', 'contractNumber', 'rateModel', 'overpaymentNotes'].forEach((key) => {
+        if (snapshot.details[key] && loan.details[key] !== snapshot.details[key]) {
+            loan.details[key] = snapshot.details[key];
+            changed = true;
+        }
+    });
+
+    const matchesLegacySeed = Math.abs((loan.currentCapitalLeft || 0) - MBANK_LEGACY_SEED_CAPITAL) < 0.01
+        && Math.abs((loan.nextInstallmentAmount || 0) - MBANK_LEGACY_SEED_INSTALLMENT) < 0.01
+        && (loan.details.remainingInstallments || 0) === MBANK_LEGACY_SEED_REMAINING_INSTALLMENTS;
+
+    if (matchesLegacySeed) {
+        ['totalAmount', 'currentCapitalLeft', 'interestRate', 'nextInstallmentAmount', 'nextInstallmentDue'].forEach((key) => {
+            const target = snapshot[key];
+            if (typeof target === 'number') {
+                if (Math.abs((loan[key] || 0) - target) > 0.01) {
+                    loan[key] = target;
+                    changed = true;
+                }
+            } else if (loan[key] !== target) {
+                loan[key] = target;
+                changed = true;
+            }
+        });
+        if ((loan.details.capitalPaid || 0) < 0.01 && snapshot.details.capitalPaid > 0) {
+            loan.details.capitalPaid = snapshot.details.capitalPaid;
+            changed = true;
+        }
+        if (loan.details.remainingInstallments !== snapshot.details.remainingInstallments) {
+            loan.details.remainingInstallments = snapshot.details.remainingInstallments;
+            changed = true;
+        }
     }
 
     if (changed) appState.loans[idx] = normalizeLoan(loan);
