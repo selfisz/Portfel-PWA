@@ -29,6 +29,15 @@ function normalizePpkBreakdown(raw) {
     };
 }
 
+function roundPpkMoney(value) {
+    return Math.round(Math.max(0, Number(value) || 0) * 100) / 100;
+}
+
+function getPpkBreakdownTotal(breakdown) {
+    const parts = normalizePpkBreakdown(breakdown || {});
+    return roundPpkMoney(parts.own + parts.employer + parts.state);
+}
+
 function normalizePpkAssetFields(asset) {
     if (!isPpkAsset(asset)) {
         delete asset.ppkBreakdown;
@@ -39,7 +48,22 @@ function normalizePpkAssetFields(asset) {
     asset.ppkContributions = Array.isArray(asset.ppkContributions)
         ? asset.ppkContributions.map(normalizePpkContribution).filter(Boolean)
         : [];
+    syncPpkAmountWithBreakdown(asset);
     return asset;
+}
+
+/** Gdy składniki > saldo, podnieś saldo (zachowaj zysk gdy saldo było wyższe). */
+function syncPpkAmountWithBreakdown(asset) {
+    if (!isPpkAsset(asset)) return false;
+    const partsSum = getPpkBreakdownTotal(getPpkBreakdown(asset));
+    const amount = roundPpkMoney(parseFloat(asset.amount) || 0);
+    if (partsSum <= amount + 0.001) return false;
+    asset.amount = partsSum;
+    const amountEl = typeof document !== 'undefined'
+        ? document.getElementById('asset-amount-input')
+        : null;
+    if (amountEl) amountEl.value = asset.amount || '';
+    return true;
 }
 
 function getPpkContributions(asset) {
@@ -217,6 +241,9 @@ function populatePpkEditForm(asset) {
     togglePpkEditFields();
     if (!isPpkAsset(asset)) return;
 
+    syncPpkAmountWithBreakdown(asset);
+    asset._ppkEditPreservedGain = getPpkGainAmount(asset);
+
     const breakdown = getPpkBreakdown(asset);
     const ownEl = document.getElementById('asset-ppk-own-input');
     const employerEl = document.getElementById('asset-ppk-employer-input');
@@ -225,10 +252,12 @@ function populatePpkEditForm(asset) {
     const contribOwnEl = document.getElementById('asset-ppk-contrib-own');
     const contribEmployerEl = document.getElementById('asset-ppk-contrib-employer');
     const contribStateEl = document.getElementById('asset-ppk-contrib-state');
+    const amountEl = document.getElementById('asset-amount-input');
 
     if (ownEl) ownEl.value = breakdown.own || '';
     if (employerEl) employerEl.value = breakdown.employer || '';
     if (stateEl) stateEl.value = breakdown.state || '';
+    if (amountEl) amountEl.value = asset.amount || '';
     if (dateEl && !dateEl.value) dateEl.value = typeof localIsoDate === 'function' ? localIsoDate(new Date()) : '';
     if (contribOwnEl) contribOwnEl.value = '';
     if (contribEmployerEl) contribEmployerEl.value = '';
@@ -250,10 +279,38 @@ function getPpkContributionTotal(entry) {
 
 function applyPpkContributionDelta(asset, delta) {
     if (!isPpkAsset(asset) || !delta) return;
-    const next = Math.round(((parseFloat(asset.amount) || 0) + delta) * 100) / 100;
+    const next = roundPpkMoney((parseFloat(asset.amount) || 0) + delta);
     asset.amount = Math.max(0, next);
     const amountEl = document.getElementById('asset-amount-input');
     if (amountEl) amountEl.value = asset.amount || '';
+}
+
+function readPpkBreakdownInputs() {
+    return normalizePpkBreakdown({
+        own: document.getElementById('asset-ppk-own-input')?.value,
+        employer: document.getElementById('asset-ppk-employer-input')?.value,
+        state: document.getElementById('asset-ppk-state-input')?.value
+    });
+}
+
+/** Przy edycji składników: saldo = suma składników + zachowany zysk kapitałowy. */
+function onPpkBreakdownInputChange() {
+    const asset = typeof getActiveAsset === 'function' ? getActiveAsset() : null;
+    if (!isPpkAsset(asset)) return;
+    if (getPpkContributions(asset).length) return;
+
+    const amountEl = document.getElementById('asset-amount-input');
+    if (!amountEl) return;
+
+    const newParts = readPpkBreakdownInputs();
+    const newSum = getPpkBreakdownTotal(newParts);
+    const preservedGain = typeof asset._ppkEditPreservedGain === 'number'
+        ? asset._ppkEditPreservedGain
+        : getPpkGainAmount(asset);
+    const nextAmount = roundPpkMoney(newSum + preservedGain);
+    amountEl.value = nextAmount || '';
+    asset.amount = nextAmount;
+    asset.ppkBreakdown = newParts;
 }
 
 function addPpkContributionEntry() {
@@ -271,6 +328,7 @@ function addPpkContributionEntry() {
     asset.ppkContributions = asset.ppkContributions || [];
     asset.ppkContributions.push(entry);
     applyPpkContributionDelta(asset, getPpkContributionTotal(entry));
+    syncPpkAmountWithBreakdown(asset);
 
     document.getElementById('asset-ppk-contrib-own').value = '';
     document.getElementById('asset-ppk-contrib-employer').value = '';
@@ -286,6 +344,7 @@ function removePpkContributionEntry(entryId) {
     const removed = (asset.ppkContributions || []).find((entry) => entry.id === entryId);
     asset.ppkContributions = (asset.ppkContributions || []).filter((entry) => entry.id !== entryId);
     if (removed) applyPpkContributionDelta(asset, -getPpkContributionTotal(removed));
+    syncPpkAmountWithBreakdown(asset);
     renderPpkContributionsEditList(asset);
     syncPpkBreakdownInputsFromHistory(asset);
 }
@@ -303,6 +362,23 @@ function syncPpkBreakdownInputsFromHistory(asset) {
     }
 }
 
+function migratePpkBalanceConsistency() {
+    if (!Array.isArray(appState.assets) || typeof isPpkAsset !== 'function') return false;
+    let changed = false;
+    appState.assets.forEach((asset, idx) => {
+        if (!isPpkAsset(asset)) return;
+        const before = roundPpkMoney(parseFloat(asset.amount) || 0);
+        const normalized = typeof normalizeAsset === 'function'
+            ? normalizeAsset(asset)
+            : normalizePpkAssetFields({ ...asset });
+        if (Math.abs(roundPpkMoney(normalized.amount || 0) - before) > 0.01) {
+            appState.assets[idx] = normalized;
+            changed = true;
+        }
+    });
+    return changed;
+}
+
 function readPpkFieldsFromForm(payload) {
     if (!isPpkAsset(payload)) return payload;
 
@@ -310,15 +386,28 @@ function readPpkFieldsFromForm(payload) {
         ? payload.ppkContributions.map(normalizePpkContribution).filter(Boolean)
         : [];
 
+    const previousBreakdown = normalizePpkBreakdown(payload.ppkBreakdown || {});
+    const previousAmount = roundPpkMoney(parseFloat(payload.amount) || 0);
+    const previousGain = Math.max(
+        0,
+        roundPpkMoney(previousAmount - getPpkBreakdownTotal(previousBreakdown))
+    );
+
     if (payload.ppkContributions.length) {
         payload.ppkBreakdown = getPpkBreakdown(payload);
+        const partsSum = getPpkBreakdownTotal(payload.ppkBreakdown);
+        if (previousAmount < partsSum) {
+            payload.amount = partsSum;
+        }
     } else {
-        payload.ppkBreakdown = normalizePpkBreakdown({
-            own: document.getElementById('asset-ppk-own-input')?.value,
-            employer: document.getElementById('asset-ppk-employer-input')?.value,
-            state: document.getElementById('asset-ppk-state-input')?.value
-        });
+        payload.ppkBreakdown = readPpkBreakdownInputs();
+        const partsSum = getPpkBreakdownTotal(payload.ppkBreakdown);
+        const preservedGain = typeof payload._ppkEditPreservedGain === 'number'
+            ? payload._ppkEditPreservedGain
+            : previousGain;
+        payload.amount = roundPpkMoney(partsSum + preservedGain);
     }
 
+    delete payload._ppkEditPreservedGain;
     return normalizePpkAssetFields(payload);
 }
