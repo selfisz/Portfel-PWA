@@ -1,0 +1,1537 @@
+/* Raporty — analityka długów (render + wykresy) */
+
+let reportsDebtSplitDrillLabel = null;
+
+function updateDebtSplitDrillChrome(drillLabel) {
+    const titleEl = document.getElementById('reports-debt-split-title');
+    const backBtn = document.getElementById('btn-reset-reports-debt-split');
+    if (titleEl) {
+        titleEl.textContent = drillLabel ? `Podział: ${drillLabel}` : 'Podział spłat';
+    }
+    backBtn?.classList.toggle('hidden', !drillLabel);
+}
+
+function resetReportsDebtSplitDrill(silent = false) {
+    reportsDebtSplitDrillLabel = null;
+    updateDebtSplitDrillChrome(null);
+    if (!silent && reportsLastCtx) {
+        renderReportsDebtSplitChart(reportsLastCtx, 'reportsDebtsSplitChart', 'reports-debts-split-legend');
+    }
+}
+
+function renderReportsDebtTrendChart(ctx) {
+    const canvas = document.getElementById('reportsDebtTrendChart');
+    if (!canvas) return;
+
+    const { monthLabels, totalData, loanData, cardData } = buildDebtBalanceTrendData(ctx);
+    const theme = getReportsChartTheme();
+    const chartCtx = canvas.getContext('2d');
+    if (reportsDebtTrendChartInstance) reportsDebtTrendChartInstance.destroy();
+
+    if (!monthLabels.length) return;
+
+    const totalColor = isLightTheme() ? 'rgba(15, 23, 42, 0.9)' : 'rgba(245, 245, 245, 0.9)';
+    const loanColor = isLightTheme() ? 'rgba(99, 102, 241, 0.85)' : 'rgba(129, 140, 248, 0.85)';
+    const cardColor = isLightTheme() ? 'rgba(13, 148, 136, 0.85)' : 'rgba(45, 212, 191, 0.85)';
+
+    reportsDebtTrendChartInstance = new Chart(chartCtx, {
+        type: 'line',
+        data: {
+            labels: monthLabels,
+            datasets: [
+                {
+                    label: 'Razem',
+                    data: totalData,
+                    borderColor: totalColor,
+                    backgroundColor: 'transparent',
+                    tension: 0.3,
+                    pointRadius: 3,
+                    borderWidth: 2.5
+                },
+                {
+                    label: 'Kredyty',
+                    data: loanData,
+                    borderColor: loanColor,
+                    backgroundColor: 'transparent',
+                    tension: 0.3,
+                    pointRadius: 2,
+                    borderWidth: 1.5,
+                    borderDash: [4, 4]
+                },
+                {
+                    label: 'Karty',
+                    data: cardData,
+                    borderColor: cardColor,
+                    backgroundColor: 'transparent',
+                    tension: 0.3,
+                    pointRadius: 2,
+                    borderWidth: 1.5,
+                    borderDash: [4, 4]
+                }
+            ]
+        },
+        options: getReportsChartOptions(theme)
+    });
+}
+
+function renderReportsDebtSplitChart(ctx, canvasId = 'reportsDebtsSplitChart', legendId = 'reports-debts-split-legend') {
+    const canvas = document.getElementById(canvasId);
+    const legendEl = document.getElementById(legendId);
+    if (!canvas) return;
+
+    const isTabChart = canvasId === 'reportsDebtsSplitChart';
+    const drillLabel = isTabChart ? reportsDebtSplitDrillLabel : null;
+    const slices = isTabChart ? buildDebtSplitDrillData(ctx, drillLabel) : buildDebtSplitData(ctx);
+    if (isTabChart) updateDebtSplitDrillChrome(drillLabel);
+    if (isTabChart) {
+        if (reportsDebtsTabSplitInstance) reportsDebtsTabSplitInstance.destroy();
+    } else if (reportsDebtSplitChartInstance) {
+        reportsDebtSplitChartInstance.destroy();
+    }
+
+    if (!slices.length) {
+        if (legendEl) {
+            const backRow = drillLabel
+                ? `<button type="button" class="reports-allocation-legend-back" onclick="resetReportsDebtSplitDrill()"><span aria-hidden="true">←</span> Wróć do podziału</button>`
+                : '';
+            legendEl.innerHTML = `${backRow}<p class="reports-hint">Brak spłat w wybranym okresie.</p>`;
+        }
+        return;
+    }
+
+    const labels = slices.map((s) => s.label);
+    const values = slices.map((s) => s.amount);
+    const colors = getChartSliceColors(labels, 'expense');
+    const borderColor = getChartBorderColor();
+    const canDrill = isTabChart && !drillLabel;
+
+    const chart = new Chart(canvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{
+                data: values,
+                backgroundColor: colors,
+                borderColor,
+                borderWidth: 3,
+                borderRadius: 5,
+                spacing: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 1.35,
+            cutout: '58%',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: getReportsChartTheme().tooltipBg,
+                    callbacks: {
+                        label: (context) => `${context.label}: ${formatPlnAmount(context.parsed)}`
+                    }
+                }
+            },
+            onClick: canDrill ? (_event, elements, chartRef) => {
+                if (!elements[0]) return;
+                reportsDebtSplitDrillLabel = chartRef.data.labels[elements[0].index];
+                renderReportsDebtSplitChart(ctx, canvasId, legendId);
+            } : undefined
+        }
+    });
+
+    if (isTabChart) reportsDebtsTabSplitInstance = chart;
+    else reportsDebtSplitChartInstance = chart;
+
+    if (legendEl) {
+        const total = values.reduce((s, v) => s + v, 0);
+        const backRow = drillLabel
+            ? `<button type="button" class="reports-allocation-legend-back" onclick="resetReportsDebtSplitDrill()"><span aria-hidden="true">←</span> Wróć do podziału</button>`
+            : '';
+        legendEl.innerHTML = backRow + slices.map((slice, i) => {
+            const pct = total > 0 ? Math.round((slice.amount / total) * 100) : 0;
+            const drillClass = canDrill ? ' chart-legend-item--drill' : '';
+            const tag = canDrill ? 'button' : 'div';
+            const attrs = canDrill
+                ? ` type="button" data-label="${String(slice.label).replace(/"/g, '&quot;')}"`
+                : '';
+            return `<${tag} class="reports-debt-split-item chart-legend-item${drillClass}"${attrs}>
+                <span class="reports-debt-split-dot" style="background:${colors[i]}"></span>
+                <span class="reports-debt-split-label">${escapeHtml(slice.label)}</span>
+                <strong>${formatPlnAmount(slice.amount)}</strong>
+                <em>${pct}%</em>
+            </${tag}>`;
+        }).join('');
+        if (canDrill) {
+            legendEl.querySelectorAll('.chart-legend-item--drill').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    reportsDebtSplitDrillLabel = btn.dataset.label;
+                    renderReportsDebtSplitChart(ctx, canvasId, legendId);
+                });
+            });
+        }
+    }
+}
+
+function renderReportsDebtForecast(targetId = 'reports-debt-forecast') {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+
+    const loans = getActiveLoans();
+    const cards = getActiveCreditCards();
+    if (!loans.length && !cards.length) {
+        el.innerHTML = '';
+        return;
+    }
+
+    const loanRows = loans.map((loan) => {
+        const est = estimateLoanPayoff(loan);
+        return `<div class="debt-forecast-row loan-clickable" role="button" tabindex="0"
+            onclick="openLoanDetails('${escapeHtml(loan.id)}')"
+            onkeydown="if (event.key === 'Enter') openLoanDetails('${escapeHtml(loan.id)}')">
+            <div class="debt-forecast-info">
+                <strong>${escapeHtml(getLoanDisplayName(loan))}</strong>
+                <span class="reports-hint">${est.detail}</span>
+            </div>
+            <div class="debt-forecast-meta">
+                <span class="label">Kapitał</span>
+                <strong>${formatPlnAmount(loan.currentCapitalLeft || 0)}</strong>
+                <span class="debt-forecast-date">${est.label}</span>
+            </div>
+        </div>`;
+    }).join('');
+
+    const cardRows = cards.map((card) => {
+        const est = estimateCardPayoff(card);
+        return `<div class="debt-forecast-row credit-clickable" role="button" tabindex="0"
+            onclick="openCreditCardDetails('${escapeHtml(card.id)}')"
+            onkeydown="if (event.key === 'Enter') openCreditCardDetails('${escapeHtml(card.id)}')">
+            <div class="debt-forecast-info">
+                <strong>${escapeHtml(card.name)}</strong>
+                <span class="reports-hint">${est.detail}</span>
+            </div>
+            <div class="debt-forecast-meta">
+                <span class="label">Zadłużenie</span>
+                <strong>${formatPlnAmount(card.currentBalance)}</strong>
+                <span class="debt-forecast-date">${est.label}</span>
+            </div>
+        </div>`;
+    }).join('');
+
+    el.innerHTML = `
+        <div class="reports-debt-forecast-box">
+            <h3 class="analysis-subsection-label">Prognoza spłaty</h3>
+            <p class="reports-hint">Szacunek na podstawie rat z umowy lub średniej spłat kart.</p>
+            ${loanRows}${cardRows}
+        </div>`;
+}
+
+function renderReportsDebtOverpayment(ctx, targetId = 'reports-debt-overpayment') {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+
+    const { regular, over, total } = analyzeLoanPaymentsInPeriod(ctx);
+    if (!total) {
+        el.innerHTML = '';
+        return;
+    }
+
+    const overPct = Math.round((over / total) * 100);
+    el.innerHTML = `
+        <div class="reports-debt-overpayment-box">
+            <h3 class="analysis-subsection-label">Raty vs nadpłaty (kredyty)</h3>
+            <div class="loan-report-grid">
+                <div><span class="label">Raty</span><strong>${formatPlnAmount(regular)}</strong></div>
+                <div><span class="label">Nadpłaty</span><strong class="income">${formatPlnAmount(over)}</strong></div>
+                <div><span class="label">Razem</span><strong class="expense">${formatPlnAmount(total)}</strong></div>
+                <div><span class="label">Udział nadpłat</span><strong>${overPct}%</strong></div>
+            </div>
+            <div class="progress-bar-bg" style="margin-top:12px">
+                <div class="progress-bar-fill" style="width:${overPct}%;background:var(--success)"></div>
+            </div>
+        </div>`;
+}
+
+function renderReportsDebtDsr(ctx) {
+    const el = document.getElementById('reports-debt-dsr');
+    if (!el) return;
+
+    const income = ctx.periodTx
+        .filter((t) => t.type === 'income')
+        .reduce((s, t) => s + t.amount, 0);
+    const { loanPayments, cardRepayments, total } = getDebtPaymentsInPeriod(ctx);
+    const dsr = income > 0 ? Math.round((total / income) * 100) : null;
+    const dsrClass = dsr === null ? '' : (dsr > 40 ? 'expense' : (dsr > 25 ? '' : 'income'));
+
+    el.innerHTML = `
+        <div class="reports-debt-dsr-box">
+            <div class="reports-debt-dsr-hero">
+                <span class="label">Obciążenie dochodem (DSR)</span>
+                <strong class="${dsrClass}">${dsr !== null ? `${dsr}%` : '—'}</strong>
+            </div>
+            <p class="reports-hint reports-debt-dsr-hint">Udział wpływów przeznaczony na spłaty w wybranym okresie.</p>
+            <div class="loan-report-grid reports-debt-dsr-grid">
+                <div><span class="label">Raty kredytów</span><strong class="expense">${formatPlnAmount(loanPayments)}</strong></div>
+                <div><span class="label">Spłaty kart</span><strong class="expense">${formatPlnAmount(cardRepayments)}</strong></div>
+                <div><span class="label">Razem spłaty</span><strong class="expense">${formatPlnAmount(total)}</strong></div>
+                <div><span class="label">Wpływy w okresie</span><strong class="income">${formatPlnAmount(income)}</strong></div>
+            </div>
+        </div>`;
+}
+
+function renderReportsCreditCardSummary(ctx, targetId = 'reports-credit-card-summary') {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+
+    const cards = getActiveCreditCards();
+    if (!cards.length) {
+        el.innerHTML = '';
+        return;
+    }
+
+    const { start, end } = getPeriodBoundsFromCtx(ctx);
+    const compact = targetId === 'reports-debts-cards';
+
+    el.innerHTML = cards.map((card) => {
+        const available = getCreditCardAvailable(card);
+        const usedPct = card.limit > 0 ? Math.round((card.currentBalance / card.limit) * 100) : 0;
+        const cardId = escapeHtml(card.id);
+        const repayments = getCreditCardMovementsInRange(start, end)
+            .filter((m) => m.cardId === card.id && m.type === 'repayment')
+            .reduce((s, m) => s + m.amount, 0);
+
+        if (compact) {
+            return `<div class="debt-portfolio-row credit-clickable" role="button" tabindex="0"
+                onclick="openCreditCardDetails('${cardId}')" onkeydown="if (event.key === 'Enter') openCreditCardDetails('${cardId}')">
+                <div class="debt-portfolio-head">
+                    <strong>${escapeHtml(card.name)}</strong>
+                    <span class="debt-portfolio-tag">${usedPct}% limitu</span>
+                </div>
+                <span class="debt-portfolio-meta">${formatPlnAmount(card.currentBalance)} · spłaty ${formatPlnAmount(repayments)} · wolne ${formatPlnAmount(available)}</span>
+                <div class="debt-portfolio-progress">
+                    <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${Math.min(100, usedPct)}%;background:var(--accent)"></div></div>
+                </div>
+            </div>`;
+        }
+
+        const transfers = getCreditCardMovementsInRange(start, end)
+            .filter((m) => m.cardId === card.id && m.type === 'transfer_out')
+            .reduce((s, m) => s + m.amount, 0);
+
+        return `<div class="analysis-loan-click credit-clickable" role="button" tabindex="0"
+            onclick="openCreditCardDetails('${cardId}')" onkeydown="if (event.key === 'Enter') openCreditCardDetails('${cardId}')">
+            <div class="analysis-subsection-label">${escapeHtml(card.name)}</div>
+            <div class="loan-report-grid">
+                <div><span class="label">Zadłużenie</span><strong>${formatPlnAmount(card.currentBalance)}</strong></div>
+                <div><span class="label">Wykorzystanie</span><strong>${usedPct}%</strong></div>
+                <div><span class="label">Spłaty w okresie</span><strong class="expense">${formatPlnAmount(repayments)}</strong></div>
+                <div><span class="label">Przelewy z karty</span><strong>${formatPlnAmount(transfers)}</strong></div>
+            </div>
+            <div class="progress-bar-bg" style="margin-top:12px"><div class="progress-bar-fill" style="width:${Math.min(100, usedPct)}%;background:var(--accent)"></div></div>
+            <p class="reports-hint" style="margin-top:8px">Wolne: ${formatPlnAmount(available)} z ${formatPlnAmount(card.limit)}</p>
+        </div>`;
+    }).join('');
+}
+
+function renderReportsDebtPaymentsChart(ctx, canvasId = 'reportsDebtChart') {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+
+    const { monthLabels, loanData, cardData } = buildDebtPaymentsMonthData(ctx);
+    const theme = getReportsChartTheme();
+    const chartCtx = canvas.getContext('2d');
+    const isTabChart = canvasId === 'reportsDebtsChart';
+    if (isTabChart) {
+        if (reportsDebtsTabChartInstance) reportsDebtsTabChartInstance.destroy();
+    } else if (reportsDebtChartInstance) {
+        reportsDebtChartInstance.destroy();
+    }
+
+    const debtColor = isLightTheme() ? 'rgba(99, 102, 241, 0.85)' : 'rgba(129, 140, 248, 0.85)';
+    const cardColor = isLightTheme() ? 'rgba(13, 148, 136, 0.85)' : 'rgba(45, 212, 191, 0.85)';
+
+    const chart = new Chart(chartCtx, {
+        type: 'bar',
+        data: {
+            labels: monthLabels,
+            datasets: [
+                {
+                    label: 'Raty kredytów',
+                    data: loanData,
+                    backgroundColor: debtColor,
+                    borderRadius: 6,
+                    borderSkipped: false
+                },
+                {
+                    label: 'Spłaty kart',
+                    data: cardData,
+                    backgroundColor: cardColor,
+                    borderRadius: 6,
+                    borderSkipped: false
+                }
+            ]
+        },
+        options: getReportsChartOptions(theme)
+    });
+
+    if (isTabChart) reportsDebtsTabChartInstance = chart;
+    else reportsDebtChartInstance = chart;
+}
+
+function renderReportsLoanSummary(ctx, targetId = 'reports-loan-summary') {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+
+    const loans = getActiveLoans();
+    if (!loans.length) {
+        el.innerHTML = '<p class="reports-hint">Brak aktywnych kredytów.</p>';
+        return;
+    }
+
+    el.innerHTML = loans.map((loan) => {
+        const paidPct = Math.round(getLoanPaidPercent(loan));
+        const loanName = escapeHtml(getLoanDisplayName(loan));
+        const loanId = escapeHtml(loan.id);
+
+        const debtPayments = ctx.periodTx
+            .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
+            .reduce((s, t) => s + t.amount, 0);
+
+        return `<div class="analysis-loan-click loan-clickable" role="button" tabindex="0"
+            onclick="openLoanDetails('${loanId}')" onkeydown="if (event.key === 'Enter') openLoanDetails('${loanId}')">
+            <div class="analysis-subsection-label">${loanName}</div>
+            <div class="loan-report-grid">
+                <div><span class="label">Spłacono</span><strong>${paidPct}%</strong></div>
+                <div><span class="label">Kapitał</span><strong>${formatPlnAmount(loan.currentCapitalLeft || 0)}</strong></div>
+                <div><span class="label">Raty/nadpłaty w okresie</span><strong class="expense">${formatPlnAmount(debtPayments)}</strong></div>
+                <div><span class="label">Następna rata</span><strong>${loan.nextInstallmentAmount ? formatPlnAmount(loan.nextInstallmentAmount) : '—'}</strong></div>
+            </div>
+            <div class="progress-bar-bg" style="margin-top:12px"><div class="progress-bar-fill" style="width:${paidPct}%;background:var(--success)"></div></div>
+        </div>`;
+    }).join('');
+}
+
+function buildYearReviewData(year) {
+    const yearTx = (appState.transactions || []).filter((t) => t.date.startsWith(String(year)));
+    if (!yearTx.length) return null;
+
+    const s = summarizePeriod(yearTx);
+    const expenses = yearTx.filter((t) => t.type === 'expense');
+    const incomes = yearTx.filter((t) => t.type === 'income');
+    const biggest = [...expenses].sort((a, b) => b.amount - a.amount)[0];
+    const byDay = {};
+    expenses.forEach((t) => { byDay[t.date] = (byDay[t.date] || 0) + t.amount; });
+    const costliestDay = Object.entries(byDay).sort((a, b) => b[1] - a[1])[0];
+
+    const byMonth = {};
+    expenses.forEach((t) => {
+        const mk = t.date.slice(0, 7);
+        byMonth[mk] = (byMonth[mk] || 0) + t.amount;
+    });
+    const monthEntries = Object.entries(byMonth).sort((a, b) => b[1] - a[1]);
+    const costliestMonth = monthEntries[0];
+    const cheapestMonth = monthEntries[monthEntries.length - 1];
+
+    const catSums = {};
+    expenses.forEach((t) => { catSums[t.mainCategory] = (catSums[t.mainCategory] || 0) + t.amount; });
+    const topCats = Object.entries(catSums).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    const snapStart = typeof getSnapshotForMonthKey === 'function'
+        ? getSnapshotForMonthKey(`${year}-01`)
+        : null;
+    const snapEnd = typeof getSnapshotForMonthKey === 'function'
+        ? getSnapshotForMonthKey(`${year}-12`)
+        : null;
+    const wealthDelta = snapStart && snapEnd ? snapEnd.netWorth - snapStart.netWorth : null;
+    const debtDelta = snapStart && snapEnd ? snapEnd.totalDebt - snapStart.totalDebt : null;
+
+    const debtPayments = expenses
+        .filter((t) => t.mainCategory === 'Długi')
+        .reduce((sum, t) => sum + t.amount, 0);
+
+    let subscriptionTotal = 0;
+    if (typeof getAllRecurringEntries === 'function') {
+        subscriptionTotal = getAllRecurringEntries('sub')
+            .filter((e) => e.mainCategory === 'Subskrypcje' || /subskrypc/i.test(`${e.mainCategory} ${e.subCategory}`))
+            .reduce((sum, e) => sum + (e.amount || 0) * 12, 0);
+    }
+
+    const ikzeUsed = typeof getIkzeContributionsFromTransactions === 'function'
+        ? getIkzeContributionsFromTransactions(year)
+        : 0;
+
+    return {
+        year,
+        yearTx,
+        s,
+        biggest,
+        costliestDay,
+        costliestMonth,
+        cheapestMonth,
+        topCats,
+        wealthDelta,
+        debtDelta,
+        debtPayments,
+        subscriptionTotal,
+        ikzeUsed,
+        txCount: yearTx.length,
+        incomeCount: incomes.length
+    };
+}
+
+function buildYearReviewHtml(data) {
+    if (!data) return '<div class="empty-state"><p>Brak danych za rok</p></div>';
+    const {
+        year, s, biggest, costliestDay, costliestMonth, cheapestMonth,
+        topCats, wealthDelta, debtDelta, debtPayments, subscriptionTotal, ikzeUsed, txCount
+    } = data;
+
+    const formatMonthKey = (mk) => {
+        if (!mk) return '—';
+        const [y, m] = String(mk).split('-').map(Number);
+        return new Date(y, m - 1, 1).toLocaleDateString('pl-PL', { month: 'long' });
+    };
+
+    const wealthBlock = wealthDelta !== null
+        ? `<div class="year-review-section"><h3 class="analysis-subsection-label">Majątek</h3>
+            <p class="year-review-wealth-delta ${wealthDelta >= 0 ? 'snapshot-delta-positive' : 'snapshot-delta-negative'}">
+                ${NET_WORTH_LABEL}: ${wealthDelta >= 0 ? '+' : ''}${formatPlnAmount(wealthDelta)} w roku
+                ${debtDelta !== null ? ` · Dług: ${debtDelta <= 0 ? '' : '+'}${formatPlnAmount(debtDelta)}` : ''}
+            </p></div>`
+        : '';
+
+    const topCatsHtml = topCats.length
+        ? `<div class="year-review-section"><h3 class="analysis-subsection-label">Top kategorie wydatków</h3>
+            <div class="year-review-top-cats">${topCats.map(([cat, amt], i) =>
+                `<div class="year-review-top-cat-row">
+                    <span class="year-review-top-cat-rank">${i + 1}</span>
+                    <span class="year-review-top-cat-name">${escapeHtml(cat)}</span>
+                    <span class="year-review-top-cat-amount expense">${formatPlnAmount(amt)}</span>
+                </div>`).join('')}</div></div>`
+        : '';
+
+    return `
+        <div class="year-review-hero">${year} — podsumowanie roku</div>
+        <div class="year-review-grid">
+            <div><span>Wydatki</span><strong>${formatPlnAmount(s.expense)}</strong></div>
+            <div><span>Wpływy</span><strong>${formatPlnAmount(s.income)}</strong></div>
+            <div><span>Oszczędności</span><strong>${s.savings}%</strong></div>
+            <div><span>Transakcje</span><strong>${txCount}</strong></div>
+            <div><span>Najdroższy dzień</span><strong>${costliestDay ? formatTxDate(costliestDay[0]) : '—'}</strong></div>
+            <div><span>Największy wydatek</span><strong>${biggest ? formatPlnAmount(biggest.amount) : '—'}</strong></div>
+            <div><span>Najdroższy miesiąc</span><strong>${costliestMonth ? formatMonthKey(costliestMonth[0]) : '—'}</strong></div>
+            <div><span>Najtańszy miesiąc</span><strong>${cheapestMonth ? formatMonthKey(cheapestMonth[0]) : '—'}</strong></div>
+            <div><span>Spłaty długów</span><strong>${formatPlnAmount(debtPayments)}</strong></div>
+            ${subscriptionTotal > 0 ? `<div><span>Subskrypcje (szac./rok)</span><strong>${formatPlnAmount(subscriptionTotal)}</strong></div>` : ''}
+            ${ikzeUsed > 0 ? `<div><span>IKZE wpłaty</span><strong>${formatPlnAmount(ikzeUsed)}</strong></div>` : ''}
+        </div>
+        ${wealthBlock}
+        ${topCatsHtml}
+        <div class="year-review-actions">
+            <button type="button" class="btn-outline" onclick="exportYearReviewPdf(${year})">PDF podsumowania roku</button>
+        </div>`;
+}
+
+function renderReportsYearReview(ctx) {
+    const el = document.getElementById('reports-year-review');
+    if (!el) return;
+
+    let year = new Date().getFullYear();
+    if (ctx.mode === 'year' && ctx.period !== 'all') year = parseInt(ctx.period, 10);
+    else if (ctx.rangeStart) year = parseInt(ctx.rangeStart.slice(0, 4), 10);
+    else if (ctx.mode === 'month' && ctx.rangeStart) year = parseInt(ctx.rangeStart.slice(0, 4), 10);
+
+    const data = buildYearReviewData(year);
+    el.innerHTML = buildYearReviewHtml(data);
+}
+
+function exportYearReviewPdf(year) {
+    const data = buildYearReviewData(year);
+    if (!data || typeof openPrintPreview !== 'function') return;
+    openPrintPreview(buildYearReviewHtml(data), `Rok ${year}`);
+}
+
+function buildTransactionRowsHtml(periodTx) {
+    return [...periodTx].sort((a, b) => a.date.localeCompare(b.date)).map((t) => `<tr>
+            <td>${t.date}</td><td>${t.type === 'expense' ? 'Wydatek' : 'Wpływ'}</td>
+            <td>${escapeHtml(t.mainCategory)}${t.subCategory !== '[Bez podkategorii]' ? ' / ' + escapeHtml(t.subCategory) : ''}</td>
+            <td>${t.amount.toFixed(2)} zł</td><td>${escapeHtml(t.note || '')}</td>
+        </tr>`).join('');
+}
+
+function buildTransactionsPeriodSection(periodTx, title, isMainTitle = false) {
+    const s = summarizePeriod(periodTx);
+    const savingsRate = s.income > 0 ? Math.round((s.balance / s.income) * 100) : 0;
+    const headingTag = isMainTitle ? 'h1' : 'h2';
+    const headingClass = isMainTitle ? 'reports-pdf-title' : 'reports-pdf-section-title';
+    return `<section class="reports-pdf-tx-section">
+        <${headingTag} class="${headingClass}">${escapeHtml(title)}</${headingTag}>
+        <p class="reports-pdf-summary">Wpływy: ${formatPlnAmount(s.income)} | Wydatki: ${formatPlnAmount(s.expense)} | Bilans: ${formatPlnAmount(s.balance)} | Oszczędności: ${savingsRate}%</p>
+        <table class="reports-pdf-table"><thead><tr><th>Data</th><th>Typ</th><th>Kategoria</th><th>Kwota</th><th>Notatka</th></tr></thead><tbody>
+        ${buildTransactionRowsHtml(periodTx)}
+        </tbody></table>
+    </section>`;
+}
+
+function buildReportsTransactionsPrintBody(ctx) {
+    if (ctx.mode === 'compare' && ctx.periodA && ctx.periodB) {
+        const { labelA, labelB, banner } = typeof getComparePeriodLabels === 'function'
+            ? getComparePeriodLabels(ctx)
+            : { labelA: 'Okres A', labelB: 'Okres B', banner: 'Porównanie okresów' };
+        return `<h1 class="reports-pdf-title">Transakcje — ${escapeHtml(banner)}</h1>
+        ${buildTransactionsPeriodSection(ctx.periodA.tx, labelA)}
+        ${buildTransactionsPeriodSection(ctx.periodB.tx, labelB)}`;
+    }
+    const title = ctx.label ? `Transakcje — ${ctx.label}` : 'Transakcje';
+    return buildTransactionsPeriodSection(ctx.periodTx || [], title, true);
+}
+
+function buildReportsPrintBody(ctx, savingsRate) {
+    void savingsRate;
+    return buildReportsTransactionsPrintBody(ctx);
+}
+
+function buildReportsPrintHtml(ctx, savingsRate) {
+    return `<!DOCTYPE html><html lang="pl"><head><meta charset="utf-8"><title>Raport Portfel</title>
+        <style>body{font-family:system-ui,sans-serif;padding:24px;color:#111}h1{margin:0 0 8px}table{width:100%;border-collapse:collapse;margin-top:16px}
+        th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5}</style></head><body>
+        ${buildReportsPrintBody(ctx, savingsRate)}
+        </body></html>`;
+}
+
+function getLoanRemainingMonths(loan) {
+    if (loan.details?.remainingInstallments > 0) return loan.details.remainingInstallments;
+    if (loan.details?.endDate && typeof daysUntilDate === 'function') {
+        const days = daysUntilDate(loan.details.endDate);
+        if (days !== null && days > 0) return Math.max(1, Math.ceil(days / 30.44));
+    }
+    const capital = loan.currentCapitalLeft || 0;
+    const installment = loan.nextInstallmentAmount || 0;
+    if (capital > 0 && installment > 0) return Math.max(1, Math.ceil(capital / installment));
+    return 0;
+}
+
+function calcAmortPayment(balance, annualRate, months) {
+    if (!(balance > 0) || !(months > 0)) return 0;
+    const r = annualRate / 100 / 12;
+    if (r === 0) return balance / months;
+    const factor = Math.pow(1 + r, months);
+    return balance * r * factor / (factor - 1);
+}
+
+function formatMonthsDuration(months) {
+    if (!months || months <= 0) return '—';
+    const years = Math.floor(months / 12);
+    const rem = months % 12;
+    if (years > 0 && rem > 0) return `${years} lat ${rem} mies.`;
+    if (years > 0) return `${years} lat`;
+    return `${months} mies.`;
+}
+
+function runAmortizationShorten({ balance, annualRate, payment, extraMonthly = 0, lumpSum = 0 }) {
+    let b = Math.max(0, balance - Math.max(0, lumpSum));
+    const r = annualRate / 100 / 12;
+    const extra = Math.max(0, extraMonthly);
+    const monthlyOutflow = payment + extra;
+    let totalInterest = 0;
+    let months = 0;
+
+    while (b > 0.01 && months < 600) {
+        months += 1;
+        const interest = b * r;
+        totalInterest += interest;
+        let principal = monthlyOutflow - interest;
+        if (monthlyOutflow <= interest) {
+            return {
+                months,
+                totalInterest,
+                paidOff: false,
+                monthlyPayment: payment,
+                monthlyOutflow,
+                extraMonthly: extra,
+                endingBalance: b,
+                payoffDate: null
+            };
+        }
+        if (principal > b) principal = b;
+        b -= principal;
+    }
+
+    const today = localIsoDate(new Date());
+    return {
+        months,
+        totalInterest,
+        paidOff: b <= 0.01,
+        monthlyPayment: payment,
+        monthlyOutflow,
+        extraMonthly: extra,
+        endingBalance: Math.max(0, b),
+        payoffDate: addMonthsToToday(months)
+    };
+}
+
+function runAmortizationLower({ balance, annualRate, payment, termMonths, extraMonthly = 0, lumpSum = 0 }) {
+    const bStart = Math.max(0, balance - Math.max(0, lumpSum));
+    const r = annualRate / 100 / 12;
+    const extra = Math.max(0, extraMonthly);
+    const recalculatedPayment = calcAmortPayment(bStart, annualRate, termMonths);
+
+    let targetPayment = payment;
+    if (lumpSum > 0 || extra > 0) {
+        targetPayment = extra > 0
+            ? Math.max(recalculatedPayment, payment - extra)
+            : recalculatedPayment;
+    }
+
+    const savedPerMonth = Math.max(0, payment - targetPayment);
+
+    let endingBalance = bStart;
+    let totalInterest = 0;
+    let monthsUsed = 0;
+
+    for (let m = 0; m < termMonths && endingBalance > 0.01; m += 1) {
+        monthsUsed += 1;
+        const interest = endingBalance * r;
+        totalInterest += interest;
+        let principal = targetPayment - interest;
+        if (principal < 0) principal = 0;
+        if (principal > endingBalance) principal = endingBalance;
+        endingBalance -= principal;
+    }
+
+    return {
+        months: termMonths,
+        monthsUsed,
+        totalInterest,
+        paidOff: endingBalance <= 0.01,
+        monthlyPayment: targetPayment,
+        monthlyOutflow: targetPayment,
+        savedPerMonth,
+        recalculatedPayment,
+        extraMonthly: extra,
+        lumpSum: Math.max(0, lumpSum),
+        endingBalance: Math.max(0, endingBalance),
+        payoffDate: loanPayoffDateFromMonths(termMonths)
+    };
+}
+
+function loanPayoffDateFromMonths(months) {
+    const d = new Date();
+    d.setMonth(d.getMonth() + months);
+    return localIsoDate(d);
+}
+
+function calculateOverpaymentScenarios(loan, { extraMonthly = 0, lumpSum = 0 } = {}) {
+    const balance = loan.currentCapitalLeft || 0;
+    const payment = loan.nextInstallmentAmount || 0;
+    const annualRate = loan.interestRate || 0;
+    const termMonths = getLoanRemainingMonths(loan);
+    if (!(balance > 0) || !(payment > 0) || !(termMonths > 0)) return null;
+
+    const baseline = runAmortizationShorten({ balance, annualRate, payment, extraMonthly: 0, lumpSum: 0 });
+    const shorten = runAmortizationShorten({
+        balance,
+        annualRate,
+        payment,
+        extraMonthly: Math.max(0, extraMonthly),
+        lumpSum: Math.max(0, lumpSum)
+    });
+    const lower = runAmortizationLower({
+        balance,
+        annualRate,
+        payment,
+        termMonths,
+        extraMonthly: Math.max(0, extraMonthly),
+        lumpSum: Math.max(0, lumpSum)
+    });
+
+    if (loan.details?.endDate) {
+        baseline.payoffDate = loan.details.endDate;
+        lower.payoffDate = loan.details.endDate;
+    }
+
+    return {
+        params: { balance, annualRate, payment, termMonths },
+        baseline,
+        shorten,
+        lower,
+        savedMonthsShorten: Math.max(0, baseline.months - shorten.months),
+        savedInterestShorten: Math.max(0, baseline.totalInterest - shorten.totalInterest),
+        savedInterestLower: Math.max(0, baseline.totalInterest - lower.totalInterest)
+    };
+}
+
+function estimateAnnualInterest(loan) {
+    const capital = loan.currentCapitalLeft || 0;
+    const rate = loan.interestRate || 0;
+    if (!capital || !rate) return 0;
+    return capital * (rate / 100);
+}
+
+function simulateOverpaymentMonths(loan, extraMonthly, mode = 'shorten') {
+    const scenarios = calculateOverpaymentScenarios(loan, { extraMonthly, lumpSum: 0 });
+    if (!scenarios) return null;
+
+    const pick = mode === 'lower' ? scenarios.lower : scenarios.shorten;
+    const base = scenarios.baseline;
+    return {
+        mode: mode === 'lower' ? 'lower' : 'shorten',
+        baseMonths: base.months,
+        newMonths: pick.months,
+        savedMonths: mode === 'lower' ? 0 : Math.max(0, base.months - pick.months),
+        installment: scenarios.params.payment,
+        newInstallment: pick.monthlyPayment,
+        extraMonthly: Math.max(0, extraMonthly),
+        savedPerMonth: pick.savedPerMonth || 0,
+        totalPayment: mode === 'lower' ? pick.monthlyPayment : pick.monthlyOutflow,
+        annualInterestSaved: mode === 'lower'
+            ? scenarios.savedInterestLower
+            : scenarios.savedInterestShorten
+    };
+}
+
+function populateDebtsOverpayLoanSelect() {
+    const select = document.getElementById('debts-overpay-loan');
+    if (!select) return;
+    const loans = getActiveLoans().filter((l) => l.nextInstallmentAmount > 0 && l.currentCapitalLeft > 0);
+    if (!loans.length) {
+        select.innerHTML = '<option value="">— brak —</option>';
+        select.disabled = true;
+        debtsOverpayLoanId = null;
+        return;
+    }
+    select.disabled = false;
+    if (!debtsOverpayLoanId || !loans.some((l) => l.id === debtsOverpayLoanId)) {
+        debtsOverpayLoanId = loans[0].id;
+    }
+    select.innerHTML = loans.map((l) =>
+        `<option value="${escapeHtml(l.id)}"${l.id === debtsOverpayLoanId ? ' selected' : ''}>${escapeHtml(getLoanDisplayName(l))}</option>`
+    ).join('');
+}
+
+function syncOverpayCalcChrome() {
+    const isMonthly = debtsOverpayKind !== 'lump';
+    document.getElementById('btn-overpay-monthly')?.classList.toggle('active', isMonthly);
+    document.getElementById('btn-overpay-lump')?.classList.toggle('active', !isMonthly);
+    const input = document.getElementById('debts-overpay-amount');
+    if (input) input.placeholder = isMonthly ? 'Kwota / mies.' : 'Kwota jednorazowa';
+}
+
+function setDebtsOverpayKind(kind) {
+    debtsOverpayKind = kind === 'lump' ? 'lump' : 'monthly';
+    syncOverpayCalcChrome();
+    onDebtsOverpayChange();
+}
+
+function getDebtsOverpayInputs() {
+    const amount = Math.max(0, parseFloat(document.getElementById('debts-overpay-amount')?.value) || 0);
+    debtsOverpayAmount = amount;
+    if (debtsOverpayKind === 'lump') {
+        return { extraMonthly: 0, lumpSum: amount };
+    }
+    return { extraMonthly: amount, lumpSum: 0 };
+}
+
+function onDebtsOverpayChange() {
+    debtsOverpayLoanId = document.getElementById('debts-overpay-loan')?.value || debtsOverpayLoanId;
+    renderReportsDebtOverpayCalc();
+}
+
+function renderReportsDebtOverpayCalc() {
+    syncOverpayCalcChrome();
+    const el = document.getElementById('reports-debt-overpay-results');
+    const summaryEl = document.getElementById('debts-overpay-loan-summary');
+    if (!el) return;
+
+    const loan = getLoanById(debtsOverpayLoanId);
+    if (!loan) {
+        if (summaryEl) summaryEl.innerHTML = '';
+        el.innerHTML = '<p class="reports-hint">Wybierz kredyt z ratą, aby zobaczyć symulację.</p>';
+        return;
+    }
+
+    const overpay = getDebtsOverpayInputs();
+    const scenarios = calculateOverpaymentScenarios(loan, overpay);
+    if (!scenarios) {
+        if (summaryEl) summaryEl.innerHTML = '';
+        el.innerHTML = '<p class="reports-hint">Uzupełnij kapitał, ratę i pozostały okres w szczegółach kredytu.</p>';
+        return;
+    }
+
+    const { params, shorten, lower } = scenarios;
+    const hasOverpay = overpay.extraMonthly > 0 || overpay.lumpSum > 0;
+
+    if (summaryEl) {
+        summaryEl.innerHTML = `<div class="overpay-calc-loan-meta">
+            <span>Kapitał <strong>${formatPlnAmount(params.balance)}</strong></span>
+            <span>Rata <strong>${formatPlnAmount(params.payment)}</strong></span>
+            <span>Stopa <strong>${params.annualRate ? `${params.annualRate}%` : '—'}</strong></span>
+            <span>Okres <strong>${formatMonthsDuration(params.termMonths)}</strong></span>
+        </div>`;
+    }
+
+    const ercNote = loan.details?.earlyRepaymentFee != null && loan.details.earlyRepaymentFee > 0
+        ? `<p class="reports-hint overpay-calc-warning">Możliwa opłata za wcześniejszą spłatę (~${loan.details.earlyRepaymentFee}%).</p>`
+        : '';
+
+    const payoffLabel = (dateStr) => (dateStr ? formatTxDate(dateStr) : '—');
+    const delta = (text, cls = 'income') => text ? ` <em class="overpay-stat-delta ${cls}">${text}</em>` : '';
+    const stat = (label, value) => `<div class="overpay-stat"><span>${label}</span><strong>${value}</strong></div>`;
+
+    if (!hasOverpay) {
+        el.innerHTML = `<p class="reports-hint overpay-calc-empty">Wpisz kwotę nadpłaty, aby zobaczyć symulację.</p>${ercNote}`;
+        return;
+    }
+
+    const shortenPayNote = shorten.extraMonthly > 0
+        ? stat('Płatność', `${formatPlnAmount(shorten.monthlyOutflow)}/mies.${delta(`+${formatPlnAmount(shorten.extraMonthly)} nadpłata`)}`)
+        : (overpay.lumpSum > 0 ? stat('Jednorazowo', formatPlnAmount(overpay.lumpSum)) : '');
+
+    el.innerHTML = `
+        <div class="overpay-scenarios">
+            <div class="overpay-scenario">
+                <div class="overpay-scenario-title">Skróć okres</div>
+                ${shortenPayNote}
+                ${stat('Koniec spłaty', `${payoffLabel(shorten.payoffDate)}${delta(scenarios.savedMonthsShorten > 0 ? `−${formatMonthsDuration(scenarios.savedMonthsShorten)}` : '')}`)}
+                ${stat('Odsetki łącznie', `${formatPlnAmount(shorten.totalInterest)}${delta(scenarios.savedInterestShorten > 0 ? `−${formatPlnAmount(scenarios.savedInterestShorten)}` : '')}`)}
+            </div>
+            <div class="overpay-scenario">
+                <div class="overpay-scenario-title">Obniż ratę</div>
+                ${stat('Rata', `${formatPlnAmount(lower.monthlyPayment)}/mies.${delta(lower.savedPerMonth > 0 ? `−${formatPlnAmount(lower.savedPerMonth)}` : '')}`)}
+                ${stat('Okres', formatMonthsDuration(lower.months))}
+                ${stat('Odsetki łącznie', `${formatPlnAmount(lower.totalInterest)}${delta(scenarios.savedInterestLower > 0 ? `−${formatPlnAmount(scenarios.savedInterestLower)}` : '')}`)}
+            </div>
+        </div>
+        ${!lower.paidOff && overpay.extraMonthly > 0 ? '<p class="reports-hint overpay-calc-warning">Przy obniżeniu raty kapitał może nie spłacić się w terminie.</p>' : ''}
+        ${ercNote}`;
+}
+
+function populateDebtsScenarioLoanSelect() {
+    populateDebtsOverpayLoanSelect();
+}
+
+function setDebtsScenarioExtra(amount) {
+    const input = document.getElementById('debts-overpay-amount');
+    if (input) input.value = String(amount);
+    onDebtsOverpayChange();
+}
+
+function onDebtsScenarioChange() {
+    onDebtsOverpayChange();
+}
+
+function getNextLoanPaymentSummary() {
+    let next = null;
+    getActiveLoans().forEach((loan) => {
+        if (!loan.nextInstallmentDue || !loan.nextInstallmentAmount) return;
+        if (!next || loan.nextInstallmentDue < next.date) {
+            next = {
+                date: loan.nextInstallmentDue,
+                amount: loan.nextInstallmentAmount
+            };
+        }
+    });
+    return next;
+}
+
+function getDebtsFreedomLabel() {
+    const loans = getActiveLoans().filter((l) => (l.currentCapitalLeft || 0) > 0);
+    const cards = getActiveCreditCards().filter((c) => (c.currentBalance || 0) > 0);
+    if (!loans.length && !cards.length) return 'Brak długów';
+
+    let maxMonths = -1;
+    let bestLabel = '—';
+
+    const consider = (months, label) => {
+        if (months === null || Number.isNaN(months)) return;
+        if (months > maxMonths) {
+            maxMonths = months;
+            bestLabel = label;
+        }
+    };
+
+    loans.forEach((loan) => {
+        if (loan.details?.endDate && typeof daysUntilDate === 'function') {
+            const days = daysUntilDate(loan.details.endDate);
+            if (days !== null) {
+                consider(days / 30.44, formatTxDate(loan.details.endDate));
+                return;
+            }
+        }
+        const est = estimateLoanPayoff(loan);
+        const match = est.label.match(/~(\d+)\s*mies/);
+        if (match) consider(parseInt(match[1], 10), est.label);
+        else if (est.label && est.label !== '—' && est.label !== 'Spłacony') consider(0, est.label);
+    });
+
+    cards.forEach((card) => {
+        const est = estimateCardPayoff(card);
+        const match = est.label.match(/~(\d+)\s*mies/);
+        if (match) consider(parseInt(match[1], 10), est.label);
+        else if (est.label && est.label !== '—' && est.label !== 'Spłacona') consider(0, est.label);
+    });
+
+    return bestLabel;
+}
+
+function renderReportsDebtsHero(ctx) {
+    const totalEl = document.getElementById('reports-debts-hero-total');
+    const metaEl = document.getElementById('reports-debts-hero-meta');
+    const interestEl = document.getElementById('reports-debts-kpi-interest');
+    const nextEl = document.getElementById('reports-debts-kpi-next');
+    const freedomEl = document.getElementById('reports-debts-kpi-freedom');
+    if (!totalEl) return;
+
+    const totalDebt = getLoanSummaryTotal();
+    const loanDebt = getLoanCapitalLeft();
+    const cardDebt = getCreditCardDebtTotal();
+    const { total } = getDebtPaymentsInPeriod(ctx);
+    const income = ctx.periodTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const dsr = income > 0 ? Math.round((total / income) * 100) : null;
+
+    const annualInterest = getActiveLoans()
+        .filter((l) => (l.currentCapitalLeft || 0) > 0)
+        .reduce((sum, loan) => sum + estimateAnnualInterest(loan), 0);
+    const nextPayment = getNextLoanPaymentSummary();
+
+    totalEl.textContent = formatPlnAmount(totalDebt);
+    if (interestEl) {
+        interestEl.textContent = annualInterest > 0 ? formatPlnAmount(annualInterest) : '—';
+        interestEl.classList.toggle('expense', annualInterest > 0);
+    }
+    if (nextEl) {
+        if (!nextPayment) {
+            nextEl.textContent = '—';
+        } else {
+            nextEl.innerHTML = `<span class="debts-kpi-next-stack"><span class="debts-kpi-next-amount">${formatPlnAmount(nextPayment.amount)}</span><span class="debts-kpi-next-date">${escapeHtml(formatTxDate(nextPayment.date))}</span></span>`;
+        }
+    }
+    if (freedomEl) freedomEl.textContent = getDebtsFreedomLabel();
+    if (metaEl) {
+        metaEl.textContent = [
+            `kredyty ${formatPlnAmount(loanDebt)}`,
+            `karty ${formatPlnAmount(cardDebt)}`,
+            `spłaty w okresie ${formatPlnAmount(total)}`,
+            dsr !== null ? `DSR ${dsr}%` : ''
+        ].filter(Boolean).join(' · ');
+    }
+}
+
+let reportsDebtPortfolioFilter = 'all';
+
+function setReportsDebtPortfolioFilter(filter) {
+    if (!['all', 'loans', 'cards'].includes(filter)) filter = 'all';
+    reportsDebtPortfolioFilter = filter;
+    document.getElementById('btn-reports-debt-filter-all')?.classList.toggle('active', filter === 'all');
+    document.getElementById('btn-reports-debt-filter-loans')?.classList.toggle('active', filter === 'loans');
+    document.getElementById('btn-reports-debt-filter-cards')?.classList.toggle('active', filter === 'cards');
+    const ctx = typeof reportsLastCtx !== 'undefined' && reportsLastCtx
+        ? reportsLastCtx
+        : getReportsPeriodContext();
+    renderReportsDebtPortfolio(ctx);
+}
+
+function buildReportsLoanPortfolioRowHtml(loan, ctx) {
+    const capital = loan.currentCapitalLeft || 0;
+    const annual = estimateAnnualInterest(loan);
+    const paidPct = Math.round(getLoanPaidPercent(loan));
+    const debtPayments = ctx.periodTx
+        .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
+        .reduce((s, t) => s + t.amount, 0);
+    const loanId = escapeHtml(loan.id);
+    const isMortgage = typeof isMortgageLoan === 'function' && isMortgageLoan(loan);
+    const propertyValue = loan.details?.propertyValue || 0;
+    let ltvTag = '';
+    if (isMortgage && propertyValue > 0) {
+        const ltv = (capital / propertyValue) * 100;
+        const ltvClass = ltv > 80 ? ' debt-portfolio-tag--warn' : '';
+        ltvTag = `<span class="debt-portfolio-tag${ltvClass}">LTV ${ltv.toFixed(1)}%</span>`;
+    }
+    const metaBits = [
+        loan.interestRate ? `${loan.interestRate}%` : null,
+        annual > 0 ? `~${formatPlnAmount(annual)}/rok` : null,
+        loan.nextInstallmentAmount ? `rata ${formatPlnAmount(loan.nextInstallmentAmount)}` : null,
+        debtPayments > 0 ? `w okresie ${formatPlnAmount(debtPayments)}` : null
+    ].filter(Boolean).join(' · ');
+    const ltvHint = isMortgage && propertyValue > 0
+        ? `<span class="debt-portfolio-ltv-hint">Nieruchomość ${formatPlnAmount(propertyValue)} · wolny kapitał ${formatPlnAmount(Math.max(0, propertyValue - capital))}</span>`
+        : '';
+
+    return {
+        annual,
+        html: `<div class="debt-portfolio-row loan-clickable" role="button" tabindex="0"
+            onclick="openLoanDetails('${loanId}')" onkeydown="if (event.key === 'Enter') openLoanDetails('${loanId}')">
+            <div class="debt-portfolio-head">
+                <strong>${escapeHtml(getLoanDisplayName(loan))}</strong>
+                ${ltvTag}
+            </div>
+            <span class="debt-portfolio-meta">${metaBits || 'Brak szczegółów stopy'}</span>
+            <div class="debt-portfolio-progress">
+                <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${paidPct}%;background:var(--success)"></div></div>
+                <span class="reports-hint">Spłacono ${paidPct}% · kapitał ${formatPlnAmount(capital)}</span>
+            </div>
+            ${ltvHint}
+        </div>`
+    };
+}
+
+function buildReportsCardPortfolioRowHtml(card, ctx) {
+    const { start, end } = getPeriodBoundsFromCtx(ctx);
+    const available = getCreditCardAvailable(card);
+    const usedPct = card.limit > 0 ? Math.round((card.currentBalance / card.limit) * 100) : 0;
+    const cardId = escapeHtml(card.id);
+    const repayments = getCreditCardMovementsInRange(start, end)
+        .filter((m) => m.cardId === card.id && m.type === 'repayment')
+        .reduce((s, m) => s + m.amount, 0);
+
+    return `<div class="debt-portfolio-row credit-clickable" role="button" tabindex="0"
+        onclick="openCreditCardDetails('${cardId}')" onkeydown="if (event.key === 'Enter') openCreditCardDetails('${cardId}')">
+        <div class="debt-portfolio-head">
+            <strong>${escapeHtml(card.name)}</strong>
+            <span class="debt-portfolio-tag">Karta · ${usedPct}% limitu</span>
+        </div>
+        <span class="debt-portfolio-meta">${formatPlnAmount(card.currentBalance)} · spłaty ${formatPlnAmount(repayments)} · wolne ${formatPlnAmount(available)}</span>
+        <div class="debt-portfolio-progress">
+            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${Math.min(100, usedPct)}%;background:var(--accent)"></div></div>
+        </div>
+    </div>`;
+}
+
+function renderReportsDebtPortfolio(ctx) {
+    const el = document.getElementById('reports-debt-portfolio');
+    if (!el) return;
+
+    const loans = getActiveLoans();
+    const cards = getActiveCreditCards();
+    const filter = reportsDebtPortfolioFilter;
+    const showLoans = filter !== 'cards';
+    const showCards = filter !== 'loans';
+
+    if (!loans.length && !cards.length) {
+        el.innerHTML = '<p class="reports-hint">Brak aktywnych kredytów i kart kredytowych.</p>';
+        return;
+    }
+
+    let totalAnnual = 0;
+    const rows = [];
+
+    if (showLoans && loans.length) {
+        loans.forEach((loan) => {
+            const built = buildReportsLoanPortfolioRowHtml(loan, ctx);
+            totalAnnual += built.annual;
+            rows.push(built.html);
+        });
+    }
+
+    if (showCards && cards.length) {
+        cards.forEach((card) => {
+            rows.push(buildReportsCardPortfolioRowHtml(card, ctx));
+        });
+    }
+
+    if (!rows.length) {
+        const emptyMsg = filter === 'loans'
+            ? 'Brak aktywnych kredytów.'
+            : filter === 'cards'
+                ? 'Brak aktywnych kart kredytowych.'
+                : 'Brak pozycji w portfelu.';
+        el.innerHTML = `<p class="reports-hint">${emptyMsg}</p>`;
+        return;
+    }
+
+    const footer = showLoans && filter !== 'cards' && totalAnnual > 0
+        ? `<div class="debt-portfolio-total">
+            <span>Szacunek odsetek kredytów</span>
+            <strong class="expense">${formatPlnAmount(totalAnnual)}/rok</strong>
+        </div>`
+        : '';
+
+    el.innerHTML = rows.join('') + footer;
+}
+
+function renderReportsDebtLoansPortfolio(ctx) {
+    renderReportsDebtPortfolio(ctx);
+}
+
+function getDebtInstallmentKey(kind, id) {
+    return `${kind}:${id}`;
+}
+
+function getExcludedDebtInstallmentSet() {
+    const raw = appState.reportPrefs?.excludedDebtInstallments;
+    return new Set(Array.isArray(raw) ? raw : []);
+}
+
+function isDebtInstallmentIncludedInSummary(row) {
+    return !getExcludedDebtInstallmentSet().has(getDebtInstallmentKey(row.kind, row.id));
+}
+
+function toggleDebtInstallmentInSummary(kind, id) {
+    if (!appState.reportPrefs || typeof appState.reportPrefs !== 'object') appState.reportPrefs = {};
+    const key = getDebtInstallmentKey(kind, id);
+    const excluded = Array.isArray(appState.reportPrefs.excludedDebtInstallments)
+        ? [...appState.reportPrefs.excludedDebtInstallments]
+        : [];
+    const idx = excluded.indexOf(key);
+    if (idx >= 0) excluded.splice(idx, 1);
+    else excluded.push(key);
+    appState.reportPrefs.excludedDebtInstallments = excluded;
+    saveState();
+    renderReportsDebtInstallmentList();
+}
+
+function collectDebtInstallmentRows(bounds = null) {
+    const { startDate, endDate } = bounds?.startDate && bounds?.endDate
+        ? bounds
+        : (typeof getMonthDateBounds === 'function' ? getMonthDateBounds() : { startDate: '', endDate: '' });
+    const rows = [];
+    const loanScheduled = new Map();
+    const loanDueDates = new Map();
+
+    if (typeof getScheduledDebtPaymentsOnDate === 'function' && startDate && endDate) {
+        const start = new Date(`${startDate}T12:00:00`);
+        const end = new Date(`${endDate}T12:00:00`);
+        const seen = new Set();
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dateStr = localIsoDate(d);
+            getScheduledDebtPaymentsOnDate(dateStr).forEach((payment) => {
+                if (payment.type !== 'loan') return;
+                const key = `${payment.id}|${dateStr}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+                loanScheduled.set(payment.id, (loanScheduled.get(payment.id) || 0) + payment.amount);
+                if (!loanDueDates.has(payment.id) || dateStr < loanDueDates.get(payment.id)) {
+                    loanDueDates.set(payment.id, dateStr);
+                }
+            });
+        }
+    }
+
+    loanScheduled.forEach((scheduledTotal, loanId) => {
+        const loan = getLoanById(loanId);
+        if (!loan) return;
+        const paid = sumLoanInstallmentPaymentsForLoanInRange(loan, startDate, endDate);
+        const remaining = Math.max(0, Math.round((scheduledTotal - paid) * 100) / 100);
+        if (remaining <= 0) return;
+        const due = loanDueDates.get(loanId) || loan.nextInstallmentDue || '';
+        rows.push({
+            sortKey: due || '9999-99-99',
+            name: getLoanDisplayName(loan),
+            amount: remaining,
+            scheduledAmount: scheduledTotal,
+            paidAmount: paid,
+            dateLabel: due ? formatTxDate(due) : '—',
+            estimated: false,
+            kind: 'loan',
+            id: loan.id
+        });
+    });
+
+    getActiveCreditCards().forEach((card) => {
+        if (!(card.currentBalance > 0)) return;
+        const hint = typeof getCardRepaymentHint === 'function' ? getCardRepaymentHint(card) : null;
+        if (!hint) return;
+        const scheduled = Math.min(hint.amount, card.currentBalance);
+        const paid = sumCardRepaymentsForCardInRange(card.id, startDate, endDate);
+        const remaining = Math.max(0, Math.round((scheduled - paid) * 100) / 100);
+        if (remaining <= 0) return;
+        rows.push({
+            sortKey: `9998-${String(hint.day).padStart(2, '0')}`,
+            name: card.name,
+            amount: remaining,
+            scheduledAmount: scheduled,
+            paidAmount: paid,
+            dateLabel: `~${hint.day}. dnia miesiąca`,
+            estimated: true,
+            kind: 'card',
+            id: card.id
+        });
+    });
+
+    rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey) || a.name.localeCompare(b.name, 'pl'));
+    return rows;
+}
+
+function setReportsDebtsCardVisible(cardId, visible) {
+    document.getElementById(cardId)?.classList.toggle('hidden', !visible);
+}
+
+function updateReportsDebtsSectionVisibility(ctx) {
+    const loans = getActiveLoans();
+    const cards = getActiveCreditCards();
+    const hasLoanDebt = loans.some((l) => (l.currentCapitalLeft || 0) > 0);
+    const hasCardDebt = cards.some((c) => (c.currentBalance || 0) > 0);
+    const hasAnyDebt = hasLoanDebt || hasCardDebt;
+
+    setReportsDebtsCardVisible('reports-debts-portfolio-card', hasAnyDebt);
+    setReportsDebtsCardVisible('reports-debts-installments-card', collectDebtInstallmentRows().length > 0);
+    setReportsDebtsCardVisible('reports-debts-overpay-card', hasLoanDebt);
+    setReportsDebtsCardVisible('reports-debts-charts-card', hasAnyDebt);
+
+    const freedomItems = typeof buildDebtFreedomTimeline === 'function' ? buildDebtFreedomTimeline() : [];
+    const { total: loanPaymentsInPeriod } = analyzeLoanPaymentsInPeriod(ctx);
+    setReportsDebtsCardVisible('reports-debts-freedom-card', freedomItems.length > 0 || loanPaymentsInPeriod > 0);
+}
+
+let debtInstallmentFilterExpanded = false;
+
+function toggleReportsDebtInstallmentFilter() {
+    debtInstallmentFilterExpanded = !debtInstallmentFilterExpanded;
+    const panel = document.getElementById('reports-debt-installment-filter-panel');
+    const toggle = document.getElementById('reports-debt-installment-filter-toggle');
+    if (panel) panel.classList.toggle('hidden', !debtInstallmentFilterExpanded);
+    if (toggle) toggle.setAttribute('aria-expanded', debtInstallmentFilterExpanded ? 'true' : 'false');
+}
+
+function setAllDebtInstallmentsInSummary(included) {
+    const rows = collectDebtInstallmentRows();
+    if (!rows.length) return;
+    if (!appState.reportPrefs || typeof appState.reportPrefs !== 'object') appState.reportPrefs = {};
+    if (included) {
+        appState.reportPrefs.excludedDebtInstallments = [];
+    } else {
+        appState.reportPrefs.excludedDebtInstallments = rows.map((row) => getDebtInstallmentKey(row.kind, row.id));
+    }
+    saveState();
+    renderReportsDebtInstallmentList();
+}
+
+function renderReportsDebtInstallmentFilter(rows) {
+    const block = document.getElementById('reports-debt-installment-filter-block');
+    const chipsEl = document.getElementById('reports-debt-installment-chips');
+    if (!block || !chipsEl) return;
+
+    if (rows.length < 2) {
+        block.classList.add('hidden');
+        chipsEl.innerHTML = '';
+        return;
+    }
+
+    block.classList.remove('hidden');
+    chipsEl.innerHTML = rows.map((row) => {
+        const included = isDebtInstallmentIncludedInSummary(row);
+        const toggleFn = `toggleDebtInstallmentInSummary('${escapeHtml(row.kind)}','${escapeHtml(row.id)}')`;
+        const est = row.estimated ? ' ~' : '';
+        return `<button type="button" class="toggle-btn loans-chip${included ? ' active' : ''}"
+            onclick="${toggleFn}" aria-pressed="${included ? 'true' : 'false'}">${escapeHtml(row.name)}${est}</button>`;
+    }).join('');
+}
+
+function renderReportsDebtInstallmentList() {
+    const el = document.getElementById('reports-debt-installment-list');
+    if (!el) return;
+
+    const rows = collectDebtInstallmentRows();
+    const includedRows = rows.filter(isDebtInstallmentIncludedInSummary);
+    const excludedCount = rows.length - includedRows.length;
+
+    const summaryEl = document.getElementById('reports-debt-installment-summary');
+    const monthlyTotal = includedRows.reduce((s, r) => s + r.amount, 0);
+    const loanTotal = includedRows.filter((r) => !r.estimated).reduce((s, r) => s + r.amount, 0);
+    const cardTotal = includedRows.filter((r) => r.estimated).reduce((s, r) => s + r.amount, 0);
+    const monthBounds = typeof getMonthDateBounds === 'function' ? getMonthDateBounds() : null;
+    const monthSummary = monthBounds
+        ? getDebtInstallmentRemainingSummary(monthBounds.startDate, monthBounds.endDate)
+        : null;
+
+    if (summaryEl) {
+        const details = [];
+        if (loanTotal > 0 || cardTotal > 0) {
+            details.push(`pozostało ${formatPlnAmount(monthlyTotal)}`);
+            if (loanTotal > 0) details.push(`kredyty ${formatPlnAmount(loanTotal)}`);
+            if (cardTotal > 0) details.push(`karty ~${formatPlnAmount(cardTotal)}`);
+        }
+        if (monthSummary && monthSummary.paid > 0) {
+            details.push(`zapłacono ${formatPlnAmount(monthSummary.paid)}`);
+        }
+        if (excludedCount > 0) details.push(`${includedRows.length}/${rows.length} w sumie`);
+        summaryEl.innerHTML = `<div class="debt-installment-total">
+            <span class="label">Pozostało do spłaty w tym miesiącu</span>
+            <strong class="expense">${formatPlnAmount(monthSummary?.remaining ?? monthlyTotal)}</strong>
+        </div>${details.length ? `<p class="debt-installment-total-meta">${details.join(' · ')}</p>` : ''}`;
+    }
+
+    renderReportsDebtInstallmentFilter(rows);
+
+    if (!rows.length) {
+        if (summaryEl) summaryEl.innerHTML = '';
+        el.innerHTML = '<p class="reports-hint">Brak zaplanowanych rat — uzupełnij dane kredytów w portfelu.</p>';
+        return;
+    }
+
+    el.innerHTML = rows.map((row) => {
+        const openFn = row.kind === 'loan'
+            ? `openLoanDetails('${escapeHtml(row.id)}')`
+            : `openCreditCardDetails('${escapeHtml(row.id)}')`;
+        const estClass = row.estimated ? ' debt-installment-row--estimated' : '';
+        const included = isDebtInstallmentIncludedInSummary(row);
+        const paidHint = row.paidAmount > 0
+            ? ` · zapłacono ${formatPlnAmount(row.paidAmount)}`
+            : '';
+        return `<div class="debt-installment-row${estClass}${included ? '' : ' debt-installment-row--excluded'} ${row.kind}-clickable" role="button" tabindex="0"
+            onclick="${openFn}" onkeydown="if (event.key==='Enter') ${openFn}">
+            <span class="debt-installment-name">${escapeHtml(row.name)}${row.estimated ? ' <em>szac.</em>' : ''}</span>
+            <span class="debt-installment-amount">${formatPlnAmount(row.amount)}</span>
+            <span class="debt-installment-date">${escapeHtml(row.dateLabel)}${paidHint}</span>
+        </div>`;
+    }).join('');
+}
+
+function renderReportsDebtsFreedomPanel(ctx) {
+    const el = document.getElementById('reports-debts-freedom-panel');
+    if (!el) return;
+
+    const items = typeof buildDebtFreedomTimeline === 'function' ? buildDebtFreedomTimeline() : [];
+    const { regular, over, total } = analyzeLoanPaymentsInPeriod(ctx);
+    const hasPeriod = total > 0;
+    const hasTimeline = items.length > 0;
+
+    if (!hasPeriod && !hasTimeline) {
+        el.innerHTML = '';
+        return;
+    }
+
+    let periodHtml = '';
+    if (hasPeriod) {
+        const overPct = Math.round((over / total) * 100);
+        periodHtml = `<div class="debt-freedom-period">
+            <span class="analysis-subsection-label">Spłaty kredytów w okresie</span>
+            <div class="debt-freedom-period-grid">
+                <div><span class="label">Raty</span><strong>${formatPlnAmount(regular)}</strong></div>
+                <div><span class="label">Nadpłaty</span><strong class="income">${formatPlnAmount(over)}</strong></div>
+                <div><span class="label">Razem</span><strong class="expense">${formatPlnAmount(total)}</strong></div>
+                ${over > 0 ? `<div><span class="label">Udział nadpłat</span><strong>${overPct}%</strong></div>` : ''}
+            </div>
+        </div>`;
+    }
+
+    let timelineHtml = '';
+    if (hasTimeline) {
+        const today = localIsoDate(new Date());
+        const dated = items.filter((i) => i.endDate);
+        const maxMonths = dated.length
+            ? Math.max(...dated.map((i) => {
+                const d = new Date(`${i.endDate}T12:00:00`);
+                const n = new Date(`${today}T12:00:00`);
+                return Math.max(1, (d.getFullYear() - n.getFullYear()) * 12 + (d.getMonth() - n.getMonth()));
+            }))
+            : 1;
+
+        const rows = items.map((item) => {
+            const monthsLeft = item.endDate
+                ? Math.max(0, (() => {
+                    const d = new Date(`${item.endDate}T12:00:00`);
+                    const n = new Date(`${today}T12:00:00`);
+                    return (d.getFullYear() - n.getFullYear()) * 12 + (d.getMonth() - n.getMonth());
+                })())
+                : null;
+            const pct = monthsLeft !== null ? Math.min(100, Math.round((monthsLeft / maxMonths) * 100)) : 8;
+            const dateLabel = item.endDate ? formatTxDate(item.endDate) : item.label;
+            const openFn = item.kind === 'loan'
+                ? `openLoanDetails('${escapeHtml(item.id)}')`
+                : `openCreditCardDetails('${escapeHtml(item.id)}')`;
+            return `<div class="debt-freedom-row ${item.kind}-clickable" role="button" tabindex="0" onclick="${openFn}" onkeydown="if (event.key==='Enter') ${openFn}">
+                <div class="debt-freedom-head">
+                    <strong>${escapeHtml(item.name)}</strong>
+                    <span class="debt-freedom-date">${escapeHtml(dateLabel)}</span>
+                </div>
+                <div class="debt-freedom-bar"><span style="width:${pct}%"></span></div>
+                <div class="debt-freedom-meta">
+                    <span>${formatPlnAmount(item.amount)} pozostało</span>
+                    <span>${escapeHtml(item.detail || item.label)}</span>
+                </div>
+            </div>`;
+        }).join('');
+
+        timelineHtml = `<div class="debt-freedom-timeline-wrap">
+            <span class="analysis-subsection-label">Koniec spłaty</span>
+            ${rows}
+        </div>`;
+    }
+
+    el.innerHTML = periodHtml + timelineHtml;
+}
+
+function renderReportsDebtInterest() {
+    const el = document.getElementById('reports-debt-interest');
+    if (!el) return;
+
+    const loans = getActiveLoans().filter((l) => (l.currentCapitalLeft || 0) > 0);
+    if (!loans.length) {
+        el.innerHTML = '<p class="reports-hint">Brak aktywnych kredytów.</p>';
+        return;
+    }
+
+    let totalAnnual = 0;
+    const rows = loans.map((loan) => {
+        const annual = estimateAnnualInterest(loan);
+        const monthly = annual / 12;
+        totalAnnual += annual;
+        const loanId = escapeHtml(loan.id);
+        return `<div class="debt-interest-row loan-clickable" role="button" tabindex="0"
+            onclick="openLoanDetails('${loanId}')" onkeydown="if (event.key === 'Enter') openLoanDetails('${loanId}')">
+            <div class="debt-interest-info">
+                <strong>${escapeHtml(getLoanDisplayName(loan))}</strong>
+                <span class="reports-hint">${loan.interestRate ? `${loan.interestRate}%` : 'brak stopy'} · kapitał ${formatPlnAmount(loan.currentCapitalLeft)}</span>
+            </div>
+            <div class="debt-interest-amounts">
+                <div><span class="label">/ rok</span><strong class="expense">${formatPlnAmount(annual)}</strong></div>
+                <div><span class="label">/ mies.</span><strong>${formatPlnAmount(monthly)}</strong></div>
+            </div>
+        </div>`;
+    }).join('');
+
+    el.innerHTML = `${rows}
+        <div class="debt-interest-total">
+            <span>Łączny szacunek odsetek / rok</span>
+            <strong class="expense">${formatPlnAmount(totalAnnual)}</strong>
+        </div>`;
+}
+
+function renderReportsDebtLtv() {
+    const el = document.getElementById('reports-debt-ltv');
+    if (!el) return;
+
+    const mortgages = getActiveLoans().filter((l) => isMortgageLoan(l) && (l.details?.propertyValue || 0) > 0);
+    if (!mortgages.length) {
+        el.innerHTML = '<p class="reports-hint">Brak hipoteki z wartością nieruchomości w szczegółach umowy.</p>';
+        return;
+    }
+
+    el.innerHTML = mortgages.map((loan) => {
+        const propertyValue = loan.details.propertyValue;
+        const capital = loan.currentCapitalLeft || 0;
+        const ltv = propertyValue > 0 ? (capital / propertyValue) * 100 : 0;
+        const contractLtv = loan.details.ltvPercent || 0;
+        const loanId = escapeHtml(loan.id);
+        const ltvClass = ltv > 80 ? 'expense' : '';
+
+        return `<div class="debt-ltv-row loan-clickable" role="button" tabindex="0"
+            onclick="openLoanDetails('${loanId}')" onkeydown="if (event.key === 'Enter') openLoanDetails('${loanId}')">
+            <div class="debt-ltv-head">
+                <strong>${escapeHtml(getLoanDisplayName(loan))}</strong>
+                <span class="debt-ltv-value ${ltvClass}">${ltv.toFixed(1)}% LTV</span>
+            </div>
+            <div class="loan-report-grid">
+                <div><span class="label">Kapitał</span><strong>${formatPlnAmount(capital)}</strong></div>
+                <div><span class="label">Wartość nieruchomości</span><strong>${formatPlnAmount(propertyValue)}</strong></div>
+                <div><span class="label">LTV z umowy</span><strong>${contractLtv ? `${contractLtv}%` : '—'}</strong></div>
+                <div><span class="label">Wolny kapitał</span><strong class="income">${formatPlnAmount(Math.max(0, propertyValue - capital))}</strong></div>
+            </div>
+            <div class="progress-bar-bg" style="margin-top:12px">
+                <div class="progress-bar-fill" style="width:${Math.min(100, ltv)}%;background:${ltv > 80 ? 'var(--danger)' : 'var(--accent)'}"></div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderReportsDebtsSection(ctx) {
+    renderReportsDebtsHero(ctx);
+    renderReportsDebtPortfolio(ctx);
+    renderReportsDebtInstallmentList();
+    populateDebtsOverpayLoanSelect();
+    renderReportsDebtOverpayCalc();
+    renderReportsDebtsFreedomPanel(ctx);
+    renderReportsDebtPaymentsChart(ctx, 'reportsDebtsChart');
+    renderReportsDebtSplitChart(ctx, 'reportsDebtsSplitChart', 'reports-debts-split-legend');
+}

@@ -1,0 +1,766 @@
+function isIosNotificationClient() {
+    return /iPad|iPhone|iPod/i.test(navigator.userAgent || '');
+}
+
+function isStandalonePwa() {
+    return window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+}
+
+function formatSystemNotificationForDisplay(item) {
+    const title = String(item?.title || '').trim();
+    const body = String(item?.body || '').trim();
+    if (!isIosNotificationClient()) {
+        return { title, body };
+    }
+    // iOS pod tytułem wstawia linię „from <nazwa aplikacji>” — bez pustego tytułu
+    // wygląda to jak „Masz 4 powiadomień from Finanse” w jednej linii.
+    if (!title) return { title: '', body };
+    if (!body) return { title: '', body: title };
+    return { title: '', body: `${title}\n${body}` };
+}
+
+function getDefaultNotificationPrefs() {
+    return {
+        enabled: false,
+        budgetAlerts: true,
+        loanReminders: true,
+        cardReminders: true,
+        spendingPaceAlerts: true,
+        recurringMissingAlerts: true,
+        insightAlerts: true,
+        weeklyBriefing: true,
+        taskReminders: true
+    };
+}
+
+function getNotificationPrefs() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(NOTIFICATION_PREFS_KEY) || 'null');
+        if (!raw || typeof raw !== 'object') return getDefaultNotificationPrefs();
+        return { ...getDefaultNotificationPrefs(), ...raw };
+    } catch {
+        return getDefaultNotificationPrefs();
+    }
+}
+
+function saveNotificationPrefs(prefs) {
+    localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify({ ...getDefaultNotificationPrefs(), ...prefs }));
+}
+
+function getNotificationInbox() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(NOTIFICATION_INBOX_KEY) || '[]');
+        return Array.isArray(raw) ? raw : [];
+    } catch {
+        return [];
+    }
+}
+
+function saveNotificationInbox(inbox) {
+    localStorage.setItem(NOTIFICATION_INBOX_KEY, JSON.stringify(inbox));
+}
+
+function addDaysToIsoDate(isoDate, days) {
+    if (!isoDate) return '';
+    const d = new Date(`${isoDate}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return '';
+    d.setDate(d.getDate() + days);
+    return localIsoDate(d);
+}
+
+function getTomorrowIsoDate() {
+    return addDaysToIsoDate(localIsoDate(new Date()), 1);
+}
+
+function getCurrentMonthKey() {
+    return localIsoDate(new Date()).slice(0, 7);
+}
+
+function isNotificationSnoozed(item, todayStr = localIsoDate(new Date())) {
+    return !!(item.snoozedUntil && item.snoozedUntil > todayStr);
+}
+
+function isNotificationDismissedThisMonth(item, monthKey = getCurrentMonthKey()) {
+    return !!(item.dismissed && item.dismissedYm === monthKey);
+}
+
+function isNotificationVisible(item, todayStr = localIsoDate(new Date())) {
+    if (!item || item.dismissedPermanently) return false;
+    if (isNotificationSnoozed(item, todayStr)) return false;
+    if (item.dismissed && item.dismissedYm === todayStr.slice(0, 7)) return false;
+    if (typeof isNotificationResolved === 'function' && isNotificationResolved(item)) return false;
+    return true;
+}
+
+function getUnreadNotificationCount() {
+    return getNotificationInbox().filter((item) => isNotificationVisible(item) && !item.read).length;
+}
+
+function upsertNotification(proposal) {
+    if (!proposal?.id) return null;
+    const inbox = getNotificationInbox();
+    const idx = inbox.findIndex((n) => n.id === proposal.id);
+    const now = new Date().toISOString();
+    const currentYm = getCurrentMonthKey();
+
+    if (idx >= 0) {
+        const existing = inbox[idx];
+        let dismissed = existing.dismissed;
+        let dismissedYm = existing.dismissedYm;
+        let dismissedPermanently = existing.dismissedPermanently;
+        if (dismissed && dismissedYm && dismissedYm < currentYm) {
+            dismissed = false;
+            dismissedYm = null;
+        }
+        inbox[idx] = {
+            ...existing,
+            ...proposal,
+            read: existing.read,
+            dismissed,
+            dismissedYm,
+            dismissedPermanently,
+            snoozedUntil: existing.snoozedUntil,
+            updatedAt: now
+        };
+        delete inbox[idx].refreshRead;
+        saveNotificationInbox(inbox);
+        return { item: inbox[idx], isNew: false };
+    }
+
+    const created = {
+        read: false,
+        dismissed: false,
+        dismissedYm: null,
+        dismissedPermanently: false,
+        snoozedUntil: null,
+        createdAt: now,
+        updatedAt: now,
+        ...proposal
+    };
+    delete created.refreshRead;
+    inbox.unshift(created);
+    saveNotificationInbox(inbox.slice(0, 200));
+    return { item: created, isNew: true };
+}
+
+function getNotificationById(id) {
+    return getNotificationInbox().find((n) => n.id === id) || null;
+}
+
+function dismissNotification(id) {
+    const inbox = getNotificationInbox();
+    const item = inbox.find((n) => n.id === id);
+    if (!item) return;
+    item.dismissed = true;
+    item.dismissedYm = getCurrentMonthKey();
+    item.read = true;
+    if (typeof isNotificationResolved === 'function' && isNotificationResolved(item)) {
+        item.dismissedPermanently = true;
+    }
+    saveNotificationInbox(inbox);
+    updateNotificationsBadge();
+    renderNotificationsPanel();
+}
+
+function snoozeNotification(id) {
+    const inbox = getNotificationInbox();
+    const item = inbox.find((n) => n.id === id);
+    if (!item) return;
+    item.snoozedUntil = getTomorrowIsoDate();
+    item.read = true;
+    saveNotificationInbox(inbox);
+    updateNotificationsBadge();
+    renderNotificationsPanel();
+}
+
+function markNotificationRead(id) {
+    const inbox = getNotificationInbox();
+    const item = inbox.find((n) => n.id === id);
+    if (!item) return;
+    item.read = true;
+    saveNotificationInbox(inbox);
+    updateNotificationsBadge();
+    renderNotificationsPanel();
+}
+
+function markAllNotificationsRead() {
+    const inbox = getNotificationInbox();
+    let changed = false;
+    inbox.forEach((item) => {
+        if (isNotificationVisible(item) && !item.read) {
+            item.read = true;
+            changed = true;
+        }
+    });
+    if (changed) saveNotificationInbox(inbox);
+    updateNotificationsBadge();
+    renderNotificationsPanel();
+}
+
+function formatNotificationRelativeTime(iso) {
+    if (!iso) return '';
+    const then = new Date(iso).getTime();
+    const diffMin = Math.round((Date.now() - then) / 60000);
+    if (diffMin < 1) return 'przed chwilą';
+    if (diffMin < 60) return `${diffMin} min temu`;
+    const diffH = Math.round(diffMin / 60);
+    if (diffH < 24) return `${diffH} godz. temu`;
+    const diffD = Math.round(diffH / 24);
+    if (diffD === 1) return 'wczoraj';
+    if (diffD < 7) return `${diffD} dni temu`;
+    return formatTxDate(iso.slice(0, 10));
+}
+
+function updateNotificationsBadge() {
+    const badge = document.getElementById('notifications-badge');
+    if (!badge) return;
+    const unread = getUnreadNotificationCount();
+    const boardCount = typeof getActionBoardTabCount === 'function'
+        ? getActionBoardTabCount()
+        : (typeof getActionBoardBadgeCount === 'function' ? getActionBoardBadgeCount() : 0);
+    const basketCount = typeof getBasketCount === 'function' ? getBasketCount() : 0;
+    const count = unread + boardCount + basketCount;
+    badge.textContent = count > 9 ? '9+' : String(count);
+    badge.classList.toggle('hidden', count === 0);
+    const btn = document.getElementById('btn-notifications');
+    if (btn) btn.classList.toggle('btn-icon--has-badge', count > 0);
+}
+
+let notificationsPanelTab = 'alerts';
+
+function getNotificationsPanelTab() {
+    return notificationsPanelTab;
+}
+
+function setNotificationsPanelTab(tab) {
+    notificationsPanelTab = tab === 'board' ? 'board' : tab === 'basket' ? 'basket' : 'alerts';
+    const alertsPanel = document.getElementById('notifications-tab-alerts');
+    const boardPanel = document.getElementById('notifications-tab-board');
+    const basketPanel = document.getElementById('notifications-tab-basket');
+    const btnAlerts = document.getElementById('btn-notif-tab-alerts');
+    const btnBoard = document.getElementById('btn-notif-tab-board');
+    const btnBasket = document.getElementById('btn-notif-tab-basket');
+    if (alertsPanel) alertsPanel.classList.toggle('hidden', notificationsPanelTab !== 'alerts');
+    if (boardPanel) boardPanel.classList.toggle('hidden', notificationsPanelTab !== 'board');
+    if (basketPanel) basketPanel.classList.toggle('hidden', notificationsPanelTab !== 'basket');
+    if (btnAlerts) btnAlerts.classList.toggle('active', notificationsPanelTab === 'alerts');
+    if (btnBoard) btnBoard.classList.toggle('active', notificationsPanelTab === 'board');
+    if (btnBasket) btnBasket.classList.toggle('active', notificationsPanelTab === 'basket');
+    if (notificationsPanelTab === 'board' && typeof renderActionBoardPanel === 'function') {
+        renderActionBoardPanel();
+    } else if (notificationsPanelTab === 'basket' && typeof renderTxBasketPanel === 'function') {
+        renderTxBasketPanel();
+    } else {
+        renderNotificationsList();
+    }
+    if (typeof updateNotificationsTasksFooter === 'function') updateNotificationsTasksFooter();
+}
+
+function renderNotificationsList() {
+    const list = document.getElementById('notifications-list');
+    if (!list) return;
+    const items = getNotificationInbox().filter((item) => isNotificationVisible(item));
+    if (!items.length) {
+        list.innerHTML = '<p class="notifications-empty">Brak powiadomień</p>';
+        if (typeof updateNotificationsTasksFooter === 'function') updateNotificationsTasksFooter();
+        return;
+    }
+    list.innerHTML = items.map((item) => {
+        const unreadClass = item.read ? '' : ' notification-row--unread';
+        return `<article class="notification-row${unreadClass}" data-id="${escapeHtml(item.id)}">
+            <button type="button" class="notification-row-main" onclick="openNotificationTarget('${escapeHtml(item.id)}')">
+                <strong class="notification-row-title">${escapeHtml(item.title)}</strong>
+                <span class="notification-row-body">${escapeHtml(item.body)}</span>
+                <span class="notification-row-time">${escapeHtml(formatNotificationRelativeTime(item.updatedAt || item.createdAt))}</span>
+            </button>
+            <div class="notification-row-actions">
+                <button type="button" class="notification-action-btn" title="Przypomnij jutro" aria-label="Przypomnij jutro" onclick="event.stopPropagation(); snoozeNotification('${escapeHtml(item.id)}')">↻</button>
+                <button type="button" class="notification-action-btn notification-action-btn--dismiss" title="Odrzuć" aria-label="Odrzuć" onclick="event.stopPropagation(); dismissNotification('${escapeHtml(item.id)}')">×</button>
+            </div>
+        </article>`;
+    }).join('');
+    if (typeof updateNotificationsTasksFooter === 'function') updateNotificationsTasksFooter();
+}
+
+function renderNotificationsPanel() {
+    setNotificationsPanelTab(notificationsPanelTab);
+    if (typeof updateActionBoardTabBadge === 'function') updateActionBoardTabBadge();
+    if (typeof updateTxBasketBadge === 'function') updateTxBasketBadge();
+}
+
+function openNotificationsPanel() {
+    if (typeof guardAppLockSensitiveAction === 'function' && !guardAppLockSensitiveAction()) return;
+    const panel = document.getElementById('notifications-overlay');
+    if (!panel) return;
+    panel.classList.remove('hidden');
+    document.body.classList.add('notifications-open');
+    renderNotificationsPanel();
+    const btn = document.getElementById('btn-notifications');
+    if (btn) btn.setAttribute('aria-expanded', 'true');
+}
+
+function closeNotificationsPanel() {
+    document.getElementById('notifications-overlay')?.classList.add('hidden');
+    document.body.classList.remove('notifications-open');
+    const btn = document.getElementById('btn-notifications');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+
+function toggleNotificationsPanel() {
+    const panel = document.getElementById('notifications-overlay');
+    if (!panel) return;
+    if (panel.classList.contains('hidden')) openNotificationsPanel();
+    else closeNotificationsPanel();
+}
+
+function openNotificationTarget(id) {
+    if (!id) return;
+    if (String(id).startsWith('notif-digest|') || String(id).startsWith('notif-test|')) {
+        openNotificationsPanel();
+        return;
+    }
+    const item = getNotificationById(id);
+    if (!item) {
+        window.setTimeout(() => {
+            const retry = getNotificationById(id);
+            if (!retry) return;
+            markNotificationRead(id);
+            closeNotificationsPanel();
+            navigateFromNotification(retry);
+        }, 350);
+        return;
+    }
+    markNotificationRead(id);
+    closeNotificationsPanel();
+    navigateFromNotification(item);
+}
+
+function navigateFromNotification(item) {
+    if (typeof guardAppLockSensitiveAction === 'function' && !guardAppLockSensitiveAction()) return;
+    const payload = item.payload || {};
+    const loansNav = document.querySelector('.nav-item[onclick*="\'loans\'"]');
+
+    if (payload.loanId && typeof openLoanDetails === 'function') {
+        if (typeof switchView === 'function') switchView('loans', 'Długi', loansNav);
+        openLoanDetails(payload.loanId);
+        return;
+    }
+    if (payload.cardId && typeof openCreditCardDetails === 'function') {
+        if (typeof switchView === 'function') switchView('loans', 'Długi', loansNav);
+        openCreditCardDetails(payload.cardId);
+        return;
+    }
+    if (item.type === 'budget_warn' || item.type === 'budget_over' || item.type === 'budget_pace') {
+        const reportsNav = document.querySelector('.nav-item[onclick*="\'reports\'"]');
+        if (typeof switchView === 'function') switchView('reports', 'Raporty', reportsNav);
+        if (typeof setAnalysisSection === 'function') setAnalysisSection('overview');
+        if (typeof expandReportsBudgetFromNotification === 'function') {
+            expandReportsBudgetFromNotification(item.payload || {});
+        }
+        requestAnimationFrame(() => {
+            document.getElementById('reports-budget-overview-card')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+        return;
+    }
+    if (item.type === 'recurring_missing') {
+        const reportsNav = document.querySelector('.nav-item[onclick*="\'reports\'"]');
+        if (typeof switchView === 'function') switchView('reports', 'Raporty', reportsNav);
+        return;
+    }
+    if (item.type === 'spending_anomaly') {
+        const reportsNav = document.querySelector('.nav-item[onclick*="\'reports\'"]');
+        if (typeof switchView === 'function') switchView('reports', 'Raporty', reportsNav);
+        return;
+    }
+    if (item.type === 'ikze_limit') {
+        if (typeof openIkzeLimitPanel === 'function') openIkzeLimitPanel();
+        return;
+    }
+    if (item.type === 'savings_goal') {
+        const reportsNav = document.querySelector('.nav-item[onclick*="\'reports\'"]');
+        if (typeof switchView === 'function') switchView('reports', 'Raporty', reportsNav);
+        return;
+    }
+    if (item.type === 'month_close') {
+        const reportsNav = document.querySelector('.nav-item[onclick*="\'reports\'"]');
+        if (typeof switchView === 'function') switchView('reports', 'Raporty', reportsNav);
+        if (typeof openMonthCloseWizard === 'function') {
+            const unclosed = typeof getUnclosedMonthsWithData === 'function' ? getUnclosedMonthsWithData() : [];
+            openMonthCloseWizard(unclosed[unclosed.length - 1] || null);
+        }
+        return;
+    }
+    if (item.type === 'card_monthly_check') {
+        if (typeof switchView === 'function') switchView('loans', 'Długi', loansNav);
+        const cardId = payload.cardId || payload.cardIds?.[0];
+        if (cardId && typeof openCreditCardDetails === 'function') openCreditCardDetails(cardId);
+        return;
+    }
+    if ((item.type === 'task_due_today' || item.type === 'task_due_tomorrow' || item.type === 'task_overdue' || item.type === 'task_due_soon')
+        && payload.todoId) {
+        if (typeof openTodoInTasksView === 'function') {
+            openTodoInTasksView(payload.todoId);
+        } else if (typeof openTasksView === 'function') {
+            openTasksView(payload.listId || null);
+            window.setTimeout(() => {
+                if (typeof openTodoItemEditor === 'function') openTodoItemEditor(payload.todoId);
+            }, 80);
+        }
+        return;
+    }
+    if (item.type === 'skryba_weekly') {
+        if (typeof openSkrybaPanel === 'function') {
+            openSkrybaPanel();
+            const query = payload.query || 'Briefing tygodnia';
+            window.setTimeout(() => {
+                const input = document.getElementById('skryba-input');
+                if (input) input.value = query;
+                if (typeof sendSkrybaMessage === 'function') sendSkrybaMessage();
+            }, 120);
+        }
+    }
+}
+
+let backgroundNotificationDigestSent = false;
+
+function maybeShowSystemNotifications(newItems) {
+    const prefs = getNotificationPrefs();
+    if (!prefs.enabled || !newItems?.length) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (document.visibilityState === 'visible') return;
+
+    postSystemNotifications(newItems.filter((item) => !item.read));
+}
+
+async function postSystemNotifications(items) {
+    if (!items?.length) return false;
+    if (!('serviceWorker' in navigator)) return false;
+
+    try {
+        const reg = await navigator.serviceWorker.ready;
+        const target = reg.active || navigator.serviceWorker.controller;
+        if (!target) return false;
+
+        const supportsActions = !isIosNotificationClient();
+        items.forEach((item) => {
+            const formatted = formatSystemNotificationForDisplay(item);
+            target.postMessage({
+                type: 'SHOW_NOTIFICATION',
+                supportsActions,
+                notification: {
+                    id: item.id,
+                    title: formatted.title,
+                    body: formatted.body
+                }
+            });
+        });
+        return true;
+    } catch (err) {
+        console.warn('postSystemNotifications', err);
+        return false;
+    }
+}
+
+async function showTestSystemNotification() {
+    const prefs = getNotificationPrefs();
+    if (!prefs.enabled) {
+        if (typeof showSettingsToast === 'function') {
+            showSettingsToast('Włącz powiadomienia przełącznikiem powyżej', 'error');
+        }
+        return;
+    }
+    if (!('Notification' in window)) {
+        if (typeof showSettingsToast === 'function') {
+            showSettingsToast('Ta przeglądarka nie obsługuje powiadomień systemowych', 'error');
+        }
+        return;
+    }
+    if (isIosNotificationClient() && !isStandalonePwa()) {
+        if (typeof showSettingsToast === 'function') {
+            showSettingsToast('Na iPhone dodaj aplikację do ekranu początkowego — wtedy działają powiadomienia na pasku', 'error');
+        }
+        return;
+    }
+    if (Notification.permission !== 'granted') {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') {
+            if (typeof showSettingsToast === 'function') {
+                showSettingsToast('Zezwól na powiadomienia w Ustawieniach iPhone’a → Finanse', 'error');
+            }
+            return;
+        }
+    }
+
+    const sent = await postSystemNotifications([{
+        id: `notif-test|${Date.now()}`,
+        title: 'Powiadomienia włączone',
+        body: 'Będziesz dostawać alerty o budżecie, ratach i zadaniach — gdy aplikacja jest w tle.',
+        read: false
+    }]);
+
+    if (typeof showSettingsToast === 'function') {
+        if (sent) {
+            showSettingsToast('Wysłano test — zminimalizuj aplikację, jeśli nie widzisz banera');
+        } else {
+            showSettingsToast('Nie udało się wysłać — odśwież aplikację i spróbuj ponownie', 'error');
+        }
+    }
+}
+
+function evaluateSkrybaWeeklyBriefing() {
+    if (typeof skrybaToolWeeklyBriefing !== 'function' || typeof upsertNotification !== 'function') {
+        return [];
+    }
+    const now = new Date();
+    if (now.getDay() !== 1) return [];
+
+    const weekKey = typeof getSkrybaIsoWeekKey === 'function'
+        ? getSkrybaIsoWeekKey(now)
+        : `${now.getFullYear()}-W${String(Math.ceil(now.getDate() / 7)).padStart(2, '0')}`;
+    const storageKey = typeof SKRYBA_WEEKLY_BRIEFING_KEY !== 'undefined'
+        ? SKRYBA_WEEKLY_BRIEFING_KEY
+        : 'finanse_skryba_weekly_briefing_key';
+    if (localStorage.getItem(storageKey) === weekKey) return [];
+
+    const briefing = skrybaToolWeeklyBriefing();
+    if (!briefing?.shortBody) return [];
+
+    localStorage.setItem(storageKey, weekKey);
+
+    const result = upsertNotification({
+        id: `skryba-weekly|${weekKey}`,
+        type: 'skryba_weekly',
+        title: 'Briefing tygodnia — Skryba',
+        body: briefing.shortBody,
+        payload: { query: 'Briefing tygodnia', weekKey }
+    });
+    return result?.isNew ? [result.item] : [];
+}
+
+function runDailyNotificationDigest() {
+    const prefs = getNotificationPrefs();
+    if (!prefs.enabled) return;
+    const today = localIsoDate(new Date());
+    const last = localStorage.getItem(NOTIFICATION_DAILY_DIGEST_DATE_KEY);
+    if (last === today) return;
+    const hour = new Date().getHours();
+    if (hour < 8) return;
+
+    const created = evaluateAllNotifications();
+    localStorage.setItem(NOTIFICATION_DAILY_DIGEST_DATE_KEY, today);
+
+    const unread = getNotificationInbox().filter((item) => isNotificationVisible(item) && !item.read);
+    if (!unread.length) return;
+
+    const monthCloseHint = typeof getUnclosedMonthsWithData === 'function'
+        ? getUnclosedMonthsWithData().length
+        : 0;
+    if (monthCloseHint > 0 && typeof upsertNotification === 'function') {
+        upsertNotification({
+            id: `month-close-reminder|${today.slice(0, 7)}`,
+            type: 'month_close',
+            title: 'Nierozliczone miesiące',
+            body: `Masz ${monthCloseHint} mies. do rozliczenia — możesz to zrobić w dowolnym momencie.`,
+            payload: {}
+        });
+    }
+
+    if (document.visibilityState !== 'visible' && created.length) {
+        maybeShowSystemNotifications(created);
+    }
+}
+
+let notificationScheduleTimer = null;
+
+function scheduleNotificationChecks() {
+    if (notificationScheduleTimer) clearInterval(notificationScheduleTimer);
+    notificationScheduleTimer = setInterval(() => {
+        runDailyNotificationDigest();
+    }, 60 * 1000);
+    runDailyNotificationDigest();
+}
+
+function evaluateAllNotifications() {
+    const prefs = getNotificationPrefs();
+    if (!prefs.enabled) {
+        updateNotificationsBadge();
+        return [];
+    }
+    const created = [];
+    if (prefs.budgetAlerts && typeof evaluateBudgetAlerts === 'function') {
+        created.push(...evaluateBudgetAlerts());
+    }
+    if (prefs.loanReminders && typeof evaluateLoanReminders === 'function') {
+        created.push(...evaluateLoanReminders());
+    }
+    if (prefs.cardReminders && typeof evaluateCardReminders === 'function') {
+        created.push(...evaluateCardReminders());
+    }
+    if (prefs.spendingPaceAlerts && typeof evaluateSpendingPaceAlerts === 'function') {
+        created.push(...evaluateSpendingPaceAlerts());
+    }
+    if (prefs.recurringMissingAlerts && typeof evaluateMissingRecurringAlerts === 'function') {
+        created.push(...evaluateMissingRecurringAlerts());
+    }
+    if (prefs.insightAlerts && typeof evaluateSpendingInsightAlerts === 'function') {
+        created.push(...evaluateSpendingInsightAlerts());
+    }
+    if (prefs.taskReminders && typeof evaluateTaskDueReminders === 'function') {
+        created.push(...evaluateTaskDueReminders());
+    }
+    if (prefs.weeklyBriefing && typeof evaluateSkrybaWeeklyBriefing === 'function') {
+        created.push(...evaluateSkrybaWeeklyBriefing());
+    }
+    updateNotificationsBadge();
+    const panel = document.getElementById('notifications-overlay');
+    if (panel && !panel.classList.contains('hidden')) renderNotificationsPanel();
+    if (typeof refreshActionBoard === 'function') refreshActionBoard();
+    maybeShowSystemNotifications(created);
+    return created;
+}
+
+function handleServiceWorkerNotificationMessage(event) {
+    const data = event.data;
+    if (!data?.type || !data.id) return;
+    if (data.type === 'NOTIFICATION_OPENED') openNotificationTarget(data.id);
+    if (data.type === 'NOTIFICATION_DISMISS') dismissNotification(data.id);
+    if (data.type === 'NOTIFICATION_SNOOZE') snoozeNotification(data.id);
+}
+
+async function setNotificationsEnabled(enabled) {
+    const prefs = getNotificationPrefs();
+    prefs.enabled = !!enabled;
+    if (prefs.enabled && 'Notification' in window && Notification.permission === 'default') {
+        await Notification.requestPermission();
+    }
+    saveNotificationPrefs(prefs);
+    if (prefs.enabled) {
+        evaluateAllNotifications();
+        scheduleNotificationChecks();
+        if (Notification.permission === 'granted' && !localStorage.getItem(NOTIFICATION_TEST_SHOWN_KEY)) {
+            showTestSystemNotification();
+            localStorage.setItem(NOTIFICATION_TEST_SHOWN_KEY, '1');
+        }
+    } else {
+        updateNotificationsBadge();
+        if (notificationScheduleTimer) {
+            clearInterval(notificationScheduleTimer);
+            notificationScheduleTimer = null;
+        }
+    }
+    return prefs;
+}
+
+function bindNotificationPrefToggle(id, key) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', () => {
+        const prefs = getNotificationPrefs();
+        prefs[key] = el.checked;
+        saveNotificationPrefs(prefs);
+        if (prefs.enabled) evaluateAllNotifications();
+    });
+}
+
+function syncNotificationSettingsUI() {
+    const prefs = getNotificationPrefs();
+    const master = document.getElementById('notif-pref-enabled');
+    const budget = document.getElementById('notif-pref-budget');
+    const loan = document.getElementById('notif-pref-loan');
+    const card = document.getElementById('notif-pref-card');
+    const pace = document.getElementById('notif-pref-pace');
+    const recurring = document.getElementById('notif-pref-recurring');
+    const tasks = document.getElementById('notif-pref-tasks');
+    const insight = document.getElementById('notif-pref-insight');
+    const status = document.getElementById('notif-permission-status');
+    if (master) master.checked = prefs.enabled;
+    if (budget) budget.checked = prefs.budgetAlerts;
+    if (loan) loan.checked = prefs.loanReminders;
+    if (card) card.checked = prefs.cardReminders;
+    if (pace) pace.checked = prefs.spendingPaceAlerts;
+    if (recurring) recurring.checked = prefs.recurringMissingAlerts;
+    if (tasks) tasks.checked = prefs.taskReminders;
+    if (insight) insight.checked = prefs.insightAlerts;
+    const sub = document.getElementById('notif-pref-subtoggles');
+    if (sub) sub.classList.toggle('hidden', !prefs.enabled);
+    if (status) {
+        if (!('Notification' in window)) {
+            status.textContent = 'Przeglądarka nie obsługuje powiadomień systemowych — działa panel w aplikacji.';
+        } else if (isIosNotificationClient() && !isStandalonePwa()) {
+            status.textContent = 'Na iPhone powiadomienia na pasku działają tylko z ikony na ekranie głównym (Udostępnij → Dodaj do ekranu początkowego).';
+        } else if (Notification.permission === 'granted') {
+            status.textContent = isIosNotificationClient()
+                ? 'Powiadomienia włączone. Na iPhone banery widać głównie przy aplikacji w tle.'
+                : 'Powiadomienia systemowe włączone.';
+        } else if (Notification.permission === 'denied') {
+            status.textContent = isIosNotificationClient()
+                ? 'Powiadomienia zablokowane — Ustawienia iPhone’a → Finanse → Powiadomienia.'
+                : 'Powiadomienia zablokowane w przeglądarce — dostępny jest panel w aplikacji.';
+        } else {
+            status.textContent = 'Po włączeniu zostaniesz poproszony o zgodę na powiadomienia systemowe.';
+        }
+    }
+}
+
+async function onNotificationMasterToggle() {
+    const master = document.getElementById('notif-pref-enabled');
+    await setNotificationsEnabled(!!master?.checked);
+    syncNotificationSettingsUI();
+}
+
+function initNotifications() {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('message', handleServiceWorkerNotificationMessage);
+    }
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            backgroundNotificationDigestSent = false;
+            evaluateAllNotifications();
+            return;
+        }
+        if (!getNotificationPrefs().enabled) return;
+
+        const created = evaluateAllNotifications();
+        if (created.length) {
+            maybeShowSystemNotifications(created);
+            return;
+        }
+        if (backgroundNotificationDigestSent) return;
+
+        const unread = getNotificationInbox().filter((item) => isNotificationVisible(item) && !item.read);
+        if (!unread.length) return;
+
+        backgroundNotificationDigestSent = true;
+        const digest = unread.length === 1
+            ? unread[0]
+            : {
+                id: `notif-digest|${localIsoDate(new Date())}`,
+                title: `Masz ${unread.length} powiadomień`,
+                body: unread.slice(0, 3).map((item) => item.title).join(' · '),
+                read: false
+            };
+        postSystemNotifications([digest]);
+    });
+    bindNotificationPrefToggle('notif-pref-budget', 'budgetAlerts');
+    bindNotificationPrefToggle('notif-pref-loan', 'loanReminders');
+    bindNotificationPrefToggle('notif-pref-card', 'cardReminders');
+    bindNotificationPrefToggle('notif-pref-pace', 'spendingPaceAlerts');
+    bindNotificationPrefToggle('notif-pref-recurring', 'recurringMissingAlerts');
+    bindNotificationPrefToggle('notif-pref-tasks', 'taskReminders');
+    bindNotificationPrefToggle('notif-pref-insight', 'insightAlerts');
+    syncNotificationSettingsUI();
+    updateNotificationsBadge();
+    evaluateAllNotifications();
+    if (typeof refreshActionBoard === 'function') refreshActionBoard();
+    if (getNotificationPrefs().enabled) scheduleNotificationChecks();
+}
+
+function notifyAfterFinanceChange() {
+    if (!getNotificationPrefs().enabled) {
+        updateNotificationsBadge();
+    } else {
+        evaluateAllNotifications();
+    }
+    if (typeof refreshActionBoard === 'function') refreshActionBoard();
+}

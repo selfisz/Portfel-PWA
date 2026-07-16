@@ -1,0 +1,755 @@
+const CELE_ASSET_ID = 'asset-cash-mbank-cele';
+const IKZE_ANNUAL_LIMIT_PLN = 8000;
+
+function getIkzeAnnualLimitPln() {
+    const custom = appState.reportPrefs?.ikzeAnnualLimitPln;
+    if (typeof custom === 'number' && custom > 0) return custom;
+    return IKZE_ANNUAL_LIMIT_PLN;
+}
+const MAX_ASSET_SNAPSHOTS = 36;
+const MAX_ASSET_VALUE_HISTORY = 500;
+
+function normalizeAssetSnapshot(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const monthKey = raw.monthKey || (raw.date ? raw.date.slice(0, 7) : '');
+    if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return null;
+    const byType = raw.byType && typeof raw.byType === 'object' ? raw.byType : {};
+    return {
+        id: raw.id || `snap-${monthKey}`,
+        monthKey,
+        date: raw.date || `${monthKey}-28`,
+        totalAssets: Math.max(0, parseFloat(raw.totalAssets) || 0),
+        shortAssets: Math.max(0, parseFloat(raw.shortAssets) || 0),
+        longAssets: Math.max(0, parseFloat(raw.longAssets) || 0),
+        totalDebt: Math.max(0, parseFloat(raw.totalDebt) || 0),
+        loanDebt: Math.max(0, parseFloat(raw.loanDebt) || 0),
+        cardDebt: Math.max(0, parseFloat(raw.cardDebt) || 0),
+        netWorth: parseFloat(raw.netWorth) || 0,
+        byType: {
+            investment: Math.max(0, parseFloat(byType.investment) || 0),
+            cash: Math.max(0, parseFloat(byType.cash) || 0),
+            deposit: Math.max(0, parseFloat(byType.deposit) || 0),
+            retirement: Math.max(0, parseFloat(byType.retirement) || 0)
+        },
+        source: raw.source || 'auto'
+    };
+}
+
+function normalizeAssetValueHistoryEntry(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const valuePln = parseFloat(raw.valuePln);
+    if (Number.isNaN(valuePln)) return null;
+    return {
+        id: raw.id || `avh-${Date.now().toString(36)}`,
+        assetId: raw.assetId || '',
+        date: raw.date || localIsoDate(new Date()),
+        valuePln,
+        note: raw.note || '',
+        source: raw.source || 'manual'
+    };
+}
+
+function getAssetSnapshots() {
+    return (appState.assetSnapshots || []).map(normalizeAssetSnapshot).filter(Boolean)
+        .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+}
+
+function getAssetValueHistory() {
+    return (appState.assetValueHistory || []).map(normalizeAssetValueHistoryEntry).filter(Boolean)
+        .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+}
+
+function buildCurrentSnapshotPayload(monthKey, source = 'manual') {
+    const assets = typeof getSummaryAssets === 'function' ? getSummaryAssets() : [];
+    const horizons = typeof getAssetsHorizonTotals === 'function'
+        ? getAssetsHorizonTotals()
+        : { short: getPortfolioValuePln(), long: 0 };
+    const loanDebt = getLoanCapitalLeft();
+    const cardDebt = getCreditCardDebtTotal();
+    const totalDebt = loanDebt + cardDebt;
+    const totalAssets = getPortfolioValuePln();
+    const byType = { investment: 0, cash: 0, deposit: 0, retirement: 0, other: 0 };
+    assets.forEach((asset) => {
+        const type = asset.type || 'investment';
+        if (byType[type] !== undefined) byType[type] += getAssetValuePln(asset);
+    });
+    return normalizeAssetSnapshot({
+        id: `snap-${monthKey}`,
+        monthKey,
+        date: localIsoDate(new Date()),
+        totalAssets,
+        shortAssets: horizons.short,
+        longAssets: horizons.long,
+        totalDebt,
+        loanDebt,
+        cardDebt,
+        netWorth: totalAssets - totalDebt,
+        byType,
+        source
+    });
+}
+
+function captureAssetSnapshot(monthKey = null, source = 'manual') {
+    const _now = new Date();
+    const key = monthKey || `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
+    const snapshot = buildCurrentSnapshotPayload(key, source);
+    if (!snapshot) return null;
+    if (!Array.isArray(appState.assetSnapshots)) appState.assetSnapshots = [];
+    const idx = appState.assetSnapshots.findIndex((s) => normalizeAssetSnapshot(s)?.monthKey === key);
+    if (idx >= 0) appState.assetSnapshots[idx] = snapshot;
+    else appState.assetSnapshots.push(snapshot);
+    appState.assetSnapshots = getAssetSnapshots();
+    return snapshot;
+}
+
+function autoCaptureAssetSnapshotsIfNeeded() {
+    if (!Array.isArray(appState.assetSnapshots)) appState.assetSnapshots = [];
+    const now = new Date();
+    const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const snapshots = getAssetSnapshots();
+    const last = snapshots[snapshots.length - 1];
+    let changed = false;
+
+    if (!last) {
+        captureAssetSnapshot(currentKey, 'auto');
+        if (typeof captureAllAssetValueHistory === 'function') captureAllAssetValueHistory('auto');
+        return true;
+    }
+
+    if (last.monthKey < currentKey) {
+        const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const prevKey = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`;
+        if (!snapshots.some((s) => s.monthKey === prevKey)) {
+            captureAssetSnapshot(prevKey, 'auto');
+            changed = true;
+        }
+        if (!snapshots.some((s) => s.monthKey === currentKey)) {
+            captureAssetSnapshot(currentKey, 'auto');
+            changed = true;
+        }
+    } else if (last.monthKey === currentKey && last.source === 'auto') {
+        const idx = appState.assetSnapshots.findIndex((s) => normalizeAssetSnapshot(s)?.monthKey === currentKey);
+        if (idx >= 0) {
+            appState.assetSnapshots[idx] = buildCurrentSnapshotPayload(currentKey, 'auto');
+            changed = true;
+        }
+    }
+
+    if (changed && typeof captureAllAssetValueHistory === 'function') {
+        captureAllAssetValueHistory('auto');
+    }
+
+    return changed;
+}
+
+function getSnapshotForMonthKey(monthKey) {
+    const snapshots = getAssetSnapshots();
+    const exact = snapshots.find((s) => s.monthKey === monthKey);
+    if (exact) return exact;
+    return snapshots.filter((s) => s.monthKey <= monthKey).pop() || null;
+}
+
+function isCurrentMonthKey(monthKey) {
+    const now = new Date();
+    return monthKey === `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getWealthAtPeriodEnd(endDate) {
+    if (!endDate) return null;
+    const monthKey = endDate.slice(0, 7);
+    if (isCurrentMonthKey(monthKey) && typeof buildCurrentSnapshotPayload === 'function') {
+        return buildCurrentSnapshotPayload(monthKey, 'live');
+    }
+    return getSnapshotForMonthKey(monthKey);
+}
+
+function buildCompareWealthSummary(periodAEnd, periodBEnd) {
+    const snapA = getWealthAtPeriodEnd(periodAEnd);
+    const snapB = getWealthAtPeriodEnd(periodBEnd);
+    if (!snapA && !snapB) return null;
+
+    const empty = { totalAssets: 0, totalDebt: 0, netWorth: 0, loanDebt: 0, cardDebt: 0 };
+    const a = snapA || empty;
+    const b = snapB || snapA || empty;
+
+    return {
+        a: {
+            assets: a.totalAssets,
+            debt: a.totalDebt,
+            netWorth: a.netWorth,
+            loanDebt: a.loanDebt,
+            cardDebt: a.cardDebt
+        },
+        b: {
+            assets: b.totalAssets,
+            debt: b.totalDebt,
+            netWorth: b.netWorth,
+            loanDebt: b.loanDebt,
+            cardDebt: b.cardDebt
+        },
+        deltaAssets: b.totalAssets - a.totalAssets,
+        deltaDebt: b.totalDebt - a.totalDebt,
+        deltaNetWorth: b.netWorth - a.netWorth,
+        deltaLoanDebt: b.loanDebt - a.loanDebt,
+        deltaCardDebt: b.cardDebt - a.cardDebt,
+        hasBoth: Boolean(snapA && snapB)
+    };
+}
+
+function getSnapshotMonthChange() {
+    const snapshots = getAssetSnapshots();
+    if (snapshots.length < 2) return null;
+    const current = snapshots[snapshots.length - 1];
+    const prev = snapshots[snapshots.length - 2];
+    const netWorth = current.netWorth - prev.netWorth;
+    const totalAssets = current.totalAssets - prev.totalAssets;
+    const totalDebt = current.totalDebt - prev.totalDebt;
+    const pctNet = prev.netWorth !== 0 ? (netWorth / Math.abs(prev.netWorth)) * 100 : null;
+    return {
+        netWorth,
+        totalAssets,
+        totalDebt,
+        pctNet,
+        prevMonthKey: prev.monthKey,
+        currentMonthKey: current.monthKey,
+        prevNetWorth: prev.netWorth,
+        currentNetWorth: current.netWorth
+    };
+}
+
+function formatSnapshotDelta(value, pct = null) {
+    const sign = value >= 0 ? '+' : '';
+    const amount = `${sign}${formatPlnAmount(value)}`;
+    if (pct === null || Number.isNaN(pct)) return amount;
+    const pctSign = pct >= 0 ? '+' : '';
+    return `${amount} (${pctSign}${pct.toFixed(1)}%)`;
+}
+
+function recordAssetValueHistory(asset, source = 'manual', note = '', dateIso = null) {
+    if (!asset?.id) return null;
+    const date = dateIso || localIsoDate(new Date());
+    const entry = normalizeAssetValueHistoryEntry({
+        assetId: asset.id,
+        date,
+        valuePln: getAssetValuePln(asset),
+        note,
+        source
+    });
+    if (!entry) return null;
+    if (!Array.isArray(appState.assetValueHistory)) appState.assetValueHistory = [];
+    const last = getAssetValueHistory()
+        .filter((e) => e.assetId === asset.id && e.date === date)
+        .pop();
+    if (last && Math.abs(last.valuePln - entry.valuePln) < 0.01) return last;
+    appState.assetValueHistory.push(entry);
+    return entry;
+}
+
+function captureAllAssetValueHistory(source = 'auto', dateIso = null) {
+    const assets = typeof getSummaryAssets === 'function' ? getSummaryAssets() : [];
+    const date = dateIso || localIsoDate(new Date());
+    let changed = false;
+    assets.filter((asset) => !asset.archived).forEach((asset) => {
+        const beforeLen = (appState.assetValueHistory || []).length;
+        recordAssetValueHistory(asset, source, '', date);
+        if ((appState.assetValueHistory || []).length > beforeLen) changed = true;
+    });
+    return changed;
+}
+
+function backfillMissingAssetValueHistory() {
+    const assets = typeof getSummaryAssets === 'function' ? getSummaryAssets() : [];
+    const today = localIsoDate(new Date());
+    let changed = false;
+    assets.filter((asset) => !asset.archived).forEach((asset) => {
+        const hasHistory = getAssetValueHistory().some((entry) => entry.assetId === asset.id);
+        if (!hasHistory) {
+            recordAssetValueHistory(asset, 'backfill', '', today);
+            changed = true;
+        }
+    });
+    return changed;
+}
+
+function estimateAssetValueFromMonthSnapshot(asset, asOfDate) {
+    const monthKey = asOfDate.slice(0, 7);
+    const snap = getSnapshotForMonthKey(monthKey);
+    if (!snap?.byType) return null;
+
+    const type = asset.type || 'investment';
+    const typeTotal = snap.byType[type] || 0;
+    if (!(typeTotal > 0)) return null;
+
+    const peers = (typeof getSummaryAssets === 'function' ? getSummaryAssets() : [])
+        .filter((a) => !a.archived && (a.type || 'investment') === type);
+    const currentTypeTotal = peers.reduce((sum, a) => sum + getAssetValuePln(a), 0);
+    if (!(currentTypeTotal > 0)) return null;
+
+    const share = getAssetValuePln(asset) / currentTypeTotal;
+    return {
+        value: typeTotal * share,
+        source: 'snapshot-estimate',
+        asOf: snap.date || `${monthKey}-28`,
+        monthKey
+    };
+}
+
+function getOperationalCashPln() {
+    return getAnalysisSummaryAssets()
+        .filter((a) => a.type === 'cash' && a.id !== CELE_ASSET_ID)
+        .reduce((sum, a) => sum + getAssetValuePln(a), 0);
+}
+
+function getCeleCashPln() {
+    const cele = typeof getAssetById === 'function' ? getAssetById(CELE_ASSET_ID) : null;
+    return cele ? getAssetValuePln(cele) : 0;
+}
+
+function getGoalAssets() {
+    return getAnalysisSummaryAssets().filter((a) => (a.goalTarget || 0) > 0 || a.id === CELE_ASSET_ID);
+}
+
+function getActiveDeposits() {
+    return getAnalysisSummaryAssets().filter((a) => a.type === 'deposit' && a.endDate);
+}
+
+function getSelectableTransferAssets() {
+    return getActiveAssets();
+}
+
+function populateTransactionAssetSelect() {
+    const select = document.getElementById('tx-linked-asset-select');
+    if (!select) return;
+    const assets = getSelectableTransferAssets();
+    select.innerHTML = '<option value="">— wybierz aktywo —</option>' + assets.map((asset) => {
+        const name = typeof getAssetDisplayName === 'function' ? getAssetDisplayName(asset) : asset.name;
+        return `<option value="${escapeHtml(asset.id)}">${escapeHtml(name)}</option>`;
+    }).join('');
+}
+
+function updateTransactionAssetHints() {
+    const wrapper = document.getElementById('tx-linked-asset-wrapper');
+    const selectWrap = document.getElementById('tx-linked-asset-select-wrapper');
+    const checkbox = document.getElementById('tx-linked-asset');
+    const paidWithCard = document.getElementById('tx-credit-card')?.checked;
+    if (wrapper) wrapper.classList.toggle('hidden', !!paidWithCard);
+    if (checkbox && paidWithCard) checkbox.checked = false;
+    if (selectWrap) selectWrap.classList.toggle('hidden', !checkbox?.checked);
+    populateTransactionAssetSelect();
+}
+
+function saveAssetSnapshotNow() {
+    const snap = captureAssetSnapshot(null, 'manual');
+    if (!snap) return;
+    saveState();
+    if (typeof renderReports === 'function' && document.getElementById('view-reports')?.classList.contains('active')) {
+        renderReports();
+    }
+    if (typeof showSettingsToast === 'function') showSettingsToast('Zapisano snapshot majątku');
+}
+
+function adjustAssetValuePln(asset, deltaPln, options = {}) {
+    if (!deltaPln || !asset) return null;
+    const a = normalizeAsset(asset);
+    if (a.type === 'investment') {
+        const qty = a.quantity || 0;
+        const currentValue = getAssetValuePln(a);
+        const nextValue = currentValue + deltaPln;
+        if (nextValue < 0 && !options.skipConfirm) {
+            const ok = confirm(`Wartość ${getAssetDisplayName(a)} spadnie do ${formatPlnAmount(nextValue)}. Kontynuować?`);
+            if (!ok) return null;
+        }
+        if (qty > 0) {
+            const nextPrice = nextValue / qty / (a.currency === 'EUR' ? (EUR_PLN_RATE || 1) : 1);
+            return updateAssetInState({ ...a, currentPrice: Math.max(0, nextPrice) });
+        }
+        return updateAssetInState({ ...a, quantity: 1, purchasePrice: Math.max(0, nextValue), currentPrice: Math.max(0, nextValue), currency: 'PLN' });
+    }
+    const nextAmount = (a.amount || 0) + deltaPln;
+    if (nextAmount < 0 && !options.skipConfirm) {
+        const ok = confirm(`Saldo ${getAssetDisplayName(a)} spadnie do ${formatPlnAmount(nextAmount)}. Kontynuować?`);
+        if (!ok) return null;
+    }
+    return updateAssetInState({ ...a, amount: nextAmount });
+}
+
+function applyAssetTransferFromTransaction(tx, deltaSign) {
+    if (!tx?.linkedAssetId) return true;
+    if (tx.linkedAssetId === PRIMARY_CASH_ASSET_ID && typeof ensurePrimaryCashAsset === 'function') {
+        ensurePrimaryCashAsset();
+    }
+    const asset = typeof getAssetById === 'function' ? getAssetById(tx.linkedAssetId) : null;
+    if (!asset) return true;
+    const amount = Number(tx.amount);
+    if (!Number.isFinite(amount) || amount === 0) return true;
+
+    if (asset.type === 'cash' && typeof registerCashMovement === 'function') {
+        if (deltaSign < 0) {
+            if (tx.cashMovementId) {
+                removeCashMovement(tx.cashMovementId);
+                delete tx.cashMovementId;
+                return true;
+            }
+            const movement = registerCashMovement({
+                assetId: asset.id,
+                delta: -amount,
+                date: tx.date,
+                note: tx.note || 'Cofnięcie wpływu',
+                source: 'transaction_linked',
+                sourceRef: `revert|${tx.date}|${tx.linkedAssetId}|${tx.amount}`
+            });
+            return !!movement;
+        }
+        const movement = registerCashMovement({
+            assetId: asset.id,
+            delta: amount,
+            date: tx.date,
+            note: tx.note || (tx.type === 'income' ? 'Wpływ' : 'Wydatek'),
+            source: 'transaction_linked',
+            sourceRef: `${tx.date}|${tx.type}|${tx.linkedAssetId}|${tx.amount}`
+        });
+        if (!movement) return false;
+        tx.cashMovementId = movement.id;
+        return true;
+    }
+
+    const updated = adjustAssetValuePln(asset, amount * deltaSign);
+    return !!updated;
+}
+
+function revertAssetTransfer(tx) {
+    if (!tx?.linkedAssetId) return;
+    applyAssetTransferFromTransaction(tx, -1);
+}
+
+function syncAssetOnTransactionSave(tx, previousTx = null) {
+    if (previousTx?.linkedAssetId) {
+        revertAssetTransfer(previousTx);
+    }
+
+    if (!tx.linkedAssetId) return true;
+
+    if (tx.type === 'income' || tx.type === 'expense') {
+        return applyAssetTransferFromTransaction(tx, 1);
+    }
+    return true;
+}
+
+function syncAssetOnTransactionDelete(tx) {
+    revertAssetTransfer(tx);
+}
+
+function buildWealthFlowSummary(ctx) {
+    const { start, end } = getPeriodBoundsFromCtx(ctx);
+    const txs = ctx.periodTx || [];
+    let toAssets = 0;
+    txs.forEach((tx) => {
+        if (tx.linkedAssetId) toAssets += tx.amount;
+    });
+    const { total: debtPayments } = getDebtPaymentsInPeriod(ctx);
+    const cashNet = getCashMovementsInRange(start, end, PRIMARY_CASH_ASSET_ID)
+        .reduce((s, m) => s + m.delta, 0);
+    return { toAssets, debtPayments, cashNet };
+}
+
+function buildNetWorthTrendData() {
+    const snapshots = getAssetSnapshots();
+    if (snapshots.length < 2) return { monthLabels: [], assetsData: [], debtData: [], netData: [] };
+    return {
+        monthLabels: snapshots.map((s) => {
+            const [y, m] = s.monthKey.split('-').map(Number);
+            return new Date(y, m - 1, 1).toLocaleDateString('pl-PL', { month: 'short', year: '2-digit' });
+        }),
+        assetsData: snapshots.map((s) => s.totalAssets),
+        debtData: snapshots.map((s) => s.totalDebt),
+        netData: snapshots.map((s) => s.netWorth),
+        shortData: snapshots.map((s) => s.shortAssets),
+        longData: snapshots.map((s) => s.longAssets)
+    };
+}
+
+function buildAllocationTrendData() {
+    const snapshots = getAssetSnapshots();
+    if (!snapshots.length) return { monthLabels: [], datasets: [] };
+    return {
+        monthLabels: snapshots.map((s) => {
+            const [y, m] = s.monthKey.split('-').map(Number);
+            return new Date(y, m - 1, 1).toLocaleDateString('pl-PL', { month: 'short' });
+        }),
+        investmentData: snapshots.map((s) => s.byType.investment),
+        cashData: snapshots.map((s) => s.byType.cash),
+        depositData: snapshots.map((s) => s.byType.deposit),
+        retirementData: snapshots.map((s) => s.byType.retirement)
+    };
+}
+
+function buildDiversificationSlices() {
+    return getAnalysisSummaryAssets()
+        .map((asset) => ({
+            label: typeof getAssetDisplayName === 'function' ? getAssetDisplayName(asset) : asset.name,
+            amount: getAssetValuePln(asset)
+        }))
+        .filter((s) => s.amount > 0)
+        .sort((a, b) => b.amount - a.amount);
+}
+
+function getIkzeContributionsFromTransactions(year) {
+    const start = `${year}-01-01`;
+    const end = `${year}-12-31`;
+    return getIkzeContributionsInRange(start, end);
+}
+
+function getIkzeContributionsInRange(start, end) {
+    if (!start || !end || start > end) return 0;
+    return appState.transactions
+        .filter((tx) => tx.date >= start && tx.date <= end && tx.linkedAssetId)
+        .filter((tx) => {
+            const asset = getAssetById(tx.linkedAssetId);
+            return asset?.type === 'retirement' && asset.retirementKind === 'IKZE'
+                && (tx.type === 'expense' || tx.type === 'income');
+        })
+        .reduce((sum, tx) => sum + tx.amount, 0);
+}
+
+function getRetirementContributionsInRange(start, end) {
+    if (!start || !end || start > end) return 0;
+    return appState.transactions
+        .filter((tx) => tx.date >= start && tx.date <= end && tx.linkedAssetId)
+        .filter((tx) => {
+            const asset = getAssetById(tx.linkedAssetId);
+            return asset?.type === 'retirement' && (tx.type === 'expense' || tx.type === 'income');
+        })
+        .reduce((sum, tx) => sum + tx.amount, 0);
+}
+
+function getIkzeContributionsThroughDate(endDate) {
+    if (!endDate) return 0;
+    const year = endDate.slice(0, 4);
+    const manual = getIkzeManualContributions(year);
+    if (manual !== null) return manual;
+    return getIkzeContributionsInRange(`${year}-01-01`, endDate);
+}
+
+const COMPARE_DIVERSIFICATION_TYPES = [
+    { key: 'investment', label: 'Inwestycja' },
+    { key: 'cash', label: 'Gotówka' },
+    { key: 'deposit', label: 'Lokata' },
+    { key: 'retirement', label: 'PPK / IKZE' }
+];
+
+function buildCompareDiversificationSummary(periodAEnd, periodBEnd) {
+    const snapA = getWealthAtPeriodEnd(periodAEnd);
+    const snapB = getWealthAtPeriodEnd(periodBEnd);
+    if (!snapA && !snapB) return null;
+
+    const emptyByType = { investment: 0, cash: 0, deposit: 0, retirement: 0 };
+    const byTypeA = snapA?.byType || emptyByType;
+    const byTypeB = snapB?.byType || snapA?.byType || emptyByType;
+    const totalA = snapA?.totalAssets || 0;
+    const totalB = snapB?.totalAssets || snapA?.totalAssets || 0;
+
+    return {
+        rows: COMPARE_DIVERSIFICATION_TYPES.map(({ key, label }) => {
+            const amountA = byTypeA[key] || 0;
+            const amountB = byTypeB[key] || 0;
+            return {
+                key,
+                label,
+                amountA,
+                amountB,
+                pctA: totalA > 0 ? Math.round((amountA / totalA) * 100) : 0,
+                pctB: totalB > 0 ? Math.round((amountB / totalB) * 100) : 0
+            };
+        }),
+        totalA,
+        totalB,
+        hasBoth: Boolean(snapA && snapB)
+    };
+}
+
+function buildCompareIkzeSummary(periodA, periodB) {
+    if (!periodA?.start || !periodA?.end || !periodB?.start || !periodB?.end) return null;
+    const limit = getIkzeAnnualLimitPln();
+    const yearA = periodA.end.slice(0, 4);
+    const yearB = periodB.end.slice(0, 4);
+    return {
+        contribA: getIkzeContributionsInRange(periodA.start, periodA.end),
+        contribB: getIkzeContributionsInRange(periodB.start, periodB.end),
+        retirementA: getRetirementContributionsInRange(periodA.start, periodA.end),
+        retirementB: getRetirementContributionsInRange(periodB.start, periodB.end),
+        ytdA: getIkzeContributionsThroughDate(periodA.end),
+        ytdB: getIkzeContributionsThroughDate(periodB.end),
+        limit,
+        yearA,
+        yearB,
+        manualA: isIkzeContributionsManual(yearA),
+        manualB: isIkzeContributionsManual(yearB)
+    };
+}
+
+function getIkzeManualContributions(year) {
+    const map = appState.reportPrefs?.ikzeContributionsByYear;
+    if (!map || typeof map !== 'object') return null;
+    const key = String(year);
+    if (!(key in map)) return null;
+    const val = parseFloat(map[key]);
+    return Number.isFinite(val) ? Math.max(0, val) : null;
+}
+
+function getIkzeContributionsInYear(year) {
+    const manual = getIkzeManualContributions(year);
+    if (manual !== null) return manual;
+    return getIkzeContributionsFromTransactions(year);
+}
+
+function isIkzeContributionsManual(year) {
+    return getIkzeManualContributions(year) !== null;
+}
+
+function estimateNetWorthPayoffMonths() {
+    const net = getPortfolioValuePln() - getLoanSummaryTotal();
+    if (net >= 0) return { months: 0, label: 'Już na plusie' };
+    const avgPayment = getActiveLoans().reduce((s, l) => s + (l.nextInstallmentAmount || 0), 0)
+        + getActiveCreditCards().reduce((s, c) => s + getRecentCardRepaymentAverage(c.id, 3), 0);
+    if (avgPayment <= 0) return { months: null, label: 'Brak danych o spłatach' };
+    const assetGrowth = getSnapshotMonthChange()?.totalAssets || 0;
+    const monthlyDelta = avgPayment + Math.max(0, assetGrowth);
+    if (monthlyDelta <= 0) return { months: null, label: 'Brak postępu' };
+    return {
+        months: Math.ceil(Math.abs(net) / monthlyDelta),
+        label: `~${Math.ceil(Math.abs(net) / monthlyDelta)} mies. przy obecnym tempie`
+    };
+}
+
+function getLiquidityAfterOverpayment(extraMonthly) {
+    const liquid = getOperationalCashPln();
+    const extra = parseFloat(extraMonthly) || 0;
+    const ctx = getReportsPeriodContext();
+    const { start, end } = getPeriodBoundsFromCtx(ctx);
+    const days = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1);
+    const expense = ctx.periodTx
+        .filter((t) => t.type === 'expense' && shouldTransactionAffectCash(t))
+        .reduce((s, t) => s + t.amount, 0);
+    const monthlyExpense = (expense / days) * 30.44;
+    const after = liquid - extra;
+    const runway = monthlyExpense > 0 ? after / monthlyExpense : null;
+    return { liquid, after, runway, monthlyExpense };
+}
+
+function getAssetValueAtDate(asset, dateIso) {
+    const today = localIsoDate(new Date());
+    if (!asset || asset.archived) return { value: null, source: 'missing' };
+    if (dateIso >= today) {
+        return { value: getAssetValuePln(asset), source: 'current' };
+    }
+
+    const history = getAssetValueHistory()
+        .filter((entry) => entry.assetId === asset.id && entry.date <= dateIso);
+    if (history.length) {
+        const latest = history[history.length - 1];
+        return { value: latest.valuePln, source: 'history', asOf: latest.date };
+    }
+
+    const fromSnapshot = estimateAssetValueFromMonthSnapshot(asset, dateIso);
+    if (fromSnapshot) return fromSnapshot;
+
+    if (dateIso.slice(0, 7) === today.slice(0, 7)) {
+        return { value: getAssetValuePln(asset), source: 'estimate', asOf: today };
+    }
+
+    return { value: null, source: 'missing' };
+}
+
+function formatAssetValueSourceLabel(val, asOfDate) {
+    if (!val || val.source === 'missing') return '—';
+    if (val.source === 'current') return 'bieżąca';
+    if (val.source === 'estimate') return 'szacunek (bieżąca)';
+    if (val.source === 'snapshot-estimate') {
+        return `szacunek (snapshot ${val.monthKey || asOfDate.slice(0, 7)})`;
+    }
+    if (val.source === 'history' && val.asOf && val.asOf !== asOfDate) {
+        return `z ${val.asOf}`;
+    }
+    if (val.source === 'history') return 'zapis historyczny';
+    return '—';
+}
+
+function formatAssetPdfDateLabel(dateIso) {
+    const d = new Date(`${dateIso}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return dateIso;
+    return d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function buildAssetsPrintBody(asOfDate) {
+    const assets = (typeof getSummaryAssets === 'function' ? getSummaryAssets() : [])
+        .filter((asset) => !asset.archived);
+    const label = formatAssetPdfDateLabel(asOfDate);
+    let total = 0;
+    let missingCount = 0;
+    const rows = assets.map((asset) => {
+        const name = typeof getAssetDisplayName === 'function' ? getAssetDisplayName(asset) : asset.name;
+        const typeLabel = typeof ASSET_TYPE_LABELS !== 'undefined'
+            ? (ASSET_TYPE_LABELS[asset.type] || asset.type || '—')
+            : (asset.type || '—');
+        const val = getAssetValueAtDate(asset, asOfDate);
+        if (val.value === null) {
+            missingCount += 1;
+            return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(typeLabel)}</td><td colspan="2">Brak danych historycznych</td></tr>`;
+        }
+        total += val.value;
+        const meta = formatAssetValueSourceLabel(val, asOfDate);
+        return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(typeLabel)}</td><td>${formatPlnAmount(val.value)}</td><td>${escapeHtml(meta)}</td></tr>`;
+    }).join('');
+
+    const monthKey = asOfDate.slice(0, 7);
+    const snap = typeof getSnapshotForMonthKey === 'function' ? getSnapshotForMonthKey(monthKey) : null;
+    const debtNote = snap
+        ? `<p class="reports-pdf-summary">Zadłużenie (snapshot ${monthKey}): ${formatPlnAmount(snap.totalDebt)} | Majątek netto: ${formatPlnAmount(snap.netWorth)}</p>`
+        : '';
+
+    const disclaimer = missingCount > 0
+        ? `<p class="reports-pdf-summary reports-pdf-disclaimer">Uwaga: ${missingCount} pozycji bez danych na ten dzień. Pozostałe mogą być ze snapshotu miesięcznego lub ostatniego zapisu historii.</p>`
+        : `<p class="reports-pdf-summary reports-pdf-disclaimer">Wartości z historii aktywów lub szacunku ze snapshotu miesięcznego (gdy brak dziennego zapisu).</p>`;
+
+    return `<h1 class="reports-pdf-title">Majątek na dzień ${escapeHtml(label)}</h1>
+        <p class="reports-pdf-summary">Suma aktywów (znane): ${formatPlnAmount(total)} · Pozycji: ${assets.length}</p>
+        ${debtNote}
+        ${disclaimer}
+        <table class="reports-pdf-table"><thead><tr><th>Aktywo</th><th>Typ</th><th>Wartość</th><th>Źródło</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function runAssetAnalyticsMigrations() {
+    let changed = false;
+    if (!Array.isArray(appState.assetSnapshots)) {
+        appState.assetSnapshots = [];
+        changed = true;
+    }
+    if (!Array.isArray(appState.assetValueHistory)) {
+        appState.assetValueHistory = [];
+        changed = true;
+    }
+    const beforeLen = appState.assetSnapshots.length;
+    appState.assetSnapshots = getAssetSnapshots();
+    if (appState.assetSnapshots.length !== beforeLen) changed = true;
+
+    if (appState.assetSnapshots.length > MAX_ASSET_SNAPSHOTS) {
+        appState.assetSnapshots = appState.assetSnapshots.slice(-MAX_ASSET_SNAPSHOTS);
+        changed = true;
+    }
+    if (appState.assetValueHistory.length > MAX_ASSET_VALUE_HISTORY) {
+        appState.assetValueHistory = appState.assetValueHistory.slice(-MAX_ASSET_VALUE_HISTORY);
+        changed = true;
+    }
+
+    const cele = getAssetById?.(CELE_ASSET_ID);
+    if (cele && !cele.goalTarget) {
+        updateAssetInState({ ...cele, goalTarget: 5000 });
+        changed = true;
+    }
+
+    if (autoCaptureAssetSnapshotsIfNeeded()) changed = true;
+    if (typeof backfillMissingAssetValueHistory === 'function' && backfillMissingAssetValueHistory()) {
+        changed = true;
+    }
+    return changed;
+}

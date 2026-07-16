@@ -1,0 +1,2407 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <script>
+    (function () {
+        var parts = location.pathname.split('/').filter(Boolean);
+        var idx = parts.indexOf('Portfel-PWA');
+        if (idx < 0) return;
+        var base = '/' + parts.slice(0, idx + 1).join('/') + '/';
+        if (location.pathname === base.slice(0, -1)) {
+            location.replace(base + 'index.html' + location.search + location.hash);
+            return;
+        }
+        var baseEl = document.createElement('base');
+        baseEl.href = base;
+        document.head.appendChild(baseEl);
+    })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+    <title>Finanse</title>
+    <meta name="theme-color" content="#e4eaf4">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Finanse">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+</head>
+<body class="auth-locked">
+
+    <div id="auth-overlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+        <div class="auth-card onboarding-card">
+            <img src="icons/icon-192.png" alt="">
+            <h2 id="auth-title">Finanse</h2>
+            <p id="auth-message">Sprawdzanie sesji…</p>
+            <p id="auth-checking" class="auth-checking">Łączenie…</p>
+            <p id="auth-error" class="auth-error hidden" role="alert"></p>
+            <p id="auth-info" class="auth-info hidden" role="status"></p>
+            <form id="auth-email-form" class="auth-email-form hidden" autocomplete="on" onsubmit="signInWithEmailPassword(event)">
+                <label class="auth-field">
+                    <span class="auth-field-label">E-mail</span>
+                    <input type="email" id="auth-email" name="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+                </label>
+                <label class="auth-field">
+                    <span class="auth-field-label">Hasło</span>
+                    <input type="password" id="auth-password" name="password" autocomplete="current-password" required>
+                </label>
+                <button type="submit" id="btn-email-signin" class="btn-onboarding-primary auth-email-submit">Zaloguj się</button>
+                <button type="button" id="btn-password-reset" class="auth-link-btn" onclick="sendPasswordResetLink()">Wyślij link do ustawienia hasła</button>
+                <p class="auth-hint">Pierwszy raz na iPhone? Wyślij link na e-mail, ustaw hasło, potem zaloguj się powyżej. Rejestracja jest wyłączona.</p>
+            </form>
+            <button type="button" id="btn-google-signin" class="btn-google-signin hidden">
+                <svg class="btn-google-signin-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                Zaloguj przez Google
+            </button>
+        </div>
+    </div>
+
+    <div id="app-lock-overlay" class="app-lock-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="app-lock-title">
+        <div class="app-lock-card onboarding-card">
+            <img src="icons/icon-192.png" alt="">
+            <h2 id="app-lock-title">Zablokowane</h2>
+            <p id="app-lock-subtitle" class="app-lock-subtitle">Wpisz PIN, aby kontynuować.</p>
+            <p id="app-lock-error" class="auth-error hidden" role="alert"></p>
+            <div id="app-lock-pin-dots" class="app-lock-pin-dots" aria-hidden="true">
+                <span class="app-lock-pin-dot"></span><span class="app-lock-pin-dot"></span><span class="app-lock-pin-dot"></span><span class="app-lock-pin-dot"></span>
+            </div>
+            <div id="app-lock-pin-pad" class="app-lock-pin-pad">
+                <button type="button" class="app-lock-key" data-app-lock-digit="1">1</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="2">2</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="3">3</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="4">4</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="5">5</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="6">6</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="7">7</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="8">8</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="9">9</button>
+                <span class="app-lock-key app-lock-key--spacer" aria-hidden="true"></span>
+                <button type="button" class="app-lock-key" data-app-lock-digit="0">0</button>
+                <button type="button" class="app-lock-key app-lock-key--action" data-app-lock-action="backspace" aria-label="Usuń">⌫</button>
+            </div>
+            <button type="button" id="btn-app-lock-bio" class="btn-onboarding-primary app-lock-bio-btn hidden">Odblokuj biometrią</button>
+            <button type="button" id="btn-app-lock-back-quick" class="btn-text-link app-lock-back-quick hidden" type="button">Wróć do szybkiego wpisu</button>
+        </div>
+    </div>
+
+    <div id="app-lock-setup-overlay" class="app-lock-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="app-lock-setup-title">
+        <div class="app-lock-card onboarding-card">
+            <h2 id="app-lock-setup-title">Ustaw PIN</h2>
+            <p id="app-lock-setup-subtitle" class="app-lock-subtitle">Wpisz 4-cyfrowy PIN.</p>
+            <p id="app-lock-setup-error" class="auth-error hidden" role="alert"></p>
+            <div id="app-lock-setup-dots" class="app-lock-pin-dots" aria-hidden="true">
+                <span class="app-lock-pin-dot"></span><span class="app-lock-pin-dot"></span><span class="app-lock-pin-dot"></span><span class="app-lock-pin-dot"></span>
+            </div>
+            <div class="app-lock-pin-pad">
+                <button type="button" class="app-lock-key" data-app-lock-digit="1" data-app-lock-target="setup">1</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="2" data-app-lock-target="setup">2</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="3" data-app-lock-target="setup">3</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="4" data-app-lock-target="setup">4</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="5" data-app-lock-target="setup">5</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="6" data-app-lock-target="setup">6</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="7" data-app-lock-target="setup">7</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="8" data-app-lock-target="setup">8</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="9" data-app-lock-target="setup">9</button>
+                <button type="button" class="app-lock-key app-lock-key--action" data-app-lock-action="cancel-setup" data-app-lock-target="setup">Anuluj</button>
+                <button type="button" class="app-lock-key" data-app-lock-digit="0" data-app-lock-target="setup">0</button>
+                <button type="button" class="app-lock-key app-lock-key--action" data-app-lock-action="backspace" data-app-lock-target="setup" aria-label="Usuń">⌫</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="onboarding" class="onboarding-overlay hidden">
+        <div class="onboarding-card">
+            <img id="onboarding-icon" src="icons/icon-192.png" alt="Finanse">
+            <h2 id="onboarding-title">Witaj w Finanse</h2>
+            <p id="onboarding-text">Twoje dane synchronizują się w chmurze — dostępne na każdym urządzeniu.</p>
+            <div class="onboarding-dots" id="onboarding-dots">
+                <span class="active"></span><span></span><span></span>
+            </div>
+            <div class="onboarding-actions">
+                <button type="button" class="btn-onboarding-secondary" id="onboarding-skip">Pomiń</button>
+                <button type="button" class="btn-onboarding-primary" id="onboarding-next">Dalej</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="welcome-dashboard" class="welcome-dashboard hidden" role="main" aria-label="Ekran startowy">
+            <div id="welcome-dashboard-card" class="welcome-dashboard-card onboarding-card">
+            <div class="welcome-dashboard-head">
+                <img class="welcome-dashboard-logo" src="icons/header-logo.png" alt="">
+                <div class="welcome-dashboard-head-text">
+                    <h2 id="welcome-greeting" class="welcome-dashboard-greeting">Dzień dobry</h2>
+                    <p id="welcome-info" class="welcome-dashboard-info"></p>
+                </div>
+            </div>
+            <div class="welcome-dashboard-spotlight" aria-label="Wydatki w bieżącym miesiącu">
+                <p id="welcome-period" class="welcome-dashboard-period"></p>
+                <span class="welcome-dashboard-expense-label">Wydatki</span>
+                <p id="welcome-balance" class="welcome-dashboard-balance"></p>
+            </div>
+            <div class="welcome-dashboard-tiles">
+                <button type="button" class="welcome-tile" data-welcome-target="add">
+                    <span class="welcome-tile-icon" aria-hidden="true">+</span>
+                    <span class="welcome-tile-title">Dodaj transakcję</span>
+                    <span class="welcome-tile-meta">Szybki wpis</span>
+                </button>
+                <button type="button" class="welcome-tile" data-welcome-target="tasks">
+                    <span class="welcome-tile-icon" aria-hidden="true">✓</span>
+                    <span class="welcome-tile-title">Na dziś</span>
+                    <span id="welcome-tile-tasks-meta" class="welcome-tile-meta">—</span>
+                </button>
+                <button type="button" class="welcome-tile" data-welcome-target="payments">
+                    <span class="welcome-tile-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
+                    </span>
+                    <span class="welcome-tile-title">Do zapłaty</span>
+                    <span id="welcome-tile-payments-meta" class="welcome-tile-meta">—</span>
+                </button>
+                <button type="button" class="welcome-tile" data-welcome-target="reports">
+                    <span class="welcome-tile-icon" aria-hidden="true">◐</span>
+                    <span class="welcome-tile-title">Analiza</span>
+                    <span id="welcome-tile-reports-meta" class="welcome-tile-meta">—</span>
+                </button>
+            </div>
+            <div class="welcome-dashboard-actions">
+                <button type="button" id="btn-welcome-unlock-bio" class="welcome-action-btn welcome-action-btn--bio hidden">Odblokuj biometrią</button>
+                <button type="button" id="btn-welcome-open-full" class="welcome-action-btn welcome-action-btn--primary">Otwórz pełną aplikację</button>
+                <button type="button" id="btn-welcome-enable-pin" class="welcome-action-btn welcome-action-btn--link hidden">Włącz blokadę PIN</button>
+            </div>
+        </div>
+    </div>
+
+    <header>
+        <button type="button" class="header-brand" id="btn-header-home" aria-label="Ekran startowy">
+            <img class="header-logo" src="icons/header-logo.png" alt="">
+            <h1 id="view-title">Pulpit</h1>
+        </button>
+        <div class="header-actions">
+            <button type="button" id="btn-hub-centrum" class="btn-icon btn-icon--hub" onclick="toggleHubPanel()" aria-label="Centrum — Skryba, zadania i koszyk" aria-expanded="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V18a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-3.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5zM8 20v-1h8v1H8z"/></svg>
+                <span id="hub-badge" class="notifications-badge hidden">0</span>
+            </button>
+            <button type="button" id="btn-app-lock" class="btn-icon btn-icon--lock header-action-legacy hidden" aria-label="Zablokuj aplikację">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm-6 9a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm3.1-9H8.9V6a3.1 3.1 0 0 1 6.2 0v2z"/></svg>
+            </button>
+            <button type="button" id="btn-skryba" class="btn-icon btn-icon--skryba header-action-legacy hidden" onclick="toggleSkrybaPanel()" aria-label="Skryba — asystent AI" aria-expanded="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h3l3 3 3-3h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+            </button>
+            <button type="button" id="btn-tasks" class="btn-icon btn-icon--tasks header-action-legacy hidden" onclick="openTasksView()" aria-label="Zadania">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 14l-5-5 1.41-1.41L11 14.17l7.59-7.59L20 8l-9 9z"/></svg>
+                <span id="tasks-badge" class="notifications-badge hidden">0</span>
+            </button>
+            <button type="button" id="btn-settings" class="btn-icon header-action-legacy hidden" onclick="openSettings()" aria-label="Ustawienia">
+                <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            </button>
+            <button type="button" id="btn-notifications" class="btn-icon btn-icon--bell" onclick="toggleNotificationsPanel()" aria-label="Powiadomienia i tablica" aria-expanded="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6V11a7 7 0 0 0-5-6.71V4a2 2 0 1 0-4 0v.29A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2z"/></svg>
+                <span id="notifications-badge" class="notifications-badge hidden">0</span>
+            </button>
+            <div id="sync-status" title="Status synchronizacji z chmurą"></div>
+        </div>
+    </header>
+
+    <div id="app-lock-restricted-banner" class="app-lock-restricted-banner hidden" role="status">
+        <span class="app-lock-restricted-banner-text">Aplikacja zablokowana — możesz dodać transakcję lub odblokować pełny dostęp.</span>
+        <button type="button" id="btn-app-lock-unlock" class="app-lock-restricted-banner-btn">Odblokuj</button>
+    </div>
+
+    <div id="module-split-banner" class="module-split-banner hidden" role="alert">
+        <div>
+            <strong>Konserwacja kodu</strong>
+            <span id="module-split-banner-text">Moduł JS przekroczył próg — rozważ dalszy podział w js/.</span>
+        </div>
+        <button type="button" onclick="dismissModuleSplitBanner()">OK</button>
+    </div>
+
+    <div id="offline-banner" class="offline-banner hidden" role="status" aria-live="polite">
+        <span>Tryb offline — zmiany zapisują się lokalnie i zsynchronizują się po powrocie internetu.</span>
+    </div>
+
+    <!-- Źródło markupu: partials/skryba-overlay.html (sync: node scripts/assemble-html.mjs) -->
+    <div id="skryba-overlay" class="skryba-overlay hidden">
+        <div class="skryba-shell">
+            <header class="skryba-header">
+                <button type="button" id="btn-skryba-back" class="skryba-header-btn hidden" onclick="skrybaShowChatView()" aria-label="Wróć do czatu">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                </button>
+                <div class="skryba-header-titles">
+                    <h2 class="skryba-header-title" id="skryba-header-title">Skryba</h2>
+                    <p class="skryba-header-subtitle hidden" id="skryba-header-subtitle"></p>
+                </div>
+                <div class="skryba-header-actions">
+                    <button type="button" id="btn-skryba-threads" class="skryba-header-btn" onclick="skrybaShowThreadsView()" aria-label="Historia rozmów">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+                    </button>
+                    <button type="button" class="skryba-header-btn" onclick="skrybaStartNewThread()" aria-label="Nowa rozmowa">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                    </button>
+                    <button type="button" class="skryba-header-btn" onclick="closeSkrybaPanel()" aria-label="Zamknij">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                    </button>
+                </div>
+            </header>
+
+            <div id="skryba-threads-view" class="skryba-threads-view hidden">
+                <div class="skryba-threads-toolbar">
+                    <button type="button" class="btn-text-link skryba-threads-clear-btn" onclick="skrybaDeleteAllThreads()">Usuń wszystkie rozmowy</button>
+                </div>
+                <div id="skryba-threads-list" class="skryba-threads-list"></div>
+            </div>
+
+            <div id="skryba-chat-view" class="skryba-chat-view">
+                <div id="skryba-messages" class="skryba-messages"></div>
+                <div id="skryba-voice-preview" class="skryba-voice-preview hidden" aria-live="polite">
+                    <span id="skryba-voice-preview-text" class="skryba-voice-preview-text"></span>
+                    <div class="skryba-voice-preview-actions">
+                        <button type="button" class="skryba-btn skryba-btn--primary" onclick="confirmSkrybaVoicePreview()">Wyślij</button>
+                        <button type="button" class="skryba-btn" onclick="cancelSkrybaVoicePreview()">Anuluj</button>
+                    </div>
+                </div>
+                <div class="skryba-composer">
+                    <button type="button" id="btn-skryba-voice" class="skryba-voice-btn hidden" onclick="toggleSkrybaVoiceInput()" aria-label="Dyktuj wiadomość" aria-pressed="false">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+                    </button>
+                    <textarea id="skryba-input" class="skryba-input" rows="1" placeholder="Np. 20 zł zakupy biedronka…" onkeydown="onSkrybaInputKeydown(event)" oninput="onSkrybaInputInput()"></textarea>
+                    <button type="button" id="btn-skryba-send" class="skryba-send-btn" onclick="sendSkrybaMessage()" aria-label="Wyślij">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="hub-overlay" class="hub-overlay notifications-overlay hidden" onclick="if (event.target === this) closeHubPanel()">
+        <div class="hub-panel notifications-panel settings-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-hub"></div>
+            <nav class="analysis-subnav hub-subnav" aria-label="Centrum">
+                <button id="btn-hub-tab-skryba" type="button" class="analysis-subnav-btn" onclick="setHubPanelTab('skryba')">Skryba</button>
+                <button id="btn-hub-tab-tasks" type="button" class="analysis-subnav-btn active" onclick="setHubPanelTab('tasks')">Zadania <span id="hub-tasks-tab-badge" class="notifications-tab-badge hidden">0</span></button>
+                <button id="btn-hub-tab-basket" type="button" class="analysis-subnav-btn" onclick="setHubPanelTab('basket')">Koszyk <span id="tx-basket-tab-badge" class="notifications-tab-badge hidden">0</span></button>
+            </nav>
+            <div id="hub-tab-skryba" class="hub-tab-panel hidden">
+                <div id="hub-skryba-launcher" class="hub-skryba-launcher"></div>
+            </div>
+            <div id="hub-tab-tasks" class="hub-tab-panel">
+                <div id="hub-tasks-preview" class="hub-tasks-preview notifications-list"></div>
+                <div class="hub-tab-footer action-board-footer">
+                    <button type="button" class="btn-submit btn-submit--form action-board-skryba-btn" onclick="hubOpenTasks()">Otwórz pełną listę zadań</button>
+                </div>
+            </div>
+            <div id="hub-tab-basket" class="hub-tab-panel hidden">
+                <p id="tx-basket-summary" class="tx-basket-summary">Brak transakcji w koszyku</p>
+                <div id="tx-basket-list" class="tx-basket-list notifications-list"></div>
+                <div class="tx-basket-footer action-board-footer">
+                    <button type="button" id="btn-tx-basket-clear" class="btn-cancel btn-cancel--form" onclick="confirmClearTxBasket()">Wyczyść wszystko</button>
+                    <button type="button" id="btn-tx-basket-pdf" class="btn-submit btn-submit--form" onclick="exportTxBasketPdf()">PDF</button>
+                </div>
+            </div>
+            <footer class="hub-footer">
+                <button type="button" id="btn-hub-settings" class="hub-footer-btn" onclick="hubOpenSettings()">Ustawienia</button>
+                <button type="button" id="btn-hub-lock" class="hub-footer-btn hidden" onclick="hubLockApp()">Zablokuj aplikację</button>
+            </footer>
+        </div>
+    </div>
+
+    <div id="notifications-overlay" class="notifications-overlay hidden" onclick="if (event.target === this) closeNotificationsPanel()">
+        <div class="notifications-panel settings-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-notifications"></div>
+            <nav class="analysis-subnav notifications-subnav" aria-label="Panel powiadomień">
+                <button id="btn-notif-tab-alerts" type="button" class="analysis-subnav-btn active" onclick="setNotificationsPanelTab('alerts')">Powiadomienia</button>
+                <button id="btn-notif-tab-board" type="button" class="analysis-subnav-btn" onclick="setNotificationsPanelTab('board')">Tablica <span id="action-board-tab-badge" class="notifications-tab-badge hidden">0</span></button>
+            </nav>
+            <div id="notifications-tab-alerts" class="notifications-tab-panel">
+                <div class="notifications-panel-toolbar">
+                    <button type="button" class="notifications-mark-all" onclick="markAllNotificationsRead()">Oznacz wszystkie jako przeczytane</button>
+                </div>
+                <div id="notifications-list" class="notifications-list"></div>
+                <div id="notifications-tasks-footer" class="action-board-footer hidden">
+                    <button type="button" class="btn-submit btn-submit--form action-board-skryba-btn" onclick="openTasksFromNotifications()">Przejdź do moich zadań</button>
+                </div>
+            </div>
+            <div id="notifications-tab-board" class="notifications-tab-panel hidden">
+                <div id="action-board-list" class="notifications-list action-board-list"></div>
+                <div id="action-board-footer" class="action-board-footer hidden">
+                    <button type="button" class="btn-submit btn-submit--form action-board-skryba-btn" onclick="startSkrybaActionBoardReview()">Przejdź ze Skrybą</button>
+                </div>
+            </div>
+            <div id="notifications-tab-basket" class="notifications-tab-panel hidden" aria-hidden="true"></div>
+        </div>
+    </div>
+
+    <div id="settings-overlay" class="settings-overlay hidden" onclick="if (event.target === this) closeSettings()">
+        <div class="settings-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-settings"></div>
+
+            <nav class="analysis-subnav settings-subnav" aria-label="Sekcje ustawień">
+                <button id="btn-settings-account" type="button" class="analysis-subnav-btn" onclick="setSettingsSection('account')">Konto</button>
+                <button id="btn-settings-appearance" type="button" class="analysis-subnav-btn active" onclick="setSettingsSection('appearance')">Wygląd</button>
+                <button id="btn-settings-categories" type="button" class="analysis-subnav-btn" onclick="setSettingsSection('categories')">Kategorie</button>
+                <button id="btn-settings-budgets" type="button" class="analysis-subnav-btn" onclick="setSettingsSection('budgets')">Budżety</button>
+                <button id="btn-settings-assistant" type="button" class="analysis-subnav-btn" onclick="setSettingsSection('assistant')">Asystent AI</button>
+                <button id="btn-settings-notifications" type="button" class="analysis-subnav-btn" onclick="setSettingsSection('notifications')">Powiadomienia</button>
+                <button id="btn-settings-backup" type="button" class="analysis-subnav-btn" onclick="setSettingsSection('backup')">Kopia</button>
+            </nav>
+
+            <div id="settings-section-account" class="settings-section-panel hidden">
+                <div class="settings-section">
+                    <div class="section-label">Konto</div>
+                    <p class="settings-hint">Zalogowano jako:</p>
+                    <p id="settings-account-email" class="settings-account-email">—</p>
+                    <div id="settings-account-actions" class="settings-account-actions settings-action-grid">
+                        <button type="button" id="btn-settings-password-reset" class="settings-action-btn" onclick="sendPasswordResetLink(true)">
+                            <span class="settings-action-btn-title">Zmiana hasła</span>
+                            <span class="settings-action-btn-desc">Link na e-mail</span>
+                        </button>
+                        <button type="button" class="settings-action-btn settings-action-btn--danger" onclick="signOutFromApp()">
+                            <span class="settings-action-btn-title">Wyloguj się</span>
+                            <span class="settings-action-btn-desc">Koniec sesji</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="section-label">Blokada aplikacji</div>
+                    <p class="settings-hint">Dodatkowa ochrona na urządzeniu. Po odblokowaniu aplikacja pozostaje otwarta przez 5 minut bezczynności — szybkie przełączenie nie wymaga ponownego PIN-u.</p>
+                    <label class="settings-toggle-row">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title">PIN</span>
+                            <span class="settings-nav-row-desc">4-cyfrowy kod przy starcie i po bezczynności</span>
+                        </span>
+                        <input type="checkbox" id="app-lock-pin-toggle" onchange="onAppLockPinToggle()">
+                    </label>
+                    <label class="settings-toggle-row" id="app-lock-bio-row">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title" id="app-lock-bio-label">Face ID / Touch ID</span>
+                            <span class="settings-nav-row-desc" id="app-lock-bio-hint">Odblokowanie biometrią na tym urządzeniu.</span>
+                        </span>
+                        <input type="checkbox" id="app-lock-bio-toggle" onchange="onAppLockBiometricToggle()">
+                    </label>
+                    <button type="button" id="btn-app-lock-change-pin" class="btn-text-link settings-api-key-save hidden" onclick="onAppLockChangePinClick()">Zmień PIN</button>
+                    <label class="settings-toggle-row">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title">Szybki wpis przy blokadzie</span>
+                            <span class="settings-nav-row-desc">Przy blokadzie dostępna tylko zakładka „Dodaj” — bez pełnego odblokowania</span>
+                        </span>
+                        <input type="checkbox" id="app-lock-quick-add-toggle" onchange="onAppLockQuickAddToggle()" checked>
+                    </label>
+                </div>
+            </div>
+
+            <div id="settings-section-appearance" class="settings-section-panel">
+                <div class="settings-section">
+                    <div class="section-label">Motyw</div>
+                    <div class="theme-selector" id="theme-selector">
+                        <button type="button" class="theme-option" data-theme="light" onclick="setTheme('light')">Jasny</button>
+                        <button type="button" class="theme-option" data-theme="dark" onclick="setTheme('dark')">Ciemny</button>
+                        <button type="button" class="theme-option" data-theme="auto" onclick="setTheme('auto')">Auto</button>
+                    </div>
+                </div>
+
+                <div id="module-split-notice" class="settings-maintenance hidden">
+                    <strong>Konserwacja kodu</strong>
+                    <p>Największy moduł w <code>js/</code> ma <span id="module-split-lines">—</span> linii (próg: <span id="module-split-threshold">900</span>).</p>
+                </div>
+            </div>
+
+            <div id="settings-section-categories" class="settings-section-panel hidden">
+                <div class="settings-section">
+                    <div class="section-label">Kategorie wydatków i wpływów</div>
+                    <p class="settings-hint">Zmień nazwy, dodaj własne pozycje lub usuń nieużywane — obowiązuje w całej aplikacji.</p>
+                    <button type="button" class="settings-nav-row settings-nav-row--standalone" onclick="openCategoryEditor()">
+                        <span class="settings-nav-row-body">
+                            <span class="settings-nav-row-title">Edytuj kategorie i podkategorie</span>
+                            <span class="settings-nav-row-desc">Osobne listy dla wydatków i wpływów</span>
+                        </span>
+                        <span class="settings-nav-row-chevron" aria-hidden="true">›</span>
+                    </button>
+                </div>
+                <div class="settings-section">
+                    <div class="section-label">Reguły auto-kategoryzacji</div>
+                    <p class="settings-hint">Gdy notatka zawiera wzorzec, przypisz kategorię automatycznie (także przy podziale transakcji).</p>
+                    <div id="category-rules-list" class="category-rules-list-host"></div>
+                    <div id="category-rule-form" class="category-rule-form hidden" aria-hidden="true">
+                        <div id="category-rule-form-mode" class="flex-toggle flex-toggle--2 category-rule-form-mode">
+                            <button type="button" id="category-rule-mode-new" class="toggle-btn active" onclick="setCategoryRuleFormMode('new')">Nowa reguła</button>
+                            <button type="button" id="category-rule-mode-proposals" class="toggle-btn" onclick="setCategoryRuleFormMode('proposals')">Propozycje</button>
+                        </div>
+                        <div id="category-rule-form-title" class="category-rule-form-title hidden">Edytuj regułę</div>
+                        <div id="category-rule-form-manual" class="category-rule-form-manual">
+                            <label class="section-label" for="category-rule-pattern">Wzorzec w notatce</label>
+                            <input type="text" id="category-rule-pattern" class="settings-api-key-input" placeholder="np. biedronka">
+                            <label class="section-label" for="category-rule-type">Typ</label>
+                            <select id="category-rule-type" class="settings-api-key-input">
+                                <option value="expense">Wydatek</option>
+                                <option value="income">Wpływ</option>
+                            </select>
+                            <label class="section-label" for="category-rule-main">Kategoria</label>
+                            <select id="category-rule-main" class="settings-api-key-input"></select>
+                            <label class="section-label" for="category-rule-sub">Podkategoria</label>
+                            <select id="category-rule-sub" class="settings-api-key-input"></select>
+                            <div class="category-rule-form-actions">
+                                <button type="button" id="category-rule-submit-btn" class="btn-submit btn-submit--form" onclick="saveCategoryRuleFromForm()">Dodaj regułę</button>
+                                <button type="button" id="category-rule-cancel-btn" class="btn-cancel btn-cancel--form" onclick="closeCategoryRuleForm()">Zrezygnuj</button>
+                            </div>
+                        </div>
+                        <div id="category-rule-form-proposals" class="category-rule-form-proposals hidden">
+                            <p class="settings-hint category-rule-proposals-hint">Propozycje z Twoich notatek (powtórzenia) i gotowe szablony. Kliknij wiersz, aby edytować przed dodaniem.</p>
+                            <div id="category-rule-proposals-list" class="category-rule-proposals-list"></div>
+                            <div class="category-rule-form-actions">
+                                <button type="button" class="btn-submit btn-submit--form" onclick="addAllStarterCategoryRules()">Dodaj wszystkie dostępne</button>
+                                <button type="button" class="btn-cancel btn-cancel--form" onclick="closeCategoryRuleForm()">Zrezygnuj</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="settings-section-budgets" class="settings-section-panel hidden">
+                <div class="settings-section settings-section--month-close">
+                    <div class="section-label">Rozliczenie miesiąca</div>
+                    <p class="settings-hint">Otwórz ponownie zamknięty miesiąc, aby przejść kreator rozliczenia (np. po auto-zamknięciu starszych okresów).</p>
+                    <div id="settings-month-close-reopen-list" class="month-close-reopen-list"></div>
+                </div>
+                <div class="settings-section settings-section--budget-editor">
+                    <div class="section-label">Limity miesięczne</div>
+                    <p class="settings-hint">Ustaw limit dla kategorii lub podkategorii. Puste pole = brak limitu. Zużycie bieżącego miesiąca widać pod polem.</p>
+                    <div id="settings-budget-list" class="budget-editor-list"></div>
+                    <button type="button" class="btn-submit category-editor-save settings-budget-save" onclick="saveBudgetEditor()">Zapisz limity</button>
+                </div>
+            </div>
+
+            <div id="settings-section-assistant" class="settings-section-panel hidden">
+                <div class="settings-section">
+                    <div class="section-label">Skryba — asystent AI</div>
+                    <p class="settings-hint">Naturalne polecenia w czacie (Groq). Klucz API zostaje tylko w tej przeglądarce — nie trafia do chmury Portfela.</p>
+                    <label class="settings-toggle-row">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title">Włącz Skrybę</span>
+                            <span class="settings-nav-row-desc">Ikona w nagłówku obok powiadomień</span>
+                        </span>
+                        <input type="checkbox" id="assistant-enabled-toggle" onchange="onAssistantEnabledToggle()">
+                    </label>
+                    <label class="settings-toggle-row">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title">Potwierdzaj dodanie transakcji</span>
+                            <span class="settings-nav-row-desc">Wyłączone = zapis od razu po rozpoznaniu polecenia</span>
+                        </span>
+                        <input type="checkbox" id="assistant-confirm-tx-toggle" onchange="onAssistantConfirmTxToggle()" checked>
+                    </label>
+                    <div class="form-group settings-api-key-group">
+                        <label for="assistant-api-key">Klucz API Groq</label>
+                        <input type="password" id="assistant-api-key" class="settings-api-key-input" autocomplete="off" placeholder="gsk_…" onblur="onAssistantApiKeyBlur()">
+                        <p class="settings-hint">Utwórz w <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Groq Console</a>. Darmowy plan bez karty. Proste wydatki (np. „20 zł biedronka”) rozpoznaje lokalnie; złożone pytania idą do modelu AI.</p>
+                        <button type="button" class="btn-text-link settings-api-key-save" onclick="saveAssistantApiKey()">Zapisz klucz</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="settings-section-notifications" class="settings-section-panel hidden">
+                <div class="settings-section">
+                    <div class="section-label">Powiadomienia</div>
+                    <label class="settings-toggle-row">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title">Włącz powiadomienia</span>
+                            <span class="settings-nav-row-desc">Limity, raty kredytów, karty, tempo wydatków i insights</span>
+                        </span>
+                        <input type="checkbox" id="notif-pref-enabled" onchange="onNotificationMasterToggle()">
+                    </label>
+                    <p id="notif-permission-status" class="settings-hint notif-permission-status"></p>
+                    <button type="button" class="btn-outline notif-test-btn" onclick="showTestSystemNotification()">Wyślij testowe powiadomienie</button>
+                    <div id="notif-pref-subtoggles" class="notif-pref-subtoggles hidden">
+                        <label class="settings-toggle-row settings-toggle-row--sub">
+                            <span class="settings-nav-row-title">Alerty 80% / 100% limitu</span>
+                            <input type="checkbox" id="notif-pref-budget">
+                        </label>
+                        <label class="settings-toggle-row settings-toggle-row--sub">
+                            <span class="settings-nav-row-title">Raty kredytów (dzień wcześniej i w terminie)</span>
+                            <input type="checkbox" id="notif-pref-loan">
+                        </label>
+                        <label class="settings-toggle-row settings-toggle-row--sub">
+                            <span class="settings-nav-row-title">Karty (50 dni od transakcji + 1. dzień miesiąca)</span>
+                            <input type="checkbox" id="notif-pref-card">
+                        </label>
+                        <label class="settings-toggle-row settings-toggle-row--sub">
+                            <span class="settings-nav-row-title">Tempo wydatków (prognoza limitu)</span>
+                            <input type="checkbox" id="notif-pref-pace">
+                        </label>
+                        <label class="settings-toggle-row settings-toggle-row--sub">
+                            <span class="settings-nav-row-title">Brakujące stałe opłaty</span>
+                            <input type="checkbox" id="notif-pref-recurring">
+                        </label>
+                        <label class="settings-toggle-row settings-toggle-row--sub">
+                            <span class="settings-nav-row-title">Terminy zadań i płatności z listy</span>
+                            <input type="checkbox" id="notif-pref-tasks">
+                        </label>
+                        <label class="settings-toggle-row settings-toggle-row--sub">
+                            <span class="settings-nav-row-title">Insights (anomalie, IKZE, cel oszczędności)</span>
+                            <input type="checkbox" id="notif-pref-insight">
+                        </label>
+                    </div>
+                    <label class="settings-toggle-row settings-toggle-row--budget-confirm">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title">Pytaj przed przekroczeniem limitu</span>
+                            <span class="settings-nav-row-desc">Okno potwierdzenia przy zapisie wydatku ≥100% limitu kategorii</span>
+                        </span>
+                        <input type="checkbox" id="budget-confirm-over-toggle" onchange="setBudgetConfirmOnOver(this.checked)">
+                    </label>
+                </div>
+            </div>
+
+            <div id="settings-section-backup" class="settings-section-panel hidden">
+                <div class="settings-section settings-section--backup">
+                    <div class="section-label">Kopia zapasowa</div>
+                    <p id="storage-usage-info" class="settings-hint storage-usage-info">—</p>
+                    <div class="backup-status-grid">
+                        <div class="backup-status-card">
+                            <span class="backup-status-label">Chmura</span>
+                            <span class="backup-status-value" id="backup-cloud-info">Sprawdzanie…</span>
+                        </div>
+                        <div class="backup-status-card">
+                            <span class="backup-status-label">Telefon</span>
+                            <span class="backup-status-value" id="backup-local-info">Brak kopii lokalnej</span>
+                        </div>
+                    </div>
+                    <label class="settings-toggle-row settings-toggle-row--backup-auto">
+                        <span class="settings-toggle-row-body">
+                            <span class="settings-nav-row-title">Automatyczna kopia</span>
+                            <span class="settings-nav-row-desc">Raz dziennie przy otwarciu aplikacji (do 10 wersji auto)</span>
+                        </span>
+                        <input type="checkbox" id="auto-cloud-backup-toggle" onchange="onAutoCloudBackupToggle()">
+                    </label>
+                    <p id="auto-cloud-backup-status" class="settings-hint">—</p>
+                    <div class="settings-action-group">
+                        <span class="settings-action-group-label">Zapisz kopię</span>
+                        <div class="settings-action-grid">
+                            <button type="button" class="settings-action-btn" id="btn-backup-cloud" onclick="backupToCloud()">
+                                <span class="settings-action-btn-title">Chmura</span>
+                                <span class="settings-action-btn-desc">Ręczna kopia (do 10 wersji)</span>
+                            </button>
+                            <button type="button" class="settings-action-btn" id="btn-backup-phone" onclick="backupToPhone()">
+                                <span class="settings-action-btn-title">Plik</span>
+                                <span class="settings-action-btn-desc">Pobierz JSON</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="settings-action-group">
+                        <span class="settings-action-group-label">Przywróć kopię</span>
+                        <div class="settings-action-grid">
+                            <button type="button" class="settings-action-btn settings-action-btn--restore" id="btn-restore-cloud" onclick="restoreFromCloud()">
+                                <span class="settings-action-btn-title">Z chmury</span>
+                                <span class="settings-action-btn-desc">Wybierz datę kopii</span>
+                            </button>
+                            <button type="button" class="settings-action-btn settings-action-btn--restore" id="btn-restore-file" onclick="restoreFromPhoneFile()">
+                                <span class="settings-action-btn-title">Z pliku</span>
+                                <span class="settings-action-btn-desc">Wybierz JSON</span>
+                            </button>
+                        </div>
+                    </div>
+                    <input type="file" id="backup-file-input" accept=".json,application/json" hidden onchange="handleBackupFileSelect(event)">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="category-editor-overlay" class="settings-overlay category-editor-overlay hidden" onclick="if (event.target === this) closeCategoryEditor()">
+        <div class="settings-panel category-editor-panel">
+            <div id="panel-header-category-editor"></div>
+            <div class="flex-toggle category-editor-type-toggle">
+                <button id="btn-category-editor-expense" type="button" class="toggle-btn active expense" onclick="setCategoryEditorType('expense')">Wydatki</button>
+                <button id="btn-category-editor-income" type="button" class="toggle-btn income" onclick="setCategoryEditorType('income')">Wpływy</button>
+            </div>
+            <div id="category-editor-list" class="category-editor-list"></div>
+            <p class="category-editor-hint">Możesz zmieniać nazwy i ikony (kliknij ikonę), dodawać własne pozycje albo usuwać niepotrzebne (×). Usunięte kategorie znikają z listy wyboru, ale zostają w historii transakcji.</p>
+            <button type="button" class="btn-submit btn-submit--form category-editor-save" onclick="saveCategoryEditor()">Zapisz zmiany</button>
+        </div>
+        <div id="category-icon-picker" class="category-icon-picker hidden" onclick="if (event.target === this) closeCategoryIconPicker()">
+            <div class="category-icon-picker-panel" onclick="event.stopPropagation()">
+                <p class="category-icon-picker-title">Wybierz ikonę</p>
+                <div id="category-icon-picker-grid" class="category-icon-picker-grid"></div>
+                <button type="button" class="category-icon-picker-reset" onclick="resetCategoryIconPicker()">Przywróć domyślną</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="cloud-restore-overlay" class="settings-overlay category-editor-overlay hidden" onclick="if (event.target === this) closeCloudRestorePicker()">
+        <div class="settings-panel category-editor-panel cloud-restore-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-cloud-restore"></div>
+            <p class="cloud-restore-hint">Wybierz kopię z chmury. Przywrócenie zastąpi obecne dane w aplikacji.</p>
+            <div id="cloud-restore-list" class="cloud-restore-list"></div>
+        </div>
+    </div>
+
+    <div id="backup-restore-progress-overlay" class="backup-restore-progress-overlay hidden" aria-hidden="true" aria-live="polite">
+        <div class="backup-restore-progress-card" role="status">
+            <div id="backup-restore-progress-spinner" class="backup-restore-progress-spinner" aria-hidden="true"></div>
+            <h2 id="backup-restore-progress-title" class="backup-restore-progress-title">Przywracanie kopii</h2>
+            <p id="backup-restore-progress-status" class="backup-restore-progress-status">Przygotowanie…</p>
+            <ol id="backup-restore-progress-steps" class="backup-restore-progress-steps"></ol>
+            <p id="backup-restore-progress-detail" class="backup-restore-progress-detail hidden"></p>
+            <div id="backup-restore-progress-actions" class="backup-restore-progress-actions hidden">
+                <button type="button" class="btn-submit btn-submit--form" onclick="closeBackupRestoreProgress()">Zamknij</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="asset-picker-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeAssetPicker()">
+        <div class="calendar-day-panel asset-picker-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-asset-picker"></div>
+            <p class="reports-hint">Inwestycje, lokaty, gotówka, PPK/IKZE i inne — np. nieruchomość lub auto jako szacunkowa wartość.</p>
+            <div class="asset-picker-grid">
+                <button type="button" class="asset-picker-btn" onclick="startNewAsset('investment')">
+                    <span class="asset-picker-icon">📈</span>
+                    <strong>Inwestycja</strong>
+                    <span>ETF, akcje</span>
+                </button>
+                <button type="button" class="asset-picker-btn" onclick="startNewAsset('deposit')">
+                    <span class="asset-picker-icon">🏦</span>
+                    <strong>Lokata</strong>
+                    <span>oprocentowanie, termin</span>
+                </button>
+                <button type="button" class="asset-picker-btn" onclick="startNewAsset('cash')">
+                    <span class="asset-picker-icon">💵</span>
+                    <strong>Gotówka</strong>
+                    <span>konto, portfel</span>
+                </button>
+                <button type="button" class="asset-picker-btn" onclick="startNewAsset('retirement')">
+                    <span class="asset-picker-icon">🛡️</span>
+                    <strong>PPK / IKZE</strong>
+                    <span>emerytura</span>
+                </button>
+                <button type="button" class="asset-picker-btn" onclick="startNewAsset('other')">
+                    <span class="asset-picker-icon">📦</span>
+                    <strong>Inne</strong>
+                    <span>auto, nieruchomość…</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="asset-details-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeAssetDetails()">
+        <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-asset-details"></div>
+            <div id="asset-details-view-scroll" class="asset-details-view-scroll loan-details-content">
+                <div id="asset-details-content" class="asset-details-inner"></div>
+                <div id="asset-cash-tx-section" class="asset-cash-tx-section hidden">
+                    <div class="asset-cash-tx-head">
+                        <span class="section-label">Ruchy z transakcji</span>
+                        <div class="flex-toggle flex-toggle--2 asset-cash-tx-period">
+                            <button type="button" id="btn-cash-tx-month" class="toggle-btn active" onclick="setCashTxPeriod('month')">Ten miesiąc</button>
+                            <button type="button" id="btn-cash-tx-all-period" class="toggle-btn" onclick="setCashTxPeriod('all')">Wszystko</button>
+                        </div>
+                        <div class="flex-toggle flex-toggle--3 asset-cash-tx-filter">
+                            <button type="button" id="btn-cash-tx-all" class="toggle-btn active" onclick="setCashTxFilter('all')">Wszystkie</button>
+                            <button type="button" id="btn-cash-tx-expense" class="toggle-btn expense" onclick="setCashTxFilter('expense')">Wydatki</button>
+                            <button type="button" id="btn-cash-tx-income" class="toggle-btn income" onclick="setCashTxFilter('income')">Wpływy</button>
+                        </div>
+                        <p class="asset-cash-tx-hint">Dotknij transakcję, aby zobaczyć podgląd</p>
+                    </div>
+                    <div id="asset-cash-tx-list" class="asset-cash-tx-list"></div>
+                </div>
+                <div id="asset-ppk-section" class="asset-ppk-section hidden">
+                    <div class="asset-cash-tx-head">
+                        <span class="section-label">Historia wpłat PPK</span>
+                        <p class="asset-cash-tx-hint">Miesięczne wpłaty własne, pracodawcy i dopłaty państwa.</p>
+                    </div>
+                    <div id="asset-ppk-contrib-list" class="asset-cash-tx-list"></div>
+                </div>
+            </div>
+            <div id="asset-details-actions" class="asset-details-actions-wrap"></div>
+            <div id="asset-sell-section" class="asset-sell-section hidden">
+                <p class="section-label">Sprzedaj pozycję</p>
+                <div class="loan-form-row">
+                    <div class="form-group">
+                        <label class="section-label" for="asset-sell-qty">Ilość (szt.)</label>
+                        <input type="number" id="asset-sell-qty" min="0.0001" step="0.0001" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="section-label" for="asset-sell-price">Cena sprzedaży</label>
+                        <input type="number" id="asset-sell-price" min="0.0001" step="0.0001" placeholder="0.00">
+                    </div>
+                </div>
+                <label class="asset-sell-cash-row">
+                    <input type="checkbox" id="asset-sell-cash" checked>
+                    <span id="asset-sell-cash-label">Zaksięguj wpływ na gotówkę</span>
+                </label>
+                <div class="loan-details-edit-actions">
+                    <button type="button" class="btn-submit" onclick="sellAssetPartial()">Sprzedaj</button>
+                    <button type="button" class="btn-outline" onclick="closeSellAssetForm()">Anuluj</button>
+                </div>
+            </div>
+            <div id="asset-details-edit" class="loan-details-edit obligation-edit-form hidden">
+                <div class="form-group">
+                    <label class="section-label" for="asset-type-input">Typ</label>
+                    <select id="asset-type-input" onchange="onAssetTypeInputChange()"></select>
+                </div>
+                <div class="form-group">
+                    <label class="section-label" for="asset-name-input">Nazwa</label>
+                    <input type="text" id="asset-name-input" placeholder="np. VWCE, mBank, PPK pracodawcy" maxlength="80">
+                </div>
+                <div class="form-group">
+                    <label class="section-label" for="asset-currency-input">Waluta</label>
+                    <select id="asset-currency-input">
+                        <option value="PLN">PLN</option>
+                        <option value="EUR">EUR</option>
+                    </select>
+                </div>
+
+                <div data-asset-fields="investment">
+                    <div class="loan-form-row">
+                        <div class="form-group">
+                            <label class="section-label" for="asset-ticker-input">Ticker</label>
+                            <input type="text" id="asset-ticker-input" placeholder="VWCE.DE" maxlength="20">
+                        </div>
+                        <div class="form-group">
+                            <label class="section-label" for="asset-quantity-input">Ilość</label>
+                            <input type="number" id="asset-quantity-input" min="0" step="0.0001" placeholder="45">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="section-label" for="asset-broker-input">Konto maklerskie</label>
+                        <select id="asset-broker-input">
+                            <option value="">— brak —</option>
+                            <option value="xtb">XTB</option>
+                            <option value="mbank">mBank eMakler (Zwykły)</option>
+                            <option value="ikze">IKZE mBank eMakler</option>
+                        </select>
+                    </div>
+                    <div class="loan-form-row">
+                        <div class="form-group">
+                            <label class="section-label" for="asset-purchase-input">Średnia cena</label>
+                            <input type="number" id="asset-purchase-input" min="0" step="0.01" placeholder="104.20">
+                        </div>
+                        <div class="form-group">
+                            <label class="section-label" for="asset-price-input">Bieżący kurs</label>
+                            <input type="number" id="asset-price-input" min="0" step="0.01" placeholder="118.50">
+                        </div>
+                    </div>
+                </div>
+
+                <div data-asset-fields="deposit cash retirement other" class="hidden">
+                    <div class="form-group">
+                        <label class="section-label" for="asset-amount-input">Saldo / kwota</label>
+                        <input type="number" id="asset-amount-input" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+
+                <div data-asset-fields="cash" class="hidden">
+                    <div class="form-group">
+                        <label class="section-label" for="asset-goal-input">Cel oszczędnościowy (PLN)</label>
+                        <input type="number" id="asset-goal-input" min="0" step="0.01" placeholder="Opcjonalnie">
+                    </div>
+                </div>
+
+                <div data-asset-fields="deposit" class="hidden">
+                    <div class="loan-form-row">
+                        <div class="form-group">
+                            <label class="section-label" for="asset-rate-input">Oprocentowanie (%)</label>
+                            <input type="number" id="asset-rate-input" min="0" step="0.01" placeholder="5.5">
+                        </div>
+                        <div class="form-group">
+                            <label class="section-label" for="asset-end-input">Koniec lokaty</label>
+                            <input type="date" id="asset-end-input">
+                        </div>
+                    </div>
+                </div>
+
+                <div data-asset-fields="retirement" class="hidden">
+                    <div class="loan-form-row">
+                        <div class="form-group">
+                            <label class="section-label" for="asset-retirement-kind-input">Rodzaj</label>
+                            <select id="asset-retirement-kind-input" onchange="onAssetRetirementKindInputChange()">
+                                <option value="PPK">PPK</option>
+                                <option value="IKZE">IKZE</option>
+                                <option value="EMERYTURA">Emerytura</option>
+                                <option value="KZP">KZP</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="section-label" for="asset-institution-input">Instytucja</label>
+                            <input type="text" id="asset-institution-input" placeholder="np. Nationale-Nederlanden" maxlength="60">
+                        </div>
+                    </div>
+                    <div id="asset-ppk-edit-wrap" class="hidden">
+                        <p class="section-label">Składniki salda PPK</p>
+                        <p class="ppk-hint">Podaj sumy składników albo zbuduj je z historii wpłat poniżej.</p>
+                        <div class="loan-form-row">
+                            <div class="form-group">
+                                <label class="section-label" for="asset-ppk-own-input">Wpłaty własne (PLN)</label>
+                                <input type="number" id="asset-ppk-own-input" min="0" step="0.01" placeholder="0.00" oninput="onPpkBreakdownInputChange()">
+                            </div>
+                            <div class="form-group">
+                                <label class="section-label" for="asset-ppk-employer-input">Wpłaty pracodawcy (PLN)</label>
+                                <input type="number" id="asset-ppk-employer-input" min="0" step="0.01" placeholder="0.00" oninput="onPpkBreakdownInputChange()">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="section-label" for="asset-ppk-state-input">Dopłaty państwa (PLN)</label>
+                            <input type="number" id="asset-ppk-state-input" min="0" step="0.01" placeholder="0.00" oninput="onPpkBreakdownInputChange()">
+                        </div>
+                        <p class="section-label">Dodaj wpłatę do historii</p>
+                        <div id="asset-ppk-contrib-edit-list" class="ppk-contrib-edit-list"></div>
+                        <div class="loan-form-row">
+                            <div class="form-group">
+                                <label class="section-label" for="asset-ppk-contrib-date">Data</label>
+                                <input type="date" id="asset-ppk-contrib-date">
+                            </div>
+                            <div class="form-group">
+                                <label class="section-label" for="asset-ppk-contrib-own">Ty (PLN)</label>
+                                <input type="number" id="asset-ppk-contrib-own" min="0" step="0.01" placeholder="0.00">
+                            </div>
+                        </div>
+                        <div class="loan-form-row">
+                            <div class="form-group">
+                                <label class="section-label" for="asset-ppk-contrib-employer">Pracodawca (PLN)</label>
+                                <input type="number" id="asset-ppk-contrib-employer" min="0" step="0.01" placeholder="0.00">
+                            </div>
+                            <div class="form-group">
+                                <label class="section-label" for="asset-ppk-contrib-state">Państwo (PLN)</label>
+                                <input type="number" id="asset-ppk-contrib-state" min="0" step="0.01" placeholder="0.00">
+                            </div>
+                        </div>
+                        <button type="button" class="btn-outline loan-details-btn" onclick="addPpkContributionEntry()">Dodaj wpłatę</button>
+                    </div>
+                </div>
+
+                <div class="loan-details-edit-actions">
+                    <button type="button" class="btn-submit" onclick="saveAssetDetails()">Zapisz</button>
+                    <button type="button" class="btn-outline loan-details-btn" onclick="cancelAssetEdit()">Anuluj</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="loan-details-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeLoanDetails()">
+        <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-loan-details"></div>
+            <div id="loan-details-content" class="loan-details-content"></div>
+            <div id="loan-details-edit" class="loan-details-edit obligation-edit-form hidden">
+                <p class="obligation-form-hint">Podkategoria łączy kredyt z transakcjami w kategorii Długi. Brakuje na liście? Dodaj w Ustawienia → Kategorie.</p>
+                <div class="form-group">
+                    <label class="section-label" for="loan-name-input">Nazwa</label>
+                    <input type="text" id="loan-name-input" placeholder="np. Kredyt hipoteczny" maxlength="60">
+                </div>
+                <div class="form-group">
+                    <label class="section-label" for="loan-subcategory-select">Podkategoria</label>
+                    <select id="loan-subcategory-select"></select>
+                </div>
+                <div class="loan-form-row">
+                    <div class="form-group">
+                        <label class="section-label" for="loan-total-input">Kwota początkowa (PLN)</label>
+                        <input type="number" id="loan-total-input" min="0" step="0.01" placeholder="669913.99">
+                    </div>
+                    <div class="form-group">
+                        <label class="section-label" for="loan-capital-input">Pozostały kapitał (PLN)</label>
+                        <input type="number" id="loan-capital-input" min="0" step="0.01" placeholder="661159.25">
+                    </div>
+                </div>
+                <div class="loan-form-row">
+                    <div class="form-group">
+                        <label class="section-label" for="loan-rate-input">Oprocentowanie (%)</label>
+                        <input type="number" id="loan-rate-input" min="0" step="0.01" placeholder="6.19">
+                    </div>
+                    <div class="form-group">
+                        <label class="section-label" for="loan-installment-input">Bieżąca rata (PLN)</label>
+                        <input type="number" id="loan-installment-input" min="0" step="0.01" placeholder="4128.37">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="section-label" for="loan-installment-due-input">Termin najbliższej raty</label>
+                    <input type="date" id="loan-installment-due-input">
+                </div>
+                <div class="loan-details-edit-actions obligation-form-actions">
+                    <button type="button" class="btn-submit" onclick="saveLoanDetails()">Zapisz</button>
+                    <button type="button" class="btn-outline loan-details-btn" onclick="cancelLoanEdit()">Anuluj</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="credit-card-details-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeCreditCardDetails()">
+        <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-credit-card-details"></div>
+            <div id="credit-card-details-content" class="loan-details-content"></div>
+            <div id="credit-card-details-edit" class="loan-details-edit obligation-edit-form hidden">
+                <div class="form-group">
+                    <label class="section-label" for="credit-card-name-input">Nazwa</label>
+                    <input type="text" id="credit-card-name-input" placeholder="np. mBank" maxlength="60">
+                </div>
+                <div class="loan-form-row">
+                    <div class="form-group">
+                        <label class="section-label" for="credit-card-limit-input">Limit (PLN)</label>
+                        <input type="number" id="credit-card-limit-input" min="0" step="0.01" placeholder="8200">
+                    </div>
+                    <div class="form-group">
+                        <label class="section-label" for="credit-card-balance-input">Zadłużenie (PLN)</label>
+                        <input type="number" id="credit-card-balance-input" min="0" step="0.01" placeholder="1468.06">
+                    </div>
+                </div>
+                <div class="loan-details-edit-actions obligation-form-actions">
+                    <button type="button" class="btn-submit btn-submit--form" onclick="saveCreditCardDetails()">Zapisz</button>
+                    <button type="button" class="btn-outline loan-details-btn" onclick="cancelCreditCardEdit()">Anuluj</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ikze-limit-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeIkzeLimitPanel()">
+        <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-ikze-limit"></div>
+            <div id="ikze-limit-content" class="loan-details-content"></div>
+            <div id="ikze-limit-edit" class="loan-details-edit obligation-edit-form hidden">
+                <div class="form-group">
+                    <label class="section-label" for="reports-ikze-limit-input">Roczny limit IKZE (zł)</label>
+                    <input type="number" id="reports-ikze-limit-input" min="0" step="100" inputmode="decimal">
+                </div>
+                <div class="form-group">
+                    <label class="section-label" for="reports-ikze-contributions-input">Wpłaty w tym roku (zł)</label>
+                    <input type="number" id="reports-ikze-contributions-input" min="0" step="50" inputmode="decimal">
+                </div>
+                <p class="reports-hint">Możesz wpisać kwotę ręcznie albo przeliczyć z transakcji powiązanych z IKZE.</p>
+                <div class="ikze-limit-actions">
+                    <button type="button" class="btn-outline" onclick="syncIkzeContributionsFromTransactions()">Przelicz z transakcji</button>
+                    <button type="button" class="btn-outline" onclick="useIkzeContributionsFromTransactions()">Używaj transakcji</button>
+                    <button type="button" class="btn-outline" onclick="resetIkzeAnnualLimit()">Domyślny limit</button>
+                </div>
+                <div class="loan-details-edit-actions obligation-form-actions">
+                    <button type="button" class="btn-submit" onclick="saveIkzeLimitSettings()">Zapisz</button>
+                    <button type="button" class="btn-outline loan-details-btn" onclick="cancelIkzeLimitEdit()">Anuluj</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="credit-card-quick-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeCreditCardQuickAction()">
+        <div class="calendar-day-panel credit-card-quick-panel obligation-quick-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-credit-card-quick"></div>
+            <p id="credit-card-quick-meta" class="obligation-form-hint credit-card-quick-meta"></p>
+            <div class="form-group obligation-form-group">
+                <label class="section-label" for="credit-card-quick-amount">Kwota (PLN)</label>
+                <div class="obligation-amount-row">
+                    <input type="number" id="credit-card-quick-amount" step="0.01" min="0" inputmode="decimal" placeholder="0,00" autocomplete="off">
+                    <button type="button" id="credit-card-quick-full-btn" class="obligation-amount-chip hidden" onclick="fillCreditCardQuickFullAmount()">Całość</button>
+                </div>
+            </div>
+            <div class="loan-details-edit-actions obligation-form-actions">
+                <button type="button" class="btn-submit btn-submit--form" onclick="confirmCreditCardQuickAction()">Zapisz</button>
+                <button type="button" class="btn-outline loan-details-btn" onclick="closeCreditCardQuickAction()">Anuluj</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="transaction-details-overlay" class="calendar-day-overlay hidden" data-action="close-transaction-details">
+        <div class="calendar-day-panel loan-details-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-transaction-details"></div>
+            <div id="transaction-details-content" class="loan-details-content"></div>
+        </div>
+    </div>
+
+    <div id="tasks-list-picker-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeTasksListPicker()">
+        <div class="calendar-day-panel tasks-picker-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-tasks-list-picker"></div>
+            <div id="tasks-list-picker-grid" class="tasks-list-picker-grid" role="list"></div>
+        </div>
+    </div>
+
+    <div id="tasks-item-edit-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeTodoItemEditor()">
+        <div class="calendar-day-panel tasks-edit-panel" onclick="event.stopPropagation()">
+            <div id="panel-header-tasks-item-edit"></div>
+            <form class="tasks-edit-form" onsubmit="saveTodoItemEditor(event)">
+                <label class="tasks-edit-field">
+                    <span class="tasks-edit-label">Tytuł</span>
+                    <input type="text" id="tasks-edit-title" maxlength="120" required autocomplete="off">
+                </label>
+                <label class="tasks-edit-field" id="tasks-edit-due-wrap">
+                    <span class="tasks-edit-label">Termin</span>
+                    <input type="date" id="tasks-edit-due">
+                    <div id="tasks-edit-due-chips" class="tasks-due-chips hidden" role="group" aria-label="Szybki termin">
+                        <button type="button" class="tasks-due-chip" data-due-offset="0">Dziś</button>
+                        <button type="button" class="tasks-due-chip" data-due-offset="1">Jutro</button>
+                        <button type="button" class="tasks-due-chip" data-due-offset="7">Za tydzień</button>
+                    </div>
+                </label>
+                <label class="tasks-edit-field" id="tasks-edit-amount-wrap">
+                    <span class="tasks-edit-label">Kwota (PLN)</span>
+                    <input type="number" id="tasks-edit-amount" min="0" step="0.01" inputmode="decimal">
+                </label>
+                <label class="tasks-edit-field" id="tasks-edit-note-wrap">
+                    <span class="tasks-edit-label">Notatka</span>
+                    <input type="text" id="tasks-edit-note" maxlength="500" autocomplete="off">
+                </label>
+                <div class="tasks-edit-actions">
+                    <button type="submit" id="tasks-edit-submit-btn" class="btn-submit btn-submit--form tasks-list-btn">Zapisz</button>
+                    <button type="button" class="tasks-list-btn tasks-list-btn--ghost" onclick="closeTodoItemEditor()">Anuluj</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="calendar-day-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeCalendarDay()">
+        <div class="calendar-day-panel">
+            <div id="panel-header-calendar-day"></div>
+            <div id="calendar-day-summary" class="calendar-day-summary"></div>
+            <div class="calendar-day-filter-row">
+                <label class="section-label" for="calendar-day-filter">Filtr</label>
+                <select id="calendar-day-filter" onchange="onCalendarDayFilterChange()"></select>
+            </div>
+            <div id="calendar-day-list" class="calendar-day-list"></div>
+        </div>
+    </div>
+
+    <div id="month-drill-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeMonthDrill()">
+        <div class="calendar-day-panel">
+            <div id="panel-header-month-drill"></div>
+            <div id="month-drill-summary"></div>
+            <div id="month-drill-list" class="calendar-day-list"></div>
+        </div>
+    </div>
+
+    <div id="reports-pdf-overlay" class="reports-pdf-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reports-pdf-title">
+        <div class="reports-pdf-shell">
+            <div id="panel-header-reports-pdf"></div>
+            <div id="reports-pdf-content" class="reports-pdf-content"></div>
+            <div class="reports-pdf-footer">
+                <button type="button" class="btn-cancel btn-cancel--form" onclick="closePrintPreview()">Wróć</button>
+                <button type="button" class="btn-submit btn-submit--form" onclick="printPrintPreview()">Drukuj / PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="assets-pdf-date-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeAssetsPdfDatePicker()">
+        <div class="calendar-day-panel" onclick="event.stopPropagation()">
+            <div class="settings-header">
+                <h2 class="overlay-title">Majątek — wybierz dzień</h2>
+                <button type="button" class="btn-icon" aria-label="Zamknij" onclick="closeAssetsPdfDatePicker()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+            <p class="settings-hint">Raport na wybrany dzień. Wartości historyczne pochodzą z zapisanej historii aktywów.</p>
+            <div class="assets-pdf-date-presets">
+                <button type="button" class="toggle-btn" onclick="setAssetsPdfDatePreset(0)">Dziś</button>
+                <button type="button" class="toggle-btn" onclick="setAssetsPdfDatePreset(1)">Wczoraj</button>
+            </div>
+            <label class="section-label" for="assets-pdf-date-input">Inna data</label>
+            <input type="date" id="assets-pdf-date-input" class="settings-api-key-input">
+            <button type="button" class="btn-submit btn-submit--form" onclick="exportAssetsPdfForSelectedDate()">Pokaż raport</button>
+        </div>
+    </div>
+
+    <div id="debts-pdf-date-overlay" class="calendar-day-overlay hidden" onclick="if (event.target === this) closeDebtsPdfDatePicker()">
+        <div class="calendar-day-panel" onclick="event.stopPropagation()">
+            <div class="settings-header">
+                <h2 class="overlay-title">Długi — wybierz dzień</h2>
+                <button type="button" class="btn-icon" aria-label="Zamknij" onclick="closeDebtsPdfDatePicker()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+            <p class="settings-hint">Raport zadłużenia na wybrany dzień. Sumy miesięczne pochodzą ze snapshotów majątku.</p>
+            <div class="assets-pdf-date-presets">
+                <button type="button" class="toggle-btn" onclick="setDebtsPdfDatePreset(0)">Dziś</button>
+                <button type="button" class="toggle-btn" onclick="setDebtsPdfDatePreset(1)">Wczoraj</button>
+            </div>
+            <label class="section-label" for="debts-pdf-date-input">Inna data</label>
+            <input type="date" id="debts-pdf-date-input" class="settings-api-key-input">
+            <button type="button" class="btn-submit btn-submit--form" onclick="exportDebtsPdfForSelectedDate()">Pokaż raport</button>
+        </div>
+    </div>
+
+    <div id="recurring-confirm-overlay" class="calendar-day-overlay hidden">
+        <div class="calendar-day-panel recurring-confirm-panel" onclick="event.stopPropagation()">
+            <div class="settings-header">
+                <h2 class="overlay-title">Transakcje cykliczne</h2>
+                <button type="button" class="btn-icon" aria-label="Zamknij" onclick="closeRecurringConfirmOverlay()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+            <p class="settings-hint">Do dodania w tym miesiącu — potwierdź lub pomiń.</p>
+            <div id="recurring-confirm-list" class="recurring-confirm-list"></div>
+            <div class="recurring-confirm-bulk">
+                <button type="button" class="btn-submit btn-submit--form" onclick="confirmAllPendingRecurring()">Dodaj wszystkie</button>
+                <button type="button" class="btn-cancel btn-cancel--form" onclick="skipAllPendingRecurring()">Pomiń wszystkie</button>
+            </div>
+        </div>
+    </div>
+
+    <p id="settings-toast" class="settings-toast hidden"></p>
+
+    <div id="duplicate-tx-overlay" class="duplicate-tx-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="duplicate-tx-title">
+        <div class="duplicate-tx-panel card" onclick="event.stopPropagation()">
+            <h2 id="duplicate-tx-title" class="overlay-title">Wykryto duplikat</h2>
+            <div id="duplicate-tx-body" class="duplicate-tx-body"></div>
+            <div class="duplicate-tx-actions">
+                <button type="button" class="btn-cancel btn-cancel--form" onclick="resolveDuplicateConfirm('cancel')">Nie dodawaj</button>
+                <button type="button" class="btn-submit btn-submit--form" onclick="resolveDuplicateConfirm('keep')">Zostaw obie</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="month-close-overlay" class="month-close-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="month-close-title">
+        <div class="month-close-panel card" onclick="event.stopPropagation()">
+            <div class="month-close-header">
+                <h2 id="month-close-title" class="overlay-title">Rozliczenie miesiąca</h2>
+                <button type="button" class="btn-icon" onclick="closeMonthCloseWizard()" aria-label="Zamknij">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+            <div id="month-close-steps" class="month-close-steps" aria-hidden="true"></div>
+            <div id="month-close-body" class="month-close-body"></div>
+            <div class="month-close-footer">
+                <button type="button" id="month-close-prev" class="btn-cancel btn-cancel--form" onclick="monthCloseWizardPrev()">Wstecz</button>
+                <button type="button" id="month-close-next" class="btn-submit btn-submit--form" onclick="monthCloseWizardNext()">Dalej</button>
+                <button type="button" id="month-close-finish" class="btn-submit btn-submit--form hidden" onclick="finishMonthCloseWizard()">Zamknij miesiąc</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="view-dashboard" class="app-view active">
+            <div class="card hero-card">
+                <div class="hero-period-row">
+                    <label class="hero-period-select-wrap">
+                        <span id="db-period-label" class="hero-period-label">Bieżący miesiąc</span>
+                        <select id="dashboard-period-select" class="hero-period-select" aria-label="Okres" onchange="handleDashboardPeriodChange()">
+                            <option value="current-month">Bieżący miesiąc</option>
+                            <option value="next-month">Następny miesiąc (prognoza)</option>
+                            <option value="previous-month">Poprzedni miesiąc</option>
+                            <option value="current-year">Bieżący rok</option>
+                            <option value="previous-year">Poprzedni rok</option>
+                            <option value="all">Wszystko</option>
+                            <option value="custom">Niestandardowy okres</option>
+                        </select>
+                    </label>
+                    <button type="button" id="dashboard-period-reset" class="hero-period-reset hidden" onclick="resetDashboardPeriod()" aria-label="Przywróć bieżący miesiąc" title="Bieżący miesiąc">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v4l5-5-5-5v4z"/></svg>
+                    </button>
+                </div>
+                <div id="dashboard-custom-dates" class="hero-custom-dates">
+                    <input type="date" id="db-start-date" onchange="renderDashboard()">
+                    <input type="date" id="db-end-date" onchange="renderDashboard()">
+                </div>
+                <div id="db-net-balance" class="hero-balance">0,00 zł</div>
+                <div class="hero-stats">
+                    <div class="hero-stat income">
+                        <div id="db-incomes-label" class="label">Wpływy</div>
+                        <div id="db-total-incomes" class="value">0,00 zł</div>
+                    </div>
+                    <div class="hero-stat expense">
+                        <div id="db-expenses-label" class="label">Wydatki</div>
+                        <div id="db-total-expenses" class="value">0,00 zł</div>
+                    </div>
+                </div>
+                <div class="hero-budget">
+                    <span class="hero-budget-label">Zużycie wpływów</span>
+                    <div class="progress-bar-bg hero-progress-bar"><div id="budget-progress-fill" class="progress-bar-fill"></div></div>
+                </div>
+                <p id="db-forecast-hint" class="hero-forecast-hint hidden">Średnia z ostatnich 3 miesięcy — wpływy i wydatki są szacunkowe.</p>
+            </div>
+
+            <div id="dashboard-month-close-banner" class="hidden"></div>
+
+            <div id="dashboard-tasks" class="card dashboard-panel hidden">
+                <div class="dashboard-tasks-head">
+                    <h2 class="dashboard-section-title">Na dziś</h2>
+                    <button type="button" id="dashboard-tasks-see-all" class="hero-summary-action dashboard-tasks-see-all hidden" onclick="openTasksView('all')">Zobacz wszystko</button>
+                </div>
+                <div id="dashboard-tasks-summary" class="dashboard-installments-summary hidden"></div>
+                <div id="dashboard-tasks-list" class="dashboard-action-list"></div>
+            </div>
+
+            <div id="dashboard-upcoming-loans" class="card dashboard-panel hidden">
+                <h2 id="dashboard-upcoming-loans-title" class="dashboard-section-title">Raty w tym miesiącu</h2>
+                <div id="dashboard-upcoming-loans-summary" class="dashboard-installments-summary hidden"></div>
+                <div id="dashboard-upcoming-loans-list" class="dashboard-action-list"></div>
+            </div>
+
+            <div id="dashboard-credit-cards" class="card dashboard-panel hidden">
+                <h2 class="dashboard-section-title">Karty kredytowe</h2>
+                <div id="dashboard-credit-cards-list" class="dashboard-action-list"></div>
+            </div>
+
+            <div id="dashboard-wealth" class="card dashboard-panel dashboard-wealth-panel hidden">
+                <h2 class="dashboard-section-title">Majątek</h2>
+                <div id="dashboard-wealth-content" class="dashboard-wealth-content"></div>
+            </div>
+
+            <div class="card chart-card">
+                <div class="chart-card-header">
+                    <h2 id="chart-title">Struktura wydatków</h2>
+                    <div class="chart-type-toggle flex-toggle">
+                        <button id="btn-chart-expense" type="button" class="toggle-btn active expense" onclick="setChartViewType('expense')">Wydatki</button>
+                        <button id="btn-chart-income" type="button" class="toggle-btn income" onclick="setChartViewType('income')">Wpływy</button>
+                    </div>
+                </div>
+                <button id="btn-reset-chart" class="btn-outline" onclick="resetDashboardChart()">&#8592; Wróć do ogółu</button>
+                <div id="chart-view-filter-block" class="chart-view-filter hidden">
+                    <button type="button" class="chart-view-filter-toggle" onclick="toggleChartViewFilter()" aria-expanded="false" aria-controls="chart-view-filter-panel">
+                        <span>Dostosuj widok</span>
+                        <svg class="chart-view-filter-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </button>
+                    <div id="chart-view-filter-panel" class="chart-view-filter-panel hidden">
+                        <div class="hero-summary-actions">
+                            <button type="button" class="hero-summary-action" onclick="setAllChartViewFilterVisible(true)">Zaznacz wszystko</button>
+                            <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                            <button type="button" class="hero-summary-action" onclick="setAllChartViewFilterVisible(false)">Odznacz wszystko</button>
+                            <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                            <button type="button" id="chart-view-filter-restore" class="hero-summary-action hidden" onclick="restoreChartViewFilterDefault()">Przywróć domyślnie</button>
+                        </div>
+                        <p id="chart-view-filter-hint" class="chart-view-filter-hint hidden"></p>
+                        <nav id="chart-view-filter-chips" class="chart-view-filter-chips" aria-label="Segmenty wykresu"></nav>
+                    </div>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="dashboardChart"></canvas>
+                    <div class="chart-center-label" aria-hidden="true">
+                        <div id="chart-center-amount" class="chart-center-amount">0,00 zł</div>
+                        <div class="chart-center-sub">razem</div>
+                    </div>
+                </div>
+                <div id="chart-legend" class="chart-legend"></div>
+            </div>
+
+            <div class="card">
+                <div class="dashboard-tx-header">
+                    <h2 id="dashboard-tx-title">Transakcje</h2>
+                    <button type="button" id="btn-dashboard-select" class="btn-text-link dashboard-select-btn" onclick="toggleDashboardSelectionMode()" aria-pressed="false">Zaznacz</button>
+                </div>
+                <div class="search-bar">
+                    <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                    <input type="text" id="db-search" placeholder="Szukaj transakcji..." oninput="renderDashboard()">
+                </div>
+                <p id="db-search-hint" class="search-scope-hint">Przeszukiwanie wszystkich transakcji</p>
+                <div id="dashboard-tx-selection-bar" class="dashboard-tx-selection-bar hidden">
+                    <button type="button" class="btn-text-link" onclick="selectAllDashboardFiltered()">Zaznacz wszystko</button>
+                    <button type="button" class="btn-text-link" onclick="deselectAllDashboardFiltered()">Odznacz wszystko</button>
+                    <button type="button" id="btn-dashboard-add-to-basket" class="btn-submit btn-submit--inline" onclick="addSelectedDashboardToBasket()" disabled>Dodaj do koszyka</button>
+                </div>
+                <p id="dashboard-tx-list-hint" class="tx-list-hint">Dotknij, aby edytować</p>
+                <div id="recent-transactions-list"></div>
+            </div>
+        </div>
+
+        <div id="view-add" class="app-view">
+            <div class="add-view-layout">
+                <div class="card add-form-card">
+                    <h2 id="form-header" class="form-header add-form-header">Nowa transakcja</h2>
+                    <div id="add-hero-standard" class="add-hero">
+                        <div class="add-amount-hero">
+                            <input type="text" id="tx-amount" class="add-amount-input" inputmode="decimal" placeholder="0,00" autocomplete="off" enterkeyhint="done" aria-label="Kwota w PLN" oninput="clearAddFormError(); if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview(); if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();">
+                            <span class="add-amount-suffix" aria-hidden="true">zł</span>
+                        </div>
+                        <div class="flex-toggle flex-toggle--2 add-type-primary">
+                            <button id="btn-expense" type="button" class="toggle-btn active expense" onclick="setFormMode('expense')">Wydatek</button>
+                            <button id="btn-income" type="button" class="toggle-btn income" onclick="setFormMode('income')">Wpływ</button>
+                        </div>
+                        <div class="add-type-secondary">
+                            <button id="btn-loan-payment" type="button" class="add-alt-mode-btn" onclick="setFormMode('loan')">Spłata kredytu</button>
+                            <span class="add-type-secondary-sep" aria-hidden="true">·</span>
+                            <button id="btn-card-payment" type="button" class="add-alt-mode-btn" onclick="setFormMode('card')">Operacja na karcie</button>
+                        </div>
+                    </div>
+                    <p id="add-form-error" class="add-form-error hidden" role="alert" aria-live="polite"></p>
+                    <div id="add-form-standard">
+                        <div class="add-recent-section" id="recent-categories-wrapper" style="display:none;">
+                            <span class="add-section-label">Ostatnio</span>
+                            <div id="recent-categories-row" class="recent-categories add-recent-scroll"></div>
+                        </div>
+                        <div class="add-payment-row" id="add-payment-row">
+                            <div id="credit-card-purchase-wrapper" class="add-payment-toggle-wrap">
+                                <div class="flex-toggle flex-toggle--2 add-payment-toggle" role="group" aria-label="Sposób płatności">
+                                    <button type="button" id="btn-payment-cash" class="toggle-btn payment-cash active" onclick="setAddPaymentMethod('cash')">Z salda</button>
+                                    <button type="button" id="btn-payment-card" class="toggle-btn payment-card" onclick="setAddPaymentMethod('card')">Kartą</button>
+                                </div>
+                                <input type="checkbox" id="tx-affects-cash" class="visually-hidden" checked tabindex="-1" aria-hidden="true">
+                                <input type="checkbox" id="tx-credit-card" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                                <div class="form-group credit-card-select-group hidden" id="credit-card-select-wrapper">
+                                    <label class="section-label" for="tx-credit-card-select">Karta</label>
+                                    <select id="tx-credit-card-select" onchange="if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();"></select>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="reports-hint tx-income-cash-hint hidden" id="tx-income-cash-hint">Wpływ zwiększy saldo gotówki.</p>
+                        <section class="add-category-section" id="add-category-section" aria-label="Kategoria">
+                            <button type="button" class="add-category-selected-btn" id="add-category-selected-btn" onclick="focusAddCategorySearch()">
+                                <span class="add-section-label">Kategoria</span>
+                                <span id="add-category-summary" class="add-category-summary-text">Wybierz kategorię</span>
+                            </button>
+                            <div class="add-category-search-wrap">
+                                <label class="visually-hidden" for="add-category-search">Szukaj kategorii</label>
+                                <input type="search" id="add-category-search" class="add-category-search" placeholder="Szukaj np. czynsz…" autocomplete="off" enterkeyhint="search" oninput="if (typeof renderAddCategorySearchResults === 'function') renderAddCategorySearchResults(this.value);" onfocus="clearAddFormError();">
+                            </div>
+                            <div id="add-category-search-results" class="add-category-search-results hidden" aria-live="polite"></div>
+                            <button type="button" id="add-category-browse-btn" class="add-category-browse-btn hidden" onclick="openAddCategoryBrowse()">Inna kategoria — pełna lista</button>
+                            <details id="add-category-picker" class="add-category-picker add-category-picker--grids-only">
+                                <summary class="visually-hidden">Pełna lista kategorii</summary>
+                                <div class="add-category-picker-body">
+                                    <div id="add-category-grids-wrap" class="add-category-grids-wrap">
+                                        <div class="form-group add-category-main-group">
+                                            <label class="add-section-label">Kategoria główna</label>
+                                            <div id="main-category-grid" class="grid-selector"></div>
+                                        </div>
+                                        <div class="form-group add-subcategory-group" id="sub-category-wrapper" style="display:none;">
+                                            <label class="add-section-label">Podkategoria</label>
+                                            <div id="sub-category-grid" class="grid-selector grid-selector--subs"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
+                        </section>
+                        <div id="tx-budget-preview" class="tx-budget-preview tx-budget-preview--add hidden" aria-live="polite"></div>
+                        <div class="add-details-row">
+                            <div class="add-date-chip-wrap">
+                                <label class="add-date-chip-label" id="add-date-chip-label" for="tx-date">Dziś</label>
+                                <input type="date" id="tx-date" class="add-date-input" onchange="clearAddFormError(); if (typeof updateTransactionBudgetPreview === 'function') updateTransactionBudgetPreview(); if (typeof updateAddDateChipLabel === 'function') updateAddDateChipLabel(); if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();">
+                            </div>
+                            <input type="text" id="tx-note" class="add-note-input" placeholder="Notatka (opcjonalnie)" oninput="if (typeof updateAddFormFooterSummary === 'function') updateAddFormFooterSummary();">
+                        </div>
+                        <details id="add-form-more-options" class="add-form-more-options add-form-more-options--inline">
+                            <summary class="add-form-more-options-summary">Więcej opcji</summary>
+                            <div class="add-form-more-options-body">
+                                <div class="checkbox-wrapper hidden" id="tx-linked-asset-wrapper">
+                                    <input type="checkbox" id="tx-linked-asset" onchange="updateTransactionAssetHints()">
+                                    <label for="tx-linked-asset">Powiąż z aktywem</label>
+                                </div>
+                                <div class="form-group hidden" id="tx-linked-asset-select-wrapper">
+                                    <label class="section-label" for="tx-linked-asset-select">Aktywo</label>
+                                    <select id="tx-linked-asset-select"></select>
+                                    <p class="reports-hint">Wydatek → przelew na aktywo. Wpływ → wpłata bezpośrednio na aktywo.</p>
+                                </div>
+                                <div class="checkbox-wrapper" id="recurring-wrapper">
+                                    <input type="checkbox" id="tx-recurring">
+                                    <label for="tx-recurring">Cykliczna (co miesiąc)</label>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+                    <div id="add-form-loan" class="hidden add-alt-form">
+                        <button type="button" class="add-back-to-standard" onclick="setFormMode('expense')">← Wydatek / wpływ</button>
+                        <p class="reports-hint add-loan-hint">Nadpłata na kapitał kredytu — cała kwota zmniejsza pozostały kapitał, dodaje wydatek w Długach i odejmuje z gotówki.</p>
+                        <div class="add-recent-section" id="recent-loans-wrapper" style="display:none;">
+                            <span class="add-section-label">Ostatnio</span>
+                            <div id="recent-loans-row" class="recent-categories add-recent-scroll"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="section-label" for="add-loan-payment-select">Kredyt</label>
+                            <select id="add-loan-payment-select"></select>
+                        </div>
+                        <div class="form-group form-group--amount add-alt-amount">
+                            <label class="section-label" for="add-loan-payment-amount">Kwota (PLN)</label>
+                            <input type="number" id="add-loan-payment-amount" step="0.01" placeholder="0,00" inputmode="decimal" autocomplete="off">
+                        </div>
+                        <div class="add-details-row">
+                            <div class="add-date-chip-wrap">
+                                <label class="section-label add-date-chip-label" for="add-loan-payment-date">Data</label>
+                                <input type="date" id="add-loan-payment-date" class="add-date-input">
+                            </div>
+                            <input type="text" id="add-loan-payment-note" class="add-note-input" placeholder="Notatka" maxlength="80">
+                        </div>
+                    </div>
+                    <div id="add-form-card" class="hidden add-alt-form">
+                        <button type="button" class="add-back-to-standard" onclick="setFormMode('expense')">← Wydatek / wpływ</button>
+                        <p class="reports-hint add-loan-hint" id="add-credit-card-hint">Zmniejsza zadłużenie — bez wpływu na wydatki w analizie.</p>
+                        <div class="add-recent-section" id="recent-cards-wrapper" style="display:none;">
+                            <span class="add-section-label">Ostatnio</span>
+                            <div id="recent-cards-row" class="recent-categories add-recent-scroll"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="section-label" for="add-credit-card-type">Operacja</label>
+                            <select id="add-credit-card-type" onchange="populateAddCreditCardForm()">
+                                <option value="repayment">Spłata karty</option>
+                                <option value="transfer_out">Przelew z karty na konto</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="section-label" for="add-credit-card-select">Karta</label>
+                            <select id="add-credit-card-select" onchange="populateAddCreditCardForm()"></select>
+                        </div>
+                        <div class="form-group form-group--amount add-alt-amount">
+                            <label class="section-label" for="add-credit-card-amount">Kwota (PLN)</label>
+                            <div class="obligation-amount-row">
+                                <input type="number" id="add-credit-card-amount" step="0.01" placeholder="0,00" inputmode="decimal" autocomplete="off">
+                                <button type="button" id="add-credit-card-full-btn" class="obligation-amount-chip hidden" onclick="fillAddCreditCardFullAmount()">Całość</button>
+                            </div>
+                        </div>
+                        <div class="add-details-row">
+                            <div class="add-date-chip-wrap">
+                                <label class="section-label add-date-chip-label" for="add-credit-card-date">Data</label>
+                                <input type="date" id="add-credit-card-date" class="add-date-input">
+                            </div>
+                            <input type="text" id="add-credit-card-note" class="add-note-input" placeholder="Notatka" maxlength="80">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="add-form-footer" id="add-form-footer">
+                <p class="add-footer-summary" id="add-footer-summary" aria-live="polite"></p>
+                <div class="add-form-options" id="add-form-sticky-bar">
+                    <div id="add-sticky-standard" class="add-sticky-panel">
+                        <button type="button" class="btn-submit btn-submit--form" onclick="saveTransaction()">Zapisz</button>
+                    </div>
+                    <div id="add-sticky-loan" class="add-sticky-panel hidden">
+                        <button type="button" class="btn-submit btn-submit--form" onclick="saveLoanPaymentFromAdd()">Zapisz spłatę</button>
+                    </div>
+                    <div id="add-sticky-card" class="add-sticky-panel hidden">
+                        <button type="button" class="btn-submit btn-submit--form" onclick="saveCreditCardMovementFromAdd()">Zapisz</button>
+                    </div>
+                    <button type="button" class="btn-cancel btn-cancel--form" id="btn-cancel-edit" onclick="cancelEdit()">Anuluj edycję</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-reports" class="app-view">
+            <div id="reports-period-hero" class="card hero-card analysis-period-hero">
+                <div class="analysis-period-hero-head">
+                    <div class="hero-label">Okres analizy</div>
+                    <div class="analysis-period-export">
+                        <button type="button" class="hero-summary-action" onclick="exportReportsTransactions()">Transakcje</button>
+                        <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                        <button type="button" class="hero-summary-action" onclick="exportReportsPdf()">PDF</button>
+                    </div>
+                </div>
+                <div class="analysis-period-display-row">
+                    <div id="reports-period-display" class="hero-balance analysis-period-display">—</div>
+                    <button type="button" id="reports-period-reset" class="hero-period-reset hidden" onclick="resetReportsPeriod()" aria-label="Przywróć bieżący miesiąc" title="Bieżący miesiąc">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v4l5-5-5-5v4z"/></svg>
+                    </button>
+                </div>
+                <p id="reports-period-summary" class="hero-forecast-hint">Wyświetlane dane za bieżący miesiąc</p>
+
+                <select id="reports-year-select" class="hidden" aria-hidden="true" tabindex="-1" onchange="renderReports()"></select>
+                <input type="month" id="reports-period-month" class="hidden" aria-hidden="true" tabindex="-1" onchange="onReportsMonthChange()">
+
+                <div id="reports-period-main-block" class="loans-hero-summary">
+                    <button type="button" class="loans-hero-summary-toggle" onclick="toggleReportsPeriodMain()" aria-expanded="false" aria-controls="reports-period-main-panel">
+                        <span>Rok i miesiąc</span>
+                        <svg class="loans-hero-summary-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </button>
+                    <div id="reports-period-main-panel" class="loans-hero-summary-panel hidden">
+                        <div class="analysis-period-subrow">
+                            <span class="analysis-period-sub-label">Rok</span>
+                            <nav id="reports-year-chips" class="loans-hero-summary-chips analysis-period-chips--years" aria-label="Rok analizy"></nav>
+                        </div>
+                        <div class="analysis-period-subrow">
+                            <span class="analysis-period-sub-label">Miesiąc</span>
+                            <nav id="reports-month-chips" class="loans-hero-summary-chips analysis-period-chips--months" aria-label="Miesiąc analizy"></nav>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="reports-period-special-block" class="loans-hero-summary">
+                    <button type="button" class="loans-hero-summary-toggle" onclick="toggleReportsPeriodSpecial()" aria-expanded="false" aria-controls="reports-period-special-panel">
+                        <span>Zakres i porównanie</span>
+                        <svg class="loans-hero-summary-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </button>
+                    <div id="reports-period-special-panel" class="loans-hero-summary-panel hidden">
+                        <nav class="loans-hero-summary-chips analysis-special-mode-chips" aria-label="Niestandardowy okres">
+                            <button id="btn-reports-range-mode" type="button" class="toggle-btn loans-chip" onclick="selectReportsSpecialMode('range')">Zakres dat</button>
+                            <button id="btn-reports-compare-mode" type="button" class="toggle-btn loans-chip" onclick="selectReportsSpecialMode('compare')">Porównaj</button>
+                        </nav>
+                        <div id="reports-period-fields" class="analysis-period-fields">
+                            <div id="reports-period-range-wrap" class="analysis-period-field hidden">
+                                <span class="analysis-period-sub-label">Zakres dat</span>
+                                <div class="reports-hero-date-row analysis-period-date-row">
+                                    <input type="date" id="reports-range-start" class="analysis-period-date-input" aria-label="Początek zakresu">
+                                    <span class="reports-hero-date-sep">–</span>
+                                    <input type="date" id="reports-range-end" class="analysis-period-date-input" aria-label="Koniec zakresu">
+                                </div>
+                            </div>
+                            <div id="reports-period-compare-wrap" class="analysis-period-field hidden">
+                                <nav class="compare-preset-chips" aria-label="Typ porównania">
+                                    <button id="btn-compare-preset-mom" type="button" class="toggle-btn loans-chip" onclick="selectComparePreset('mom')">M–M</button>
+                                    <button id="btn-compare-preset-yoy" type="button" class="toggle-btn loans-chip" onclick="selectComparePreset('yoy')">R–R</button>
+                                    <button id="btn-compare-preset-same-month" type="button" class="toggle-btn loans-chip" onclick="selectComparePreset('same-month')">M rok wcześniej</button>
+                                    <button id="btn-compare-preset-custom" type="button" class="toggle-btn loans-chip" onclick="selectComparePreset('custom')">Własny</button>
+                                </nav>
+                                <div id="compare-preset-mom-wrap" class="compare-preset-panel">
+                                    <div class="compare-mom-flex-row compare-mom-labels-row">
+                                        <span class="analysis-period-sub-label compare-mom-side">Okres A</span>
+                                        <span class="compare-mom-vs compare-mom-vs--spacer" aria-hidden="true">vs</span>
+                                        <span class="analysis-period-sub-label compare-mom-side">Okres B</span>
+                                    </div>
+                                    <div class="compare-mom-flex-row compare-mom-controls-row">
+                                        <input type="month" id="reports-compare-a-month" class="analysis-period-month-input compare-mom-side" aria-label="Okres A">
+                                        <span class="compare-mom-vs" aria-hidden="true">vs</span>
+                                        <input type="month" id="reports-compare-b-month" class="analysis-period-month-input compare-mom-side" aria-label="Okres B">
+                                    </div>
+                                </div>
+                                <div id="compare-preset-yoy-wrap" class="compare-preset-panel hidden">
+                                    <div class="compare-pickers">
+                                        <div class="compare-pickers-labels">
+                                            <span class="analysis-period-sub-label">Okres A</span>
+                                            <span class="compare-pickers-vs-gap" aria-hidden="true"></span>
+                                            <span class="analysis-period-sub-label">Okres B</span>
+                                        </div>
+                                        <div class="compare-pickers-controls">
+                                            <select id="reports-compare-a-year" class="analysis-period-month-input" aria-label="Rok okresu A"></select>
+                                            <span class="compare-pickers-vs" aria-hidden="true">vs</span>
+                                            <select id="reports-compare-b-year" class="analysis-period-month-input" aria-label="Rok okresu B"></select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="compare-preset-same-month-wrap" class="compare-preset-panel hidden">
+                                    <div class="compare-mom-flex-row compare-mom-labels-row">
+                                        <span class="analysis-period-sub-label compare-mom-side">Okres A</span>
+                                        <span class="compare-mom-vs compare-mom-vs--spacer" aria-hidden="true">vs</span>
+                                        <span class="analysis-period-sub-label compare-mom-side">Okres B</span>
+                                    </div>
+                                    <div class="compare-mom-flex-row compare-mom-controls-row">
+                                        <span id="reports-compare-same-month-a-display" class="compare-same-month-display compare-mom-side" aria-label="Okres A">—</span>
+                                        <span class="compare-mom-vs" aria-hidden="true">vs</span>
+                                        <span id="reports-compare-same-month-b-display" class="compare-same-month-display compare-mom-side" aria-label="Okres B">—</span>
+                                    </div>
+                                    <input type="month" id="reports-compare-same-month" class="hidden" tabindex="-1" aria-hidden="true">
+                                </div>
+                                <div id="compare-preset-custom-wrap" class="compare-preset-panel hidden">
+                                    <div class="compare-pickers">
+                                        <div class="compare-pickers-labels">
+                                            <span class="analysis-period-sub-label">Okres A</span>
+                                            <span class="compare-pickers-vs-gap" aria-hidden="true"></span>
+                                            <span class="analysis-period-sub-label">Okres B</span>
+                                        </div>
+                                        <div class="compare-pickers-controls">
+                                            <div class="reports-hero-date-row analysis-period-date-row">
+                                                <input type="date" id="reports-compare-a-start" class="analysis-period-date-input" aria-label="Początek okresu A">
+                                                <span class="reports-hero-date-sep">–</span>
+                                                <input type="date" id="reports-compare-a-end" class="analysis-period-date-input" aria-label="Koniec okresu A">
+                                            </div>
+                                            <span class="compare-pickers-vs" aria-hidden="true">vs</span>
+                                            <div class="reports-hero-date-row analysis-period-date-row">
+                                                <input type="date" id="reports-compare-b-start" class="analysis-period-date-input" aria-label="Początek okresu B">
+                                                <span class="reports-hero-date-sep">–</span>
+                                                <input type="date" id="reports-compare-b-end" class="analysis-period-date-input" aria-label="Koniec okresu B">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="reports-period-special-confirm" class="analysis-period-confirm-row hidden">
+                                <button type="button" class="toggle-btn loans-chip analysis-period-confirm-btn" onclick="confirmReportsSpecialPeriod()">Zatwierdź</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="reports-month-close-banner" class="hidden"></div>
+
+            <div id="analysis-compare-banner" class="card analysis-compare-banner hidden">
+                <div class="analysis-compare-banner-text">
+                    <span class="analysis-compare-banner-label">Raport porównawczy</span>
+                    <span id="analysis-compare-banner-range" class="analysis-compare-banner-range"></span>
+                </div>
+                <button type="button" class="toggle-btn loans-chip analysis-compare-exit-btn" onclick="exitCompareMode()">Przywróć widok okresu</button>
+            </div>
+
+            <nav id="analysis-tab-grid" class="analysis-subnav analysis-section-tabs" aria-label="Sekcje analizy">
+                <button id="btn-analysis-overview" type="button" class="analysis-subnav-btn active" onclick="setAnalysisSection('overview')">Przegląd</button>
+                <button id="btn-analysis-expenses" type="button" class="analysis-subnav-btn" onclick="setAnalysisSection('expenses')">Wydatki</button>
+                <button id="btn-analysis-assets" type="button" class="analysis-subnav-btn" onclick="setAnalysisSection('assets')">Majątek</button>
+                <button id="btn-analysis-debts" type="button" class="analysis-subnav-btn" onclick="setAnalysisSection('debts')">Długi</button>
+                <button id="btn-analysis-advanced" type="button" class="analysis-subnav-btn" onclick="setAnalysisSection('advanced')">Więcej</button>
+            </nav>
+
+            <div id="analysis-sections-body" class="analysis-sections-body">
+            <div id="analysis-section-overview" class="analysis-section">
+                <div id="analysis-compare-overview" class="analysis-compare-slot" hidden aria-hidden="true"></div>
+                <div class="card hero-card reports-overview-hero">
+                    <div class="hero-label">Saldo okresu</div>
+                    <div id="reports-net-balance" class="hero-balance reports-overview-balance">0,00 zł</div>
+                    <div class="hero-stats reports-overview-stats">
+                        <div class="hero-stat income">
+                            <div class="label">Wpływy</div>
+                            <div id="reports-total-income" class="value">0,00 zł</div>
+                        </div>
+                        <div class="hero-stat expense">
+                            <div class="label">Wydatki</div>
+                            <div id="reports-total-expense" class="value">0,00 zł</div>
+                        </div>
+                        <div class="hero-stat reports-stat-savings">
+                            <div class="label">Oszczędności</div>
+                            <div id="reports-savings-rate" class="value">0%</div>
+                        </div>
+                    </div>
+                    <div id="reports-mom-summary" class="reports-mom-banner reports-mom-banner--hero hidden" aria-live="polite"></div>
+                    <div class="reports-overview-extras">
+                        <div class="hero-budget reports-savings-goal-bar">
+                            <div class="reports-goal-bar-head">
+                                <span class="hero-budget-label">Cel oszczędności</span>
+                                <span id="reports-goal-label" class="reports-goal-inline-label">0% z 20%</span>
+                            </div>
+                            <div class="progress-bar-bg hero-progress-bar reports-goal-bar"><div id="reports-goal-fill" class="progress-bar-fill"></div></div>
+                        </div>
+                        <button type="button" id="reports-goal-toggle" class="reports-overview-link-toggle" onclick="toggleReportsSavingsGoal()" aria-expanded="false" aria-controls="reports-goal-panel">
+                            <span>Ustaw cel oszczędności</span>
+                            <svg class="reports-overview-link-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                        </button>
+                        <div id="reports-goal-panel" class="reports-goal-panel--hero hidden">
+                            <label class="reports-goal-panel-label" for="savings-goal-input">Cel (%)</label>
+                            <div class="reports-goal-input-row">
+                                <input type="number" id="savings-goal-input" class="reports-goal-panel-input reports-goal-panel-input--hero" min="0" max="100" step="1" onchange="saveSavingsGoal()">
+                                <span>%</span>
+                            </div>
+                        </div>
+                        <div class="reports-daily-compact reports-daily-compact--hero">
+                            <span class="reports-daily-compact-label">Średnia dzienna</span>
+                            <strong id="reports-daily-avg" class="reports-daily-compact-value">0,00 zł</strong>
+                            <span id="reports-daily-avg-hint" class="reports-daily-compact-hint">wydatki / dzień</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="reports-day-summary-card" class="card dashboard-panel reports-day-month-card hidden">
+                    <div class="reports-day-month-head">
+                        <h2 class="dashboard-section-title">Podsumowanie dnia</h2>
+                        <p id="reports-day-scope-hint" class="reports-hint hidden">Liczone według dzisiejszej daty — niezależnie od wybranego okresu analizy.</p>
+                    </div>
+
+                    <div class="reports-day-month-block reports-day-month-block--solo">
+                        <div class="reports-day-month-block-head">
+                            <div class="flex-toggle reports-day-month-compare-toggle chart-type-toggle">
+                                <button id="btn-day-compare-yesterday" type="button" class="toggle-btn active" onclick="setReportsDayCompareMode('yesterday')">Wczoraj</button>
+                                <button id="btn-day-compare-som" type="button" class="toggle-btn" onclick="setReportsDayCompareMode('same-month')">Ten sam dzień miesiąc temu</button>
+                            </div>
+                        </div>
+                        <div id="reports-day-summary-stats" class="reports-day-month-stats"></div>
+                        <p id="reports-day-summary-delta" class="reports-day-month-delta"></p>
+                    </div>
+
+                    <div class="reports-hero-expand reports-day-month-expand">
+                        <button type="button" id="reports-day-summary-toggle" class="reports-hero-expand-toggle" onclick="toggleReportsDaySummaryDetails()" aria-expanded="false" aria-controls="reports-day-summary-panel">
+                            <span>Szczegóły i transakcje</span>
+                            <svg class="reports-hero-expand-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                        </button>
+                        <div id="reports-day-summary-panel" class="reports-hero-expand-panel hidden">
+                            <p id="reports-day-analysis" class="reports-day-month-analysis"></p>
+                            <div id="reports-day-tx-list" class="reports-tx-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="reports-forecast-card" class="card dashboard-panel hidden">
+                    <h2 class="dashboard-section-title">Prognoza miesiąca</h2>
+                    <div id="reports-forecast"></div>
+                </div>
+
+                <div id="reports-budget-overview-card" class="card dashboard-panel hidden">
+                    <div class="chart-card-header">
+                        <h2 class="dashboard-section-title">Budżet miesiąca</h2>
+                        <button type="button" class="btn-text-link" onclick="openBudgetEditor()">Ustaw limity</button>
+                    </div>
+                    <p id="reports-budget-overview-summary" class="reports-hint budget-overview-summary"></p>
+                    <p class="reports-hint">Bieżący miesiąc kalendarzowy — wliczone są też zakupy kartą i zaplanowane wydatki w miesiącu z daty.</p>
+                    <div id="reports-budget-overview-list"></div>
+                    <button type="button" id="reports-budget-overview-toggle" class="btn-text-link hidden" onclick="toggleReportsBudgetOverviewShowAll()"></button>
+                </div>
+
+                <div class="card chart-card dashboard-panel">
+                    <div class="chart-card-header">
+                        <h2 id="reports-structure-title" class="dashboard-section-title">Struktura wydatków</h2>
+                        <div class="chart-type-toggle flex-toggle">
+                            <button id="btn-reports-structure-expense" type="button" class="toggle-btn active expense" onclick="setReportsStructureViewType('expense')">Wydatki</button>
+                            <button id="btn-reports-structure-income" type="button" class="toggle-btn income" onclick="setReportsStructureViewType('income')">Wpływy</button>
+                        </div>
+                    </div>
+                    <button id="btn-reset-reports-structure" type="button" class="btn-outline" onclick="resetReportsStructureChart()">&#8592; Wróć do ogółu</button>
+                    <div id="reports-structure-view-filter-block" class="chart-view-filter hidden">
+                        <button type="button" class="chart-view-filter-toggle" onclick="toggleReportsStructureViewFilter()" aria-expanded="false" aria-controls="reports-structure-view-filter-panel">
+                            <span>Filtr widoku wykresu</span>
+                            <svg class="chart-view-filter-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                        </button>
+                        <div id="reports-structure-view-filter-panel" class="chart-view-filter-panel hidden">
+                            <div class="hero-summary-actions">
+                                <button type="button" class="hero-summary-action" onclick="setAllReportsStructureViewFilterVisible(true)">Pokaż wszystkie</button>
+                                <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                                <button type="button" class="hero-summary-action" onclick="setAllReportsStructureViewFilterVisible(false)">Ukryj wszystkie</button>
+                                <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                                <button type="button" id="reports-structure-view-filter-restore" class="hero-summary-action hidden" onclick="restoreReportsStructureViewFilterDefault()">Przywróć domyślnie</button>
+                            </div>
+                            <p id="reports-structure-view-filter-hint" class="chart-view-filter-hint hidden"></p>
+                            <nav id="reports-structure-view-filter-chips" class="chart-view-filter-chips" aria-label="Segmenty wykresu"></nav>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="reportsStructureChart"></canvas>
+                        <div class="chart-center-label" aria-hidden="true">
+                            <div id="reports-structure-center-amount" class="chart-center-amount">0,00 zł</div>
+                            <div id="reports-structure-center-sub" class="chart-center-sub">razem</div>
+                        </div>
+                    </div>
+                    <div id="reports-structure-legend" class="chart-legend"></div>
+                    <div id="reports-structure-tx-block" class="reports-hero-expand hidden">
+                        <button type="button" id="reports-structure-tx-toggle" class="reports-hero-expand-toggle" onclick="toggleReportsStructureTx()" aria-expanded="false" aria-controls="reports-structure-tx-panel">
+                            <span>Pokaż transakcje</span>
+                            <svg class="reports-hero-expand-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                        </button>
+                        <div id="reports-structure-tx-panel" class="reports-hero-expand-panel hidden">
+                            <div id="reports-structure-tx-list" class="reports-tx-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2 id="reports-months-title" class="dashboard-section-title">Trend okresu</h2>
+                    <div class="reports-bar-chart-wrap">
+                        <canvas id="reportsMonthsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div id="analysis-section-expenses" class="analysis-section hidden">
+                <div id="analysis-compare-expenses" class="analysis-compare-slot" hidden aria-hidden="true"></div>
+
+                <div id="reports-month-summary-card" class="card dashboard-panel reports-day-month-card hidden">
+                    <div class="reports-day-month-head">
+                        <h2 class="dashboard-section-title">Podsumowanie miesiąca</h2>
+                        <p id="reports-month-scope-hint" class="reports-hint hidden">Od 1. dnia miesiąca do dziś — niezależnie od wybranego okresu analizy.</p>
+                    </div>
+
+                    <div class="reports-day-month-block reports-day-month-block--solo">
+                        <div class="reports-day-month-block-head">
+                            <span class="reports-day-month-label">Ten miesiąc (1.–dziś)</span>
+                        </div>
+                        <div id="reports-month-summary-stats" class="reports-day-month-stats"></div>
+                        <p id="reports-month-summary-delta" class="reports-day-month-delta"></p>
+                    </div>
+
+                    <div class="reports-hero-expand reports-day-month-expand">
+                        <button type="button" id="reports-month-summary-toggle" class="reports-hero-expand-toggle" onclick="toggleReportsMonthSummaryDetails()" aria-expanded="false" aria-controls="reports-month-summary-panel">
+                            <span>Szczegóły i transakcje</span>
+                            <svg class="reports-hero-expand-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                        </button>
+                        <div id="reports-month-summary-panel" class="reports-hero-expand-panel hidden">
+                            <p id="reports-month-analysis" class="reports-day-month-analysis"></p>
+                            <div id="reports-month-tx-list" class="reports-tx-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card reports-calendar-card">
+                    <div class="reports-calendar-header">
+                        <div id="reports-calendar-nav" class="reports-calendar-nav">
+                            <button type="button" class="cal-nav-btn" onclick="shiftReportsCalendarMonth(-1)" aria-label="Poprzedni miesiąc">&#8249;</button>
+                            <h2 id="reports-calendar-label">Czerwiec 2026</h2>
+                            <button type="button" class="cal-nav-btn" onclick="shiftReportsCalendarMonth(1)" aria-label="Następny miesiąc">&#8250;</button>
+                        </div>
+                        <div class="reports-cal-view-toggle flex-toggle chart-type-toggle">
+                            <button id="btn-cal-month" type="button" class="toggle-btn active" onclick="setReportsCalendarView('month')">Miesiąc</button>
+                            <button id="btn-cal-year" type="button" class="toggle-btn" onclick="setReportsCalendarView('year')">Rok</button>
+                        </div>
+                    </div>
+                    <div id="reports-calendar-grid" class="reports-calendar-grid"></div>
+                    <div id="reports-calendar-legend" class="reports-calendar-legend">
+                        <span class="cal-legend-item"><i class="cal-legend-swatch cal-legend-swatch--expense"></i>Wydatki</span>
+                        <span class="cal-legend-item"><i class="cal-legend-swatch cal-legend-swatch--income"></i>Wpływy</span>
+                        <span class="cal-legend-item"><i class="cal-legend-swatch cal-legend-swatch--both"></i>Oba</span>
+                    </div>
+                    <div id="reports-year-heatmap" class="reports-year-heatmap hidden"></div>
+                </div>
+
+                <div id="reports-subscription-card" class="card dashboard-panel">
+                    <div class="chart-card-header">
+                        <h2 class="dashboard-section-title">Centrum subskrypcji</h2>
+                    </div>
+                    <p class="reports-hint">Stałe opłaty wykryte z historii transakcji. <strong>Pomiń</strong> usuwa pozycję tylko z tej listy — nie kasuje transakcji w portfelu. <strong>Zmień nazwę</strong> to tylko etykieta na liście.</p>
+                    <div class="subscription-center-toolbar">
+                        <button type="button" class="btn-text-link" data-subscription-action="toggle-picker">+ Dodaj własną</button>
+                    </div>
+                    <div id="reports-subscription-picker" class="subscription-picker-panel hidden" aria-live="polite"></div>
+                    <p id="reports-subscription-summary" class="reports-hint subscription-summary-line"></p>
+                    <div id="reports-subscription-center" class="reports-recurring-list"></div>
+                </div>
+
+                <div class="card dashboard-panel">
+                    <div class="chart-card-header">
+                        <h2 id="reports-top-title" class="dashboard-section-title">Top kategorie</h2>
+                        <div class="chart-type-toggle flex-toggle">
+                            <button id="btn-reports-expense" type="button" class="toggle-btn active expense" onclick="setReportsViewType('expense')">Wydatki</button>
+                            <button id="btn-reports-income" type="button" class="toggle-btn income" onclick="setReportsViewType('income')">Wpływy</button>
+                        </div>
+                    </div>
+                    <div class="reports-rank-toggle flex-toggle chart-type-toggle">
+                        <button id="btn-reports-main" type="button" class="toggle-btn active" onclick="setReportsRankLevel('main')">Kategorie</button>
+                        <button id="btn-reports-sub" type="button" class="toggle-btn" onclick="setReportsRankLevel('sub')">Podkategorie</button>
+                    </div>
+                    <div id="reports-top-categories" class="reports-top-list"></div>
+                </div>
+
+                <div class="card dashboard-panel">
+                    <h2 class="dashboard-section-title">Największe wydatki</h2>
+                    <p class="reports-hint">Bez rat kredytu i spłat długów — same „niespodzianki”.</p>
+                    <div id="reports-outliers-list" class="reports-top-list"></div>
+                </div>
+
+                <div class="card dashboard-panel">
+                    <div class="chart-card-header">
+                        <h2 class="dashboard-section-title">Trendy kategorii</h2>
+                    </div>
+                    <div class="reports-rank-toggle flex-toggle chart-type-toggle">
+                        <button id="btn-trends-main" type="button" class="toggle-btn active" onclick="setReportsRankLevel('main')">Kategorie</button>
+                        <button id="btn-trends-sub" type="button" class="toggle-btn" onclick="setReportsRankLevel('sub')">Podkategorie</button>
+                    </div>
+                    <p class="reports-hint">Zmiana wydatków w ostatnich 3 miesiącach.</p>
+                    <div id="reports-trends-list" class="reports-top-list"></div>
+                </div>
+
+                <div class="card dashboard-panel">
+                    <div class="chart-card-header">
+                        <h2 class="dashboard-section-title">Wydatki cykliczne</h2>
+                    </div>
+                    <div class="reports-rank-toggle flex-toggle chart-type-toggle">
+                        <button id="btn-recurring-main" type="button" class="toggle-btn active" onclick="setReportsRankLevel('main')">Kategorie</button>
+                        <button id="btn-recurring-sub" type="button" class="toggle-btn" onclick="setReportsRankLevel('sub')">Podkategorie</button>
+                    </div>
+                    <p class="reports-hint">Powtarzające się wydatki z ostatnich miesięcy lub oznaczone ręcznie.</p>
+                    <div id="reports-recurring-list" class="reports-recurring-list"></div>
+                </div>
+            </div>
+
+            <div id="analysis-section-advanced" class="analysis-section hidden">
+                <div id="analysis-compare-advanced" class="analysis-compare-slot" hidden aria-hidden="true"></div>
+                <div class="card reports-months-card">
+                    <h2 class="dashboard-section-title">Trend wydatków</h2>
+                    <div class="reports-bar-chart-wrap">
+                        <canvas id="reportsTrendChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="analysis-charts-grid">
+                    <div class="card reports-months-card">
+                        <h2 id="reports-yoy-title" class="dashboard-section-title">Ten miesiąc vs poprzedni</h2>
+                        <div class="reports-bar-chart-wrap">
+                            <canvas id="reportsYoyChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card reports-months-card">
+                        <h2 class="dashboard-section-title">Dzień tygodnia</h2>
+                        <div class="reports-bar-chart-wrap reports-dow-chart-wrap">
+                            <canvas id="reportsDowChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card dashboard-panel">
+                    <h2 class="dashboard-section-title">Przepływ środków</h2>
+                    <p class="reports-hint">Wpływy → kategorie wydatków → bilans.</p>
+                    <div id="reports-flow-chart" class="reports-flow-chart"></div>
+                </div>
+
+                <div class="card dashboard-panel">
+                    <h2 class="dashboard-section-title">Podsumowanie roku</h2>
+                    <div id="reports-year-review"></div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2 class="dashboard-section-title">Alokacja w czasie</h2>
+                    <div class="reports-bar-chart-wrap">
+                        <canvas id="reportsAllocationTrendChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card dashboard-panel">
+                    <h2 class="dashboard-section-title">Alokator nadwyżki</h2>
+                    <p id="reports-surplus-hint" class="reports-hint">Porównanie scenariuszy dla wolnych środków z wybranego okresu.</p>
+                    <label class="surplus-input-row" for="reports-surplus-input">
+                        <span>Kwota do rozłożenia</span>
+                        <input id="reports-surplus-input" type="number" min="0" step="50" inputmode="decimal" oninput="onSurplusAllocatorInput()">
+                    </label>
+                    <div id="reports-surplus-allocator" class="surplus-scenario-list"></div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2 id="reports-diversification-title" class="dashboard-section-title">Dywersyfikacja</h2>
+                    <p class="reports-hint">Udział każdej pozycji w majątku — dotknij segment, aby zobaczyć szczegóły.</p>
+                    <button id="btn-reset-reports-diversification" type="button" class="btn-outline reports-allocation-back hidden" onclick="resetReportsDiversificationDrill()">← Wróć do dywersyfikacji</button>
+                    <div class="reports-bar-chart-wrap reports-debt-split-wrap">
+                        <canvas id="reportsDiversificationChart"></canvas>
+                    </div>
+                    <div id="reports-diversification-legend" class="reports-debt-split-legend chart-legend"></div>
+                </div>
+
+                <div class="card ikze-limit-card loan-clickable" id="reports-ikze-limit-card" role="button" tabindex="0"
+                    onclick="openIkzeLimitPanel()" onkeydown="if (event.key === 'Enter') openIkzeLimitPanel()">
+                    <h2 class="dashboard-section-title">Limit IKZE w roku</h2>
+                    <div id="reports-ikze-limit"></div>
+                </div>
+
+                <div class="card">
+                    <h2 class="dashboard-section-title">Hipoteka vs emerytura</h2>
+                    <div id="reports-mortgage-retirement"></div>
+                </div>
+            </div>
+
+            <div id="analysis-section-assets" class="analysis-section hidden">
+                <div id="analysis-compare-assets" class="analysis-compare-slot" hidden aria-hidden="true"></div>
+                <div class="card hero-card reports-assets-hero-card">
+                    <div class="hero-label">Wartość majątku</div>
+                    <div id="reports-assets-hero-total" class="hero-balance">—</div>
+                    <p id="reports-assets-hero-meta" class="loan-hero-meta"></p>
+                </div>
+
+                <div class="card">
+                    <h2>Horyzont inwestycyjny</h2>
+                    <p class="reports-hint">Krótkoterminowe vs długoterminowe — ten sam podział co w zakładce Aktywa.</p>
+                    <div id="reports-assets-horizon"></div>
+                </div>
+
+                <div id="reports-deposits-calendar-card" class="card hidden">
+                    <h2 class="dashboard-section-title">Koniec lokat</h2>
+                    <p class="reports-hint">Zbliżające się terminy zakończenia lokat.</p>
+                    <div id="reports-deposits-calendar-list"></div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2 id="reports-assets-allocation-title" class="dashboard-section-title">Struktura majątku</h2>
+                    <p class="reports-hint">Udział typów aktywów w sumie — dotknij segment, aby zobaczyć pozycje.</p>
+                    <div class="reports-bar-chart-wrap reports-debt-split-wrap">
+                        <canvas id="reportsAssetsAllocationChart"></canvas>
+                    </div>
+                    <button id="btn-reset-reports-assets-allocation" type="button" class="btn-outline reports-allocation-back hidden" onclick="resetReportsAssetAllocationDrill()">← Wróć do struktury</button>
+                    <div id="reports-assets-allocation-legend" class="reports-debt-split-legend chart-legend"></div>
+                </div>
+
+                <div class="card reports-assets-investments-card">
+                    <h2>Inwestycje — P/L</h2>
+                    <div id="reports-assets-investments" class="reports-assets-compact-block"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Emerytura i długoterminowe</h2>
+                    <p class="reports-hint">PPK, IKZE, emerytura — bez KZP (środki operacyjne z pracy).</p>
+                    <div id="reports-assets-retirement"></div>
+                </div>
+
+                <div class="card reports-assets-all-card">
+                    <h2>Wszystkie pozycje</h2>
+                    <div id="reports-assets-list" class="reports-assets-compact-block"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Majątek a zobowiązania</h2>
+                    <div id="reports-assets-debt-link"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Gotówka a transakcje</h2>
+                    <p class="reports-hint">Bilans wpływów i wydatków z salda vs rzeczywista zmiana operacyjnej gotówki w okresie.</p>
+                    <div id="reports-assets-cash-flow"></div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2>Trend salda gotówki</h2>
+                    <div class="reports-bar-chart-wrap">
+                        <canvas id="reportsAssetsCashTrendChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Historia majątku</h2>
+                    <p class="reports-hint">Snapshoty miesięczne — zapisują się automatycznie przy zmianie miesiąca. Trend wartości netto wymaga co najmniej 2 miesięcy danych.</p>
+                        <button type="button" class="btn-outline assets-snapshot-btn" onclick="saveAssetSnapshotNow()">Zapisz stan teraz</button>
+                    <div id="reports-assets-snapshots-list" class="assets-snapshots-list"></div>
+                </div>
+
+                <div class="card reports-months-card">
+                    <h2>Trend wartości netto</h2>
+                    <div id="reports-networth-trend-empty" class="reports-chart-empty hidden"></div>
+                    <div id="reports-networth-trend-wrap" class="reports-bar-chart-wrap">
+                        <canvas id="reportsNetWorthTrendChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Przepływy majątku</h2>
+                    <p class="reports-hint">Ile poszło na aktywa, spłaty i zmianę gotówki w wybranym okresie.</p>
+                    <div id="reports-wealth-flows"></div>
+                </div>
+            </div>
+
+            <div id="analysis-section-debts" class="analysis-section hidden">
+                <div id="analysis-compare-debts" class="analysis-compare-slot" hidden aria-hidden="true"></div>
+                <div class="card hero-card reports-debts-hero-card">
+                    <div class="hero-label">Zadłużenie</div>
+                    <div id="reports-debts-hero-total" class="hero-balance">—</div>
+                    <div class="hero-stats reports-debts-hero-stats">
+                        <div class="hero-stat">
+                            <div class="label">Odsetki / rok</div>
+                            <div id="reports-debts-kpi-interest" class="value">—</div>
+                        </div>
+                        <div class="hero-stat hero-stat-kpi-compact">
+                            <div class="label">Następna rata</div>
+                            <div id="reports-debts-kpi-next" class="value debts-kpi-next">—</div>
+                        </div>
+                        <div class="hero-stat">
+                            <div class="label">Pełna wolność</div>
+                            <div id="reports-debts-kpi-freedom" class="value">—</div>
+                        </div>
+                    </div>
+                    <p id="reports-debts-hero-meta" class="hero-forecast-hint loan-hero-meta"></p>
+                </div>
+
+                <div id="reports-debts-portfolio-card" class="card debts-panel-card">
+                    <h2 class="dashboard-section-title debts-portfolio-title">Portfel długów</h2>
+                    <nav class="analysis-subnav debts-portfolio-tabs" aria-label="Filtr portfela">
+                        <button id="btn-reports-debt-filter-all" type="button" class="analysis-subnav-btn active" onclick="setReportsDebtPortfolioFilter('all')">Wszystkie</button>
+                        <button id="btn-reports-debt-filter-loans" type="button" class="analysis-subnav-btn" onclick="setReportsDebtPortfolioFilter('loans')">Kredyty</button>
+                        <button id="btn-reports-debt-filter-cards" type="button" class="analysis-subnav-btn" onclick="setReportsDebtPortfolioFilter('cards')">Karty</button>
+                    </nav>
+                    <div id="reports-debt-portfolio"></div>
+                </div>
+
+                <div id="reports-debts-installments-card" class="card debts-panel-card">
+                    <h2 class="dashboard-section-title">Raty i terminy</h2>
+                    <div id="reports-debt-installment-summary"></div>
+                    <div id="reports-debt-installment-filter-block" class="chart-view-filter hidden">
+                        <button type="button" id="reports-debt-installment-filter-toggle" class="chart-view-filter-toggle" onclick="toggleReportsDebtInstallmentFilter()" aria-expanded="false" aria-controls="reports-debt-installment-filter-panel">
+                            <span>Dostosuj sumę</span>
+                            <svg class="chart-view-filter-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                        </button>
+                        <div id="reports-debt-installment-filter-panel" class="chart-view-filter-panel hidden">
+                            <div class="hero-summary-actions">
+                                <button type="button" class="hero-summary-action" onclick="setAllDebtInstallmentsInSummary(true)">Zaznacz wszystko</button>
+                                <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                                <button type="button" class="hero-summary-action" onclick="setAllDebtInstallmentsInSummary(false)">Odznacz wszystko</button>
+                            </div>
+                            <nav id="reports-debt-installment-chips" class="chart-view-filter-chips" aria-label="Raty wliczane w sumę"></nav>
+                        </div>
+                    </div>
+                    <div id="reports-debt-installment-list"></div>
+                </div>
+
+                <div id="reports-debts-overpay-card" class="card debts-panel-card">
+                    <h2 class="dashboard-section-title">Kalkulator nadpłaty</h2>
+                    <div class="debts-scenario-controls overpay-calc-form">
+                        <div class="form-group overpay-calc-loan-field">
+                            <label class="section-label" for="debts-overpay-loan">Kredyt</label>
+                            <select id="debts-overpay-loan" onchange="onDebtsOverpayChange()"></select>
+                        </div>
+                        <div id="debts-overpay-loan-summary" class="overpay-calc-loan-summary"></div>
+                        <div class="overpay-calc-row">
+                            <nav class="flex-toggle flex-toggle--2 overpay-calc-kind-toggle" aria-label="Rodzaj nadpłaty">
+                                <button id="btn-overpay-monthly" type="button" class="toggle-btn active" onclick="setDebtsOverpayKind('monthly')">Co miesiąc</button>
+                                <button id="btn-overpay-lump" type="button" class="toggle-btn" onclick="setDebtsOverpayKind('lump')">Jednorazowo</button>
+                            </nav>
+                            <div class="form-group overpay-calc-amount-field">
+                                <input type="number" id="debts-overpay-amount" min="0" step="50" value="" placeholder="Kwota / mies." inputmode="decimal" aria-label="Kwota nadpłaty" onchange="onDebtsOverpayChange()" oninput="onDebtsOverpayChange()">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="reports-debt-overpay-results"></div>
+                </div>
+
+                <div id="reports-debts-freedom-card" class="card debts-panel-card">
+                    <h2 class="dashboard-section-title">Prognoza wolności od długów</h2>
+                    <div id="reports-debts-freedom-panel"></div>
+                </div>
+
+                <div id="reports-debts-charts-card" class="card reports-debts-charts-card debts-panel-card">
+                    <h2 class="dashboard-section-title">Wykresy</h2>
+                    <div class="analysis-charts-grid debts-charts-grid">
+                        <div class="debts-chart-panel">
+                            <h3 class="debts-chart-panel-title">Trend zadłużenia</h3>
+                            <p class="reports-hint">Szacunek zadłużenia na koniec miesiąca.</p>
+                            <div class="reports-bar-chart-wrap debts-chart-wrap">
+                                <canvas id="reportsDebtTrendChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="debts-chart-panel">
+                            <h3 class="debts-chart-panel-title">Spłaty w okresie</h3>
+                            <p class="reports-hint">Kredyty i karty w wybranym okresie.</p>
+                            <div class="reports-bar-chart-wrap debts-chart-wrap">
+                                <canvas id="reportsDebtsChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="debts-chart-panel debts-chart-panel--split">
+                            <h3 id="reports-debt-split-title" class="debts-chart-panel-title">Podział spłat</h3>
+                            <p class="reports-hint">Dotknij segment, aby zobaczyć szczegóły.</p>
+                            <button id="btn-reset-reports-debt-split" type="button" class="btn-outline reports-allocation-back hidden" onclick="resetReportsDebtSplitDrill()">← Wróć do podziału</button>
+                            <div class="reports-bar-chart-wrap reports-debt-split-wrap debts-chart-wrap debts-chart-wrap--donut">
+                                <canvas id="reportsDebtsSplitChart"></canvas>
+                            </div>
+                            <div id="reports-debts-split-legend" class="reports-debt-split-legend chart-legend"></div>
+                        </div>
+                        <div id="reports-debt-peak-panel" class="debts-chart-panel hidden">
+                            <h3 class="debts-chart-panel-title">Szczyt obciążenia ratami</h3>
+                            <p class="reports-hint">Najwyższa suma rat w kolejnych 24 miesiącach.</p>
+                            <div class="reports-bar-chart-wrap debts-chart-wrap">
+                                <canvas id="reportsDebtPeakChart"></canvas>
+                            </div>
+                            <div id="reports-debt-peak-summary"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+        </div>
+
+        <div id="view-investments" class="app-view">
+            <div id="assets-total-hero" class="card hero-card assets-hero-card hidden">
+                <div class="analysis-period-hero-head">
+                    <div class="hero-label">Majątek łącznie</div>
+                    <div id="assets-export-actions" class="analysis-period-export hidden">
+                        <button type="button" class="hero-summary-action" onclick="openAssetsPdfDatePicker()">PDF</button>
+                    </div>
+                </div>
+                <div id="assets-total-value" class="hero-balance assets-capital-hero">—</div>
+                <p id="assets-total-meta" class="hero-forecast-hint hidden"></p>
+                <p id="assets-market-refresh-row" class="assets-market-refresh-row hidden">
+                    <button type="button" id="btn-refresh-market-prices" class="hero-summary-action" onclick="refreshInvestmentPricesManual()">Pobierz kursy</button>
+                    <span id="assets-market-refresh-hint" class="assets-market-refresh-hint">Pobierz kursy z Yahoo · ARTGAMES-NC tylko ręcznie</span>
+                </p>
+                <div id="assets-summary-block" class="assets-hero-summary hidden">
+                    <button type="button" class="assets-hero-summary-toggle" onclick="toggleAssetsSummary()" aria-expanded="false" aria-controls="assets-summary-panel">
+                        <span>Dostosuj sumę</span>
+                        <svg class="assets-hero-summary-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </button>
+                    <div id="assets-summary-panel" class="assets-hero-summary-panel hidden">
+                        <div class="hero-summary-actions">
+                            <button type="button" class="hero-summary-action" onclick="setAllAssetsSummaryInclude(true)">Zaznacz wszystko</button>
+                            <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                            <button type="button" class="hero-summary-action" onclick="setAllAssetsSummaryInclude(false)">Odznacz wszystko</button>
+                        </div>
+                        <nav id="assets-summary-chips" class="assets-hero-summary-chips" aria-label="Aktywa wliczane w sumę"></nav>
+                    </div>
+                </div>
+                <div id="assets-add-block" class="assets-hero-summary">
+                    <button type="button" class="assets-hero-add-toggle assets-hero-summary-toggle" onclick="toggleAssetsAdd()" aria-expanded="false" aria-controls="assets-add-panel">
+                        <span>Dodaj aktywo</span>
+                        <svg class="assets-hero-summary-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </button>
+                    <div id="assets-add-panel" class="assets-hero-summary-panel hidden">
+                        <nav class="assets-hero-summary-chips" aria-label="Typ aktywa">
+                            <button type="button" class="toggle-btn loans-chip hero-add-chip" onclick="startNewAssetFromHero('investment')">+ Inwestycja</button>
+                            <button type="button" class="toggle-btn loans-chip hero-add-chip" onclick="startNewAssetFromHero('deposit')">+ Lokata</button>
+                            <button type="button" class="toggle-btn loans-chip hero-add-chip" onclick="startNewAssetFromHero('cash')">+ Gotówka</button>
+                            <button type="button" class="toggle-btn loans-chip hero-add-chip" onclick="startNewAssetFromHero('retirement')">+ PPK / IKZE</button>
+                            <button type="button" class="toggle-btn loans-chip hero-add-chip" onclick="startNewAssetFromHero('other')">+ Inne</button>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+
+            <nav id="assets-type-filter" class="flex-toggle flex-toggle--3 assets-horizon-filter hidden" aria-label="Filtr aktywów"></nav>
+
+            <div id="assets-list" class="assets-list"></div>
+
+            <div id="assets-archive-section" class="card assets-archive-section hidden">
+                <button type="button" class="loans-archive-toggle assets-archive-toggle" onclick="toggleAssetsArchive()" aria-expanded="false" aria-controls="assets-archive-list">
+                    <span class="loans-archive-toggle-text">
+                        <h2>Archiwum</h2>
+                        <span id="assets-archive-count" class="loans-archive-count">0</span>
+                    </span>
+                    <svg class="loans-archive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </button>
+                <p class="reports-hint loans-archive-hint">Zamknięte pozycje — bez wpływu na sumę majątku.</p>
+                <div id="assets-archive-list" class="assets-archive-list hidden"></div>
+            </div>
+        </div>
+
+        <div id="view-loans" class="app-view">
+            <div id="loans-total-hero" class="card hero-card loans-hero-card hidden">
+                <div class="analysis-period-hero-head">
+                    <div class="hero-label">Łącznie do spłaty</div>
+                    <div id="loans-export-actions" class="analysis-period-export hidden">
+                        <button type="button" class="hero-summary-action" onclick="openDebtsPdfDatePicker()">PDF</button>
+                    </div>
+                </div>
+                <div id="loans-total-capital" class="hero-balance loan-capital-hero">—</div>
+                <p id="loans-total-meta" class="hero-forecast-hint hidden"></p>
+                <div id="loans-summary-block" class="loans-hero-summary hidden">
+                    <button type="button" class="loans-hero-summary-toggle" onclick="toggleLoansSummary()" aria-expanded="false" aria-controls="loans-summary-panel">
+                        <span>Dostosuj sumę</span>
+                        <svg class="loans-hero-summary-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </button>
+                    <div id="loans-summary-panel" class="loans-hero-summary-panel hidden">
+                        <div class="hero-summary-actions">
+                            <button type="button" class="hero-summary-action" onclick="setAllLoansSummaryInclude(true)">Zaznacz wszystko</button>
+                            <span class="hero-summary-action-sep" aria-hidden="true">·</span>
+                            <button type="button" class="hero-summary-action" onclick="setAllLoansSummaryInclude(false)">Odznacz wszystko</button>
+                        </div>
+                        <nav id="loans-summary-chips" class="loans-hero-summary-chips" aria-label="Kredyty wliczane w sumę"></nav>
+                    </div>
+                </div>
+                <div id="loans-add-block" class="loans-hero-summary">
+                    <button type="button" class="loans-hero-add-toggle loans-hero-summary-toggle" onclick="toggleLoansAdd()" aria-expanded="false" aria-controls="loans-add-panel">
+                        <span>Dodaj zobowiązanie</span>
+                        <svg class="loans-hero-summary-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </button>
+                    <div id="loans-add-panel" class="loans-hero-summary-panel hidden">
+                        <nav class="loans-hero-summary-chips" aria-label="Typ zobowiązania">
+                            <button type="button" class="toggle-btn loans-chip hero-add-chip" onclick="openNewLoanFromHero()">+ Kredyt</button>
+                            <button type="button" class="toggle-btn loans-chip hero-add-chip" onclick="openNewCreditCardFromHero()">+ Karta</button>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+
+            <section id="loans-active-section" class="loans-active-section">
+                <div class="loans-section-head loans-active-section-head">
+                    <h2 class="loans-section-title">Kredyty</h2>
+                    <span id="loans-active-total" class="loans-section-total hidden">—</span>
+                </div>
+                <div id="loans-list" class="loans-list"></div>
+            </section>
+
+            <section id="credit-cards-section" class="credit-cards-section hidden">
+                <div class="loans-section-head credit-cards-section-head">
+                    <h2 class="credit-cards-section-title loans-section-title">Karty kredytowe</h2>
+                    <span id="credit-cards-total" class="loans-section-total hidden">—</span>
+                </div>
+                <div id="credit-cards-list" class="credit-cards-list"></div>
+            </section>
+
+            <div id="loans-payments-section" class="card loans-payments-section hidden">
+                <div class="loans-payments-head">
+                    <h2 class="loans-section-title loans-payments-title">Ostatnie wpłaty</h2>
+                    <div id="loans-payments-filter-block" class="loans-payments-filter-inline hidden">
+                        <label class="loans-payments-picker" for="loans-payments-filter-select">
+                            <span id="loans-payments-select-label" class="loans-payments-picker-label">Wszystkie kredyty</span>
+                            <svg class="loans-payments-picker-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5z"/></svg>
+                            <select id="loans-payments-filter-select" class="loans-payments-select" aria-label="Filtr wpłat" onchange="handleLoanPaymentsFilterChange()"></select>
+                        </label>
+                    </div>
+                </div>
+                <div id="loan-payments-list" class="loan-payments-list"></div>
+            </div>
+
+            <div id="loans-archive-section" class="card loans-archive-section hidden">
+                <button type="button" class="loans-archive-toggle" onclick="toggleLoansArchive()" aria-expanded="false" aria-controls="loans-archive-list">
+                    <span class="loans-archive-toggle-text">
+                        <h2>Archiwum</h2>
+                        <span id="loans-archive-count" class="loans-archive-count">0</span>
+                    </span>
+                    <svg class="loans-archive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </button>
+                <p class="reports-hint loans-archive-hint">Spłacone kredyty — bez wpływu na sumę zadłużenia.</p>
+                <div id="loans-archive-list" class="loans-archive-list hidden"></div>
+            </div>
+        </div>
+
+        <div id="view-tasks" class="app-view">
+            <div class="card tasks-shell">
+                <div class="tasks-toolbar">
+                    <p id="tasks-hint" class="tasks-hint">Zadania na dziś i jutro — odhacz, gdy gotowe.</p>
+                    <button type="button" id="tasks-toggle-done-btn" class="tasks-toggle-done" onclick="toggleTasksShowDone()" aria-pressed="false">Pokaż zrobione</button>
+                </div>
+                <nav id="tasks-segment-nav" class="tasks-segment-nav" aria-label="Widok zadań"></nav>
+                <div id="tasks-list-header" class="tasks-list-header hidden">
+                    <button type="button" class="tasks-list-back" onclick="setTasksListFilter('lists')" aria-label="Wróć do list">‹</button>
+                    <h2 id="tasks-list-title" class="tasks-list-title"></h2>
+                    <button type="button" id="tasks-list-menu-btn" class="tasks-list-menu-btn" onclick="toggleTodoListEditor()" aria-label="Opcje listy">⋯</button>
+                </div>
+                <div id="tasks-shopping-export" class="tasks-shopping-export hidden" aria-label="Eksport listy zakupów"></div>
+                <div id="tasks-list-actions" class="tasks-list-actions hidden">
+                    <div id="tasks-list-edit-panel" class="tasks-list-edit-panel hidden">
+                        <form class="tasks-list-edit-form" onsubmit="saveTodoListEditor(event)">
+                            <input type="text" id="tasks-list-edit-name" class="tasks-list-edit-input" maxlength="40" autocomplete="off" placeholder="Nazwa listy">
+                            <div class="tasks-list-edit-actions">
+                                <button type="submit" class="btn-submit btn-submit--form tasks-list-btn">Zapisz</button>
+                                <button type="button" class="tasks-list-btn tasks-list-btn--ghost" onclick="cancelTodoListEditor()">Anuluj</button>
+                            </div>
+                            <button type="button" id="tasks-list-delete-btn" class="tasks-list-btn tasks-list-btn--danger hidden" onclick="deleteActiveTodoList()">Usuń listę</button>
+                        </form>
+                    </div>
+                </div>
+                <div id="tasks-lists-hub" class="tasks-lists-hub hidden"></div>
+                <div id="tasks-items-list" class="tasks-items-list"></div>
+                <button type="button" id="tasks-fab" class="tasks-fab hidden" onclick="handleTasksFabClick()" aria-label="Dodaj zadanie">+</button>
+            </div>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <button class="nav-item active" data-nav-view="dashboard" onclick="switchView('dashboard', 'Pulpit', this)"><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Pulpit</button>
+        <button class="nav-item" data-nav-view="add" onclick="switchView('add', 'Dodaj', this)"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>Dodaj</button>
+        <button class="nav-item" data-nav-view="reports" onclick="switchView('reports', 'Analiza', this)"><svg viewBox="0 0 24 24"><path d="M11 2v20c-5.07-.5-9-4.75-9-10s3.93-9.5 9-10zm2 0v8h9c-.44-4.14-3.51-7.27-7.5-7.85zm0 10v10c3.99-.58 7.06-3.71 7.5-7.85h-9z"/></svg>Analiza</button>
+        <button class="nav-item" data-nav-view="investments" onclick="switchView('investments', 'Aktywa', this)"><svg viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>Aktywa</button>
+        <button class="nav-item" data-nav-view="loans" onclick="switchView('loans', 'Kredyty', this)"><svg viewBox="0 0 24 24"><path d="M21 18v2H3v-2h18M5 16h2V8H5v8m6 0h2V4h-2v12m6 0h2v-5h-2v5z"/></svg>Długi</button>
+    </nav>
+
+    <div id="reports-print-meta" class="hidden" aria-hidden="true"></div>
+
+    <template id="tpl-icon-close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+    </template>
+
+    <script src="js/constants.js"></script>
+    <script src="js/firebase.js"></script>
+    <script src="js/chart-instances.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/format.js"></script>
+    <script src="js/search-utils.js"></script>
+    <script src="js/theme.js"></script>
+    <script src="js/categories.js"></script>
+    <script src="js/tx-row-html.js"></script>
+    <script src="js/category-rules.js"></script>
+    <script src="js/loan-details.js"></script>
+    <script src="js/credit-cards.js"></script>
+    <script src="js/portfolio.js"></script>
+    <script src="js/state-limits.js"></script>
+    <script src="js/transaction-search.js"></script>
+    <script src="js/backup-import.js"></script>
+    <script src="js/sync-queue.js"></script>
+    <script src="js/offline.js"></script>
+    <script src="js/sync-lifecycle.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/add-form-ui.js"></script>
+    <script src="js/transactions.js"></script>
+    <script src="js/transaction-duplicates.js"></script>
+    <script src="js/transaction-split.js"></script>
+    <script src="js/recurring-confirm.js"></script>
+    <script src="js/app-shortcuts.js"></script>
+    <script src="js/dashboard-forecast.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/reports-core.js"></script>
+    <script src="js/ppk.js"></script>
+    <script src="js/assets.js"></script>
+    <script src="js/assets-migrations.js"></script>
+    <script src="js/market-prices.js"></script>
+    <script src="js/cash.js"></script>
+    <script src="js/asset-analytics.js"></script>
+    <script src="js/loans.js"></script>
+    <script src="js/settings-backup.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/skryba-dates.js"></script>
+    <script src="js/skryba-entities.js"></script>
+    <script src="js/skryba-tools.js"></script>
+    <script src="js/skryba-actions.js"></script>
+    <script src="js/skryba-style.js"></script>
+    <script src="js/skryba-prompts.js"></script>
+    <script src="js/skryba-chat-ui.js"></script>
+    <script src="js/skryba-threads.js"></script>
+    <script src="js/skryba-router.js"></script>
+    <script src="js/skryba-voice.js"></script>
+    <script src="js/assistant.js"></script>
+    <script src="js/skryba-local-parser.js"></script>
+    <script src="js/action-board.js"></script>
+    <script src="js/tasks.js"></script>
+    <script src="js/notifications.js"></script>
+    <script src="js/hub-ui.js"></script>
+    <script src="js/budget-ui.js"></script>
+    <script src="js/budget-alerts.js"></script>
+    <script src="js/debt-reminders.js"></script>
+    <script src="js/reports-calendar.js"></script>
+    <script src="js/reports-debt-calculations.js"></script>
+    <script src="js/reports-debt.js"></script>
+    <script src="js/tx-basket.js"></script>
+    <script src="js/reports-assets.js"></script>
+    <script src="js/reports-analysis-chart.js"></script>
+    <script src="js/reports-day-month-summary.js"></script>
+    <script src="js/reports-analysis-cache.js"></script>
+    <script src="js/reports-analysis.js"></script>
+    <script src="js/month-close-duplicates-ui.js"></script>
+    <script src="js/month-close.js"></script>
+    <script src="js/spending-insights.js"></script>
+    <script src="js/subscription-center.js"></script>
+    <script src="js/surplus-allocator.js"></script>
+    <script src="js/bootstrap.js"></script>
+    <script src="js/auth-config.js"></script>
+    <script src="js/welcome-dashboard.js"></script>
+    <script src="js/ui-idle-reset.js"></script>
+    <script src="js/app-lock.js"></script>
+    <script src="js/auth.js"></script>
+</body>
+</html>

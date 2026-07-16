@@ -1,0 +1,17 @@
+{
+  "name": "portfel-pwa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:market-live": "vitest run --config vitest.live.config.js && node scripts/test-market-prices-live.mjs",
+    "firebase:deploy-rules": "firebase deploy --only firestore:rules --project portfel-pwa"
+  },
+  "devDependencies": {
+    "firebase-tools": "^13.35.1",
+    "vitest": "^2.1.8",
+    "@vitest/coverage-v8": "^2.1.8"
+  }
+}

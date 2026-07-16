@@ -1,0 +1,72 @@
+{
+  "name": "Finanse",
+  "short_name": "Finanse",
+  "description": "Osobisty portfel finansowy",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#e4eaf4",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512-maskable.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dodaj wydatek",
+      "short_name": "Wydatek",
+      "description": "Szybkie dodanie wydatku",
+      "url": "./index.html?view=add&type=expense",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Dodaj wpływ",
+      "short_name": "Wpływ",
+      "description": "Szybkie dodanie wpływu",
+      "url": "./index.html?view=add&type=income",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Analiza",
+      "short_name": "Analiza",
+      "description": "Przegląd wydatków i raportów",
+      "url": "./index.html?view=reports",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}

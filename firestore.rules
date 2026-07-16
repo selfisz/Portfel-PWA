@@ -1,0 +1,34 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isAllowedAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'dawidrekal@gmail.com';
+    }
+
+    match /users/{userId} {
+      match /state/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+      match /meta/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+      match /snapshots/{snapshotId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    match /finances/{docId} {
+      allow read: if isAllowedAdmin();
+      allow write: if false;
+      match /snapshots/{snapshotId} {
+        allow read: if isAllowedAdmin();
+        allow write: if false;
+      }
+    }
+  }
+}
