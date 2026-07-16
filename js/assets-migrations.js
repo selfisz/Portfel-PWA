@@ -426,5 +426,8 @@ function runAssetMigrations() {
     const emeryturaFix = migrateMbankEmeryturaAsset();
     const seeded = ensureUserAssetsSeed();
     const portfolio = migratePortfolioPositionsJune2026();
-    return migrated || consolidated || emeryturaFix || seeded || portfolio;
+    const ppkBalance = typeof migratePpkBalanceConsistency === 'function'
+        ? migratePpkBalanceConsistency()
+        : false;
+    return migrated || consolidated || emeryturaFix || seeded || portfolio || ppkBalance;
 }

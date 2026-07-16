@@ -96,6 +96,47 @@ describe('normalizePpkAssetFields', () => {
         expect(asset.ppkBreakdown).toBeUndefined();
         expect(asset.ppkContributions).toBeUndefined();
     });
+
+    it('podnosi saldo gdy składniki są większe niż amount', () => {
+        const asset = makePpkAsset({
+            amount: 10564.79,
+            ppkBreakdown: { own: 5996.69, employer: 4497.58, state: 274.77 }
+        });
+        normalizePpkAssetFields(asset);
+        expect(asset.amount).toBe(10769.04);
+        expect(getPpkGainAmount(asset)).toBe(0);
+    });
+
+    it('nie obniża salda gdy jest zysk kapitałowy', () => {
+        const asset = makePpkAsset({
+            amount: 12000,
+            ppkBreakdown: { own: 5000, employer: 4000, state: 200 }
+        });
+        normalizePpkAssetFields(asset);
+        expect(asset.amount).toBe(12000);
+        expect(getPpkGainAmount(asset)).toBe(2800);
+    });
+});
+
+describe('readPpkFieldsFromForm', () => {
+    it('przy edycji składników ustawia saldo = suma + zachowany zysk', () => {
+        const values = {
+            'asset-ppk-own-input': '6000',
+            'asset-ppk-employer-input': '4500',
+            'asset-ppk-state-input': '300'
+        };
+        globalThis.document = {
+            getElementById: (id) => ({ value: values[id] ?? '' })
+        };
+        const payload = makePpkAsset({
+            amount: 11000,
+            ppkBreakdown: { own: 5000, employer: 4000, state: 200 },
+            _ppkEditPreservedGain: 1800
+        });
+        readPpkFieldsFromForm(payload);
+        expect(payload.ppkBreakdown).toEqual({ own: 6000, employer: 4500, state: 300 });
+        expect(payload.amount).toBe(12600);
+    });
 });
 
 describe('PPK wpłaty do historii', () => {
