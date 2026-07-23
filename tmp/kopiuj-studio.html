@@ -1,38 +1,20 @@
 <!DOCTYPE html>
-<html lang="pl">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Kopiuj Offline Table Studio V7.6.1</title>
+<html lang="pl"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kopiuj Studio V7.6.2</title>
 <style>
-  html,body{margin:0;font-family:-apple-system,system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
-  .wrap{padding:16px;max-width:900px;margin:0 auto}
-  h1{font-size:1.1rem;margin:0 0 8px}
-  p{font-size:.9rem;color:#94a3b8;margin:0 0 14px;line-height:1.4}
-  button{
-    display:block;width:100%;padding:16px 18px;border:0;border-radius:12px;
-    background:#2563eb;color:#fff;font-size:1.05rem;font-weight:700;
-    -webkit-appearance:none;appearance:none;margin-bottom:12px
-  }
-  button.ok{background:#0f766e}
-  a.dl{
-    display:block;text-align:center;padding:14px;border-radius:12px;
-    background:#1e293b;color:#93c5fd;text-decoration:none;font-weight:600;margin-bottom:12px
-  }
-  textarea{
-    width:100%;height:55vh;box-sizing:border-box;border-radius:12px;
-    border:1px solid #334155;background:#020617;color:#e2e8f0;
-    padding:12px;font:12px/1.35 ui-monospace,Menlo,monospace
-  }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <h1>Offline Table Studio V7.6.1</h1>
-  <p>Kliknij przycisk — skopiuje cały kod. Potem wklej jako plik <code>html</code> w esce.</p>
-  <button type="button" id="copyBtn">Kopiuj cały kod</button>
-  <a class="dl" id="dl" download="offline-table-studio-v7.6.1.html" href="#">Pobierz plik .html</a>
-  <textarea id="code" readonly>&lt;!DOCTYPE html&gt;
+body{margin:0;font-family:-apple-system,system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
+.wrap{padding:16px;max-width:900px;margin:0 auto}
+button{display:block;width:100%;padding:16px;border:0;border-radius:12px;background:#2563eb;color:#fff;font-size:1.05rem;font-weight:700;margin:12px 0}
+button.ok{background:#0f766e}
+textarea{width:100%;height:55vh;box-sizing:border-box;border-radius:12px;border:1px solid #334155;background:#020617;color:#e2e8f0;padding:12px;font:12px ui-monospace,Menlo,monospace}
+a{color:#93c5fd}
+</style></head><body><div class="wrap">
+<h1>Offline Table Studio V7.6.2</h1>
+<p>Kliknij przycisk = cały kod do schowka. Wklej jako plik <code>html</code> w esce.</p>
+<button type="button" id="b">Kopiuj cały kod</button>
+<a id="dl" download="offline-table-studio-v7.6.2.html" href="#">Pobierz .html</a>
+<textarea id="t" readonly>&lt;!DOCTYPE html&gt;
 &lt;html lang=&quot;pl&quot;&gt;
 &lt;head&gt;
 &lt;meta charset=&quot;UTF-8&quot;&gt;
@@ -3115,7 +3097,9 @@ function parseListSystemValue(v){
   if(isNieFiguruje(t)) return REG_NA;
   const d=parseISODate(t);
   if(d) return dateToISODate(d);
-  if(/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  if(/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0,10);
+  // Surowa wartość z listy (np. data z Excela w innym formacie) — i tak przenieś
+  if(/\d/.test(t) &amp;&amp; t.length&lt;=16) return t;
   return &#x27;&#x27;;
 }
 function writeSystemsToRegistryRow(reg, dest, values, rmap){
@@ -3243,9 +3227,13 @@ function registryIdentityCols(reg){
   return cols;
 }
 function cleanId(v){
-  return norm(v).replace(/[\s-]/g,&#x27;&#x27;).replace(/\.0+$/,&#x27;&#x27;);
+  let s=norm(v).replace(/[\s\u00a0&#x27;-]/g,&#x27;&#x27;).replace(/\.0+$/,&#x27;&#x27;);
+  if(!s) return &#x27;&#x27;;
+  const digits=s.replace(/\D/g,&#x27;&#x27;);
+  // PESEL (11) / NIP (10) — bierz same cyfry, nawet z śmieciami z Excela
+  if(digits.length===11 || digits.length===10) return digits;
+  return s;
 }
-/** Indeks PESEL/NIP → wiersz, z kolumn które użytkownik wskazał / które się nazywają PESEL|NIP. */
 function registryIdentityIndex(reg){
   const idx=new Map();
   if(!reg) return idx;
@@ -3258,6 +3246,13 @@ function registryIdentityIndex(reg){
   });
   return idx;
 }
+function normNip(v){ return cleanId(v); }
+function keyKind(v){
+  const s=cleanId(v);
+  if(/^\d{11}$/.test(s)) return &#x27;pesel&#x27;;
+  if(/^\d{10}$/.test(s)) return &#x27;nip&#x27;;
+  return &#x27;&#x27;;
+}
 function registryIndexByPesel(reg){
   const idx=new Map();
   const pci=findSystemCol(reg,&#x27;PESEL&#x27;);
@@ -3265,18 +3260,11 @@ function registryIndexByPesel(reg){
   const cols=[pci, keyCi].filter((c,i,a)=&gt;c&gt;=0&amp;&amp;a.indexOf(c)===i);
   reg.rows.forEach((r,i)=&gt;{
     cols.forEach(ci=&gt;{
-      const k=normPesel(r[ci]);
+      const k=cleanId(r[ci]);
       if(k &amp;&amp; /^\d{11}$/.test(k)) idx.set(k,i);
     });
   });
   return idx;
-}
-function normNip(v){ return cleanId(v); }
-function keyKind(v){
-  const s=cleanId(v);
-  if(/^\d{11}$/.test(s)) return &#x27;pesel&#x27;;
-  if(/^\d{10}$/.test(s)) return &#x27;nip&#x27;;
-  return &#x27;&#x27;;
 }
 function registryIndexByNip(reg){
   const idx=new Map();
@@ -3285,11 +3273,23 @@ function registryIndexByNip(reg){
   const cols=[nci, keyCi].filter((c,i,a)=&gt;c&gt;=0&amp;&amp;a.indexOf(c)===i);
   reg.rows.forEach((r,i)=&gt;{
     cols.forEach(ci=&gt;{
-      const k=normNip(r[ci]);
+      const k=cleanId(r[ci]);
       if(k &amp;&amp; /^\d{10}$/.test(k)) idx.set(k,i);
     });
   });
   return idx;
+}
+/** Szukaj klucza w CAŁEJ bazie (ostateczność) — zapobiega duplikatom przy złej nazwie kolumny. */
+function findRegistryRowScanAll(reg, key){
+  const k=cleanId(key);
+  if(!reg||!k) return null;
+  for(let i=0;i&lt;reg.rows.length;i++){
+    const row=reg.rows[i];
+    for(let ci=0;ci&lt;reg.columns.length;ci++){
+      if(cleanId(row[ci])===k) return i;
+    }
+  }
+  return null;
 }
 /** Znajdź wiersz w bazie po PESEL albo NIP — także po kolumnie ustawionej „Ustaw kolumnę klucza”. */
 function findRegistryRowByKey(reg, key){
@@ -3298,7 +3298,6 @@ function findRegistryRowByKey(reg, key){
   if(!k) return null;
   const all=registryIdentityIndex(reg);
   if(all.has(k)) return all.get(k);
-  // fallback po rodzaju
   if(keyKind(k)===&#x27;pesel&#x27;){
     const by=registryIndexByPesel(reg);
     if(by.has(k)) return by.get(k);
@@ -3307,27 +3306,29 @@ function findRegistryRowByKey(reg, key){
     const by=registryIndexByNip(reg);
     if(by.has(k)) return by.get(k);
   }
-  return null;
+  // Ostatecznie: przeskanuj wszystkie komórki (osoba już jest w bazie pod inną kolumną)
+  return findRegistryRowScanAll(reg, k);
 }
-/** Dodaj osobę do bazy — klucz z listy trafia do PESEL albo NIP (albo do kolumny-klucza). */
+/** Dodaj osobę do bazy — NIE dokłada kolumny PESEL, jeśli baza ma już kolumnę klucza. */
 function ensureRegistryPerson(reg, key){
   let dest=findRegistryRowByKey(reg, key);
   if(dest!=null) return dest;
-  ensureCol(reg,&#x27;NIP&#x27;,130);
-  ensureCol(reg,&#x27;PESEL&#x27;,130);
-  const row=Array.from({length:reg.columns.length},()=&gt;&#x27;&#x27;);
-  const kind=keyKind(key);
   const k=cleanId(key);
-  const peselCi=findSystemCol(reg,&#x27;PESEL&#x27;);
-  const nipCi=findSystemCol(reg,&#x27;NIP&#x27;);
-  const keyCi=findKeyColumn(reg);
+  if(!k) return -1;
+  const kind=keyKind(k);
+  let targetCi=-1;
   if(kind===&#x27;nip&#x27;){
-    if(nipCi&gt;=0) row[nipCi]=k;
-    else if(keyCi&gt;=0) row[keyCi]=k;
+    targetCi=findSystemCol(reg,&#x27;NIP&#x27;);
+    if(targetCi&lt;0) targetCi=findKeyColumn(reg);
+    if(targetCi&lt;0) targetCi=ensureCol(reg,&#x27;NIP&#x27;,130);
   }else{
-    if(peselCi&gt;=0) row[peselCi]=k;
-    else if(keyCi&gt;=0) row[keyCi]=k;
+    targetCi=findSystemCol(reg,&#x27;PESEL&#x27;);
+    if(targetCi&lt;0) targetCi=findKeyColumn(reg);
+    if(targetCi&lt;0) targetCi=ensureCol(reg,&#x27;PESEL&#x27;,130);
   }
+  if(targetCi&lt;0) return -1;
+  const row=Array.from({length:reg.columns.length},()=&gt;&#x27;&#x27;);
+  row[targetCi]=k;
   dest=reg.rows.length;
   reg.rows.push(row);
   return dest;
@@ -3783,6 +3784,26 @@ function syncListToRegistry(){
     return null;
   }
 
+  function writeValsToDest(dest, vals){
+    padSheetRow(reg, dest);
+    let changed=false;
+    Object.keys(vals).forEach(name=&gt;{
+      let ci=regSys[name];
+      if(ci==null||ci&lt;0) ci=findSystemCol(reg, name);
+      if(ci==null||ci&lt;0){
+        ci=ensureCol(reg, name, 100);
+        if(ci&gt;=0) regSys[name]=ci;
+      }
+      if(ci==null||ci&lt;0) return;
+      if(norm(reg.rows[dest][ci])===norm(vals[name])) return;
+      reg.rows[dest][ci]=vals[name];
+      systemsTouched.add(name);
+      fieldsWritten++;
+      changed=true;
+    });
+    return changed;
+  }
+
   let updated=0, added=0, skipped=0, alreadyOk=0, notInBase=[];
   const systemsTouched=new Set();
   let fieldsWritten=0;
@@ -3801,28 +3822,9 @@ function syncListToRegistry(){
       return;
     }
 
-    padSheetRow(reg, dest);
-    let changed=false;
-    Object.keys(vals).forEach(name=&gt;{
-      const ci=regSys[name];
-      if(ci==null||ci&lt;0) return;
-      if(norm(reg.rows[dest][ci])===norm(vals[name])) return;
-      reg.rows[dest][ci]=vals[name];
-      systemsTouched.add(name);
-      fieldsWritten++;
-      changed=true;
-    });
+    const changed=writeValsToDest(dest, vals);
     if(changed){
       tagPersonSource(reg, dest, tag);
-      // dopisz brakujący NIP/PESEL z listy do bazy (lepsze przyszłe dopasowania)
-      keys.forEach(k=&gt;{
-        const kind=keyKind(k);
-        const peselCi=findSystemCol(reg,&#x27;PESEL&#x27;);
-        const nipCi=findSystemCol(reg,&#x27;NIP&#x27;);
-        if(kind===&#x27;pesel&#x27; &amp;&amp; peselCi&gt;=0 &amp;&amp; !cleanId(reg.rows[dest][peselCi])) reg.rows[dest][peselCi]=k;
-        if(kind===&#x27;nip&#x27; &amp;&amp; nipCi&gt;=0 &amp;&amp; !cleanId(reg.rows[dest][nipCi])) reg.rows[dest][nipCi]=k;
-      });
-      // odśwież indeks
       keys.forEach(k=&gt;idIndex.set(k, dest));
       updated++;
     }else{
@@ -3831,29 +3833,62 @@ function syncListToRegistry(){
   });
 
   if(notInBase.length){
+    // Jeszcze raz pełny skan — często osoba JEST w bazie, tylko kolumna klucza była źle ustawiona
+    const stillMissing=[];
+    notInBase.forEach(item=&gt;{
+      let dest=findDest(item.keys);
+      if(dest==null){
+        for(let i=0;i&lt;item.keys.length &amp;&amp; dest==null;i++) dest=findRegistryRowScanAll(reg, item.keys[i]);
+      }
+      if(dest!=null){
+        if(writeValsToDest(dest, item.vals)){
+          tagPersonSource(reg, dest, tag);
+          item.keys.forEach(k=&gt;idIndex.set(k, dest));
+          updated++;
+        }else alreadyOk++;
+      }else{
+        stillMissing.push(item);
+      }
+    });
+    notInBase=stillMissing;
+  }
+
+  if(notInBase.length){
     const names=notInBase.slice(0,5).map(x=&gt;x.key).join(&#x27;, &#x27;)+(notInBase.length&gt;5?&#x27;…&#x27;:&#x27;&#x27;);
     const add=confirm(
-      &#x27;Lista↔Zobowiązani: znaleziono &#x27;+notInBase.length+&#x27; osób bez dopasowania PESEL/NIP:\n&#x27;+names+
-      &#x27;\n\nKlucz listy: &#x27;+letter(sh.order.indexOf(listKeyCol))+&#x27; (&#x27;+sh.columns[listKeyCol]+&#x27;)&#x27;+
-      &#x27;\nDopasowanie w bazie po: &#x27;+(registryIdentityCols(reg).map(ci=&gt;shLetterOrName(reg,ci)).join(&#x27;, &#x27;)||&#x27;?&#x27;)+
-      &#x27;\n\nDodać je do Zobowiązanych z datami KAWA/SINF/… z listy?&#x27;
+      &#x27;Nie znaleziono w Zobowiązanych (po PESEL/NIP): &#x27;+notInBase.length+&#x27;\n&#x27;+names+
+      &#x27;\n\nKlucz listy: &#x27;+shLetterOrName(sh, listKeyCol)+
+      &#x27;\nSzukano w bazie w: &#x27;+(registryIdentityCols(reg).map(ci=&gt;shLetterOrName(reg,ci)).join(&#x27;, &#x27;)||&#x27;(cała tabela)&#x27;)+
+      &#x27;\n\nUWAGA: lepiej najpierw sprawdź „Ustaw kolumnę klucza” na Zobowiązanych.&#x27;+
+      &#x27;\nDodać jako NOWE wiersze z datami KAWA/SINF/…?&#x27;
     );
     if(add){
       ensureRegistrySystemCols(reg);
       REG_SYSTEMS.forEach(name=&gt;{ regSys[name]=findSystemCol(reg, name); });
       notInBase.forEach(({key, keys, vals})=&gt;{
-        const dest=ensureRegistryPerson(reg, key);
-        padSheetRow(reg, dest);
-        let any=false;
-        Object.keys(vals).forEach(name=&gt;{
-          const ci=regSys[name];
-          if(ci==null||ci&lt;0) return;
-          reg.rows[dest][ci]=vals[name];
-          systemsTouched.add(name);
-          fieldsWritten++;
-          any=true;
+        // Ostatni skan przed dodaniem
+        let dest=findDest(keys||[key]);
+        if(dest==null) dest=findRegistryRowScanAll(reg, key);
+        if(dest!=null){
+          if(writeValsToDest(dest, vals)){ tagPersonSource(reg, dest, tag); updated++; }
+          return;
+        }
+        // Tylko gdy na pewno da się zapisać systemy
+        const canWrite=Object.keys(vals).some(name=&gt;{
+          let ci=regSys[name];
+          if(ci==null||ci&lt;0) ci=findSystemCol(reg, name);
+          if(ci&lt;0) ci=ensureCol(reg, name, 100);
+          if(ci&gt;=0) regSys[name]=ci;
+          return ci&gt;=0;
         });
-        if(!any) return;
+        if(!canWrite){ return; }
+        dest=ensureRegistryPerson(reg, key);
+        if(dest&lt;0) return;
+        if(!writeValsToDest(dest, vals)){
+          // Cofnij pusty wiersz bez KAWA/INFZ
+          if(dest===reg.rows.length-1) reg.rows.pop();
+          return;
+        }
         (keys||[key]).forEach(k=&gt;idIndex.set(k, dest));
         tagPersonSource(reg, dest, tag);
         added++;
@@ -5162,20 +5197,8 @@ renderSwatches(); fillRegSysMenu(); setRibbonTab(App.ribbonTab||&#x27;dane&#x27;
 &lt;/body&gt;
 &lt;/html&gt;
 </textarea>
-</div>
-<script>
-const ta=document.getElementById('code');
-const btn=document.getElementById('copyBtn');
-const raw=ta.value;
+</div><script>
+const t=document.getElementById('t'), b=document.getElementById('b'), raw=t.value;
 document.getElementById('dl').href=URL.createObjectURL(new Blob([raw],{type:'text/html;charset=utf-8'}));
-btn.addEventListener('click', async ()=>{
-  ta.focus(); ta.select();
-  try{
-    if(navigator.clipboard&&navigator.clipboard.writeText) await navigator.clipboard.writeText(raw);
-    else document.execCommand('copy');
-    btn.textContent='Skopiowano ✓'; btn.classList.add('ok');
-  }catch(e){ btn.textContent='Zaznaczono — Kopiuj z menu iOS'; }
-});
-</script>
-</body>
-</html>
+b.onclick=async()=>{t.focus();t.select();try{await navigator.clipboard.writeText(raw);b.textContent='Skopiowano ✓';b.className='ok';}catch(e){b.textContent='Zaznaczono — Kopiuj z menu';}};
+</script></body></html>
