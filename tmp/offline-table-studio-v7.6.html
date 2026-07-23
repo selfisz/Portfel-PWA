@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; media-src 'none'; font-src 'none';">
-<title>Offline Table Studio V7.6</title>
+<title>Offline Table Studio V7.6.1</title>
 <style>
 :root,[data-theme="navy"]{--bg:#dfe7f2;--chrome:#0f1c2e;--chrome2:#16253b;--panel:#fff;--panel2:#f4f7fb;--line:#c9d5e5;--text:#142033;--muted:#607084;--accent:#2563eb;--accent2:#1d4ed8;--soft:#e8f0ff;--head:#1a3354;--headText:#f5f8fc;--zebra:#eef3f9;--sel:#d9e8ff;--ok:#0f766e;--danger:#be123c;--shadow:0 12px 40px rgba(15,28,46,.12);--font:"Segoe UI",system-ui,-apple-system,sans-serif;--mono:Consolas,"Cascadia Mono",monospace}
 [data-theme="green"]{--bg:#dcebe3;--chrome:#0b2a24;--chrome2:#12352e;--accent:#0f766e;--accent2:#0d9488;--soft:#d8f3ee;--head:#134e4a;--sel:#c5efe7;--zebra:#eaf6f1}
@@ -3180,90 +3180,133 @@ function computePersonStatus(dates){
 }
 function refreshRegistryDerived(reg){
   if(!reg) return;
-  const map=registryColMap(reg);
-  const sysIdx=REG_SYSTEMS.map(n=>map[n]).filter(i=>i!=null&&i>=0);
-  const stanCi=map['Stan'], kompCi=map['Komplet'];
-  if(stanCi==null) return;
+  const sysIdx=REG_SYSTEMS.map(n=>findSystemCol(reg,n)).filter(i=>i>=0);
+  const stanCi=findSystemCol(reg,'Stan'), kompCi=findSystemCol(reg,'Komplet');
+  if(stanCi<0) return;
   reg.rows.forEach((row,ri)=>{
     const dates=sysIdx.map(ci=>row[ci]||'');
     const {stan,komplet}=computePersonStatus(dates);
     row[stanCi]=stan;
-    if(kompCi!=null) row[kompCi]=komplet;
+    if(kompCi>=0) row[kompCi]=komplet;
     const color=REG_STATUS_COLOR[stan];
     if(color) reg.rowColors[ri]=color; else delete reg.rowColors[ri];
   });
 }
-function registryIndexByPesel(reg){
-  const map=registryColMap(reg);
-  const pci=map['PESEL'];
+/** Kolumny tożsamości w bazie: nazwane PESEL/NIP + ręcznie ustawiony klucz (_keyColCache). */
+function registryIdentityCols(reg){
+  const cols=[];
+  const seen=new Set();
+  const add=(ci)=>{
+    if(ci==null||ci<0||seen.has(ci)) return;
+    seen.add(ci); cols.push(ci);
+  };
+  add(findSystemCol(reg,'PESEL'));
+  add(findSystemCol(reg,'NIP'));
+  add(findKeyColumn(reg)); // honoruje „Ustaw kolumnę klucza” na Zobowiązanych
+  if(reg._keyColCache!=null) add(reg._keyColCache);
+  if(!cols.length && reg.columns.length>=2) add(1);
+  if(!cols.length && reg.columns.length>=1) add(0);
+  return cols;
+}
+function cleanId(v){
+  return norm(v).replace(/[\s-]/g,'').replace(/\.0+$/,'');
+}
+/** Indeks PESEL/NIP → wiersz, z kolumn które użytkownik wskazał / które się nazywają PESEL|NIP. */
+function registryIdentityIndex(reg){
   const idx=new Map();
-  if(pci==null) return idx;
+  if(!reg) return idx;
+  const cols=registryIdentityCols(reg);
   reg.rows.forEach((r,i)=>{
-    const k=normPesel(r[pci]);
-    if(k) idx.set(k,i);
+    cols.forEach(ci=>{
+      const k=cleanId(r[ci]);
+      if(k) idx.set(k, i);
+    });
   });
   return idx;
 }
-
-function normNip(v){ return norm(v).replace(/[\s-]/g,''); }
+function registryIndexByPesel(reg){
+  const idx=new Map();
+  const pci=findSystemCol(reg,'PESEL');
+  const keyCi=findKeyColumn(reg);
+  const cols=[pci, keyCi].filter((c,i,a)=>c>=0&&a.indexOf(c)===i);
+  reg.rows.forEach((r,i)=>{
+    cols.forEach(ci=>{
+      const k=normPesel(r[ci]);
+      if(k && /^\d{11}$/.test(k)) idx.set(k,i);
+    });
+  });
+  return idx;
+}
+function normNip(v){ return cleanId(v); }
 function keyKind(v){
-  const s=norm(v).replace(/[\s-]/g,'');
+  const s=cleanId(v);
   if(/^\d{11}$/.test(s)) return 'pesel';
   if(/^\d{10}$/.test(s)) return 'nip';
   return '';
 }
 function registryIndexByNip(reg){
-  const map=registryColMap(reg);
-  const nci=map['NIP'];
   const idx=new Map();
-  if(nci==null) return idx;
+  const nci=findSystemCol(reg,'NIP');
+  const keyCi=findKeyColumn(reg);
+  const cols=[nci, keyCi].filter((c,i,a)=>c>=0&&a.indexOf(c)===i);
   reg.rows.forEach((r,i)=>{
-    const k=normNip(r[nci]);
-    if(k) idx.set(k,i);
+    cols.forEach(ci=>{
+      const k=normNip(r[ci]);
+      if(k && /^\d{10}$/.test(k)) idx.set(k,i);
+    });
   });
   return idx;
 }
-/** Znajdź wiersz w bazie po PESEL albo NIP (zależnie od wartości klucza z listy). */
+/** Znajdź wiersz w bazie po PESEL albo NIP — także po kolumnie ustawionej „Ustaw kolumnę klucza”. */
 function findRegistryRowByKey(reg, key){
   if(!reg||!key) return null;
-  const kind=keyKind(key);
-  const rmap=registryColMap(reg);
-  if(kind==='pesel' || (!kind && String(key).replace(/\D/g,'').length===11)){
+  const k=cleanId(key);
+  if(!k) return null;
+  const all=registryIdentityIndex(reg);
+  if(all.has(k)) return all.get(k);
+  // fallback po rodzaju
+  if(keyKind(k)==='pesel'){
     const by=registryIndexByPesel(reg);
-    const k=normPesel(key);
     if(by.has(k)) return by.get(k);
   }
-  if(kind==='nip' || (!kind && String(key).replace(/\D/g,'').length===10)){
+  if(keyKind(k)==='nip'){
     const by=registryIndexByNip(reg);
-    const k=normNip(key);
     if(by.has(k)) return by.get(k);
   }
-  // fallback: spróbuj obie
-  const byP=registryIndexByPesel(reg);
-  const kp=normPesel(key);
-  if(kp && byP.has(kp)) return byP.get(kp);
-  const byN=registryIndexByNip(reg);
-  const kn=normNip(key);
-  if(kn && byN.has(kn)) return byN.get(kn);
   return null;
 }
-/** Dodaj osobę do bazy — klucz z listy trafia do PESEL albo NIP. */
+/** Dodaj osobę do bazy — klucz z listy trafia do PESEL albo NIP (albo do kolumny-klucza). */
 function ensureRegistryPerson(reg, key){
   let dest=findRegistryRowByKey(reg, key);
   if(dest!=null) return dest;
   ensureCol(reg,'NIP',130);
   ensureCol(reg,'PESEL',130);
-  const rmap=registryColMap(reg);
   const row=Array.from({length:reg.columns.length},()=>'');
   const kind=keyKind(key);
+  const k=cleanId(key);
+  const peselCi=findSystemCol(reg,'PESEL');
+  const nipCi=findSystemCol(reg,'NIP');
+  const keyCi=findKeyColumn(reg);
   if(kind==='nip'){
-    if(rmap.NIP!=null) row[rmap.NIP]=normNip(key);
+    if(nipCi>=0) row[nipCi]=k;
+    else if(keyCi>=0) row[keyCi]=k;
   }else{
-    if(rmap.PESEL!=null) row[rmap.PESEL]=normPesel(key);
+    if(peselCi>=0) row[peselCi]=k;
+    else if(keyCi>=0) row[keyCi]=k;
   }
   dest=reg.rows.length;
   reg.rows.push(row);
   return dest;
+}
+/** Znajdź kolumnę systemu na liście: dokładna nazwa, potem zawiera „kawa”/„infz”… */
+function findListSystemCol(sh, name){
+  let ci=findSystemCol(sh, name);
+  if(ci>=0) return ci;
+  const up=name.toUpperCase();
+  return sh.columns.findIndex(c=>{
+    const n=norm(c).toUpperCase();
+    return n===up || n.includes(up);
+  });
 }
 
 function pickKeyColumnInteractive(sh){
@@ -3629,127 +3672,155 @@ function syncListToRegistry(){
   if(sh.name===PARK_SHEET || sh.name==='Archiwum'){ toast('Synchronizacja działa tylko z list roboczych'); return; }
   if(App.workMode==='adhoc'){ toast('Włącz tryb „Z bazą" (u góry), żeby synchronizować'); return; }
 
-  let keyCol=findKeyColumn(sh);
-  if(keyCol<0) keyCol=pickKeyColumnInteractive(sh);
-  if(keyCol<0){ toast('Brak kolumny PESEL/NIP na liście'); return; }
+  // 1) Kolumna PESEL/NIP na liście roboczej (honoruje „Ustaw kolumnę klucza”)
+  let listKeyCol=findKeyColumn(sh);
+  if(listKeyCol<0) listKeyCol=pickKeyColumnInteractive(sh);
+  if(listKeyCol<0){ toast('Wskaż kolumnę PESEL lub NIP na liście (przycisk „Ustaw kolumnę klucza”)'); return; }
+  sh._keyColCache=listKeyCol;
 
+  // 2) Baza Zobowiązani + kolumny KAWA/SINF/…
   const reg=ensureRegistrySheet(false);
+  if(!reg){ toast('Brak bazy Zobowiązanych'); return; }
+  // Upewnij się, że baza też ma ustawiony klucz (albo nazwany PESEL/NIP)
+  if(findKeyColumn(reg)<0){
+    const regKey=pickKeyColumnInteractive(reg);
+    if(regKey>=0) reg._keyColCache=regKey;
+  }
   const missing=ensureRegistrySystemCols(reg);
   if(missing.length){
-    toast('Brak kolumn w bazie: '+missing.join(', ')+'. Za dużo kolumn (limit A–Z) — usuń zbędne w Zobowiązanych i spróbuj ponownie.');
+    toast('Nie mogę utworzyć kolumn '+missing.join(', ')+' w Zobowiązanych (limit A–Z). Usuń zbędne kolumny w bazie.');
     return;
   }
 
-  let rmap=registryColMap(reg);
+  // 3) Kolumny systemów na LIŚCIE (stamtąd bierzemy daty)
   const listSys={};
-  REG_SYSTEMS.forEach(name=>{ const ci=findSystemCol(sh, name); if(ci>=0) listSys[name]=ci; });
-  const stanCi=findSystemCol(sh,'Stan');
+  let sysFound=0;
+  REG_SYSTEMS.forEach(name=>{
+    const ci=findListSystemCol(sh, name);
+    if(ci>=0){ listSys[name]=ci; sysFound++; }
+  });
+  if(!sysFound){
+    toast('Na liście nie ma kolumn KAWA/SINF/UFG/JPK/INFZ — najpierw oznacz przyciskami albo wklej daty.');
+    return;
+  }
+
+  // 4) Kolumny systemów w BAZIE (tu zapisujemy)
+  const regSys={};
+  REG_SYSTEMS.forEach(name=>{
+    const ci=findSystemCol(reg, name);
+    if(ci>=0) regSys[name]=ci;
+  });
+  const idIndex=registryIdentityIndex(reg);
   const today=todayISO();
   const tag=listSourceTag(sh, ['SYNC']);
   const idxs=sh.selected.size?[...sh.selected].sort((a,b)=>a-b):sh.rows.map((_,i)=>i);
+  const listPeselCi=findSystemCol(sh,'PESEL');
+  const listNipCi=findSystemCol(sh,'NIP');
 
-  let updated=0, added=0, skipped=0, alreadyOk=0, blockedNoCol=0, notInBase=[];
-  const systemsTouched=new Set();
-
-  function rowKey(ri){
-    let key=norm(sh.rows[ri][keyCol]).replace(/[\s-]/g,'');
-    if(key) return key;
-    const peselCi=findSystemCol(sh,'PESEL');
-    const nipCi=findSystemCol(sh,'NIP');
-    if(peselCi>=0){ key=norm(sh.rows[ri][peselCi]).replace(/[\s-]/g,''); if(key) return key; }
-    if(nipCi>=0){ key=norm(sh.rows[ri][nipCi]).replace(/[\s-]/g,''); if(key) return key; }
-    return '';
+  function keysFromListRow(ri){
+    const keys=[];
+    const seen=new Set();
+    const add=(v)=>{
+      const k=cleanId(v);
+      if(!k||seen.has(k)) return;
+      seen.add(k); keys.push(k);
+    };
+    add(sh.rows[ri][listKeyCol]);
+    if(listPeselCi>=0) add(sh.rows[ri][listPeselCi]);
+    if(listNipCi>=0) add(sh.rows[ri][listNipCi]);
+    return keys;
   }
-  function collectFromList(row){
-    const fromList={};
-    let hasListDates=false;
+  function systemsFromListRow(ri){
+    const vals={};
     REG_SYSTEMS.forEach(name=>{
       const ci=listSys[name];
       if(ci==null) return;
-      const parsed=parseListSystemValue(row[ci]);
-      if(!parsed) return;
-      fromList[name]=parsed;
-      hasListDates=true;
+      const parsed=parseListSystemValue(sh.rows[ri][ci]);
+      if(parsed) vals[name]=parsed;
     });
-    return {fromList, hasListDates};
+    return vals;
   }
+  function findDest(keys){
+    for(let i=0;i<keys.length;i++){
+      if(idIndex.has(keys[i])) return idIndex.get(keys[i]);
+      const d=findRegistryRowByKey(reg, keys[i]);
+      if(d!=null) return d;
+    }
+    return null;
+  }
+
+  let updated=0, added=0, skipped=0, alreadyOk=0, notInBase=[];
+  const systemsTouched=new Set();
+  let fieldsWritten=0;
 
   pushUndo();
 
   idxs.forEach(ri=>{
-    const row=sh.rows[ri];
-    const key=rowKey(ri);
-    if(!key){ skipped++; return; }
+    const keys=keysFromListRow(ri);
+    if(!keys.length){ skipped++; return; }
+    const vals=systemsFromListRow(ri);
+    if(!Object.keys(vals).length){ skipped++; return; }
 
-    const {fromList, hasListDates}=collectFromList(row);
-    const stan=stanCi>=0?norm(row[stanCi]):'';
-    const stanMarked=!!(stan && stan!==REG_STATUS.todo);
-    if(!hasListDates && !stanMarked){ skipped++; return; }
-
-    let dest=findRegistryRowByKey(reg, key);
-    // Drugi klucz z wiersza (NIP↔PESEL)
+    let dest=findDest(keys);
     if(dest==null){
-      const peselCi=findSystemCol(sh,'PESEL');
-      const nipCi=findSystemCol(sh,'NIP');
-      if(peselCi>=0 && peselCi!==keyCol){
-        const k2=norm(row[peselCi]).replace(/[\s-]/g,'');
-        if(k2) dest=findRegistryRowByKey(reg, k2);
-      }
-      if(dest==null && nipCi>=0 && nipCi!==keyCol){
-        const k2=norm(row[nipCi]).replace(/[\s-]/g,'');
-        if(k2) dest=findRegistryRowByKey(reg, k2);
-      }
-    }
-    if(dest==null){
-      notInBase.push({ri, key, fromList, stanMarked});
+      notInBase.push({ri, key:keys[0], keys, vals});
       return;
     }
 
-    let vals={};
-    if(hasListDates) vals=fromList;
-    else if(stanMarked){
-      REG_SYSTEMS.forEach(name=>{
-        const regCi=rmap[name];
-        if(regCi==null) return;
-        if(!norm(reg.rows[dest][regCi])) vals[name]=today;
-      });
-    }
-    if(!Object.keys(vals).length){ alreadyOk++; return; }
-
-    // Sprawdź czy jest co nadpisać
-    let needs=false;
+    padSheetRow(reg, dest);
+    let changed=false;
     Object.keys(vals).forEach(name=>{
-      const regCi=rmap[name];
-      if(regCi==null){ blockedNoCol++; return; }
-      if(norm(reg.rows[dest][regCi])!==norm(vals[name])) needs=true;
+      const ci=regSys[name];
+      if(ci==null||ci<0) return;
+      if(norm(reg.rows[dest][ci])===norm(vals[name])) return;
+      reg.rows[dest][ci]=vals[name];
+      systemsTouched.add(name);
+      fieldsWritten++;
+      changed=true;
     });
-    if(!needs){ alreadyOk++; return; }
-
-    const res=writeSystemsToRegistryRow(reg, dest, vals, rmap);
-    if(res.ok){
-      res.wrote.forEach(n=>systemsTouched.add(n));
+    if(changed){
       tagPersonSource(reg, dest, tag);
+      // dopisz brakujący NIP/PESEL z listy do bazy (lepsze przyszłe dopasowania)
+      keys.forEach(k=>{
+        const kind=keyKind(k);
+        const peselCi=findSystemCol(reg,'PESEL');
+        const nipCi=findSystemCol(reg,'NIP');
+        if(kind==='pesel' && peselCi>=0 && !cleanId(reg.rows[dest][peselCi])) reg.rows[dest][peselCi]=k;
+        if(kind==='nip' && nipCi>=0 && !cleanId(reg.rows[dest][nipCi])) reg.rows[dest][nipCi]=k;
+      });
+      // odśwież indeks
+      keys.forEach(k=>idIndex.set(k, dest));
       updated++;
     }else{
-      blockedNoCol++;
+      alreadyOk++;
     }
   });
 
   if(notInBase.length){
     const names=notInBase.slice(0,5).map(x=>x.key).join(', ')+(notInBase.length>5?'…':'');
-    const add=confirm('Znaleziono '+notInBase.length+' osób spoza bazy (po PESEL/NIP):\n'+names+'\n\nDodać je do Zobowiązanych z datami z listy?');
+    const add=confirm(
+      'Lista↔Zobowiązani: znaleziono '+notInBase.length+' osób bez dopasowania PESEL/NIP:\n'+names+
+      '\n\nKlucz listy: '+letter(sh.order.indexOf(listKeyCol))+' ('+sh.columns[listKeyCol]+')'+
+      '\nDopasowanie w bazie po: '+(registryIdentityCols(reg).map(ci=>shLetterOrName(reg,ci)).join(', ')||'?')+
+      '\n\nDodać je do Zobowiązanych z datami KAWA/SINF/… z listy?'
+    );
     if(add){
-      // Odśwież mapę kolumn na wypadek reclaim
       ensureRegistrySystemCols(reg);
-      rmap=registryColMap(reg);
-      notInBase.forEach(({key, fromList, stanMarked})=>{
+      REG_SYSTEMS.forEach(name=>{ regSys[name]=findSystemCol(reg, name); });
+      notInBase.forEach(({key, keys, vals})=>{
         const dest=ensureRegistryPerson(reg, key);
-        let vals={};
-        if(Object.keys(fromList).length) vals=fromList;
-        else if(stanMarked) REG_SYSTEMS.forEach(name=>{ vals[name]=today; });
-        const res=writeSystemsToRegistryRow(reg, dest, vals, rmap);
-        if(!res.ok){ blockedNoCol++; return; }
-        res.wrote.forEach(n=>systemsTouched.add(n));
+        padSheetRow(reg, dest);
+        let any=false;
+        Object.keys(vals).forEach(name=>{
+          const ci=regSys[name];
+          if(ci==null||ci<0) return;
+          reg.rows[dest][ci]=vals[name];
+          systemsTouched.add(name);
+          fieldsWritten++;
+          any=true;
+        });
+        if(!any) return;
+        (keys||[key]).forEach(k=>idIndex.set(k, dest));
         tagPersonSource(reg, dest, tag);
         added++;
       });
@@ -3759,21 +3830,21 @@ function syncListToRegistry(){
   refreshRegistryDerived(reg);
   revealCols(reg, [...REG_SYSTEMS, ...REG_META]);
 
+  // Odśwież Stan na liście z bazy
   const stanOut=ensureCol(sh,'Stan',120);
   const kompOut=ensureCol(sh,'Komplet',110);
-  REG_SYSTEMS.forEach(name=>{ if(findSystemCol(sh, name)<0) ensureCol(sh, name, 90); });
-  revealCols(sh, [...REG_SYSTEMS, 'Stan', 'Komplet']);
-  const rmap2=registryColMap(reg);
   idxs.forEach(ri=>{
-    const key=rowKey(ri);
-    const dest=key?findRegistryRowByKey(reg, key):null;
+    const dest=findDest(keysFromListRow(ri));
     if(dest==null) return;
     REG_SYSTEMS.forEach(name=>{
-      const lci=findSystemCol(sh, name);
-      const rci=rmap2[name];
-      if(lci>=0 && rci!=null && norm(reg.rows[dest][rci])) sh.rows[ri][lci]=reg.rows[dest][rci];
+      const lci=listSys[name];
+      const rci=regSys[name];
+      if(lci!=null && rci!=null && norm(reg.rows[dest][rci])) sh.rows[ri][lci]=reg.rows[dest][rci];
     });
-    const dates=REG_SYSTEMS.map(name=>reg.rows[dest][rmap2[name]]||'');
+    const dates=REG_SYSTEMS.map(name=>{
+      const rci=regSys[name];
+      return rci!=null?(reg.rows[dest][rci]||''):'';
+    });
     const {stan,komplet}=computePersonStatus(dates);
     if(stanOut>=0) sh.rows[ri][stanOut]=stan;
     if(kompOut>=0) sh.rows[ri][kompOut]=komplet;
@@ -3781,25 +3852,27 @@ function syncListToRegistry(){
     if(color) sh.rowColors[ri]=color;
   });
 
-  // Pokaż efekt w bazie — to była największa luka UX
-  if(updated||added){
-    App.activeId=reg.id;
-  }
+  // Zawsze pokaż bazę po syncu, żeby było widać KAWA/INFZ
+  App.activeId=reg.id;
   render();
   scheduleAutosave();
 
-  const sysHint=systemsTouched.size?' ['+[...systemsTouched].join('+')+']':'';
+  const sysHint=systemsTouched.size?' · '+[...systemsTouched].join('+'):'';
   if(updated||added){
-    toast('Synchronizacja: '+(updated?('zaktualizowano '+updated):'')+(updated&&added?', ':'')+(added?('dodano '+added):'')+sysHint+' → Zobowiązani (przewiń do KAWA/INFZ)');
-  }else if(blockedNoCol){
-    toast('Synchronizacja: nie zapisano — brak kolumn KAWA/INFZ w bazie (limit A–Z). Usuń zbędne kolumny w Zobowiązanych.');
+    toast('OK: przeniesiono do Zobowiązanych — wierszy '+ (updated+added) +', pól '+fieldsWritten+sysHint+' (przewiń do KAWA/SINF/…)');
   }else if(alreadyOk){
-    toast('Synchronizacja: daty już są w Zobowiązanych ('+alreadyOk+' wierszy). Otwórz kartę Zobowiązani i przewiń w prawo do KAWA/INFZ.');
+    toast('Daty z listy już są w Zobowiązanych ('+alreadyOk+'). Jesteś na karcie bazy — przewiń w prawo do KAWA/SINF/INFZ.');
   }else if(notInBase.length){
-    toast('Synchronizacja: anulowano dodawanie '+notInBase.length+' osób spoza bazy');
+    toast('Nie przeniesiono — brak dopasowania PESEL/NIP. Ustaw kolumnę klucza na liście i na Zobowiązanych.');
   }else{
-    toast('Synchronizacja: nic do przeniesienia (brak dat KAWA/JPK/INFZ na liście albo brak PESEL/NIP)');
+    toast('Nic do przeniesienia — na liście brak dat w kolumnach KAWA/SINF/UFG/JPK/INFZ (wierszy bez klucza: '+skipped+').');
   }
+}
+function shLetterOrName(sh, ci){
+  if(!sh||ci==null||ci<0) return '?';
+  const pos=sh.order.indexOf(ci);
+  const L=pos>=0?letter(pos):'?';
+  return L+'='+(sh.columns[ci]||'?');
 }
 function addMissingToRegistry(){
   const sh=active();
