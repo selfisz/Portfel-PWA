@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; media-src 'none'; font-src 'none';">
-<title>Offline Table Studio V7.6.8</title>
+<title>Offline Table Studio V7.6.9</title>
 <style>
 :root,[data-theme="navy"]{--bg:#dfe7f2;--chrome:#0f1c2e;--chrome2:#16253b;--panel:#fff;--panel2:#f4f7fb;--line:#c9d5e5;--text:#142033;--muted:#607084;--accent:#2563eb;--accent2:#1d4ed8;--soft:#e8f0ff;--head:#1a3354;--headText:#f5f8fc;--zebra:#eef3f9;--sel:#d9e8ff;--ok:#0f766e;--danger:#be123c;--shadow:0 12px 40px rgba(15,28,46,.12);--font:"Segoe UI",system-ui,-apple-system,sans-serif;--mono:Consolas,"Cascadia Mono",monospace}
 [data-theme="green"]{--bg:#dcebe3;--chrome:#0b2a24;--chrome2:#12352e;--accent:#0f766e;--accent2:#0d9488;--soft:#d8f3ee;--head:#134e4a;--sel:#c5efe7;--zebra:#eaf6f1}
@@ -67,28 +67,32 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
 .grid th.corner,.grid td.corner{position:sticky;left:0;z-index:4;width:48px;min-width:48px;max-width:48px;text-align:center}
 .grid thead th.corner{z-index:6;background:color-mix(in srgb,var(--head) 90%,#000)}
 .grid td.corner{background:var(--panel2);color:var(--muted);font-size:.72rem;z-index:3}
-.th-inner{display:flex;align-items:center;gap:5px;padding:8px 9px;user-select:none;position:relative}
-.th-inner .title{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
-.th-inner .meta{opacity:.65;font-size:.68rem;font-family:var(--mono)}.th-inner .sort{opacity:.5;font-size:.68rem}
-.filter-btn{border:0;background:transparent;color:inherit;cursor:pointer;opacity:.8;padding:0}.filter-btn.on{color:#fde68a;opacity:1}
-/* Szerszy uchwyt — da się złapać także przy bardzo szerokiej kolumnie */
+.th-inner{display:flex;align-items:flex-start;gap:5px;padding:8px 9px;user-select:none;position:relative;min-height:34px}
+.th-inner .title{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:normal;word-break:break-word;line-height:1.2;flex:1;min-width:0}
+.th-inner .meta{opacity:.65;font-size:.68rem;font-family:var(--mono);padding-top:2px}.th-inner .sort{opacity:.5;font-size:.68rem;padding-top:2px}
+.filter-btn{border:0;background:transparent;color:inherit;cursor:pointer;opacity:.8;padding:0;margin-top:1px}.filter-btn.on{color:#fde68a;opacity:1}
+/* Szerszy uchwyt zmiany szerokości */
 .grid thead th{position:sticky;overflow:visible}
 .resize{position:absolute;top:0;right:-5px;width:16px;height:100%;cursor:col-resize;z-index:9;background:transparent}
 .resize:hover,.resize.dragging{background:color-mix(in srgb,var(--accent) 45%,transparent)}
-/* Źródła / Notatka — twarde ograniczenie szerokości (nie rozpychają tabeli) */
-.grid col.col-meta,.grid th.col-meta,.grid td.col-meta{
-  width:100px!important;min-width:100px!important;max-width:100px!important;
-}
 .cell{display:block;padding:7px 9px;width:100%;cursor:cell;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:text}
 .grid.wrap .cell{white-space:normal;overflow:visible;word-break:break-word}
-/* Zawijanie per kolumna (nadpisuje globalne i ellipsis) */
+/* Zawijanie per kolumna — komórki i nagłówek */
 .grid td.col-wrap .cell,.grid.wrap td.col-wrap .cell{
   white-space:normal!important;overflow:visible!important;text-overflow:clip!important;
   word-break:break-word;max-height:none
 }
-.grid td.col-nowrap .cell,.grid.wrap td.col-nowrap .cell{
+.grid th.col-wrap .th-inner .title{
+  white-space:normal!important;overflow:visible!important;text-overflow:clip!important;
+  word-break:break-word;max-height:none
+}
+.grid td.col-nowrap .cell{
   white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;
   max-height:34px;word-break:normal
+}
+/* Przy globalnym .wrap bez jawnego col-nowrap też zawijaj; col-nowrap wygrywa */
+.grid.wrap td:not(.col-nowrap) .cell{
+  white-space:normal;overflow:visible;word-break:break-word;max-height:none
 }
 .grid.center .cell,.grid.center .th-inner{text-align:center;justify-content:center}
 .grid tbody tr:nth-child(even) td{background:var(--zebra)}.grid tbody tr:hover td{background:var(--soft)}
@@ -395,7 +399,7 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
     <div class="field" style="flex:1;max-width:340px"><input id="filterInput" type="search" placeholder="Szukaj w całym wierszu…" autocomplete="off" title="Filtr globalny: pokazuje wiersze, w których którakolwiek komórka zawiera wpisany tekst"></div>
     <div class="field" style="min-width:150px"><input id="gotoInput" type="number" min="1" placeholder="Idź do wiersza"><button class="btn light sm" id="btnGoto" type="button">Idź</button></div>
     <button class="btn light sm" id="btnClearFilters" type="button">Wyczyść filtry</button>
-    <button class="btn light sm primary" id="btnShrinkCols" type="button" title="Źródła/Notatka → 100px. Za szerokie kolumny → max 180px. Potem możesz przeciągać krawędź nagłówka." style="color:#fff">Zawęź kolumny</button>
+    <button class="btn light sm primary" id="btnShrinkCols" type="button" title="Opcjonalnie: Źródła/Notatka → 140px, inne max 180px. Nie blokuje zawijania ani ręcznej zmiany." style="color:#fff">Zawęź kolumny</button>
     <button class="btn light sm danger" id="btnClearSheet" type="button">Wyczyść kartę</button>
   </div>
 
@@ -511,36 +515,34 @@ const REG_CYCLE_DAYS=100;
 const REG_SYSTEMS=['KAWA','SINF','UFG','JPK','INFZ'];
 const REG_NA='Pomiń';
 const REG_META=['Stan','Komplet','Źródła','Notatka'];
-const META_TEXT_COL_W=100;
+const META_TEXT_COL_W=140;
 function foldPl(s){
-  return String(s==null?'':s).replace(/\u00a0/g,' ').trim()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  return String(s==null?'':s).replace(/\u00a0/g,' ').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/ł/g,'l');
 }
 function isMetaTextCol(name){
   const f=foldPl(name);
   return f==='zrodla'||f==='zrodlo'||f==='notatka'||/^zrodl/.test(f);
 }
-/** Zawsze wymuś wąskie Źródła/Notatka — bez wyjątków (to rozpychało tabelę). */
+/** Tylko gdy brak szerokości — nie blokuj ręcznej zmiany ani autodopasowania. */
 function capMetaTextWidths(sh){
   if(!sh||!sh.columns) return;
   sh.columns.forEach((name,ci)=>{
     if(!isMetaTextCol(name)) return;
-    sh.widths[ci]=META_TEXT_COL_W;
+    if(sh.widths[ci]==null) sh.widths[ci]=META_TEXT_COL_W;
   });
-  // dodatkowo po kanonicznej nazwie (gdy findSystemCol już istnieje w runtime)
-  try{
-    ['Źródła','Notatka'].forEach(n=>{
-      const ci=typeof findSystemCol==='function'?findSystemCol(sh,n):-1;
-      if(ci>=0) sh.widths[ci]=META_TEXT_COL_W;
-    });
-  }catch(_){}
 }
 function shrinkWideColumns(sh, maxW){
   if(!sh) return 0;
   maxW=maxW||180;
   let n=0;
   sh.columns.forEach((name,ci)=>{
-    if(isMetaTextCol(name)){ sh.widths[ci]=META_TEXT_COL_W; n++; return; }
+    if(isMetaTextCol(name)){
+      if((sh.widths[ci]||0)>META_TEXT_COL_W){ sh.widths[ci]=META_TEXT_COL_W; n++; }
+      else if(sh.widths[ci]==null){ sh.widths[ci]=META_TEXT_COL_W; }
+      return;
+    }
     const cur=sh.widths[ci];
     if(cur!=null && cur>maxW){ sh.widths[ci]=maxW; n++; }
   });
@@ -625,19 +627,19 @@ function fitColumnWidths(sh, opts){
   const cols=visCols(sh);
   const idxs=sorted(sh, filtered(sh));
   const cellFont='14px "Segoe UI",system-ui,sans-serif';
-  const maxW=opts.maxWidth||400;
+  const maxW=opts.maxWidth||420;
   const minW=opts.minWidth||72;
-  const maxHeadW=150;
+  const maxHeadW=220;
   cols.forEach(ci=>{
-    if(isMetaTextCol(sh.columns[ci])){ sh.widths[ci]=META_TEXT_COL_W; return; }
     let maxData=minW;
     const sample=idxs.length>800?idxs.filter((_,i)=>i%Math.ceil(idxs.length/800)===0):idxs;
     sample.forEach(ri=>{ maxData=Math.max(maxData, measureTextWidth(sh.rows[ri][ci], cellFont)+28); });
-    const headW=Math.min(maxHeadW, measureTextWidth(sh.columns[ci], cellFont)+40);
-    sh.widths[ci]=Math.min(maxW, Math.max(minW, Math.ceil(Math.max(maxData, headW))));
+    const headW=Math.min(maxHeadW, measureTextWidth(sh.columns[ci], cellFont)+48);
+    // Meta: autodopasuj jak inne, ale nie rozciągaj w nieskończoność
+    const colMax=isMetaTextCol(sh.columns[ci])?Math.min(maxW, 320):maxW;
+    sh.widths[ci]=Math.min(colMax, Math.max(minW, Math.ceil(Math.max(maxData, headW))));
   });
-  // Nie włączaj zawijania przy dużych tabelach — zabija wirtualizację i wiesza przeglądarkę
-  if(opts.wrap===true && idxs.length<VIRT_THRESHOLD){
+  if(opts.wrap===true){
     App.wrap=true;
     sh.columns.forEach((_,ci)=>{ if(sh.colWrap[ci]==null) sh.colWrap[ci]=true; });
   }
@@ -646,11 +648,9 @@ function fitColumnWidths(sh, opts){
 function autoFitColumns(){
   const sh=active(); if(!sh||!sh.columns.length){ toast('Brak kolumn'); return; }
   pushUndo();
-  const big=(sorted(sh, filtered(sh)).length>=VIRT_THRESHOLD);
-  fitColumnWidths(sh, {wrap:!big});
-  if(big) App.wrap=false;
+  fitColumnWidths(sh, {wrap:false});
   render();
-  toast(big?'Autodopasowano kolumny (bez zawijania — duża tabela)':'Autodopasowano kolumny (+ zawijanie)');
+  toast('Autodopasowano szerokości kolumn');
 }
 /** Po sortowaniu: LP (lub 1. kolumna) = 1…N w kolejności na ekranie. */
 function renumberByView(){
@@ -791,12 +791,6 @@ function openHeaderContextMenu(e, ci){
       toast('Szerokość: '+n+' px');
     }],
     [wrapped?'✓ Zawijaj tekst':'Zawijaj tekst', ()=>{
-      const nRows=sorted(sh,filtered(sh)).length;
-      if(!wrapped && nRows>=VIRT_THRESHOLD){
-        hideCtx();
-        toast('Zawijanie niedostępne przy '+nRows+' wierszach (wiesza przeglądarkę)');
-        return;
-      }
       pushUndo();
       setColWrap(sh, ci, !wrapped);
       hideCtx(); renderGrid(); scheduleAutosave();
@@ -818,16 +812,11 @@ function openHeaderContextMenu(e, ci){
     ['Ukryj kolumnę', ()=>{ pushUndo(); sh.visible[ci]=false; hideCtx(); render(); toast('Ukryto kolumnę'); }],
     ['Dopasuj tę kolumnę', ()=>{
       pushUndo();
-      if(isMetaTextCol(sh.columns[ci])){
-        sh.widths[ci]=META_TEXT_COL_W;
-        hideCtx(); renderGrid(); scheduleAutosave();
-        toast('Źródła/Notatka → '+META_TEXT_COL_W+' px');
-        return;
-      }
       const idxs=sorted(sh,filtered(sh));
       let max=measureTextWidth(sh.columns[ci],'650 13px "Segoe UI",system-ui,sans-serif')+56;
       idxs.forEach(ri=>{ max=Math.max(max, measureTextWidth(sh.rows[ri][ci],'14px "Segoe UI",system-ui,sans-serif')+28); });
-      sh.widths[ci]=Math.min(480, Math.max(72, Math.ceil(max)));
+      const cap=isMetaTextCol(sh.columns[ci])?320:480;
+      sh.widths[ci]=Math.min(cap, Math.max(72, Math.ceil(max)));
       hideCtx(); renderGrid(); scheduleAutosave(); toast('Dopasowano kolumnę → '+sh.widths[ci]+' px');
     }],
     ['sep'],
@@ -1636,13 +1625,12 @@ function loadMatrix(matrix, append){
     setRibbonTab('edycja');
   }
   let fitted=false;
-  const allowWrap=(p.rows.length<VIRT_THRESHOLD);
   if(App.activeSchema && !isRegistrySheet(sh)){
     const ok=confirm('Zastosować schemat „'+App.activeSchema+'”?');
     if(ok) applySchemaByName(App.activeSchema,false);
-    else { fitColumnWidths(sh,{wrap:allowWrap}); if(!allowWrap) App.wrap=false; fitted=true; render(); }
+    else { fitColumnWidths(sh,{wrap:false}); fitted=true; render(); }
   }else{
-    fitColumnWidths(sh,{wrap:allowWrap}); if(!allowWrap) App.wrap=false; fitted=true; render();
+    fitColumnWidths(sh,{wrap:false}); fitted=true; render();
   }
   if(fitted) msg+=' · kolumny dopasowane';
   toast(msg);
@@ -2048,7 +2036,6 @@ function buildRowTr(sh, ri, displayIdx, cols, idxs){
 
   cols.forEach(ci=>{
     const td=document.createElement('td');
-    if(isMetaTextCol(sh.columns[ci])) td.classList.add('col-meta');
     if(isColWrap(sh,ci)) td.classList.add('col-wrap');
     else td.classList.add('col-nowrap');
     const val=sh.rows[ri][ci]??'';
@@ -2438,13 +2425,6 @@ function renderGrid(){
   const grid=$('dataGrid'), empty=$('emptyState'), head=$('gridHead'), body=$('gridBody'), foot=$('gridFoot'), cg=$('colgroup');
   const wrap=$('gridWrap');
   const cols=visCols(sh); const idxs=sorted(sh, filtered(sh));
-  // Duże tabele: wymuś wirtualizację (zawijanie zabija DOM)
-  if(idxs.length>=VIRT_THRESHOLD){
-    let cleared=false;
-    if(App.wrap){ App.wrap=false; cleared=true; }
-    sh.colWrap.forEach((w,i)=>{ if(w){ sh.colWrap[i]=false; cleared=true; } });
-    if(cleared) try{saveViewPrefs();}catch(_){}
-  }
   const anyWrap=sheetHasColWrap(sh);
   grid.classList.toggle('wrap', !!App.wrap || anyWrap); grid.classList.toggle('center',App.center); grid.classList.toggle('plain',!!App.plain);
   if(!sh.rows.length){
@@ -2494,8 +2474,7 @@ function renderGrid(){
   cg.innerHTML=''; const c0=document.createElement('col'); c0.className='corner'; cg.append(c0);
   cols.forEach(ci=>{
     const c=document.createElement('col'); c.className='data';
-    const w=isMetaTextCol(sh.columns[ci])?META_TEXT_COL_W:(sh.widths[ci]||150);
-    if(isMetaTextCol(sh.columns[ci])){ c.classList.add('col-meta'); sh.widths[ci]=META_TEXT_COL_W; }
+    const w=sh.widths[ci]!=null?sh.widths[ci]:(isMetaTextCol(sh.columns[ci])?META_TEXT_COL_W:150);
     c.style.width=c.style.minWidth=c.style.maxWidth=w+'px';
     c.dataset.ci=ci; cg.append(c);
   });
@@ -2503,16 +2482,14 @@ function renderGrid(){
   const corner=document.createElement('th'); corner.className='corner'; corner.innerHTML='<div class="th-inner" style="justify-content:center"><input type="checkbox" id="selectAllCb"></div>'; hr.append(corner);
   cols.forEach(ci=>{
     const th=document.createElement('th');
-    const metaCol=isMetaTextCol(sh.columns[ci]);
-    if(metaCol) th.classList.add('col-meta');
     if(isColWrap(sh,ci)) th.classList.add('col-wrap');
     else th.classList.add('col-nowrap');
-    const w=metaCol?META_TEXT_COL_W:(sh.widths[ci]||150);
+    const w=sh.widths[ci]!=null?sh.widths[ci]:(isMetaTextCol(sh.columns[ci])?META_TEXT_COL_W:150);
     th.style.width=th.style.minWidth=th.style.maxWidth=w+'px';
     const inner=document.createElement('div'); inner.className='th-inner';
     const meta=document.createElement('span'); meta.className='meta'; meta.textContent=letter(sh.order.indexOf(ci));
     const title=document.createElement('span'); title.className='title'; title.textContent=sh.columns[ci];
-    title.title='Przeciągnij PRAWNĄ krawędź nagłówka = szerokość · PPM = menu · dwuklik = nazwa';
+    title.title=sh.columns[ci]+' · przeciągnij krawędź = szerokość · PPM = zawijanie / szerokość · dwuklik = nazwa';
     const sort=document.createElement('span'); sort.className='sort'; sort.textContent=sh.sort.i===ci?(sh.sort.d>0?'▲':'▼'):'↕';
     const fbtn=document.createElement('button'); fbtn.type='button'; fbtn.className='filter-btn'+(hasActiveFilter(sh.colFilters[ci])?' on':''); fbtn.textContent='▾';
     fbtn.onclick=e=>{e.stopPropagation(); openColFilter(ci,fbtn);};
@@ -2522,9 +2499,8 @@ function renderGrid(){
     rh.title='Przeciągnij, aby zmienić szerokość';
     rh.onmousedown=e=>{
       e.preventDefault(); e.stopPropagation();
-      if(metaCol){ toast('Źródła/Notatka: stałe '+META_TEXT_COL_W+' px — użyj „Zawęź kolumny” dla innych'); return; }
       rh.classList.add('dragging');
-      const sx=e.clientX, sw=sh.widths[ci]||150;
+      const sx=e.clientX, sw=sh.widths[ci]||w;
       const mv=ev=>{
         const nw=Math.max(50, Math.min(800, sw+ev.clientX-sx));
         sh.widths[ci]=nw;
@@ -4610,8 +4586,7 @@ function runReworkGuard(){
   });
 
   const n=sorted(sh, filtered(sh)).length;
-  fitColumnWidths(sh, {wrap: n<VIRT_THRESHOLD});
-  if(n>=VIRT_THRESHOLD) App.wrap=false;
+  fitColumnWidths(sh, {wrap:false});
   try{saveViewPrefs();}catch(_){}
   render();
   scheduleAutosave();
@@ -5233,14 +5208,12 @@ document.querySelectorAll('#workModeToggle [data-work-mode]').forEach(b=>{
 });
 $('btnWrap').onclick=()=>{
   const sh=active();
-  const n=sh?sorted(sh, filtered(sh)).length:0;
   const turningOn=!sheetHasColWrap(sh);
-  if(turningOn && n>=VIRT_THRESHOLD){ toast('Zawijanie niedostępne przy '+n+' wierszach (wiesza przeglądarkę)'); return; }
   pushUndo();
   App.wrap=turningOn;
   if(sh) setAllColWrap(sh, turningOn);
   saveViewPrefs(); render();
-  toast(turningOn?'Zawijanie WŁĄCZONE (wszystkie kolumny)':'Zawijanie WYŁĄCZONE — włącz per kolumna: PPM na nagłówku');
+  toast(turningOn?'Zawijanie WŁĄCZONE (wszystkie kolumny — także przy dużej tabeli)':'Zawijanie WYŁĄCZONE — per kolumna: PPM na nagłówku → Zawijaj tekst');
 };
 $('btnCenter').onclick=()=>{pushUndo(); App.center=!App.center; saveViewPrefs(); render();};
 if($('btnToggleSums')) $('btnToggleSums').onclick=()=>{ const sh=active(); if(!sh) return; pushUndo(); sh.showSums = !sh.showSums; renderGrid(); };
@@ -5468,11 +5441,6 @@ document.addEventListener('keydown', e=>{
 });
 
 loadSchemas(); loadCopyMode(); loadWorkMode(); loadViewPrefs(); ensureBase(); tryRestoreAutosave();
-// Duże skoroszyty + zapisane zawijanie = pusty/rozjechany UI — zdejmij wrap zanim wyrenderujemy
-(function(){
-  const big=App.sheets.some(sh=>(sh.rows&&sh.rows.length>=VIRT_THRESHOLD));
-  if(big && App.wrap){ App.wrap=false; try{saveViewPrefs();}catch(_){} }
-})();
 renderSwatches(); fillRegSysMenu(); setRibbonTab(App.ribbonTab||'dane'); render(); scheduleAutosave();
 })();
 </script>
