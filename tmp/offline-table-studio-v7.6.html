@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; media-src 'none'; font-src 'none';">
-<title>Offline Table Studio V7.6.6</title>
+<title>Offline Table Studio V7.6.7</title>
 <style>
 :root,[data-theme="navy"]{--bg:#dfe7f2;--chrome:#0f1c2e;--chrome2:#16253b;--panel:#fff;--panel2:#f4f7fb;--line:#c9d5e5;--text:#142033;--muted:#607084;--accent:#2563eb;--accent2:#1d4ed8;--soft:#e8f0ff;--head:#1a3354;--headText:#f5f8fc;--zebra:#eef3f9;--sel:#d9e8ff;--ok:#0f766e;--danger:#be123c;--shadow:0 12px 40px rgba(15,28,46,.12);--font:"Segoe UI",system-ui,-apple-system,sans-serif;--mono:Consolas,"Cascadia Mono",monospace}
 [data-theme="green"]{--bg:#dcebe3;--chrome:#0b2a24;--chrome2:#12352e;--accent:#0f766e;--accent2:#0d9488;--soft:#d8f3ee;--head:#134e4a;--sel:#c5efe7;--zebra:#eaf6f1}
@@ -293,6 +293,7 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
       <button class="btn sm" id="btnWrap" type="button" title="Zawijanie wszystkich kolumn. Pojedynczą kolumnę: PPM na nagłówku → Zawijaj tekst. Szerokość: przeciągnij krawędź lub PPM → Szerokość…">Zawijanie</button>
       <button class="btn sm" id="btnCenter" type="button">Wyśrodkuj</button>
       <button class="btn sm" id="btnAutoFit" type="button" title="Dopasuj szerokość kolumn">Autodopasuj</button>
+      <button class="btn sm" id="btnShrinkMeta" type="button" title="Źródła i Notatka → wąskie (96 px). Pełny tekst w podpowiedzi po najechaniu.">Zawęź Źródła/Notatkę</button>
       <button class="btn sm" id="btnToggleSums" type="button" title="Pokaż/ukryj sumę">Σ Sumy</button>
       <button class="btn sm" id="btnRenumber" type="button" title="Numeruj 1…N w widoku">Numeruj 1…N</button>
     </div>
@@ -503,18 +504,46 @@ const REG_CYCLE_DAYS=100;
 const REG_SYSTEMS=['KAWA','SINF','UFG','JPK','INFZ'];
 const REG_NA='Pomiń';
 const REG_META=['Stan','Komplet','Źródła','Notatka'];
-const META_TEXT_COL_W=120;
+const META_TEXT_COL_W=96;
 function isMetaTextCol(name){
   return /^(źródła|zrodla|źródlo|zrodlo|notatka)$/i.test(norm(name));
 }
-/** Domyślna szerokość meta — nie blokuje ręcznej zmiany. */
-function capMetaTextWidths(sh){
+function ensureMetaWidthCustom(sh){
   if(!sh) return;
-  ensureColWrap(sh);
+  if(!sh.metaWidthCustom || typeof sh.metaWidthCustom!=='object') sh.metaWidthCustom={};
+}
+/** Źródła/Notatka: domyślnie wąskie. Ręczne poszerzenie (PPM/przeciągnięcie) zostaje zapisane. */
+function capMetaTextWidths(sh, opts){
+  if(!sh) return;
+  opts=opts||{};
+  ensureMetaWidthCustom(sh);
   sh.columns.forEach((name,ci)=>{
     if(!isMetaTextCol(name)) return;
-    if(sh.widths[ci]==null) sh.widths[ci]=META_TEXT_COL_W;
+    if(opts.force || !sh.metaWidthCustom[ci]){
+      sh.widths[ci]=META_TEXT_COL_W;
+      if(opts.force) delete sh.metaWidthCustom[ci];
+    }else if(sh.widths[ci]==null){
+      sh.widths[ci]=META_TEXT_COL_W;
+    }
   });
+}
+function markMetaWidthCustom(sh, ci){
+  if(!sh||ci==null||ci<0) return;
+  if(!isMetaTextCol(sh.columns[ci])) return;
+  ensureMetaWidthCustom(sh);
+  sh.metaWidthCustom[ci]=true;
+}
+function shrinkMetaColumns(sh){
+  if(!sh) return 0;
+  ensureMetaWidthCustom(sh);
+  let n=0;
+  sh.columns.forEach((name,ci)=>{
+    if(!isMetaTextCol(name)) return;
+    delete sh.metaWidthCustom[ci];
+    if(sh.widths[ci]!==META_TEXT_COL_W) n++;
+    sh.widths[ci]=META_TEXT_COL_W;
+  });
+  return n;
 }
 function ensureColWrap(sh){
   if(!sh) return;
@@ -599,6 +628,11 @@ function fitColumnWidths(sh, opts){
   const minW=opts.minWidth||72;
   const maxHeadW=150;
   cols.forEach(ci=>{
+    if(isMetaTextCol(sh.columns[ci])){
+      ensureMetaWidthCustom(sh);
+      if(!sh.metaWidthCustom[ci]) sh.widths[ci]=META_TEXT_COL_W;
+      return;
+    }
     let maxData=minW;
     const sample=idxs.length>800?idxs.filter((_,i)=>i%Math.ceil(idxs.length/800)===0):idxs;
     sample.forEach(ri=>{ maxData=Math.max(maxData, measureTextWidth(sh.rows[ri][ci], cellFont)+28); });
@@ -756,6 +790,7 @@ function openHeaderContextMenu(e, ci){
       if(!n||n<50||n>800){ toast('Podaj liczbę 50–800'); return; }
       pushUndo();
       sh.widths[ci]=n;
+      markMetaWidthCustom(sh, ci);
       renderGrid(); scheduleAutosave();
       toast('Szerokość: '+n+' px');
     }],
@@ -771,6 +806,12 @@ function openHeaderContextMenu(e, ci){
       hideCtx(); renderGrid(); scheduleAutosave();
       toast(!wrapped?'Zawijanie WŁĄCZONE dla „'+name+'”':'Zawijanie WYŁĄCZONE dla „'+name+'”');
     }],
+    ['Zawęź Źródła i Notatkę ('+META_TEXT_COL_W+' px)', ()=>{
+      pushUndo();
+      const n=shrinkMetaColumns(sh);
+      hideCtx(); renderGrid(); scheduleAutosave();
+      toast(n?'Zawężono Źródła/Notatkę':'Źródła/Notatka już wąskie');
+    }],
     ['sep'],
     ['Sortuj A→Z / rosnąco', ()=>{ pushUndo(); sh.sort={i:ci,d:1}; hideCtx(); renderGrid(); }],
     ['Sortuj Z→A / malejąco', ()=>{ pushUndo(); sh.sort={i:ci,d:-1}; hideCtx(); renderGrid(); }],
@@ -781,6 +822,14 @@ function openHeaderContextMenu(e, ci){
     ['Ukryj kolumnę', ()=>{ pushUndo(); sh.visible[ci]=false; hideCtx(); render(); toast('Ukryto kolumnę'); }],
     ['Dopasuj tę kolumnę', ()=>{
       pushUndo();
+      if(isMetaTextCol(sh.columns[ci])){
+        sh.widths[ci]=META_TEXT_COL_W;
+        ensureMetaWidthCustom(sh);
+        delete sh.metaWidthCustom[ci];
+        hideCtx(); renderGrid(); scheduleAutosave();
+        toast('Źródła/Notatka → '+META_TEXT_COL_W+' px');
+        return;
+      }
       const idxs=sorted(sh,filtered(sh));
       let max=measureTextWidth(sh.columns[ci],'650 13px "Segoe UI",system-ui,sans-serif')+56;
       idxs.forEach(ri=>{ max=Math.max(max, measureTextWidth(sh.rows[ri][ci],'14px "Segoe UI",system-ui,sans-serif')+28); });
@@ -2478,6 +2527,7 @@ function renderGrid(){
       const up=()=>{
         window.removeEventListener('mousemove',mv);
         window.removeEventListener('mouseup',up);
+        markMetaWidthCustom(sh, ci);
         scheduleAutosave();
       };
       window.addEventListener('mousemove',mv); window.addEventListener('mouseup',up);
@@ -2989,6 +3039,8 @@ function ensureTargetColumnsFromSource(source, target){
     target.order=source.order.slice();
     target.visible=source.visible.slice();
     target.widths=source.widths.slice();
+    ensureColWrap(source); ensureColWrap(target);
+    target.colWrap=source.colWrap.slice();
     return;
   }
   source.columns.forEach((name, sci)=>{
@@ -2999,6 +3051,8 @@ function ensureTargetColumnsFromSource(source, target){
     target.order.push(tci);
     target.visible.push(true);
     target.widths.push(source.widths[sci]||150);
+    ensureColWrap(source); ensureColWrap(target);
+    target.colWrap.push(source.colWrap[sci]??null);
     target.rows.forEach(r=>{ while(r.length<target.columns.length) r.push(''); });
   });
 }
@@ -4848,11 +4902,12 @@ function openPastePdfDlg(){
 }
 
 function serializeSheet(sh){
-  ensureHidden(sh); ensureRowStatus(sh); ensureColWrap(sh);
+  ensureHidden(sh); ensureRowStatus(sh); ensureColWrap(sh); ensureMetaWidthCustom(sh);
   return {
     id:sh.id, name:sh.name, columns:sh.columns.slice(), rows:sh.rows.map(r=>r.slice()),
     order:sh.order.slice(), visible:sh.visible.slice(), widths:sh.widths.slice(),
     colWrap:sh.colWrap.slice(),
+    metaWidthCustom:Object.assign({}, sh.metaWidthCustom||{}),
     sort:Object.assign({},sh.sort), filter:sh.filter||'', colFilters:JSON.parse(JSON.stringify(sh.colFilters||{})),
     rowColors:Object.assign({},sh.rowColors||{}), marks:Object.assign({},sh.marks||{}),
     rowStatus:Object.assign({},sh.rowStatus||{}), colorRules:JSON.parse(JSON.stringify(sh.colorRules||[])),
@@ -4892,6 +4947,10 @@ function loadWorkbookData(data){
     if(!sh.widths.length) sh.widths=sh.columns.map(()=>150);
     ensureColWrap(sh);
     if(!Array.isArray(s.colWrap) && App.wrap) sh.colWrap=sh.columns.map(()=>true);
+    ensureMetaWidthCustom(sh);
+    if(s.metaWidthCustom && typeof s.metaWidthCustom==='object') sh.metaWidthCustom=Object.assign({}, s.metaWidthCustom);
+    // Stare szerokie Źródła/Notatka bez ręcznej blokady → zawęź
+    capMetaTextWidths(sh);
     sh.sort=s.sort||{i:-1,d:1}; sh.filter=s.filter||''; sh.colFilters=s.colFilters||{};
     sh.rowColors=s.rowColors||{}; sh.marks=s.marks||{}; sh.rowStatus=s.rowStatus||{};
     sh.colorRules=s.colorRules||[]; sh.hiddenRows=new Set(s.hiddenRows||[]);
@@ -5181,6 +5240,13 @@ $('btnWrap').onclick=()=>{
 $('btnCenter').onclick=()=>{pushUndo(); App.center=!App.center; saveViewPrefs(); render();};
 if($('btnToggleSums')) $('btnToggleSums').onclick=()=>{ const sh=active(); if(!sh) return; pushUndo(); sh.showSums = !sh.showSums; renderGrid(); };
 $('btnAutoFit').onclick=()=>autoFitColumns();
+if($('btnShrinkMeta')) $('btnShrinkMeta').onclick=()=>{
+  const sh=active(); if(!sh) return;
+  pushUndo();
+  shrinkMetaColumns(sh);
+  renderGrid(); scheduleAutosave();
+  toast('Źródła i Notatka → '+META_TEXT_COL_W+' px (tekst w podpowiedzi)');
+};
 $('btnRenumber').onclick=()=>renumberByView();
 $('btnClearFill').onclick=()=>{ if(App.plain && !Object.keys(active().rowColors||{}).length && !(active().colorRules||[]).length){ togglePlainView(); return; } clearFills(); };
 $('themeSelect').onchange=()=>{pushUndo(); App.theme=$('themeSelect').value; App.plain=false; render();}; $('btnMode').onclick=()=>{App.dark=!App.dark; render();};
