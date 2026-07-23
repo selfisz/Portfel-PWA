@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; media-src 'none'; font-src 'none';">
-<title>Offline Table Studio V7.6.5</title>
+<title>Offline Table Studio V7.6.6</title>
 <style>
 :root,[data-theme="navy"]{--bg:#dfe7f2;--chrome:#0f1c2e;--chrome2:#16253b;--panel:#fff;--panel2:#f4f7fb;--line:#c9d5e5;--text:#142033;--muted:#607084;--accent:#2563eb;--accent2:#1d4ed8;--soft:#e8f0ff;--head:#1a3354;--headText:#f5f8fc;--zebra:#eef3f9;--sel:#d9e8ff;--ok:#0f766e;--danger:#be123c;--shadow:0 12px 40px rgba(15,28,46,.12);--font:"Segoe UI",system-ui,-apple-system,sans-serif;--mono:Consolas,"Cascadia Mono",monospace}
 [data-theme="green"]{--bg:#dcebe3;--chrome:#0b2a24;--chrome2:#12352e;--accent:#0f766e;--accent2:#0d9488;--soft:#d8f3ee;--head:#134e4a;--sel:#c5efe7;--zebra:#eaf6f1}
@@ -74,9 +74,12 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
 .resize{position:absolute;top:0;right:0;width:6px;height:100%;cursor:col-resize}.grid th{position:sticky}
 .cell{display:block;padding:7px 9px;width:100%;cursor:cell;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:text}
 .grid.wrap .cell{white-space:normal;overflow:visible;word-break:break-word}
-.grid th.meta-text,.grid td.meta-text{max-width:120px}
-.grid td.meta-text .cell,.grid.wrap td.meta-text .cell,
-.grid th.meta-text .th-inner .title{
+/* Zawijanie per kolumna (nadpisuje globalne i ellipsis) */
+.grid td.col-wrap .cell,.grid.wrap td.col-wrap .cell{
+  white-space:normal!important;overflow:visible!important;text-overflow:clip!important;
+  word-break:break-word;max-height:none
+}
+.grid td.col-nowrap .cell,.grid.wrap td.col-nowrap .cell{
   white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;
   max-height:34px;word-break:normal
 }
@@ -287,7 +290,7 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
       <button class="btn sm" id="btnAddCol" type="button" title="Dodaj kolumnę">＋ Kolumna</button>
       <button class="btn sm" id="btnAddRow" type="button" title="Dodaj wiersz">＋ Wiersz</button>
       <span class="sep"></span>
-      <button class="btn sm" id="btnWrap" type="button">Zawijanie</button>
+      <button class="btn sm" id="btnWrap" type="button" title="Zawijanie wszystkich kolumn. Pojedynczą kolumnę: PPM na nagłówku → Zawijaj tekst. Szerokość: przeciągnij krawędź lub PPM → Szerokość…">Zawijanie</button>
       <button class="btn sm" id="btnCenter" type="button">Wyśrodkuj</button>
       <button class="btn sm" id="btnAutoFit" type="button" title="Dopasuj szerokość kolumn">Autodopasuj</button>
       <button class="btn sm" id="btnToggleSums" type="button" title="Pokaż/ukryj sumę">Σ Sumy</button>
@@ -504,12 +507,44 @@ const META_TEXT_COL_W=120;
 function isMetaTextCol(name){
   return /^(źródła|zrodla|źródlo|zrodlo|notatka)$/i.test(norm(name));
 }
+/** Domyślna szerokość meta — nie blokuje ręcznej zmiany. */
 function capMetaTextWidths(sh){
   if(!sh) return;
+  ensureColWrap(sh);
   sh.columns.forEach((name,ci)=>{
     if(!isMetaTextCol(name)) return;
-    sh.widths[ci]=META_TEXT_COL_W;
+    if(sh.widths[ci]==null) sh.widths[ci]=META_TEXT_COL_W;
   });
+}
+function ensureColWrap(sh){
+  if(!sh) return;
+  if(!Array.isArray(sh.colWrap)) sh.colWrap=[];
+  while(sh.colWrap.length<sh.columns.length) sh.colWrap.push(null);
+  if(sh.colWrap.length>sh.columns.length) sh.colWrap.length=sh.columns.length;
+}
+function isColWrap(sh, ci){
+  if(!sh||ci==null||ci<0) return false;
+  ensureColWrap(sh);
+  // true/false = jawnie; null = dziedzicz globalne App.wrap
+  if(sh.colWrap[ci]===true) return true;
+  if(sh.colWrap[ci]===false) return false;
+  return !!App.wrap;
+}
+function setColWrap(sh, ci, on){
+  if(!sh||ci==null||ci<0) return;
+  ensureColWrap(sh);
+  sh.colWrap[ci]=!!on;
+}
+function sheetHasColWrap(sh){
+  if(!sh) return false;
+  ensureColWrap(sh);
+  return sh.columns.some((_,ci)=>isColWrap(sh,ci));
+}
+/** Ustaw zawijanie na wszystkich kolumnach (przycisk globalny). */
+function setAllColWrap(sh, on){
+  if(!sh) return;
+  ensureColWrap(sh);
+  sh.columns.forEach((_,ci)=>{ sh.colWrap[ci]=!!on; });
 }
 const PARK_STATUS_WAIT='oczekuje';
 const PARK_STATUS_DONE='zrobione';
@@ -556,6 +591,7 @@ function measureTextWidth(text, font){
 function fitColumnWidths(sh, opts){
   opts=opts||{};
   if(!sh||!sh.columns.length) return false;
+  ensureColWrap(sh);
   const cols=visCols(sh);
   const idxs=sorted(sh, filtered(sh));
   const cellFont='14px "Segoe UI",system-ui,sans-serif';
@@ -563,8 +599,6 @@ function fitColumnWidths(sh, opts){
   const minW=opts.minWidth||72;
   const maxHeadW=150;
   cols.forEach(ci=>{
-    // Źródła / Notatka: zawsze wąskie — długie tagi tylko w title (hover)
-    if(isMetaTextCol(sh.columns[ci])){ sh.widths[ci]=META_TEXT_COL_W; return; }
     let maxData=minW;
     const sample=idxs.length>800?idxs.filter((_,i)=>i%Math.ceil(idxs.length/800)===0):idxs;
     sample.forEach(ri=>{ maxData=Math.max(maxData, measureTextWidth(sh.rows[ri][ci], cellFont)+28); });
@@ -572,7 +606,10 @@ function fitColumnWidths(sh, opts){
     sh.widths[ci]=Math.min(maxW, Math.max(minW, Math.ceil(Math.max(maxData, headW))));
   });
   // Nie włączaj zawijania przy dużych tabelach — zabija wirtualizację i wiesza przeglądarkę
-  if(opts.wrap===true && idxs.length<VIRT_THRESHOLD) App.wrap=true;
+  if(opts.wrap===true && idxs.length<VIRT_THRESHOLD){
+    App.wrap=true;
+    sh.columns.forEach((_,ci)=>{ if(sh.colWrap[ci]==null) sh.colWrap[ci]=true; });
+  }
   return true;
 }
 function autoFitColumns(){
@@ -700,13 +737,40 @@ function openHeaderContextMenu(e, ci){
   e.preventDefault(); e.stopPropagation();
   const sh=active(); if(!sh||ci<0) return;
   hideCtx();
+  ensureColWrap(sh);
   const menu=$('ctxMenu');
   const name=sh.columns[ci]||('Kolumna '+ci);
+  const wrapped=isColWrap(sh, ci);
+  const curW=sh.widths[ci]!=null?sh.widths[ci]:150;
   menu.innerHTML='';
   const h=document.createElement('div'); h.className='ctx-h'; h.textContent='Nagłówek: '+name; menu.append(h);
   const items=[
     ['Zmień nazwę…', ()=>{ hideCtx(); renameColumn(ci); }],
     ['Kopiuj nazwę', async()=>{ await copyText(name); hideCtx(); toast('Skopiowano nazwę', 'copy'); }],
+    ['sep'],
+    ['Szerokość… ('+curW+' px)', ()=>{
+      hideCtx();
+      const ans=prompt('Szerokość kolumny „'+name+'” (px, 50–800):', String(curW));
+      if(ans==null) return;
+      const n=parseInt(String(ans).replace(/[^\d]/g,''),10);
+      if(!n||n<50||n>800){ toast('Podaj liczbę 50–800'); return; }
+      pushUndo();
+      sh.widths[ci]=n;
+      renderGrid(); scheduleAutosave();
+      toast('Szerokość: '+n+' px');
+    }],
+    [wrapped?'✓ Zawijaj tekst':'Zawijaj tekst', ()=>{
+      const nRows=sorted(sh,filtered(sh)).length;
+      if(!wrapped && nRows>=VIRT_THRESHOLD){
+        hideCtx();
+        toast('Zawijanie niedostępne przy '+nRows+' wierszach (wiesza przeglądarkę)');
+        return;
+      }
+      pushUndo();
+      setColWrap(sh, ci, !wrapped);
+      hideCtx(); renderGrid(); scheduleAutosave();
+      toast(!wrapped?'Zawijanie WŁĄCZONE dla „'+name+'”':'Zawijanie WYŁĄCZONE dla „'+name+'”');
+    }],
     ['sep'],
     ['Sortuj A→Z / rosnąco', ()=>{ pushUndo(); sh.sort={i:ci,d:1}; hideCtx(); renderGrid(); }],
     ['Sortuj Z→A / malejąco', ()=>{ pushUndo(); sh.sort={i:ci,d:-1}; hideCtx(); renderGrid(); }],
@@ -717,16 +781,11 @@ function openHeaderContextMenu(e, ci){
     ['Ukryj kolumnę', ()=>{ pushUndo(); sh.visible[ci]=false; hideCtx(); render(); toast('Ukryto kolumnę'); }],
     ['Dopasuj tę kolumnę', ()=>{
       pushUndo();
-      if(isMetaTextCol(sh.columns[ci])){
-        sh.widths[ci]=META_TEXT_COL_W;
-        hideCtx(); renderGrid(); toast('Źródła/Notatka: max '+META_TEXT_COL_W+'px');
-        return;
-      }
       const idxs=sorted(sh,filtered(sh));
       let max=measureTextWidth(sh.columns[ci],'650 13px "Segoe UI",system-ui,sans-serif')+56;
       idxs.forEach(ri=>{ max=Math.max(max, measureTextWidth(sh.rows[ri][ci],'14px "Segoe UI",system-ui,sans-serif')+28); });
       sh.widths[ci]=Math.min(480, Math.max(72, Math.ceil(max)));
-      hideCtx(); renderGrid(); toast('Dopasowano kolumnę');
+      hideCtx(); renderGrid(); scheduleAutosave(); toast('Dopasowano kolumnę → '+sh.widths[ci]+' px');
     }],
     ['sep'],
     ['Usuń kolumnę', ()=>{ hideCtx(); deleteColumn(ci); }]
@@ -743,8 +802,12 @@ function selectAllText(el){const r=document.createRange(); r.selectNodeContents(
 
 function emptyFilter(){return {mode:'any', text:'', min:'', max:''};}
 function newSheet(name, seed){
-  return {id:uid(), name:name||'Robocza', columns:seed?.columns?.slice()||[], rows:seed?.rows?.map(r=>r.slice())||[],
+  const cols=seed?.columns?.slice()||[];
+  const wraps=seed?.colWrap?.slice()||cols.map(()=>null);
+  while(wraps.length<cols.length) wraps.push(false);
+  return {id:uid(), name:name||'Robocza', columns:cols, rows:seed?.rows?.map(r=>r.slice())||[],
     order:seed?.order?.slice()||[], visible:seed?.visible?.slice()||[], widths:seed?.widths?.slice()||[],
+    colWrap:wraps,
     sort:{i:-1,d:1}, filter:'', colFilters:{}, selected:new Set(), hiddenRows:new Set(), last:-1,
     rowColors:{}, marks:{}, rowStatus:{}, colorRules:[], activeCol:-1, _renaming:false, showSums:seed?.showSums??false};
 }
@@ -865,12 +928,13 @@ function saveSchemas(){try{localStorage.setItem(SCHEMA_KEY, JSON.stringify(App.s
 
 function snapshotView(){
   const sh=active(); if(!sh) return null;
-  ensureHidden(sh); ensureRowStatus(sh);
+  ensureHidden(sh); ensureRowStatus(sh); ensureColWrap(sh);
   return {
     sheetId:sh.id,
     columns:sh.columns.slice(),
     rows:sh.rows.map(r=>r.slice()),
     order:sh.order.slice(), visible:sh.visible.slice(), widths:sh.widths.slice(),
+    colWrap:sh.colWrap.slice(),
     sort:Object.assign({},sh.sort),
     filter:sh.filter, colFilters:JSON.parse(JSON.stringify(sh.colFilters||{})),
     colorRules:JSON.parse(JSON.stringify(sh.colorRules||[])),
@@ -898,12 +962,18 @@ function snapshotWorkbook(){
 }
 function restoreSheetFromSnap(s){
   const sh=newSheet(s.name||'Karta', {
-    columns:s.columns||[], rows:s.rows||[], order:s.order, visible:s.visible, widths:s.widths, showSums:s.showSums
+    columns:s.columns||[], rows:s.rows||[], order:s.order, visible:s.visible, widths:s.widths,
+    colWrap:s.colWrap, showSums:s.showSums
   });
   if(s.id) sh.id=s.id;
   if(!sh.order.length && sh.columns.length) sh.order=sh.columns.map((_,i)=>i);
   if(!sh.visible.length) sh.visible=sh.columns.map(()=>true);
   if(!sh.widths.length) sh.widths=sh.columns.map(()=>150);
+  ensureColWrap(sh);
+  // Stare zapisy bez colWrap + globalne wrap → włącz zawijanie na wszystkich
+  if(!Array.isArray(s.colWrap) && App.wrap){
+    sh.colWrap=sh.columns.map(()=>true);
+  }
   sh.sort=s.sort||{i:-1,d:1}; sh.filter=s.filter||''; sh.colFilters=s.colFilters||{};
   sh.rowColors=s.rowColors||{}; sh.marks=s.marks||{}; sh.rowStatus=s.rowStatus||{};
   sh.colorRules=s.colorRules||[]; sh.hiddenRows=new Set(s.hiddenRows||[]);
@@ -1495,7 +1565,7 @@ function loadMatrix(matrix, append){
     sh.sort={i:-1,d:1}; sh.selected.clear(); sh.last=-1; sh.rowColors={}; sh.marks={}; sh.rowStatus={}; sh.colFilters={}; sh.filter=''; sh.colorRules=sh.colorRules||[];
     ensureHidden(sh); sh.hiddenRows=new Set();
     $('filterInput').value='';
-  }else{ pushUndo(); const w=Math.max(sh.columns.length,p.headers.length); while(sh.columns.length<w){const i=sh.columns.length; sh.columns.push('Kolumna '+letter(i)); sh.order.push(i); sh.visible.push(true); sh.widths.push(150);} p.rows.forEach(r=>sh.rows.push(Array.from({length:w},(_,i)=>r[i]||''))); }
+  }else{ pushUndo(); const w=Math.max(sh.columns.length,p.headers.length); while(sh.columns.length<w){const i=sh.columns.length; sh.columns.push('Kolumna '+letter(i)); sh.order.push(i); sh.visible.push(true); sh.widths.push(150); ensureColWrap(sh); sh.colWrap.push(null);} p.rows.forEach(r=>sh.rows.push(Array.from({length:w},(_,i)=>r[i]||''))); }
   applyColorRules(sh);
   let msg='Wklejono '+p.rows.length+' wierszy';
   const meta=extractPpeTable._meta;
@@ -1628,7 +1698,10 @@ function rowColor(sh, ri){return sh.rowColors[ri] || (sh._ruleColors&&sh._ruleCo
 
 function captureSchema(){
   const sh=active();
-  return {name:'', order:sh.order.slice(), visible:sh.visible.slice(), widths:sh.widths.slice(), sort:Object.assign({},sh.sort),
+  ensureColWrap(sh);
+  return {name:'', order:sh.order.slice(), visible:sh.visible.slice(), widths:sh.widths.slice(),
+    colWrap:sh.colWrap.slice(),
+    sort:Object.assign({},sh.sort),
     filter:sh.filter, colFilters:JSON.parse(JSON.stringify(sh.colFilters||{})), colorRules:JSON.parse(JSON.stringify(sh.colorRules||[])),
     wrap:App.wrap, center:App.center, theme:App.theme, columns:sh.columns.slice()};
 }
@@ -1651,6 +1724,13 @@ function applySchema(schema, push){
       const name=sh.columns[i]; const oldCi=schema.columns.indexOf(name);
       return oldCi>=0 ? (schema.widths[oldCi]||150) : 150;
     });
+    ensureColWrap(sh);
+    if(Array.isArray(schema.colWrap)){
+      sh.colWrap=sh.columns.map((_,i)=>{
+        const name=sh.columns[i]; const oldCi=schema.columns.indexOf(name);
+        return oldCi>=0 ? (schema.colWrap[oldCi]??null) : null;
+      });
+    }
     // remap filters/sort/rules by name
     const mappedFilters={};
     Object.entries(schema.colFilters||{}).forEach(([oldCi,f])=>{
@@ -1662,6 +1742,8 @@ function applySchema(schema, push){
     sh.colorRules=(schema.colorRules||[]).map(r=>Object.assign({},r));
   }else{
     sh.order=schema.order.slice(); sh.visible=schema.visible.slice(); sh.widths=schema.widths.slice();
+    ensureColWrap(sh);
+    if(Array.isArray(schema.colWrap)) sh.colWrap=schema.colWrap.slice();
     sh.sort=Object.assign({},schema.sort); sh.colFilters=JSON.parse(JSON.stringify(schema.colFilters||{}));
     sh.colorRules=JSON.parse(JSON.stringify(schema.colorRules||[]));
   }
@@ -1922,7 +2004,8 @@ function buildRowTr(sh, ri, displayIdx, cols, idxs){
 
   cols.forEach(ci=>{
     const td=document.createElement('td');
-    if(isMetaTextCol(sh.columns[ci])) td.classList.add('meta-text');
+    if(isColWrap(sh,ci)) td.classList.add('col-wrap');
+    else td.classList.add('col-nowrap');
     const val=sh.rows[ri][ci]??'';
     const editing=App.editing && App.editing.r===ri && App.editing.c===ci;
     if(App.activeCell&&App.activeCell.r===ri&&App.activeCell.c===ci) td.classList.add('cell-active');
@@ -2076,6 +2159,8 @@ function addColumn(refCi, before){
   sh.columns.push(name.trim()||def);
   sh.visible.push(true);
   sh.widths.push(140);
+  ensureColWrap(sh);
+  sh.colWrap.push(null);
   const pos=refCi==null||refCi<0?-1:sh.order.indexOf(refCi);
   if(pos<0) sh.order.push(ci);
   else if(before) sh.order.splice(pos, 0, ci);
@@ -2115,6 +2200,8 @@ function deleteColumn(ci){
   sh.columns.splice(ci,1);
   sh.visible.splice(ci,1);
   sh.widths.splice(ci,1);
+  ensureColWrap(sh);
+  sh.colWrap.splice(ci,1);
   sh.rows.forEach(r=>r.splice(ci,1));
   sh.order=sh.order.filter(i=>i!==ci).map(i=>i>ci?i-1:i);
   if(sh.sort.i===ci) sh.sort={i:-1,d:1}; else if(sh.sort.i>ci) sh.sort.i--;
@@ -2123,7 +2210,7 @@ function deleteColumn(ci){
   if(sh.activeCol===ci) sh.activeCol=-1; else if(sh.activeCol>ci) sh.activeCol--;
   if(App.activeCell&&App.activeCell.c===ci) App.activeCell=null;
   else if(App.activeCell&&App.activeCell.c>ci) App.activeCell.c--;
-  if(!sh.columns.length){ sh.rows=[]; sh.order=[]; sh.visible=[]; sh.widths=[]; }
+  if(!sh.columns.length){ sh.rows=[]; sh.order=[]; sh.visible=[]; sh.widths=[]; sh.colWrap=[]; }
   applyColorRules(sh); render(); toast('Usunięto kolumnę');
 }
 function renderSidebar(sh){
@@ -2301,13 +2388,20 @@ function updateStatus(sh,idxs){
 
 function renderGrid(){
   const sh=active(); if(!sh) return;
+  ensureColWrap(sh);
   capMetaTextWidths(sh);
   const grid=$('dataGrid'), empty=$('emptyState'), head=$('gridHead'), body=$('gridBody'), foot=$('gridFoot'), cg=$('colgroup');
   const wrap=$('gridWrap');
   const cols=visCols(sh); const idxs=sorted(sh, filtered(sh));
   // Duże tabele: wymuś wirtualizację (zawijanie zabija DOM)
-  if(idxs.length>=VIRT_THRESHOLD && App.wrap){ App.wrap=false; try{saveViewPrefs();}catch(_){} }
-  grid.classList.toggle('wrap',App.wrap); grid.classList.toggle('center',App.center); grid.classList.toggle('plain',!!App.plain);
+  if(idxs.length>=VIRT_THRESHOLD){
+    let cleared=false;
+    if(App.wrap){ App.wrap=false; cleared=true; }
+    sh.colWrap.forEach((w,i)=>{ if(w){ sh.colWrap[i]=false; cleared=true; } });
+    if(cleared) try{saveViewPrefs();}catch(_){}
+  }
+  const anyWrap=sheetHasColWrap(sh);
+  grid.classList.toggle('wrap', !!App.wrap || anyWrap); grid.classList.toggle('center',App.center); grid.classList.toggle('plain',!!App.plain);
   if(!sh.rows.length){
     empty.classList.remove('hidden'); grid.hidden=true; head.innerHTML=''; body.innerHTML=''; if(foot) foot.innerHTML=''; cg.innerHTML='';
     const card=empty.querySelector('.empty-card');
@@ -2358,12 +2452,14 @@ function renderGrid(){
   const corner=document.createElement('th'); corner.className='corner'; corner.innerHTML='<div class="th-inner" style="justify-content:center"><input type="checkbox" id="selectAllCb"></div>'; hr.append(corner);
   cols.forEach(ci=>{
     const th=document.createElement('th');
-    if(isMetaTextCol(sh.columns[ci])) th.classList.add('meta-text');
+    if(isColWrap(sh,ci)) th.classList.add('col-wrap');
+    else th.classList.add('col-nowrap');
     th.style.width=th.style.minWidth=(sh.widths[ci]||150)+'px';
-    if(isMetaTextCol(sh.columns[ci])) th.style.maxWidth=META_TEXT_COL_W+'px';
     const inner=document.createElement('div'); inner.className='th-inner';
     const meta=document.createElement('span'); meta.className='meta'; meta.textContent=letter(sh.order.indexOf(ci));
-    const title=document.createElement('span'); title.className='title'; title.textContent=sh.columns[ci]; title.title='PPM = zmień nazwę · dwuklik = zmień nazwę';
+    const title=document.createElement('span'); title.className='title'; title.textContent=sh.columns[ci];
+    title.title='PPM = szerokość / zawijanie · przeciągnij krawędź = szerokość · dwuklik = nazwa'
+      +(isColWrap(sh,ci)?' · zawijanie WŁ' :'');
     const sort=document.createElement('span'); sort.className='sort'; sort.textContent=sh.sort.i===ci?(sh.sort.d>0?'▲':'▼'):'↕';
     const fbtn=document.createElement('button'); fbtn.type='button'; fbtn.className='filter-btn'+(hasActiveFilter(sh.colFilters[ci])?' on':''); fbtn.textContent='▾';
     fbtn.onclick=e=>{e.stopPropagation(); openColFilter(ci,fbtn);};
@@ -2372,10 +2468,18 @@ function renderGrid(){
     const rh=document.createElement('div'); rh.className='resize'; th.append(rh);
     rh.onmousedown=e=>{
       e.preventDefault(); e.stopPropagation();
-      if(isMetaTextCol(sh.columns[ci])){ sh.widths[ci]=META_TEXT_COL_W; toast('Źródła/Notatka: stała szerokość '+META_TEXT_COL_W+'px'); return; }
       const sx=e.clientX, sw=sh.widths[ci]||150;
-      const mv=ev=>{sh.widths[ci]=Math.max(70,sw+ev.clientX-sx); th.style.width=th.style.minWidth=sh.widths[ci]+'px'; const col=cg.querySelector('col[data-ci="'+ci+'"]'); if(col) col.style.width=sh.widths[ci]+'px';};
-      const up=()=>{window.removeEventListener('mousemove',mv); window.removeEventListener('mouseup',up);};
+      const mv=ev=>{
+        sh.widths[ci]=Math.max(50, Math.min(800, sw+ev.clientX-sx));
+        th.style.width=th.style.minWidth=sh.widths[ci]+'px';
+        const col=cg.querySelector('col[data-ci="'+ci+'"]');
+        if(col) col.style.width=sh.widths[ci]+'px';
+      };
+      const up=()=>{
+        window.removeEventListener('mousemove',mv);
+        window.removeEventListener('mouseup',up);
+        scheduleAutosave();
+      };
       window.addEventListener('mousemove',mv); window.addEventListener('mouseup',up);
     };
     sort.onclick=e=>{e.stopPropagation(); sh.activeCol=ci; pushUndo(); if(sh.sort.i===ci) sh.sort.d*=-1; else{sh.sort.i=ci; sh.sort.d=1;} renderGrid();};
@@ -2389,8 +2493,8 @@ function renderGrid(){
   const savedScroll=wrap?wrap.scrollTop:0;
   body.innerHTML='';
 
-  // Wirtualizacja: stała wysokość wiersza (unikaj skoków scrolla). Przy zawijaniu tekstu — wyłącz.
-  const useVirt=idxs.length>=VIRT_THRESHOLD && !App.editing;
+  // Wirtualizacja: stała wysokość wiersza. Przy zawijaniu tekstu — wyłącz.
+  const useVirt=idxs.length>=VIRT_THRESHOLD && !App.editing && !sheetHasColWrap(sh);
   grid.classList.toggle('virt-mode', !!useVirt);
   let start=0, end=idxs.length;
   if(useVirt && wrap){
@@ -2428,7 +2532,7 @@ function renderGrid(){
     wrap.addEventListener('scroll', ()=>{
       if(App._skipScroll || App._virtScrollLock) return;
       const sh2=active(); if(!sh2) return;
-      if(App.editing || App.wrap) return;
+      if(App.editing || sheetHasColWrap(sh) || App.wrap) return;
       const n=sorted(sh2, filtered(sh2)).length;
       if(n<VIRT_THRESHOLD) return;
       const st=wrap.scrollTop||0;
@@ -2729,7 +2833,7 @@ function render(){
   ensureBase(); const sh=active(); applyColorRules(sh);
   document.documentElement.setAttribute('data-theme', App.theme); document.documentElement.setAttribute('data-mode', App.dark?'dark':'light');
   document.title=App.workbook+' — Offline Table Studio'; $('wbTitle').value=App.workbook;
-  $('btnWrap').classList.toggle('active',App.wrap); $('btnCenter').classList.toggle('active',App.center);
+  $('btnWrap').classList.toggle('active', sheetHasColWrap(sh) || App.wrap); $('btnCenter').classList.toggle('active',App.center);
   const bf=$('btnClearFill'); if(bf) bf.classList.toggle('active',!!App.plain);
   $('themeSelect').value=App.theme;
   syncCopyModeUI();
@@ -3090,7 +3194,6 @@ function revealCols(sh, names){
     if(!sh.order.includes(ci)) sh.order.push(ci);
     sh.visible[ci]=true;
     if(sh.widths[ci]==null) sh.widths[ci]=isMetaTextCol(name)?META_TEXT_COL_W:110;
-    if(isMetaTextCol(name)) sh.widths[ci]=Math.min(META_TEXT_COL_W, sh.widths[ci]);
   });
 }
 function colIsMostlyEmpty(sh, ci){
@@ -3131,7 +3234,7 @@ function ensureCol(sh, name, width){
     if(!sh.order.includes(ci)) sh.order.push(ci);
     if(sh.visible[ci]===false) sh.visible[ci]=true;
     if(sh.widths[ci]==null) sh.widths[ci]=wantW;
-    if(isMetaTextCol(name)) sh.widths[ci]=Math.min(META_TEXT_COL_W, sh.widths[ci]);
+    ensureColWrap(sh);
     sh.rows.forEach(r=>{ while(r.length<sh.columns.length) r.push(''); });
     return ci;
   }
@@ -3142,6 +3245,7 @@ function ensureCol(sh, name, width){
     if(!sh.order.includes(ci)) sh.order.push(ci);
     sh.visible[ci]=true;
     sh.widths[ci]=wantW;
+    ensureColWrap(sh);
     sh.rows.forEach(r=>{ while(r.length<sh.columns.length) r.push(''); r[ci]=''; });
     return ci;
   }
@@ -3150,6 +3254,8 @@ function ensureCol(sh, name, width){
   sh.order.push(ci);
   sh.visible.push(true);
   sh.widths.push(wantW);
+  ensureColWrap(sh);
+  sh.colWrap.push(null);
   sh.rows.forEach(r=>{ while(r.length<sh.columns.length) r.push(''); });
   return ci;
 }
@@ -4742,10 +4848,11 @@ function openPastePdfDlg(){
 }
 
 function serializeSheet(sh){
-  ensureHidden(sh); ensureRowStatus(sh);
+  ensureHidden(sh); ensureRowStatus(sh); ensureColWrap(sh);
   return {
     id:sh.id, name:sh.name, columns:sh.columns.slice(), rows:sh.rows.map(r=>r.slice()),
     order:sh.order.slice(), visible:sh.visible.slice(), widths:sh.widths.slice(),
+    colWrap:sh.colWrap.slice(),
     sort:Object.assign({},sh.sort), filter:sh.filter||'', colFilters:JSON.parse(JSON.stringify(sh.colFilters||{})),
     rowColors:Object.assign({},sh.rowColors||{}), marks:Object.assign({},sh.marks||{}),
     rowStatus:Object.assign({},sh.rowStatus||{}), colorRules:JSON.parse(JSON.stringify(sh.colorRules||[])),
@@ -4776,12 +4883,15 @@ function loadWorkbookData(data){
   if(data.copyMode==='archive'||data.copyMode==='copy') setCopyMode(data.copyMode, true);
   App.sheets=data.sheets.map(s=>{
     const sh=newSheet(s.name||'Karta', {
-      columns:s.columns||[], rows:s.rows||[], order:s.order, visible:s.visible, widths:s.widths, showSums:s.showSums
+      columns:s.columns||[], rows:s.rows||[], order:s.order, visible:s.visible, widths:s.widths,
+      colWrap:s.colWrap, showSums:s.showSums
     });
     if(s.id) sh.id=s.id;
     if(!sh.order.length && sh.columns.length) sh.order=sh.columns.map((_,i)=>i);
     if(!sh.visible.length) sh.visible=sh.columns.map(()=>true);
     if(!sh.widths.length) sh.widths=sh.columns.map(()=>150);
+    ensureColWrap(sh);
+    if(!Array.isArray(s.colWrap) && App.wrap) sh.colWrap=sh.columns.map(()=>true);
     sh.sort=s.sort||{i:-1,d:1}; sh.filter=s.filter||''; sh.colFilters=s.colFilters||{};
     sh.rowColors=s.rowColors||{}; sh.marks=s.marks||{}; sh.rowStatus=s.rowStatus||{};
     sh.colorRules=s.colorRules||[]; sh.hiddenRows=new Set(s.hiddenRows||[]);
@@ -4901,7 +5011,7 @@ function pasteMatrixAt(matrix, startR, startC){
   while(sh.columns.length<needCols){
     const i=sh.columns.length;
     sh.columns.push('Kolumna '+letter(i));
-    sh.order.push(i); sh.visible.push(true); sh.widths.push(150);
+    sh.order.push(i); sh.visible.push(true); sh.widths.push(150); ensureColWrap(sh); sh.colWrap.push(null);
   }
   if(!sh.columns.length){ toast('Brak kolumn'); return false; }
   const endR=startR+matrix.length;
@@ -5060,8 +5170,13 @@ document.querySelectorAll('#workModeToggle [data-work-mode]').forEach(b=>{
 $('btnWrap').onclick=()=>{
   const sh=active();
   const n=sh?sorted(sh, filtered(sh)).length:0;
-  if(!App.wrap && n>=VIRT_THRESHOLD){ toast('Zawijanie niedostępne przy '+n+' wierszach (wiesza przeglądarkę)'); return; }
-  pushUndo(); App.wrap=!App.wrap; saveViewPrefs(); render();
+  const turningOn=!sheetHasColWrap(sh);
+  if(turningOn && n>=VIRT_THRESHOLD){ toast('Zawijanie niedostępne przy '+n+' wierszach (wiesza przeglądarkę)'); return; }
+  pushUndo();
+  App.wrap=turningOn;
+  if(sh) setAllColWrap(sh, turningOn);
+  saveViewPrefs(); render();
+  toast(turningOn?'Zawijanie WŁĄCZONE (wszystkie kolumny)':'Zawijanie WYŁĄCZONE — włącz per kolumna: PPM na nagłówku');
 };
 $('btnCenter').onclick=()=>{pushUndo(); App.center=!App.center; saveViewPrefs(); render();};
 if($('btnToggleSums')) $('btnToggleSums').onclick=()=>{ const sh=active(); if(!sh) return; pushUndo(); sh.showSums = !sh.showSums; renderGrid(); };
@@ -5090,7 +5205,7 @@ $('cellValue').addEventListener('keydown',e=>{
 $('cellValue').addEventListener('blur',()=>{ if(!App.editing) commitActiveCell(); });
 $('cellValue').addEventListener('focus',()=>{ if($('cellValue').textContent && !App.editing) selectAllText($('cellValue')); });
 $('cellValue').onclick=()=>{if($('cellValue').textContent && !App.editing) selectAllText($('cellValue'));};
-$('btnClearSheet').onclick=()=>{const sh=active(); if(!sh.rows.length)return; if(!confirm('Wyczyścić kartę?'))return; pushUndo(); Object.assign(sh,{columns:[],rows:[],order:[],visible:[],widths:[],sort:{i:-1,d:1},filter:'',colFilters:{},rowColors:{},marks:{},rowStatus:{},hiddenRows:new Set()}); sh.selected.clear(); $('filterInput').value=''; render();};
+$('btnClearSheet').onclick=()=>{const sh=active(); if(!sh.rows.length)return; if(!confirm('Wyczyścić kartę?'))return; pushUndo(); Object.assign(sh,{columns:[],rows:[],order:[],visible:[],widths:[],colWrap:[],sort:{i:-1,d:1},filter:'',colFilters:{},rowColors:{},marks:{},rowStatus:{},hiddenRows:new Set()}); sh.selected.clear(); $('filterInput').value=''; render();};
 $('btnClearFilters').onclick=()=>{pushUndo(); const sh=active(); sh.filter=''; sh.colFilters={}; $('filterInput').value=''; render(); toast('Wyczyszczono filtry');};
 $('filterInput').oninput=()=>{active().filter=$('filterInput').value; renderGrid();};
 $('btnGoto').onclick=()=>{
