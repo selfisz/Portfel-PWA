@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; media-src 'none'; font-src 'none';">
-<title>Offline Table Studio V7.7.1</title>
+<title>Offline Table Studio V7.7.2</title>
 <style>
 :root,[data-theme="navy"]{--bg:#dfe7f2;--chrome:#0f1c2e;--chrome2:#16253b;--panel:#fff;--panel2:#f4f7fb;--line:#c9d5e5;--text:#142033;--muted:#607084;--accent:#2563eb;--accent2:#1d4ed8;--soft:#e8f0ff;--head:#1a3354;--headText:#f5f8fc;--zebra:#eef3f9;--sel:#d9e8ff;--ok:#0f766e;--danger:#be123c;--shadow:0 12px 40px rgba(15,28,46,.12);--font:"Segoe UI",system-ui,-apple-system,sans-serif;--mono:Consolas,"Cascadia Mono",monospace}
 [data-theme="green"]{--bg:#dcebe3;--chrome:#0b2a24;--chrome2:#12352e;--accent:#0f766e;--accent2:#0d9488;--soft:#d8f3ee;--head:#134e4a;--sel:#c5efe7;--zebra:#eaf6f1}
@@ -156,6 +156,10 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
 .grid tfoot td.sum-val .cell{text-align:right;font-variant-numeric:tabular-nums}
 .grid.plain tbody tr:nth-child(even) td{background:transparent}
 .grid.plain tbody tr:hover td{background:transparent}
+/* Tryb zwykłej tabeli = biała kartka: wymuś czarny tekst na białym tle także w trybie ciemnym */
+.grid.plain{background:#fff!important}
+.grid.plain tbody td,.grid.plain tbody td .cell,.grid.plain tfoot td .cell{color:#111!important;background:#fff}
+.grid.plain tbody tr td{background:#fff}
 .grid.plain thead th,.grid.plain thead th.corner{background:#fff!important;color:#111!important;border:1px solid #333}
 .grid.plain thead th .filter-btn{color:#111;opacity:.7}
 .grid.plain tbody tr.rc-yellow td,.grid.plain tbody tr.rc-green td,.grid.plain tbody tr.rc-red td,
