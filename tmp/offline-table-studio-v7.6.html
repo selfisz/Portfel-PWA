@@ -326,7 +326,7 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
       <button class="btn sm" type="button" data-sys-today="UFG" title="Zaznaczone → UFG dziś + źródło listy">UFG</button>
       <button class="btn sm" type="button" data-sys-today="JPK" title="Zaznaczone → JPK dziś + źródło listy">JPK</button>
       <button class="btn sm" type="button" data-sys-today="INFZ" title="Zaznaczone → INFZ dziś + źródło listy">INFZ</button>
-      <button class="btn sm" id="btnSysNieFiguruje" type="button" title="Oznacz wybrane systemy jako «Nie figuruje» (liczy się do kompletu, np. osoba fizyczna bez JPK)">Nie figuruje</button>
+      <button class="btn sm" id="btnSysNieFiguruje" type="button" title="Oznacz wybrane systemy jako «Pomiń» (liczy się do kompletu, np. osoba fizyczna bez JPK)">Pomiń</button>
       <button class="btn sm" id="btnRegTrio" type="button" title="Zaznaczone → KAWA+JPK+INFZ dziś (częsty zestaw)">KAWA+JPK+INFZ</button>
       <button class="btn sm primary" id="btnRegComplete" type="button" title="Wszystkie 5 systemów = dziś" style="color:#fff">Komplet</button>
       <span class="sep"></span>
@@ -492,7 +492,7 @@ function isRegistrySheet(sh){ return !!(sh && (sh.name===REG_SHEET || sh.name===
 const PARK_SHEET='Na później';
 const REG_CYCLE_DAYS=100;
 const REG_SYSTEMS=['KAWA','SINF','UFG','JPK','INFZ'];
-const REG_NA='Nie figuruje';
+const REG_NA='Pomiń';
 const REG_META=['Stan','Komplet','Źródła','Notatka'];
 const PARK_STATUS_WAIT='oczekuje';
 const PARK_STATUS_DONE='zrobione';
@@ -3144,7 +3144,7 @@ function registryColMap(reg){
 }
 function isNieFiguruje(v){
   const t=norm(v);
-  return /^nie\s*figuruje$/i.test(t) || /^n\/?a$/i.test(t) || /^brak$/i.test(t);
+  return /^pomi[nń]$/i.test(t) || /^nie\s*figuruje$/i.test(t) || /^n\/?a$/i.test(t) || /^brak$/i.test(t);
 }
 function isSystemChecked(v){
   const t=norm(v);
@@ -3167,7 +3167,7 @@ function computePersonStatus(dates){
   const dateSlots=slots.filter(s=>s.kind==='date').map(s=>s.d);
   if(!filled.length) return {stan:REG_STATUS.todo, komplet:''};
   if(filled.length<slots.length) return {stan:REG_STATUS.partial, komplet:''};
-  // wszystkie systemy „załatwione” (data albo Nie figuruje)
+  // wszystkie systemy „załatwione” (data albo Pomiń)
   if(!dateSlots.length) return {stan:REG_STATUS.ok, komplet:''};
   const oldest=dateSlots.reduce((a,b)=>a<b?a:b);
   const age=daysBetween(oldest, todayD);
@@ -3619,12 +3619,12 @@ function markSystemsNieFiguruje(){
   const sh=active();
   if(!sh) return;
   if(App.workMode==='adhoc' && !isRegistrySheet(sh)){
-    toast('Włącz tryb „Z bazą" aby oznaczać «Nie figuruje»');
+    toast('Włącz tryb „Z bazą" aby oznaczać «Pomiń»');
     return;
   }
   const idxs=sh.selected.size?[...sh.selected]:(App.activeCell?[App.activeCell.r]:[]);
   if(!idxs.length){ toast('Zaznacz osobę / wiersze'); return; }
-  const systems=pickSystemsInteractive('«Nie figuruje» — które systemy nie dotyczą tej osoby?', []);
+  const systems=pickSystemsInteractive('«Pomiń» — które systemy pominąć dla tej osoby?', []);
   if(systems==null){ toast('Anulowano'); return; }
   if(!systems.length){ toast('Nie wybrano systemów'); return; }
 
@@ -3678,7 +3678,7 @@ function markSystemsNieFiguruje(){
   }
   render();
   scheduleAutosave();
-  toast('Nie figuruje: '+systems.join('+')+' → '+n+' osób (liczy się do kompletu)');
+  toast('Pomiń: '+systems.join('+')+' → '+n+' osób (liczy się do kompletu)');
 }
 
 function markCompleteToday(){ markSystemsToday(REG_SYSTEMS); }

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pl"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kopiuj Studio V7.6.2</title>
+<title>Kopiuj Studio V7.6.3</title>
 <style>
 body{margin:0;font-family:-apple-system,system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
 .wrap{padding:16px;max-width:900px;margin:0 auto}
@@ -10,10 +10,10 @@ button.ok{background:#0f766e}
 textarea{width:100%;height:55vh;box-sizing:border-box;border-radius:12px;border:1px solid #334155;background:#020617;color:#e2e8f0;padding:12px;font:12px ui-monospace,Menlo,monospace}
 a{color:#93c5fd}
 </style></head><body><div class="wrap">
-<h1>Offline Table Studio V7.6.2</h1>
-<p>Kliknij przycisk = cały kod do schowka. Wklej jako plik <code>html</code> w esce.</p>
+<h1>Offline Table Studio V7.6.3</h1>
+<p>Kliknij = cały kod do schowka. Wklej jako <code>html</code> w esce.</p>
 <button type="button" id="b">Kopiuj cały kod</button>
-<a id="dl" download="offline-table-studio-v7.6.2.html" href="#">Pobierz .html</a>
+<a id="dl" download="offline-table-studio-v7.6.3.html" href="#">Pobierz .html</a>
 <textarea id="t" readonly>&lt;!DOCTYPE html&gt;
 &lt;html lang=&quot;pl&quot;&gt;
 &lt;head&gt;
@@ -342,7 +342,7 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
       &lt;button class=&quot;btn sm&quot; type=&quot;button&quot; data-sys-today=&quot;UFG&quot; title=&quot;Zaznaczone → UFG dziś + źródło listy&quot;&gt;UFG&lt;/button&gt;
       &lt;button class=&quot;btn sm&quot; type=&quot;button&quot; data-sys-today=&quot;JPK&quot; title=&quot;Zaznaczone → JPK dziś + źródło listy&quot;&gt;JPK&lt;/button&gt;
       &lt;button class=&quot;btn sm&quot; type=&quot;button&quot; data-sys-today=&quot;INFZ&quot; title=&quot;Zaznaczone → INFZ dziś + źródło listy&quot;&gt;INFZ&lt;/button&gt;
-      &lt;button class=&quot;btn sm&quot; id=&quot;btnSysNieFiguruje&quot; type=&quot;button&quot; title=&quot;Oznacz wybrane systemy jako «Nie figuruje» (liczy się do kompletu, np. osoba fizyczna bez JPK)&quot;&gt;Nie figuruje&lt;/button&gt;
+      &lt;button class=&quot;btn sm&quot; id=&quot;btnSysNieFiguruje&quot; type=&quot;button&quot; title=&quot;Oznacz wybrane systemy jako «Pomiń» (liczy się do kompletu, np. osoba fizyczna bez JPK)&quot;&gt;Pomiń&lt;/button&gt;
       &lt;button class=&quot;btn sm&quot; id=&quot;btnRegTrio&quot; type=&quot;button&quot; title=&quot;Zaznaczone → KAWA+JPK+INFZ dziś (częsty zestaw)&quot;&gt;KAWA+JPK+INFZ&lt;/button&gt;
       &lt;button class=&quot;btn sm primary&quot; id=&quot;btnRegComplete&quot; type=&quot;button&quot; title=&quot;Wszystkie 5 systemów = dziś&quot; style=&quot;color:#fff&quot;&gt;Komplet&lt;/button&gt;
       &lt;span class=&quot;sep&quot;&gt;&lt;/span&gt;
@@ -508,7 +508,7 @@ function isRegistrySheet(sh){ return !!(sh &amp;&amp; (sh.name===REG_SHEET || sh
 const PARK_SHEET=&#x27;Na później&#x27;;
 const REG_CYCLE_DAYS=100;
 const REG_SYSTEMS=[&#x27;KAWA&#x27;,&#x27;SINF&#x27;,&#x27;UFG&#x27;,&#x27;JPK&#x27;,&#x27;INFZ&#x27;];
-const REG_NA=&#x27;Nie figuruje&#x27;;
+const REG_NA=&#x27;Pomiń&#x27;;
 const REG_META=[&#x27;Stan&#x27;,&#x27;Komplet&#x27;,&#x27;Źródła&#x27;,&#x27;Notatka&#x27;];
 const PARK_STATUS_WAIT=&#x27;oczekuje&#x27;;
 const PARK_STATUS_DONE=&#x27;zrobione&#x27;;
@@ -3160,7 +3160,7 @@ function registryColMap(reg){
 }
 function isNieFiguruje(v){
   const t=norm(v);
-  return /^nie\s*figuruje$/i.test(t) || /^n\/?a$/i.test(t) || /^brak$/i.test(t);
+  return /^pomi[nń]$/i.test(t) || /^nie\s*figuruje$/i.test(t) || /^n\/?a$/i.test(t) || /^brak$/i.test(t);
 }
 function isSystemChecked(v){
   const t=norm(v);
@@ -3183,7 +3183,7 @@ function computePersonStatus(dates){
   const dateSlots=slots.filter(s=&gt;s.kind===&#x27;date&#x27;).map(s=&gt;s.d);
   if(!filled.length) return {stan:REG_STATUS.todo, komplet:&#x27;&#x27;};
   if(filled.length&lt;slots.length) return {stan:REG_STATUS.partial, komplet:&#x27;&#x27;};
-  // wszystkie systemy „załatwione” (data albo Nie figuruje)
+  // wszystkie systemy „załatwione” (data albo Pomiń)
   if(!dateSlots.length) return {stan:REG_STATUS.ok, komplet:&#x27;&#x27;};
   const oldest=dateSlots.reduce((a,b)=&gt;a&lt;b?a:b);
   const age=daysBetween(oldest, todayD);
@@ -3635,12 +3635,12 @@ function markSystemsNieFiguruje(){
   const sh=active();
   if(!sh) return;
   if(App.workMode===&#x27;adhoc&#x27; &amp;&amp; !isRegistrySheet(sh)){
-    toast(&#x27;Włącz tryb „Z bazą&quot; aby oznaczać «Nie figuruje»&#x27;);
+    toast(&#x27;Włącz tryb „Z bazą&quot; aby oznaczać «Pomiń»&#x27;);
     return;
   }
   const idxs=sh.selected.size?[...sh.selected]:(App.activeCell?[App.activeCell.r]:[]);
   if(!idxs.length){ toast(&#x27;Zaznacz osobę / wiersze&#x27;); return; }
-  const systems=pickSystemsInteractive(&#x27;«Nie figuruje» — które systemy nie dotyczą tej osoby?&#x27;, []);
+  const systems=pickSystemsInteractive(&#x27;«Pomiń» — które systemy pominąć dla tej osoby?&#x27;, []);
   if(systems==null){ toast(&#x27;Anulowano&#x27;); return; }
   if(!systems.length){ toast(&#x27;Nie wybrano systemów&#x27;); return; }
 
@@ -3694,7 +3694,7 @@ function markSystemsNieFiguruje(){
   }
   render();
   scheduleAutosave();
-  toast(&#x27;Nie figuruje: &#x27;+systems.join(&#x27;+&#x27;)+&#x27; → &#x27;+n+&#x27; osób (liczy się do kompletu)&#x27;);
+  toast(&#x27;Pomiń: &#x27;+systems.join(&#x27;+&#x27;)+&#x27; → &#x27;+n+&#x27; osób (liczy się do kompletu)&#x27;);
 }
 
 function markCompleteToday(){ markSystemsToday(REG_SYSTEMS); }
