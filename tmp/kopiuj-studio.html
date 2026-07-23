@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pl"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kopiuj Studio V7.6.3</title>
+<title>Kopiuj Studio V7.6.4</title>
 <style>
 body{margin:0;font-family:-apple-system,system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
 .wrap{padding:16px;max-width:900px;margin:0 auto}
@@ -10,17 +10,17 @@ button.ok{background:#0f766e}
 textarea{width:100%;height:55vh;box-sizing:border-box;border-radius:12px;border:1px solid #334155;background:#020617;color:#e2e8f0;padding:12px;font:12px ui-monospace,Menlo,monospace}
 a{color:#93c5fd}
 </style></head><body><div class="wrap">
-<h1>Offline Table Studio V7.6.3</h1>
-<p>Kliknij = cały kod do schowka. Wklej jako <code>html</code> w esce.</p>
+<h1>Offline Table Studio V7.6.4</h1>
+<p>Kliknij = cały kod do schowka.</p>
 <button type="button" id="b">Kopiuj cały kod</button>
-<a id="dl" download="offline-table-studio-v7.6.3.html" href="#">Pobierz .html</a>
+<a id="dl" download="offline-table-studio-v7.6.4.html" href="#">Pobierz .html</a>
 <textarea id="t" readonly>&lt;!DOCTYPE html&gt;
 &lt;html lang=&quot;pl&quot;&gt;
 &lt;head&gt;
 &lt;meta charset=&quot;UTF-8&quot;&gt;
 &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;
 &lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27;; style-src &#x27;unsafe-inline&#x27;; img-src data:; connect-src &#x27;none&#x27;; form-action &#x27;none&#x27;; base-uri &#x27;none&#x27;; frame-src &#x27;none&#x27;; worker-src &#x27;none&#x27;; object-src &#x27;none&#x27;; media-src &#x27;none&#x27;; font-src &#x27;none&#x27;;&quot;&gt;
-&lt;title&gt;Offline Table Studio V7.6.1&lt;/title&gt;
+&lt;title&gt;Offline Table Studio V7.6.4&lt;/title&gt;
 &lt;style&gt;
 :root,[data-theme=&quot;navy&quot;]{--bg:#dfe7f2;--chrome:#0f1c2e;--chrome2:#16253b;--panel:#fff;--panel2:#f4f7fb;--line:#c9d5e5;--text:#142033;--muted:#607084;--accent:#2563eb;--accent2:#1d4ed8;--soft:#e8f0ff;--head:#1a3354;--headText:#f5f8fc;--zebra:#eef3f9;--sel:#d9e8ff;--ok:#0f766e;--danger:#be123c;--shadow:0 12px 40px rgba(15,28,46,.12);--font:&quot;Segoe UI&quot;,system-ui,-apple-system,sans-serif;--mono:Consolas,&quot;Cascadia Mono&quot;,monospace}
 [data-theme=&quot;green&quot;]{--bg:#dcebe3;--chrome:#0b2a24;--chrome2:#12352e;--accent:#0f766e;--accent2:#0d9488;--soft:#d8f3ee;--head:#134e4a;--sel:#c5efe7;--zebra:#eaf6f1}
@@ -510,6 +510,18 @@ const REG_CYCLE_DAYS=100;
 const REG_SYSTEMS=[&#x27;KAWA&#x27;,&#x27;SINF&#x27;,&#x27;UFG&#x27;,&#x27;JPK&#x27;,&#x27;INFZ&#x27;];
 const REG_NA=&#x27;Pomiń&#x27;;
 const REG_META=[&#x27;Stan&#x27;,&#x27;Komplet&#x27;,&#x27;Źródła&#x27;,&#x27;Notatka&#x27;];
+const META_TEXT_COL_W=150;
+function isMetaTextCol(name){
+  return /^(źródła|zrodla|notatka)$/i.test(norm(name));
+}
+function capMetaTextWidths(sh){
+  if(!sh) return;
+  sh.columns.forEach((name,ci)=&gt;{
+    if(!isMetaTextCol(name)) return;
+    const w=sh.widths[ci]==null?META_TEXT_COL_W:sh.widths[ci];
+    sh.widths[ci]=Math.min(META_TEXT_COL_W, Math.max(90, w));
+  });
+}
 const PARK_STATUS_WAIT=&#x27;oczekuje&#x27;;
 const PARK_STATUS_DONE=&#x27;zrobione&#x27;;
 const REG_STATUS={
@@ -566,7 +578,10 @@ function fitColumnWidths(sh, opts){
     const sample=idxs.length&gt;800?idxs.filter((_,i)=&gt;i%Math.ceil(idxs.length/800)===0):idxs;
     sample.forEach(ri=&gt;{ maxData=Math.max(maxData, measureTextWidth(sh.rows[ri][ci], cellFont)+28); });
     const headW=Math.min(maxHeadW, measureTextWidth(sh.columns[ci], cellFont)+40);
-    sh.widths[ci]=Math.min(maxW, Math.max(minW, Math.ceil(Math.max(maxData, headW))));
+    let colMax=maxW;
+    // Źródła / Notatka: nie rozciągaj tabeli długimi tagami
+    if(isMetaTextCol(sh.columns[ci])) colMax=META_TEXT_COL_W;
+    sh.widths[ci]=Math.min(colMax, Math.max(minW, Math.ceil(Math.max(maxData, headW))));
   });
   // Nie włączaj zawijania przy dużych tabelach — zabija wirtualizację i wiesza przeglądarkę
   if(opts.wrap===true &amp;&amp; idxs.length&lt;VIRT_THRESHOLD) App.wrap=true;
@@ -2962,7 +2977,7 @@ function finalizeLinkedListAfterPaste(sh){
 /** Po wklejeniu bazy A–K: A=NIP, B=PESEL, doklej KAWA/JPK… na końcu (nie kasuj A–K). */
 function finalizeRegistryAfterPaste(sh){
   if(!sh||!isRegistrySheet(sh) || !sh.columns.length) return {added:[]};
-  // A = NIP, B = PESEL (Twoja baza)
+  // A = NIP, B = PESEL (Twoja baza) — tylko gdy jeszcze nie wyglądają na NIP/PESEL
   if(sh.columns.length&gt;=1 &amp;&amp; !/nip/i.test(String(sh.columns[0])) &amp;&amp; !/pesel/i.test(String(sh.columns[0]))){
     sh.columns[0]=&#x27;NIP&#x27;;
   }
@@ -2979,22 +2994,36 @@ function finalizeRegistryAfterPaste(sh){
   });
   REG_META.forEach(n=&gt;{
     const had=findSystemCol(sh,n)&gt;=0;
-    const ci=ensureCol(sh, n, (n===&#x27;Źródła&#x27;||n===&#x27;Notatka&#x27;)?160:110);
+    const ci=ensureCol(sh, n, isMetaTextCol(n)?META_TEXT_COL_W:110);
     if(ci&gt;=0 &amp;&amp; !had) added.push(n);
   });
+  capMetaTextWidths(sh);
   revealCols(sh, [...REG_SYSTEMS, ...REG_META]);
   refreshRegistryDerived(sh);
   return {added};
 }
-/** Znajdź kolumnę po nazwie (bez wielkości liter). */
+/** Znajdź kolumnę po nazwie (bez wielkości liter). NIP/PESEL: też „Numer NIP” oraz A/B w bazie. */
 function findSystemCol(sh, name){
   if(!sh) return -1;
   let ci=sh.columns.indexOf(name);
   if(ci&gt;=0) return ci;
   const up=norm(name).toUpperCase();
-  return sh.columns.findIndex(c=&gt;norm(c).toUpperCase()===up);
+  ci=sh.columns.findIndex(c=&gt;norm(c).toUpperCase()===up);
+  if(ci&gt;=0) return ci;
+  if(up===&#x27;NIP&#x27;){
+    ci=sh.columns.findIndex(c=&gt;/(^|\b)nip(\b|$)/i.test(norm(c)));
+    if(ci&gt;=0) return ci;
+    // Konwencja bazy: A = NIP (o ile to nie PESEL)
+    if(isRegistrySheet(sh) &amp;&amp; sh.columns.length&gt;=1 &amp;&amp; !/pesel/i.test(String(sh.columns[0]))) return 0;
+  }
+  if(up===&#x27;PESEL&#x27;){
+    ci=sh.columns.findIndex(c=&gt;/pesel/i.test(norm(c)));
+    if(ci&gt;=0) return ci;
+    if(isRegistrySheet(sh) &amp;&amp; sh.columns.length&gt;=2) return 1;
+  }
+  return -1;
 }
-/** Ujednolić nazwy KAWA/INFZ… do kanonicznych (żeby zapis nie szedł w „Kawa” a odczyt w „KAWA”). */
+/** Ujednolić nazwy KAWA/INFZ… oraz NIP/PESEL do kanonicznych (bez dokładania duplikatów). */
 function normalizeSystemColumnNames(sh){
   if(!sh) return;
   [...REG_SYSTEMS, ...REG_META, &#x27;NIP&#x27;, &#x27;PESEL&#x27;].forEach(name=&gt;{
@@ -3009,7 +3038,8 @@ function revealCols(sh, names){
     if(ci&lt;0) return;
     if(!sh.order.includes(ci)) sh.order.push(ci);
     sh.visible[ci]=true;
-    if(sh.widths[ci]==null) sh.widths[ci]=110;
+    if(sh.widths[ci]==null) sh.widths[ci]=isMetaTextCol(name)?META_TEXT_COL_W:110;
+    if(isMetaTextCol(name)) sh.widths[ci]=Math.min(META_TEXT_COL_W, sh.widths[ci]);
   });
 }
 function colIsMostlyEmpty(sh, ci){
@@ -3039,16 +3069,18 @@ function findReclaimableCol(sh){
 }
 function ensureCol(sh, name, width){
   if(!sh) return -1;
+  const wantW=isMetaTextCol(name)?META_TEXT_COL_W:(width||120);
   let ci=sh.columns.indexOf(name);
   if(ci&lt;0){
-    // ta sama nazwa inną wielkością liter → tylko przemianuj
+    // ta sama nazwa inną wielkością liter / NIP|PESEL w A–B → tylko przemianuj
     ci=findSystemCol(sh, name);
     if(ci&gt;=0) sh.columns[ci]=name;
   }
   if(ci&gt;=0){
     if(!sh.order.includes(ci)) sh.order.push(ci);
     if(sh.visible[ci]===false) sh.visible[ci]=true;
-    if(sh.widths[ci]==null) sh.widths[ci]=width||120;
+    if(sh.widths[ci]==null) sh.widths[ci]=wantW;
+    if(isMetaTextCol(name)) sh.widths[ci]=Math.min(META_TEXT_COL_W, sh.widths[ci]);
     sh.rows.forEach(r=&gt;{ while(r.length&lt;sh.columns.length) r.push(&#x27;&#x27;); });
     return ci;
   }
@@ -3058,7 +3090,7 @@ function ensureCol(sh, name, width){
     sh.columns[ci]=name;
     if(!sh.order.includes(ci)) sh.order.push(ci);
     sh.visible[ci]=true;
-    sh.widths[ci]=width||120;
+    sh.widths[ci]=wantW;
     sh.rows.forEach(r=&gt;{ while(r.length&lt;sh.columns.length) r.push(&#x27;&#x27;); r[ci]=&#x27;&#x27;; });
     return ci;
   }
@@ -3066,18 +3098,19 @@ function ensureCol(sh, name, width){
   sh.columns.push(name);
   sh.order.push(ci);
   sh.visible.push(true);
-  sh.widths.push(width||120);
+  sh.widths.push(wantW);
   sh.rows.forEach(r=&gt;{ while(r.length&lt;sh.columns.length) r.push(&#x27;&#x27;); });
   return ci;
 }
 function ensureRegistrySystemCols(reg){
   normalizeSystemColumnNames(reg);
+  // Użyj istniejących A/B / „Numer NIP” — nie dokładać drugiego NIP/PESEL
   ensureCol(reg,&#x27;NIP&#x27;,130);
   ensureCol(reg,&#x27;PESEL&#x27;,130);
   const missing=[];
   REG_SYSTEMS.forEach(n=&gt;{ if(ensureCol(reg,n,100)&lt;0) missing.push(n); });
-  // Meta best-effort (nie blokuj systemów)
-  REG_META.forEach(n=&gt;ensureCol(reg,n,(n===&#x27;Źródła&#x27;||n===&#x27;Notatka&#x27;)?160:110));
+  REG_META.forEach(n=&gt;ensureCol(reg,n, isMetaTextCol(n)?META_TEXT_COL_W:110));
+  capMetaTextWidths(reg);
   revealCols(reg, REG_SYSTEMS);
   return missing;
 }
@@ -3164,9 +3197,8 @@ function isNieFiguruje(v){
 }
 function isSystemChecked(v){
   const t=norm(v);
-  if(!t) return false;
-  if(isNieFiguruje(t)) return true;
-  return parseISODate(t)!=null;
+  // Puste = nie; data / Pomiń / dowolny ręczny wpis (np. nr auta) = zaliczone
+  return !!t;
 }
 
 function computePersonStatus(dates){
@@ -3177,20 +3209,22 @@ function computePersonStatus(dates){
     if(!t) return {kind:&#x27;empty&#x27;};
     if(isNieFiguruje(t)) return {kind:&#x27;na&#x27;};
     const d=parseISODate(t);
-    return d?{kind:&#x27;date&#x27;, d}:{kind:&#x27;empty&#x27;};
+    if(d) return {kind:&#x27;date&#x27;, d};
+    // Ręczny wpis (nr auta itd.) — liczy się do kompletu jak kliknięcie przycisku
+    return {kind:&#x27;text&#x27;};
   });
-  const filled=slots.filter(s=&gt;s.kind===&#x27;na&#x27;||s.kind===&#x27;date&#x27;);
+  const filled=slots.filter(s=&gt;s.kind===&#x27;na&#x27;||s.kind===&#x27;date&#x27;||s.kind===&#x27;text&#x27;);
   const dateSlots=slots.filter(s=&gt;s.kind===&#x27;date&#x27;).map(s=&gt;s.d);
   if(!filled.length) return {stan:REG_STATUS.todo, komplet:&#x27;&#x27;};
   if(filled.length&lt;slots.length) return {stan:REG_STATUS.partial, komplet:&#x27;&#x27;};
-  // wszystkie systemy „załatwione” (data albo Pomiń)
+  // wszystkie systemy załatwione (data / Pomiń / tekst)
   if(!dateSlots.length) return {stan:REG_STATUS.ok, komplet:&#x27;&#x27;};
   const oldest=dateSlots.reduce((a,b)=&gt;a&lt;b?a:b);
   const age=daysBetween(oldest, todayD);
   const komplet=oldest.toISOString().slice(0,10);
   if(age&gt;REG_CYCLE_DAYS) return {stan:REG_STATUS.overdue, komplet};
-  if(dateSlots.every(d=&gt;d.toISOString().slice(0,10)===today) &amp;&amp; slots.every(s=&gt;s.kind===&#x27;na&#x27;||s.kind===&#x27;date&#x27;)){
-    // jeśli są same dzisiejsze daty (+ ewentualnie NA) → Dziś
+  const allDone=slots.every(s=&gt;s.kind===&#x27;na&#x27;||s.kind===&#x27;date&#x27;||s.kind===&#x27;text&#x27;);
+  if(dateSlots.every(d=&gt;d.toISOString().slice(0,10)===today) &amp;&amp; allDone){
     if(slots.some(s=&gt;s.kind===&#x27;date&#x27;)) return {stan:REG_STATUS.today, komplet};
   }
   if(dateSlots.every(d=&gt;d.toISOString().slice(0,10)===today)) return {stan:REG_STATUS.today, komplet};
