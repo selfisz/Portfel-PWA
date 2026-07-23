@@ -1,27 +1,25 @@
 <!DOCTYPE html>
 <html lang="pl"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kopiuj Studio V7.6.7</title>
+<title>Kopiuj Studio V7.6.8</title>
 <style>
 body{margin:0;font-family:-apple-system,system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
 .wrap{padding:16px;max-width:900px;margin:0 auto}
 button{display:block;width:100%;padding:16px;border:0;border-radius:12px;background:#2563eb;color:#fff;font-size:1.05rem;font-weight:700;margin:12px 0}
 button.ok{background:#0f766e}
 textarea{width:100%;height:55vh;box-sizing:border-box;border-radius:12px;border:1px solid #334155;background:#020617;color:#e2e8f0;padding:12px;font:12px ui-monospace,Menlo,monospace}
-a{color:#93c5fd}
 </style></head><body><div class="wrap">
-<h1>Offline Table Studio V7.6.7</h1>
-<p>Kliknij = cały kod do schowka. Wklej do <code>esce/html</code>.</p>
-<p><b>V7.6.7:</b> Źródła/Notatka zawsze wąskie (96px). Przycisk „Zawęź Źródła/Notatkę”. Zawijanie nadal off przy dużych tabelach.</p>
+<h1>Offline Table Studio V7.6.8</h1>
+<p><b>Naprawa:</b> Źródła/Notatka zawsze 100px (CSS). Przycisk <b>Zawęź kolumny</b> przy filtrach. Inne kolumny — przeciągnij prawą krawędź nagłówka (grubszy uchwyt).</p>
 <button type="button" id="b">Kopiuj cały kod</button>
-<a id="dl" download="offline-table-studio-v7.6.7.html" href="#">Pobierz .html</a>
+<a id="dl" download="offline-table-studio-v7.6.8.html" href="#" style="color:#93c5fd">Pobierz .html</a>
 <textarea id="t" readonly>&lt;!DOCTYPE html&gt;
 &lt;html lang=&quot;pl&quot;&gt;
 &lt;head&gt;
 &lt;meta charset=&quot;UTF-8&quot;&gt;
 &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;
 &lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27;; style-src &#x27;unsafe-inline&#x27;; img-src data:; connect-src &#x27;none&#x27;; form-action &#x27;none&#x27;; base-uri &#x27;none&#x27;; frame-src &#x27;none&#x27;; worker-src &#x27;none&#x27;; object-src &#x27;none&#x27;; media-src &#x27;none&#x27;; font-src &#x27;none&#x27;;&quot;&gt;
-&lt;title&gt;Offline Table Studio V7.6.7&lt;/title&gt;
+&lt;title&gt;Offline Table Studio V7.6.8&lt;/title&gt;
 &lt;style&gt;
 :root,[data-theme=&quot;navy&quot;]{--bg:#dfe7f2;--chrome:#0f1c2e;--chrome2:#16253b;--panel:#fff;--panel2:#f4f7fb;--line:#c9d5e5;--text:#142033;--muted:#607084;--accent:#2563eb;--accent2:#1d4ed8;--soft:#e8f0ff;--head:#1a3354;--headText:#f5f8fc;--zebra:#eef3f9;--sel:#d9e8ff;--ok:#0f766e;--danger:#be123c;--shadow:0 12px 40px rgba(15,28,46,.12);--font:&quot;Segoe UI&quot;,system-ui,-apple-system,sans-serif;--mono:Consolas,&quot;Cascadia Mono&quot;,monospace}
 [data-theme=&quot;green&quot;]{--bg:#dcebe3;--chrome:#0b2a24;--chrome2:#12352e;--accent:#0f766e;--accent2:#0d9488;--soft:#d8f3ee;--head:#134e4a;--sel:#c5efe7;--zebra:#eaf6f1}
@@ -79,16 +77,23 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overflow:hid
 .grid-wrap{flex:1;min-height:120px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow);position:relative}
 table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:.84rem;table-layout:fixed}
 .grid col.corner{width:48px}.grid col.data{width:150px}
-.grid th,.grid td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:0;vertical-align:middle;overflow:hidden}
+.grid th,.grid td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:0;vertical-align:middle;overflow:hidden;box-sizing:border-box}
 .grid thead th{position:sticky;top:0;z-index:5;background:var(--head);color:var(--headText)}
 .grid th.corner,.grid td.corner{position:sticky;left:0;z-index:4;width:48px;min-width:48px;max-width:48px;text-align:center}
 .grid thead th.corner{z-index:6;background:color-mix(in srgb,var(--head) 90%,#000)}
 .grid td.corner{background:var(--panel2);color:var(--muted);font-size:.72rem;z-index:3}
-.th-inner{display:flex;align-items:center;gap:5px;padding:8px 9px;user-select:none}
+.th-inner{display:flex;align-items:center;gap:5px;padding:8px 9px;user-select:none;position:relative}
 .th-inner .title{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
 .th-inner .meta{opacity:.65;font-size:.68rem;font-family:var(--mono)}.th-inner .sort{opacity:.5;font-size:.68rem}
 .filter-btn{border:0;background:transparent;color:inherit;cursor:pointer;opacity:.8;padding:0}.filter-btn.on{color:#fde68a;opacity:1}
-.resize{position:absolute;top:0;right:0;width:6px;height:100%;cursor:col-resize}.grid th{position:sticky}
+/* Szerszy uchwyt — da się złapać także przy bardzo szerokiej kolumnie */
+.grid thead th{position:sticky;overflow:visible}
+.resize{position:absolute;top:0;right:-5px;width:16px;height:100%;cursor:col-resize;z-index:9;background:transparent}
+.resize:hover,.resize.dragging{background:color-mix(in srgb,var(--accent) 45%,transparent)}
+/* Źródła / Notatka — twarde ograniczenie szerokości (nie rozpychają tabeli) */
+.grid col.col-meta,.grid th.col-meta,.grid td.col-meta{
+  width:100px!important;min-width:100px!important;max-width:100px!important;
+}
 .cell{display:block;padding:7px 9px;width:100%;cursor:cell;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:text}
 .grid.wrap .cell{white-space:normal;overflow:visible;word-break:break-word}
 /* Zawijanie per kolumna (nadpisuje globalne i ellipsis) */
@@ -310,7 +315,6 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
       &lt;button class=&quot;btn sm&quot; id=&quot;btnWrap&quot; type=&quot;button&quot; title=&quot;Zawijanie wszystkich kolumn. Pojedynczą kolumnę: PPM na nagłówku → Zawijaj tekst. Szerokość: przeciągnij krawędź lub PPM → Szerokość…&quot;&gt;Zawijanie&lt;/button&gt;
       &lt;button class=&quot;btn sm&quot; id=&quot;btnCenter&quot; type=&quot;button&quot;&gt;Wyśrodkuj&lt;/button&gt;
       &lt;button class=&quot;btn sm&quot; id=&quot;btnAutoFit&quot; type=&quot;button&quot; title=&quot;Dopasuj szerokość kolumn&quot;&gt;Autodopasuj&lt;/button&gt;
-      &lt;button class=&quot;btn sm&quot; id=&quot;btnShrinkMeta&quot; type=&quot;button&quot; title=&quot;Źródła i Notatka → wąskie (96 px). Pełny tekst w podpowiedzi po najechaniu.&quot;&gt;Zawęź Źródła/Notatkę&lt;/button&gt;
       &lt;button class=&quot;btn sm&quot; id=&quot;btnToggleSums&quot; type=&quot;button&quot; title=&quot;Pokaż/ukryj sumę&quot;&gt;Σ Sumy&lt;/button&gt;
       &lt;button class=&quot;btn sm&quot; id=&quot;btnRenumber&quot; type=&quot;button&quot; title=&quot;Numeruj 1…N w widoku&quot;&gt;Numeruj 1…N&lt;/button&gt;
     &lt;/div&gt;
@@ -406,6 +410,7 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
     &lt;div class=&quot;field&quot; style=&quot;flex:1;max-width:340px&quot;&gt;&lt;input id=&quot;filterInput&quot; type=&quot;search&quot; placeholder=&quot;Szukaj w całym wierszu…&quot; autocomplete=&quot;off&quot; title=&quot;Filtr globalny: pokazuje wiersze, w których którakolwiek komórka zawiera wpisany tekst&quot;&gt;&lt;/div&gt;
     &lt;div class=&quot;field&quot; style=&quot;min-width:150px&quot;&gt;&lt;input id=&quot;gotoInput&quot; type=&quot;number&quot; min=&quot;1&quot; placeholder=&quot;Idź do wiersza&quot;&gt;&lt;button class=&quot;btn light sm&quot; id=&quot;btnGoto&quot; type=&quot;button&quot;&gt;Idź&lt;/button&gt;&lt;/div&gt;
     &lt;button class=&quot;btn light sm&quot; id=&quot;btnClearFilters&quot; type=&quot;button&quot;&gt;Wyczyść filtry&lt;/button&gt;
+    &lt;button class=&quot;btn light sm primary&quot; id=&quot;btnShrinkCols&quot; type=&quot;button&quot; title=&quot;Źródła/Notatka → 100px. Za szerokie kolumny → max 180px. Potem możesz przeciągać krawędź nagłówka.&quot; style=&quot;color:#fff&quot;&gt;Zawęź kolumny&lt;/button&gt;
     &lt;button class=&quot;btn light sm danger&quot; id=&quot;btnClearSheet&quot; type=&quot;button&quot;&gt;Wyczyść kartę&lt;/button&gt;
   &lt;/div&gt;
 
@@ -521,44 +526,38 @@ const REG_CYCLE_DAYS=100;
 const REG_SYSTEMS=[&#x27;KAWA&#x27;,&#x27;SINF&#x27;,&#x27;UFG&#x27;,&#x27;JPK&#x27;,&#x27;INFZ&#x27;];
 const REG_NA=&#x27;Pomiń&#x27;;
 const REG_META=[&#x27;Stan&#x27;,&#x27;Komplet&#x27;,&#x27;Źródła&#x27;,&#x27;Notatka&#x27;];
-const META_TEXT_COL_W=96;
+const META_TEXT_COL_W=100;
+function foldPl(s){
+  return String(s==null?&#x27;&#x27;:s).replace(/\u00a0/g,&#x27; &#x27;).trim()
+    .normalize(&#x27;NFD&#x27;).replace(/[\u0300-\u036f]/g,&#x27;&#x27;).toLowerCase();
+}
 function isMetaTextCol(name){
-  return /^(źródła|zrodla|źródlo|zrodlo|notatka)$/i.test(norm(name));
+  const f=foldPl(name);
+  return f===&#x27;zrodla&#x27;||f===&#x27;zrodlo&#x27;||f===&#x27;notatka&#x27;||/^zrodl/.test(f);
 }
-function ensureMetaWidthCustom(sh){
-  if(!sh) return;
-  if(!sh.metaWidthCustom || typeof sh.metaWidthCustom!==&#x27;object&#x27;) sh.metaWidthCustom={};
-}
-/** Źródła/Notatka: domyślnie wąskie. Ręczne poszerzenie (PPM/przeciągnięcie) zostaje zapisane. */
-function capMetaTextWidths(sh, opts){
-  if(!sh) return;
-  opts=opts||{};
-  ensureMetaWidthCustom(sh);
+/** Zawsze wymuś wąskie Źródła/Notatka — bez wyjątków (to rozpychało tabelę). */
+function capMetaTextWidths(sh){
+  if(!sh||!sh.columns) return;
   sh.columns.forEach((name,ci)=&gt;{
     if(!isMetaTextCol(name)) return;
-    if(opts.force || !sh.metaWidthCustom[ci]){
-      sh.widths[ci]=META_TEXT_COL_W;
-      if(opts.force) delete sh.metaWidthCustom[ci];
-    }else if(sh.widths[ci]==null){
-      sh.widths[ci]=META_TEXT_COL_W;
-    }
+    sh.widths[ci]=META_TEXT_COL_W;
   });
+  // dodatkowo po kanonicznej nazwie (gdy findSystemCol już istnieje w runtime)
+  try{
+    [&#x27;Źródła&#x27;,&#x27;Notatka&#x27;].forEach(n=&gt;{
+      const ci=typeof findSystemCol===&#x27;function&#x27;?findSystemCol(sh,n):-1;
+      if(ci&gt;=0) sh.widths[ci]=META_TEXT_COL_W;
+    });
+  }catch(_){}
 }
-function markMetaWidthCustom(sh, ci){
-  if(!sh||ci==null||ci&lt;0) return;
-  if(!isMetaTextCol(sh.columns[ci])) return;
-  ensureMetaWidthCustom(sh);
-  sh.metaWidthCustom[ci]=true;
-}
-function shrinkMetaColumns(sh){
+function shrinkWideColumns(sh, maxW){
   if(!sh) return 0;
-  ensureMetaWidthCustom(sh);
+  maxW=maxW||180;
   let n=0;
   sh.columns.forEach((name,ci)=&gt;{
-    if(!isMetaTextCol(name)) return;
-    delete sh.metaWidthCustom[ci];
-    if(sh.widths[ci]!==META_TEXT_COL_W) n++;
-    sh.widths[ci]=META_TEXT_COL_W;
+    if(isMetaTextCol(name)){ sh.widths[ci]=META_TEXT_COL_W; n++; return; }
+    const cur=sh.widths[ci];
+    if(cur!=null &amp;&amp; cur&gt;maxW){ sh.widths[ci]=maxW; n++; }
   });
   return n;
 }
@@ -645,11 +644,7 @@ function fitColumnWidths(sh, opts){
   const minW=opts.minWidth||72;
   const maxHeadW=150;
   cols.forEach(ci=&gt;{
-    if(isMetaTextCol(sh.columns[ci])){
-      ensureMetaWidthCustom(sh);
-      if(!sh.metaWidthCustom[ci]) sh.widths[ci]=META_TEXT_COL_W;
-      return;
-    }
+    if(isMetaTextCol(sh.columns[ci])){ sh.widths[ci]=META_TEXT_COL_W; return; }
     let maxData=minW;
     const sample=idxs.length&gt;800?idxs.filter((_,i)=&gt;i%Math.ceil(idxs.length/800)===0):idxs;
     sample.forEach(ri=&gt;{ maxData=Math.max(maxData, measureTextWidth(sh.rows[ri][ci], cellFont)+28); });
@@ -807,7 +802,6 @@ function openHeaderContextMenu(e, ci){
       if(!n||n&lt;50||n&gt;800){ toast(&#x27;Podaj liczbę 50–800&#x27;); return; }
       pushUndo();
       sh.widths[ci]=n;
-      markMetaWidthCustom(sh, ci);
       renderGrid(); scheduleAutosave();
       toast(&#x27;Szerokość: &#x27;+n+&#x27; px&#x27;);
     }],
@@ -823,11 +817,11 @@ function openHeaderContextMenu(e, ci){
       hideCtx(); renderGrid(); scheduleAutosave();
       toast(!wrapped?&#x27;Zawijanie WŁĄCZONE dla „&#x27;+name+&#x27;”&#x27;:&#x27;Zawijanie WYŁĄCZONE dla „&#x27;+name+&#x27;”&#x27;);
     }],
-    [&#x27;Zawęź Źródła i Notatkę (&#x27;+META_TEXT_COL_W+&#x27; px)&#x27;, ()=&gt;{
+    [&#x27;Zawęź Źródła/Notatkę + szerokie&#x27;, ()=&gt;{
       pushUndo();
-      const n=shrinkMetaColumns(sh);
+      const n=shrinkWideColumns(sh, 180);
       hideCtx(); renderGrid(); scheduleAutosave();
-      toast(n?&#x27;Zawężono Źródła/Notatkę&#x27;:&#x27;Źródła/Notatka już wąskie&#x27;);
+      toast(&#x27;Zawężono kolumn: &#x27;+n);
     }],
     [&#x27;sep&#x27;],
     [&#x27;Sortuj A→Z / rosnąco&#x27;, ()=&gt;{ pushUndo(); sh.sort={i:ci,d:1}; hideCtx(); renderGrid(); }],
@@ -841,8 +835,6 @@ function openHeaderContextMenu(e, ci){
       pushUndo();
       if(isMetaTextCol(sh.columns[ci])){
         sh.widths[ci]=META_TEXT_COL_W;
-        ensureMetaWidthCustom(sh);
-        delete sh.metaWidthCustom[ci];
         hideCtx(); renderGrid(); scheduleAutosave();
         toast(&#x27;Źródła/Notatka → &#x27;+META_TEXT_COL_W+&#x27; px&#x27;);
         return;
@@ -1040,6 +1032,7 @@ function restoreSheetFromSnap(s){
   if(!Array.isArray(s.colWrap) &amp;&amp; App.wrap){
     sh.colWrap=sh.columns.map(()=&gt;true);
   }
+  capMetaTextWidths(sh);
   sh.sort=s.sort||{i:-1,d:1}; sh.filter=s.filter||&#x27;&#x27;; sh.colFilters=s.colFilters||{};
   sh.rowColors=s.rowColors||{}; sh.marks=s.marks||{}; sh.rowStatus=s.rowStatus||{};
   sh.colorRules=s.colorRules||[]; sh.hiddenRows=new Set(s.hiddenRows||[]);
@@ -2070,6 +2063,7 @@ function buildRowTr(sh, ri, displayIdx, cols, idxs){
 
   cols.forEach(ci=&gt;{
     const td=document.createElement(&#x27;td&#x27;);
+    if(isMetaTextCol(sh.columns[ci])) td.classList.add(&#x27;col-meta&#x27;);
     if(isColWrap(sh,ci)) td.classList.add(&#x27;col-wrap&#x27;);
     else td.classList.add(&#x27;col-nowrap&#x27;);
     const val=sh.rows[ri][ci]??&#x27;&#x27;;
@@ -2513,38 +2507,50 @@ function renderGrid(){
   }
   empty.classList.add(&#x27;hidden&#x27;); grid.hidden=false;
   cg.innerHTML=&#x27;&#x27;; const c0=document.createElement(&#x27;col&#x27;); c0.className=&#x27;corner&#x27;; cg.append(c0);
-  cols.forEach(ci=&gt;{const c=document.createElement(&#x27;col&#x27;); c.className=&#x27;data&#x27;; c.style.width=(sh.widths[ci]||150)+&#x27;px&#x27;; c.dataset.ci=ci; cg.append(c);});
+  cols.forEach(ci=&gt;{
+    const c=document.createElement(&#x27;col&#x27;); c.className=&#x27;data&#x27;;
+    const w=isMetaTextCol(sh.columns[ci])?META_TEXT_COL_W:(sh.widths[ci]||150);
+    if(isMetaTextCol(sh.columns[ci])){ c.classList.add(&#x27;col-meta&#x27;); sh.widths[ci]=META_TEXT_COL_W; }
+    c.style.width=c.style.minWidth=c.style.maxWidth=w+&#x27;px&#x27;;
+    c.dataset.ci=ci; cg.append(c);
+  });
   head.innerHTML=&#x27;&#x27;; const hr=document.createElement(&#x27;tr&#x27;);
   const corner=document.createElement(&#x27;th&#x27;); corner.className=&#x27;corner&#x27;; corner.innerHTML=&#x27;&lt;div class=&quot;th-inner&quot; style=&quot;justify-content:center&quot;&gt;&lt;input type=&quot;checkbox&quot; id=&quot;selectAllCb&quot;&gt;&lt;/div&gt;&#x27;; hr.append(corner);
   cols.forEach(ci=&gt;{
     const th=document.createElement(&#x27;th&#x27;);
+    const metaCol=isMetaTextCol(sh.columns[ci]);
+    if(metaCol) th.classList.add(&#x27;col-meta&#x27;);
     if(isColWrap(sh,ci)) th.classList.add(&#x27;col-wrap&#x27;);
     else th.classList.add(&#x27;col-nowrap&#x27;);
-    th.style.width=th.style.minWidth=(sh.widths[ci]||150)+&#x27;px&#x27;;
+    const w=metaCol?META_TEXT_COL_W:(sh.widths[ci]||150);
+    th.style.width=th.style.minWidth=th.style.maxWidth=w+&#x27;px&#x27;;
     const inner=document.createElement(&#x27;div&#x27;); inner.className=&#x27;th-inner&#x27;;
     const meta=document.createElement(&#x27;span&#x27;); meta.className=&#x27;meta&#x27;; meta.textContent=letter(sh.order.indexOf(ci));
     const title=document.createElement(&#x27;span&#x27;); title.className=&#x27;title&#x27;; title.textContent=sh.columns[ci];
-    title.title=&#x27;PPM = szerokość / zawijanie · przeciągnij krawędź = szerokość · dwuklik = nazwa&#x27;
-      +(isColWrap(sh,ci)?&#x27; · zawijanie WŁ&#x27; :&#x27;&#x27;);
+    title.title=&#x27;Przeciągnij PRAWNĄ krawędź nagłówka = szerokość · PPM = menu · dwuklik = nazwa&#x27;;
     const sort=document.createElement(&#x27;span&#x27;); sort.className=&#x27;sort&#x27;; sort.textContent=sh.sort.i===ci?(sh.sort.d&gt;0?&#x27;▲&#x27;:&#x27;▼&#x27;):&#x27;↕&#x27;;
     const fbtn=document.createElement(&#x27;button&#x27;); fbtn.type=&#x27;button&#x27;; fbtn.className=&#x27;filter-btn&#x27;+(hasActiveFilter(sh.colFilters[ci])?&#x27; on&#x27;:&#x27;&#x27;); fbtn.textContent=&#x27;▾&#x27;;
     fbtn.onclick=e=&gt;{e.stopPropagation(); openColFilter(ci,fbtn);};
     sort.title=&#x27;Kliknij, aby sortować&#x27;; sort.style.cursor=&#x27;pointer&#x27;;
     inner.append(meta,title,sort,fbtn); th.append(inner);
     const rh=document.createElement(&#x27;div&#x27;); rh.className=&#x27;resize&#x27;; th.append(rh);
+    rh.title=&#x27;Przeciągnij, aby zmienić szerokość&#x27;;
     rh.onmousedown=e=&gt;{
       e.preventDefault(); e.stopPropagation();
+      if(metaCol){ toast(&#x27;Źródła/Notatka: stałe &#x27;+META_TEXT_COL_W+&#x27; px — użyj „Zawęź kolumny” dla innych&#x27;); return; }
+      rh.classList.add(&#x27;dragging&#x27;);
       const sx=e.clientX, sw=sh.widths[ci]||150;
       const mv=ev=&gt;{
-        sh.widths[ci]=Math.max(50, Math.min(800, sw+ev.clientX-sx));
-        th.style.width=th.style.minWidth=sh.widths[ci]+&#x27;px&#x27;;
+        const nw=Math.max(50, Math.min(800, sw+ev.clientX-sx));
+        sh.widths[ci]=nw;
+        th.style.width=th.style.minWidth=th.style.maxWidth=nw+&#x27;px&#x27;;
         const col=cg.querySelector(&#x27;col[data-ci=&quot;&#x27;+ci+&#x27;&quot;]&#x27;);
-        if(col) col.style.width=sh.widths[ci]+&#x27;px&#x27;;
+        if(col) col.style.width=col.style.minWidth=col.style.maxWidth=nw+&#x27;px&#x27;;
       };
       const up=()=&gt;{
+        rh.classList.remove(&#x27;dragging&#x27;);
         window.removeEventListener(&#x27;mousemove&#x27;,mv);
         window.removeEventListener(&#x27;mouseup&#x27;,up);
-        markMetaWidthCustom(sh, ci);
         scheduleAutosave();
       };
       window.addEventListener(&#x27;mousemove&#x27;,mv); window.addEventListener(&#x27;mouseup&#x27;,up);
@@ -4919,12 +4925,12 @@ function openPastePdfDlg(){
 }
 
 function serializeSheet(sh){
-  ensureHidden(sh); ensureRowStatus(sh); ensureColWrap(sh); ensureMetaWidthCustom(sh);
+  ensureHidden(sh); ensureRowStatus(sh); ensureColWrap(sh);
+  capMetaTextWidths(sh);
   return {
     id:sh.id, name:sh.name, columns:sh.columns.slice(), rows:sh.rows.map(r=&gt;r.slice()),
     order:sh.order.slice(), visible:sh.visible.slice(), widths:sh.widths.slice(),
     colWrap:sh.colWrap.slice(),
-    metaWidthCustom:Object.assign({}, sh.metaWidthCustom||{}),
     sort:Object.assign({},sh.sort), filter:sh.filter||&#x27;&#x27;, colFilters:JSON.parse(JSON.stringify(sh.colFilters||{})),
     rowColors:Object.assign({},sh.rowColors||{}), marks:Object.assign({},sh.marks||{}),
     rowStatus:Object.assign({},sh.rowStatus||{}), colorRules:JSON.parse(JSON.stringify(sh.colorRules||[])),
@@ -4964,9 +4970,6 @@ function loadWorkbookData(data){
     if(!sh.widths.length) sh.widths=sh.columns.map(()=&gt;150);
     ensureColWrap(sh);
     if(!Array.isArray(s.colWrap) &amp;&amp; App.wrap) sh.colWrap=sh.columns.map(()=&gt;true);
-    ensureMetaWidthCustom(sh);
-    if(s.metaWidthCustom &amp;&amp; typeof s.metaWidthCustom===&#x27;object&#x27;) sh.metaWidthCustom=Object.assign({}, s.metaWidthCustom);
-    // Stare szerokie Źródła/Notatka bez ręcznej blokady → zawęź
     capMetaTextWidths(sh);
     sh.sort=s.sort||{i:-1,d:1}; sh.filter=s.filter||&#x27;&#x27;; sh.colFilters=s.colFilters||{};
     sh.rowColors=s.rowColors||{}; sh.marks=s.marks||{}; sh.rowStatus=s.rowStatus||{};
@@ -5257,13 +5260,14 @@ $(&#x27;btnWrap&#x27;).onclick=()=&gt;{
 $(&#x27;btnCenter&#x27;).onclick=()=&gt;{pushUndo(); App.center=!App.center; saveViewPrefs(); render();};
 if($(&#x27;btnToggleSums&#x27;)) $(&#x27;btnToggleSums&#x27;).onclick=()=&gt;{ const sh=active(); if(!sh) return; pushUndo(); sh.showSums = !sh.showSums; renderGrid(); };
 $(&#x27;btnAutoFit&#x27;).onclick=()=&gt;autoFitColumns();
-if($(&#x27;btnShrinkMeta&#x27;)) $(&#x27;btnShrinkMeta&#x27;).onclick=()=&gt;{
+if($(&#x27;btnShrinkCols&#x27;)) $(&#x27;btnShrinkCols&#x27;).onclick=()=&gt;{
   const sh=active(); if(!sh) return;
   pushUndo();
-  shrinkMetaColumns(sh);
+  const n=shrinkWideColumns(sh, 180);
   renderGrid(); scheduleAutosave();
-  toast(&#x27;Źródła i Notatka → &#x27;+META_TEXT_COL_W+&#x27; px (tekst w podpowiedzi)&#x27;);
+  toast(&#x27;Zawężono: Źródła/Notatka=100px, inne max 180px (&#x27;+n+&#x27; kol.)&#x27;);
 };
+if($(&#x27;btnShrinkMeta&#x27;)) $(&#x27;btnShrinkMeta&#x27;).onclick=()=&gt;$(&#x27;btnShrinkCols&#x27;)&amp;&amp;$(&#x27;btnShrinkCols&#x27;).click();
 $(&#x27;btnRenumber&#x27;).onclick=()=&gt;renumberByView();
 $(&#x27;btnClearFill&#x27;).onclick=()=&gt;{ if(App.plain &amp;&amp; !Object.keys(active().rowColors||{}).length &amp;&amp; !(active().colorRules||[]).length){ togglePlainView(); return; } clearFills(); };
 $(&#x27;themeSelect&#x27;).onchange=()=&gt;{pushUndo(); App.theme=$(&#x27;themeSelect&#x27;).value; App.plain=false; render();}; $(&#x27;btnMode&#x27;).onclick=()=&gt;{App.dark=!App.dark; render();};
@@ -5492,10 +5496,8 @@ renderSwatches(); fillRegSysMenu(); setRibbonTab(App.ribbonTab||&#x27;dane&#x27;
 </textarea>
 </div>
 <script>
-const t=document.getElementById('t');
-const b=document.getElementById('b');
-const blob=new Blob([t.value],{type:'text/html;charset=utf-8'});
-document.getElementById('dl').href=URL.createObjectURL(blob);
+const t=document.getElementById('t'), b=document.getElementById('b');
+document.getElementById('dl').href=URL.createObjectURL(new Blob([t.value],{type:'text/html;charset=utf-8'}));
 b.onclick=async()=>{
   try{ await navigator.clipboard.writeText(t.value); b.textContent='Skopiowano ✓'; b.classList.add('ok'); }
   catch(e){ t.select(); document.execCommand('copy'); b.textContent='Zaznaczono — Ctrl+C'; }
