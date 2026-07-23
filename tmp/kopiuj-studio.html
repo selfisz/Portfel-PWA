@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pl"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kopiuj Studio V7.6.4</title>
+<title>Kopiuj Studio V7.6.5</title>
 <style>
 body{margin:0;font-family:-apple-system,system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
 .wrap{padding:16px;max-width:900px;margin:0 auto}
@@ -10,17 +10,18 @@ button.ok{background:#0f766e}
 textarea{width:100%;height:55vh;box-sizing:border-box;border-radius:12px;border:1px solid #334155;background:#020617;color:#e2e8f0;padding:12px;font:12px ui-monospace,Menlo,monospace}
 a{color:#93c5fd}
 </style></head><body><div class="wrap">
-<h1>Offline Table Studio V7.6.4</h1>
-<p>Kliknij = cały kod do schowka.</p>
+<h1>Offline Table Studio V7.6.5</h1>
+<p>Kliknij = cały kod do schowka. Wklej do <code>esce/html</code>.</p>
+<p><b>V7.6.5:</b> wpis w UFG (nr auta) od razu liczy się do Stan/Komplet; Źródła/Notatka zawsze 120px (bez zawijania).</p>
 <button type="button" id="b">Kopiuj cały kod</button>
-<a id="dl" download="offline-table-studio-v7.6.4.html" href="#">Pobierz .html</a>
+<a id="dl" download="offline-table-studio-v7.6.5.html" href="#">Pobierz .html</a>
 <textarea id="t" readonly>&lt;!DOCTYPE html&gt;
 &lt;html lang=&quot;pl&quot;&gt;
 &lt;head&gt;
 &lt;meta charset=&quot;UTF-8&quot;&gt;
 &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;
 &lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27;; style-src &#x27;unsafe-inline&#x27;; img-src data:; connect-src &#x27;none&#x27;; form-action &#x27;none&#x27;; base-uri &#x27;none&#x27;; frame-src &#x27;none&#x27;; worker-src &#x27;none&#x27;; object-src &#x27;none&#x27;; media-src &#x27;none&#x27;; font-src &#x27;none&#x27;;&quot;&gt;
-&lt;title&gt;Offline Table Studio V7.6.4&lt;/title&gt;
+&lt;title&gt;Offline Table Studio V7.6.5&lt;/title&gt;
 &lt;style&gt;
 :root,[data-theme=&quot;navy&quot;]{--bg:#dfe7f2;--chrome:#0f1c2e;--chrome2:#16253b;--panel:#fff;--panel2:#f4f7fb;--line:#c9d5e5;--text:#142033;--muted:#607084;--accent:#2563eb;--accent2:#1d4ed8;--soft:#e8f0ff;--head:#1a3354;--headText:#f5f8fc;--zebra:#eef3f9;--sel:#d9e8ff;--ok:#0f766e;--danger:#be123c;--shadow:0 12px 40px rgba(15,28,46,.12);--font:&quot;Segoe UI&quot;,system-ui,-apple-system,sans-serif;--mono:Consolas,&quot;Cascadia Mono&quot;,monospace}
 [data-theme=&quot;green&quot;]{--bg:#dcebe3;--chrome:#0b2a24;--chrome2:#12352e;--accent:#0f766e;--accent2:#0d9488;--soft:#d8f3ee;--head:#134e4a;--sel:#c5efe7;--zebra:#eaf6f1}
@@ -90,6 +91,12 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
 .resize{position:absolute;top:0;right:0;width:6px;height:100%;cursor:col-resize}.grid th{position:sticky}
 .cell{display:block;padding:7px 9px;width:100%;cursor:cell;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:text}
 .grid.wrap .cell{white-space:normal;overflow:visible;word-break:break-word}
+.grid th.meta-text,.grid td.meta-text{max-width:120px}
+.grid td.meta-text .cell,.grid.wrap td.meta-text .cell,
+.grid th.meta-text .th-inner .title{
+  white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;
+  max-height:34px;word-break:normal
+}
 .grid.center .cell,.grid.center .th-inner{text-align:center;justify-content:center}
 .grid tbody tr:nth-child(even) td{background:var(--zebra)}.grid tbody tr:hover td{background:var(--soft)}
 .grid tbody tr.selected td{background:var(--sel)!important}.grid td.cell-active{outline:2px solid var(--accent);outline-offset:-2px}
@@ -510,16 +517,15 @@ const REG_CYCLE_DAYS=100;
 const REG_SYSTEMS=[&#x27;KAWA&#x27;,&#x27;SINF&#x27;,&#x27;UFG&#x27;,&#x27;JPK&#x27;,&#x27;INFZ&#x27;];
 const REG_NA=&#x27;Pomiń&#x27;;
 const REG_META=[&#x27;Stan&#x27;,&#x27;Komplet&#x27;,&#x27;Źródła&#x27;,&#x27;Notatka&#x27;];
-const META_TEXT_COL_W=150;
+const META_TEXT_COL_W=120;
 function isMetaTextCol(name){
-  return /^(źródła|zrodla|notatka)$/i.test(norm(name));
+  return /^(źródła|zrodla|źródlo|zrodlo|notatka)$/i.test(norm(name));
 }
 function capMetaTextWidths(sh){
   if(!sh) return;
   sh.columns.forEach((name,ci)=&gt;{
     if(!isMetaTextCol(name)) return;
-    const w=sh.widths[ci]==null?META_TEXT_COL_W:sh.widths[ci];
-    sh.widths[ci]=Math.min(META_TEXT_COL_W, Math.max(90, w));
+    sh.widths[ci]=META_TEXT_COL_W;
   });
 }
 const PARK_STATUS_WAIT=&#x27;oczekuje&#x27;;
@@ -574,14 +580,13 @@ function fitColumnWidths(sh, opts){
   const minW=opts.minWidth||72;
   const maxHeadW=150;
   cols.forEach(ci=&gt;{
+    // Źródła / Notatka: zawsze wąskie — długie tagi tylko w title (hover)
+    if(isMetaTextCol(sh.columns[ci])){ sh.widths[ci]=META_TEXT_COL_W; return; }
     let maxData=minW;
     const sample=idxs.length&gt;800?idxs.filter((_,i)=&gt;i%Math.ceil(idxs.length/800)===0):idxs;
     sample.forEach(ri=&gt;{ maxData=Math.max(maxData, measureTextWidth(sh.rows[ri][ci], cellFont)+28); });
     const headW=Math.min(maxHeadW, measureTextWidth(sh.columns[ci], cellFont)+40);
-    let colMax=maxW;
-    // Źródła / Notatka: nie rozciągaj tabeli długimi tagami
-    if(isMetaTextCol(sh.columns[ci])) colMax=META_TEXT_COL_W;
-    sh.widths[ci]=Math.min(colMax, Math.max(minW, Math.ceil(Math.max(maxData, headW))));
+    sh.widths[ci]=Math.min(maxW, Math.max(minW, Math.ceil(Math.max(maxData, headW))));
   });
   // Nie włączaj zawijania przy dużych tabelach — zabija wirtualizację i wiesza przeglądarkę
   if(opts.wrap===true &amp;&amp; idxs.length&lt;VIRT_THRESHOLD) App.wrap=true;
@@ -729,6 +734,11 @@ function openHeaderContextMenu(e, ci){
     [&#x27;Ukryj kolumnę&#x27;, ()=&gt;{ pushUndo(); sh.visible[ci]=false; hideCtx(); render(); toast(&#x27;Ukryto kolumnę&#x27;); }],
     [&#x27;Dopasuj tę kolumnę&#x27;, ()=&gt;{
       pushUndo();
+      if(isMetaTextCol(sh.columns[ci])){
+        sh.widths[ci]=META_TEXT_COL_W;
+        hideCtx(); renderGrid(); toast(&#x27;Źródła/Notatka: max &#x27;+META_TEXT_COL_W+&#x27;px&#x27;);
+        return;
+      }
       const idxs=sorted(sh,filtered(sh));
       let max=measureTextWidth(sh.columns[ci],&#x27;650 13px &quot;Segoe UI&quot;,system-ui,sans-serif&#x27;)+56;
       idxs.forEach(ri=&gt;{ max=Math.max(max, measureTextWidth(sh.rows[ri][ci],&#x27;14px &quot;Segoe UI&quot;,system-ui,sans-serif&#x27;)+28); });
@@ -1803,12 +1813,20 @@ function rangeTSV(sh){
 function clearRangeCells(){
   const sh=active(); const s=App.selRange; if(!sh||!s) return;
   pushUndo();
+  const touched=new Set();
   for(let r=s.r0;r&lt;=s.r1;r++){
     for(let c=s.c0;c&lt;=s.c1;c++){
-      if(r&lt;sh.rows.length &amp;&amp; c&lt;sh.columns.length) sh.rows[r][c]=&#x27;&#x27;;
+      if(r&lt;sh.rows.length &amp;&amp; c&lt;sh.columns.length){
+        sh.rows[r][c]=&#x27;&#x27;;
+        touched.add(r+&#x27;:&#x27;+c);
+      }
     }
   }
   applyColorRules(sh);
+  touched.forEach(k=&gt;{
+    const [r,c]=k.split(&#x27;:&#x27;).map(Number);
+    afterSystemCellEdit(sh, r, c);
+  });
   if(App.activeCell) setActiveCell(sh, App.activeCell.r, App.activeCell.c);
   renderGrid();
 }
@@ -1824,25 +1842,14 @@ function endEdit(commit){
       pushUndo();
       sh.rows[r][c]=v;
       applyColorRules(sh);
+      afterSystemCellEdit(sh, r, c);
+      scheduleAutosave();
     }
     setActiveCell(sh,r,c);
   }else if(sh &amp;&amp; App.activeCell){
     setActiveCell(sh, App.activeCell.r, App.activeCell.c);
   }
   renderGrid();
-}
-function beginEdit(ri,ci,seed){
-  const sh=active(); if(!sh||ri&lt;0||ci&lt;0) return;
-  if(App.editing &amp;&amp; (App.editing.r!==ri||App.editing.c!==ci)) endEdit(true);
-  focusCell(ri,ci,false);
-  App.editing={r:ri,c:ci, original:String(sh.rows[ri][ci]??&#x27;&#x27;), seed:seed==null?null:String(seed)};
-  renderGrid();
-  const inp=document.querySelector(&#x27;input.cell-editor&#x27;);
-  if(inp){
-    if(seed!=null){ inp.value=String(seed); inp.setSelectionRange(inp.value.length, inp.value.length); }
-    else { inp.select(); }
-    inp.focus();
-  }
 }
 function commitActiveCell(){
   const sh=active(); if(!sh||!App.activeCell) return;
@@ -1854,8 +1861,57 @@ function commitActiveCell(){
   pushUndo();
   sh.rows[r][c]=v;
   applyColorRules(sh);
+  afterSystemCellEdit(sh, r, c);
+  scheduleAutosave();
   renderGrid();
   setActiveCell(sh,r,c);
+}
+/** Po ręcznym wpisie w KAWA/UFG/… przelicz Stan/Komplet (tekst też zalicza). */
+function afterSystemCellEdit(sh, ri, ci){
+  if(!sh||ri==null||ci==null||ri&lt;0||ci&lt;0) return;
+  const isSys=REG_SYSTEMS.some(n=&gt;findSystemCol(sh,n)===ci);
+  if(!isSys){
+    if(isRegistrySheet(sh)) refreshRegistryDerived(sh);
+    return;
+  }
+  if(isRegistrySheet(sh)){
+    refreshRegistryDerived(sh);
+    return;
+  }
+  // Lista robocza: lokalny Stan/Komplet z kolumn systemów na tej liście
+  const stanCi=findSystemCol(sh,&#x27;Stan&#x27;);
+  const kompCi=findSystemCol(sh,&#x27;Komplet&#x27;);
+  const dates=REG_SYSTEMS.map(n=&gt;{
+    const sci=findSystemCol(sh,n);
+    return sci&gt;=0?(sh.rows[ri][sci]||&#x27;&#x27;):&#x27;&#x27;;
+  });
+  const {stan,komplet}=computePersonStatus(dates);
+  if(stanCi&gt;=0) sh.rows[ri][stanCi]=stan;
+  if(kompCi&gt;=0) sh.rows[ri][kompCi]=komplet;
+  const color=REG_STATUS_COLOR[stan];
+  if(color) sh.rowColors[ri]=color; else delete sh.rowColors[ri];
+
+  // Tryb Z bazą: wpis (np. nr auta w UFG) od razu do Zobowiązanych
+  if(App.workMode===&#x27;linked&#x27;){
+    try{
+      const reg=ensureRegistrySheet(false);
+      if(!reg) return;
+      ensureRegistrySystemCols(reg);
+      let keyCi=findKeyColumn(sh);
+      if(keyCi&lt;0) return;
+      const key=norm(sh.rows[ri][keyCi]).replace(/[\s-]/g,&#x27;&#x27;);
+      if(!key) return;
+      const dest=findRegistryRowByKey(reg, key) ?? findRegistryRowScanAll(reg, key);
+      if(dest==null||dest&lt;0) return;
+      const sysName=REG_SYSTEMS.find(n=&gt;findSystemCol(sh,n)===ci);
+      if(!sysName) return;
+      const rci=findSystemCol(reg, sysName);
+      if(rci&lt;0) return;
+      padSheetRow(reg, dest);
+      reg.rows[dest][rci]=sh.rows[ri][ci]||&#x27;&#x27;;
+      refreshRegistryDerived(reg);
+    }catch(_){}
+  }
 }
 function isGridTypingTarget(el){
   if(!el) return false;
@@ -1883,6 +1939,7 @@ function buildRowTr(sh, ri, displayIdx, cols, idxs){
 
   cols.forEach(ci=&gt;{
     const td=document.createElement(&#x27;td&#x27;);
+    if(isMetaTextCol(sh.columns[ci])) td.classList.add(&#x27;meta-text&#x27;);
     const val=sh.rows[ri][ci]??&#x27;&#x27;;
     const editing=App.editing &amp;&amp; App.editing.r===ri &amp;&amp; App.editing.c===ci;
     if(App.activeCell&amp;&amp;App.activeCell.r===ri&amp;&amp;App.activeCell.c===ci) td.classList.add(&#x27;cell-active&#x27;);
@@ -2261,6 +2318,7 @@ function updateStatus(sh,idxs){
 
 function renderGrid(){
   const sh=active(); if(!sh) return;
+  capMetaTextWidths(sh);
   const grid=$(&#x27;dataGrid&#x27;), empty=$(&#x27;emptyState&#x27;), head=$(&#x27;gridHead&#x27;), body=$(&#x27;gridBody&#x27;), foot=$(&#x27;gridFoot&#x27;), cg=$(&#x27;colgroup&#x27;);
   const wrap=$(&#x27;gridWrap&#x27;);
   const cols=visCols(sh); const idxs=sorted(sh, filtered(sh));
@@ -2316,7 +2374,10 @@ function renderGrid(){
   head.innerHTML=&#x27;&#x27;; const hr=document.createElement(&#x27;tr&#x27;);
   const corner=document.createElement(&#x27;th&#x27;); corner.className=&#x27;corner&#x27;; corner.innerHTML=&#x27;&lt;div class=&quot;th-inner&quot; style=&quot;justify-content:center&quot;&gt;&lt;input type=&quot;checkbox&quot; id=&quot;selectAllCb&quot;&gt;&lt;/div&gt;&#x27;; hr.append(corner);
   cols.forEach(ci=&gt;{
-    const th=document.createElement(&#x27;th&#x27;); th.style.width=th.style.minWidth=(sh.widths[ci]||150)+&#x27;px&#x27;;
+    const th=document.createElement(&#x27;th&#x27;);
+    if(isMetaTextCol(sh.columns[ci])) th.classList.add(&#x27;meta-text&#x27;);
+    th.style.width=th.style.minWidth=(sh.widths[ci]||150)+&#x27;px&#x27;;
+    if(isMetaTextCol(sh.columns[ci])) th.style.maxWidth=META_TEXT_COL_W+&#x27;px&#x27;;
     const inner=document.createElement(&#x27;div&#x27;); inner.className=&#x27;th-inner&#x27;;
     const meta=document.createElement(&#x27;span&#x27;); meta.className=&#x27;meta&#x27;; meta.textContent=letter(sh.order.indexOf(ci));
     const title=document.createElement(&#x27;span&#x27;); title.className=&#x27;title&#x27;; title.textContent=sh.columns[ci]; title.title=&#x27;PPM = zmień nazwę · dwuklik = zmień nazwę&#x27;;
@@ -2326,7 +2387,14 @@ function renderGrid(){
     sort.title=&#x27;Kliknij, aby sortować&#x27;; sort.style.cursor=&#x27;pointer&#x27;;
     inner.append(meta,title,sort,fbtn); th.append(inner);
     const rh=document.createElement(&#x27;div&#x27;); rh.className=&#x27;resize&#x27;; th.append(rh);
-    rh.onmousedown=e=&gt;{e.preventDefault(); e.stopPropagation(); const sx=e.clientX, sw=sh.widths[ci]||150; const mv=ev=&gt;{sh.widths[ci]=Math.max(70,sw+ev.clientX-sx); th.style.width=th.style.minWidth=sh.widths[ci]+&#x27;px&#x27;; const col=cg.querySelector(&#x27;col[data-ci=&quot;&#x27;+ci+&#x27;&quot;]&#x27;); if(col) col.style.width=sh.widths[ci]+&#x27;px&#x27;;}; const up=()=&gt;{window.removeEventListener(&#x27;mousemove&#x27;,mv); window.removeEventListener(&#x27;mouseup&#x27;,up);}; window.addEventListener(&#x27;mousemove&#x27;,mv); window.addEventListener(&#x27;mouseup&#x27;,up);};
+    rh.onmousedown=e=&gt;{
+      e.preventDefault(); e.stopPropagation();
+      if(isMetaTextCol(sh.columns[ci])){ sh.widths[ci]=META_TEXT_COL_W; toast(&#x27;Źródła/Notatka: stała szerokość &#x27;+META_TEXT_COL_W+&#x27;px&#x27;); return; }
+      const sx=e.clientX, sw=sh.widths[ci]||150;
+      const mv=ev=&gt;{sh.widths[ci]=Math.max(70,sw+ev.clientX-sx); th.style.width=th.style.minWidth=sh.widths[ci]+&#x27;px&#x27;; const col=cg.querySelector(&#x27;col[data-ci=&quot;&#x27;+ci+&#x27;&quot;]&#x27;); if(col) col.style.width=sh.widths[ci]+&#x27;px&#x27;;};
+      const up=()=&gt;{window.removeEventListener(&#x27;mousemove&#x27;,mv); window.removeEventListener(&#x27;mouseup&#x27;,up);};
+      window.addEventListener(&#x27;mousemove&#x27;,mv); window.addEventListener(&#x27;mouseup&#x27;,up);
+    };
     sort.onclick=e=&gt;{e.stopPropagation(); sh.activeCol=ci; pushUndo(); if(sh.sort.i===ci) sh.sort.d*=-1; else{sh.sort.i=ci; sh.sort.d=1;} renderGrid();};
     inner.onclick=e=&gt;{if(e.target===fbtn||e.target===rh||e.target===sort||e.target.closest(&#x27;.sort&#x27;))return; sh.activeCol=ci; updateStatus(sh,idxs);};
     title.ondblclick=e=&gt;{e.preventDefault(); e.stopPropagation(); renameColumn(ci);};
@@ -3177,7 +3245,7 @@ function ensureRegistrySheet(switchTo){
       rows:[],
       order:cols.map((_,i)=&gt;i),
       visible:cols.map(()=&gt;true),
-      widths:cols.map((n)=&gt;n===&#x27;PESEL&#x27;||n===&#x27;NIP&#x27;?130:n===&#x27;Źródła&#x27;||n===&#x27;Notatka&#x27;?160:100)
+      widths:cols.map((n)=&gt;n===&#x27;PESEL&#x27;||n===&#x27;NIP&#x27;?130:isMetaTextCol(n)?META_TEXT_COL_W:100)
     });
     App.sheets.push(reg);
   }else{
@@ -3210,11 +3278,11 @@ function computePersonStatus(dates){
     if(isNieFiguruje(t)) return {kind:&#x27;na&#x27;};
     const d=parseISODate(t);
     if(d) return {kind:&#x27;date&#x27;, d};
-    // Ręczny wpis (nr auta itd.) — liczy się do kompletu jak kliknięcie przycisku
-    return {kind:&#x27;text&#x27;};
+    // Ręczny wpis (nr auta itd.) — jak dzisiejsza data do kompletu/cyklu
+    return {kind:&#x27;text&#x27;, d:todayD};
   });
   const filled=slots.filter(s=&gt;s.kind===&#x27;na&#x27;||s.kind===&#x27;date&#x27;||s.kind===&#x27;text&#x27;);
-  const dateSlots=slots.filter(s=&gt;s.kind===&#x27;date&#x27;).map(s=&gt;s.d);
+  const dateSlots=slots.filter(s=&gt;s.kind===&#x27;date&#x27;||s.kind===&#x27;text&#x27;).map(s=&gt;s.d);
   if(!filled.length) return {stan:REG_STATUS.todo, komplet:&#x27;&#x27;};
   if(filled.length&lt;slots.length) return {stan:REG_STATUS.partial, komplet:&#x27;&#x27;};
   // wszystkie systemy załatwione (data / Pomiń / tekst)
@@ -3225,7 +3293,7 @@ function computePersonStatus(dates){
   if(age&gt;REG_CYCLE_DAYS) return {stan:REG_STATUS.overdue, komplet};
   const allDone=slots.every(s=&gt;s.kind===&#x27;na&#x27;||s.kind===&#x27;date&#x27;||s.kind===&#x27;text&#x27;);
   if(dateSlots.every(d=&gt;d.toISOString().slice(0,10)===today) &amp;&amp; allDone){
-    if(slots.some(s=&gt;s.kind===&#x27;date&#x27;)) return {stan:REG_STATUS.today, komplet};
+    if(slots.some(s=&gt;s.kind===&#x27;date&#x27;||s.kind===&#x27;text&#x27;)) return {stan:REG_STATUS.today, komplet};
   }
   if(dateSlots.every(d=&gt;d.toISOString().slice(0,10)===today)) return {stan:REG_STATUS.today, komplet};
   return {stan:REG_STATUS.ok, komplet};
@@ -3450,7 +3518,7 @@ function listSourceTag(sh, systems){
 }
 function tagPersonSource(reg, destRi, tag){
   if(!reg||destRi==null||destRi&lt;0) return;
-  const zci=ensureCol(reg,&#x27;Źródła&#x27;,160);
+  const zci=ensureCol(reg,&#x27;Źródła&#x27;, META_TEXT_COL_W);
   if(zci&lt;0) return;
   reg.rows[destRi][zci]=appendSourceTag(reg.rows[destRi][zci], tag);
 }
@@ -3465,7 +3533,7 @@ function mergeActiveIntoRegistry(){
   const reg=ensureRegistrySheet(false);
   ensureCol(reg,&#x27;PESEL&#x27;,130);
   REG_SYSTEMS.forEach(n=&gt;ensureCol(reg,n,100));
-  REG_META.forEach(n=&gt;ensureCol(reg,n,160));
+  REG_META.forEach(n=&gt;ensureCol(reg,n, isMetaTextCol(n)?META_TEXT_COL_W:110));
 
   const regMap=registryColMap(reg);
   const pci=regMap[&#x27;PESEL&#x27;];
@@ -3681,7 +3749,7 @@ function markSystemsNieFiguruje(){
   pushUndo();
   let reg=isRegistrySheet(sh)?sh:ensureRegistrySheet(false);
   REG_SYSTEMS.forEach(n=&gt;ensureCol(reg,n,100));
-  REG_META.forEach(n=&gt;ensureCol(reg,n,160));
+  REG_META.forEach(n=&gt;ensureCol(reg,n, isMetaTextCol(n)?META_TEXT_COL_W:110));
   ensureCol(reg,&#x27;NIP&#x27;,130); ensureCol(reg,&#x27;PESEL&#x27;,130);
   const rmap=registryColMap(reg);
   const tag=listSourceTag(sh, systems.concat([&#x27;NA&#x27;]));
@@ -3992,7 +4060,7 @@ function addMissingToRegistry(){
   ensureCol(reg,&#x27;NIP&#x27;,130);
   ensureCol(reg,&#x27;PESEL&#x27;,130);
   REG_SYSTEMS.forEach(n=&gt;ensureCol(reg,n,100));
-  REG_META.forEach(n=&gt;ensureCol(reg,n,160));
+  REG_META.forEach(n=&gt;ensureCol(reg,n, isMetaTextCol(n)?META_TEXT_COL_W:110));
 
   const idxs=sh.selected.size?[...sh.selected].sort((a,b)=&gt;a-b):sh.rows.map((_,i)=&gt;i);
   let added=0, known=0, skipped=0;
@@ -4866,6 +4934,16 @@ function pasteMatrixAt(matrix, startR, startC){
   });
   applyColorRules(sh);
   fitColumnWidths(sh,{wrap:true});
+  capMetaTextWidths(sh);
+  // Po wklejeniu w KAWA/UFG/… przelicz Stan/Komplet
+  if(isRegistrySheet(sh)) refreshRegistryDerived(sh);
+  else{
+    const endR=Math.min(sh.rows.length-1, startR+matrix.length-1);
+    const endC=Math.min(sh.columns.length-1, startC+Math.max(...matrix.map(r=&gt;r.length))-1);
+    for(let r=startR;r&lt;=endR;r++){
+      for(let c=startC;c&lt;=endC;c++) afterSystemCellEdit(sh, r, c);
+    }
+  }
   render();
   if(matrix.length){
     const er=startR+matrix.length-1;
@@ -5231,8 +5309,14 @@ renderSwatches(); fillRegSysMenu(); setRibbonTab(App.ribbonTab||&#x27;dane&#x27;
 &lt;/body&gt;
 &lt;/html&gt;
 </textarea>
-</div><script>
-const t=document.getElementById('t'), b=document.getElementById('b'), raw=t.value;
-document.getElementById('dl').href=URL.createObjectURL(new Blob([raw],{type:'text/html;charset=utf-8'}));
-b.onclick=async()=>{t.focus();t.select();try{await navigator.clipboard.writeText(raw);b.textContent='Skopiowano ✓';b.className='ok';}catch(e){b.textContent='Zaznaczono — Kopiuj z menu';}};
+</div>
+<script>
+const t=document.getElementById('t');
+const b=document.getElementById('b');
+const blob=new Blob([t.value],{type:'text/html;charset=utf-8'});
+document.getElementById('dl').href=URL.createObjectURL(blob);
+b.onclick=async()=>{
+  try{ await navigator.clipboard.writeText(t.value); b.textContent='Skopiowano ✓'; b.classList.add('ok'); }
+  catch(e){ t.select(); document.execCommand('copy'); b.textContent='Zaznaczono — Ctrl+C'; }
+};
 </script></body></html>

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; media-src 'none'; font-src 'none';">
-<title>Offline Table Studio V7.6.4</title>
+<title>Offline Table Studio V7.6.5</title>
 <style>
 :root,[data-theme="navy"]{--bg:#dfe7f2;--chrome:#0f1c2e;--chrome2:#16253b;--panel:#fff;--panel2:#f4f7fb;--line:#c9d5e5;--text:#142033;--muted:#607084;--accent:#2563eb;--accent2:#1d4ed8;--soft:#e8f0ff;--head:#1a3354;--headText:#f5f8fc;--zebra:#eef3f9;--sel:#d9e8ff;--ok:#0f766e;--danger:#be123c;--shadow:0 12px 40px rgba(15,28,46,.12);--font:"Segoe UI",system-ui,-apple-system,sans-serif;--mono:Consolas,"Cascadia Mono",monospace}
 [data-theme="green"]{--bg:#dcebe3;--chrome:#0b2a24;--chrome2:#12352e;--accent:#0f766e;--accent2:#0d9488;--soft:#d8f3ee;--head:#134e4a;--sel:#c5efe7;--zebra:#eaf6f1}
@@ -74,6 +74,12 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
 .resize{position:absolute;top:0;right:0;width:6px;height:100%;cursor:col-resize}.grid th{position:sticky}
 .cell{display:block;padding:7px 9px;width:100%;cursor:cell;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:text}
 .grid.wrap .cell{white-space:normal;overflow:visible;word-break:break-word}
+.grid th.meta-text,.grid td.meta-text{max-width:120px}
+.grid td.meta-text .cell,.grid.wrap td.meta-text .cell,
+.grid th.meta-text .th-inner .title{
+  white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;
+  max-height:34px;word-break:normal
+}
 .grid.center .cell,.grid.center .th-inner{text-align:center;justify-content:center}
 .grid tbody tr:nth-child(even) td{background:var(--zebra)}.grid tbody tr:hover td{background:var(--soft)}
 .grid tbody tr.selected td{background:var(--sel)!important}.grid td.cell-active{outline:2px solid var(--accent);outline-offset:-2px}
@@ -494,16 +500,15 @@ const REG_CYCLE_DAYS=100;
 const REG_SYSTEMS=['KAWA','SINF','UFG','JPK','INFZ'];
 const REG_NA='Pomiń';
 const REG_META=['Stan','Komplet','Źródła','Notatka'];
-const META_TEXT_COL_W=150;
+const META_TEXT_COL_W=120;
 function isMetaTextCol(name){
-  return /^(źródła|zrodla|notatka)$/i.test(norm(name));
+  return /^(źródła|zrodla|źródlo|zrodlo|notatka)$/i.test(norm(name));
 }
 function capMetaTextWidths(sh){
   if(!sh) return;
   sh.columns.forEach((name,ci)=>{
     if(!isMetaTextCol(name)) return;
-    const w=sh.widths[ci]==null?META_TEXT_COL_W:sh.widths[ci];
-    sh.widths[ci]=Math.min(META_TEXT_COL_W, Math.max(90, w));
+    sh.widths[ci]=META_TEXT_COL_W;
   });
 }
 const PARK_STATUS_WAIT='oczekuje';
@@ -558,14 +563,13 @@ function fitColumnWidths(sh, opts){
   const minW=opts.minWidth||72;
   const maxHeadW=150;
   cols.forEach(ci=>{
+    // Źródła / Notatka: zawsze wąskie — długie tagi tylko w title (hover)
+    if(isMetaTextCol(sh.columns[ci])){ sh.widths[ci]=META_TEXT_COL_W; return; }
     let maxData=minW;
     const sample=idxs.length>800?idxs.filter((_,i)=>i%Math.ceil(idxs.length/800)===0):idxs;
     sample.forEach(ri=>{ maxData=Math.max(maxData, measureTextWidth(sh.rows[ri][ci], cellFont)+28); });
     const headW=Math.min(maxHeadW, measureTextWidth(sh.columns[ci], cellFont)+40);
-    let colMax=maxW;
-    // Źródła / Notatka: nie rozciągaj tabeli długimi tagami
-    if(isMetaTextCol(sh.columns[ci])) colMax=META_TEXT_COL_W;
-    sh.widths[ci]=Math.min(colMax, Math.max(minW, Math.ceil(Math.max(maxData, headW))));
+    sh.widths[ci]=Math.min(maxW, Math.max(minW, Math.ceil(Math.max(maxData, headW))));
   });
   // Nie włączaj zawijania przy dużych tabelach — zabija wirtualizację i wiesza przeglądarkę
   if(opts.wrap===true && idxs.length<VIRT_THRESHOLD) App.wrap=true;
@@ -713,6 +717,11 @@ function openHeaderContextMenu(e, ci){
     ['Ukryj kolumnę', ()=>{ pushUndo(); sh.visible[ci]=false; hideCtx(); render(); toast('Ukryto kolumnę'); }],
     ['Dopasuj tę kolumnę', ()=>{
       pushUndo();
+      if(isMetaTextCol(sh.columns[ci])){
+        sh.widths[ci]=META_TEXT_COL_W;
+        hideCtx(); renderGrid(); toast('Źródła/Notatka: max '+META_TEXT_COL_W+'px');
+        return;
+      }
       const idxs=sorted(sh,filtered(sh));
       let max=measureTextWidth(sh.columns[ci],'650 13px "Segoe UI",system-ui,sans-serif')+56;
       idxs.forEach(ri=>{ max=Math.max(max, measureTextWidth(sh.rows[ri][ci],'14px "Segoe UI",system-ui,sans-serif')+28); });
@@ -1787,12 +1796,20 @@ function rangeTSV(sh){
 function clearRangeCells(){
   const sh=active(); const s=App.selRange; if(!sh||!s) return;
   pushUndo();
+  const touched=new Set();
   for(let r=s.r0;r<=s.r1;r++){
     for(let c=s.c0;c<=s.c1;c++){
-      if(r<sh.rows.length && c<sh.columns.length) sh.rows[r][c]='';
+      if(r<sh.rows.length && c<sh.columns.length){
+        sh.rows[r][c]='';
+        touched.add(r+':'+c);
+      }
     }
   }
   applyColorRules(sh);
+  touched.forEach(k=>{
+    const [r,c]=k.split(':').map(Number);
+    afterSystemCellEdit(sh, r, c);
+  });
   if(App.activeCell) setActiveCell(sh, App.activeCell.r, App.activeCell.c);
   renderGrid();
 }
@@ -1808,25 +1825,14 @@ function endEdit(commit){
       pushUndo();
       sh.rows[r][c]=v;
       applyColorRules(sh);
+      afterSystemCellEdit(sh, r, c);
+      scheduleAutosave();
     }
     setActiveCell(sh,r,c);
   }else if(sh && App.activeCell){
     setActiveCell(sh, App.activeCell.r, App.activeCell.c);
   }
   renderGrid();
-}
-function beginEdit(ri,ci,seed){
-  const sh=active(); if(!sh||ri<0||ci<0) return;
-  if(App.editing && (App.editing.r!==ri||App.editing.c!==ci)) endEdit(true);
-  focusCell(ri,ci,false);
-  App.editing={r:ri,c:ci, original:String(sh.rows[ri][ci]??''), seed:seed==null?null:String(seed)};
-  renderGrid();
-  const inp=document.querySelector('input.cell-editor');
-  if(inp){
-    if(seed!=null){ inp.value=String(seed); inp.setSelectionRange(inp.value.length, inp.value.length); }
-    else { inp.select(); }
-    inp.focus();
-  }
 }
 function commitActiveCell(){
   const sh=active(); if(!sh||!App.activeCell) return;
@@ -1838,8 +1844,57 @@ function commitActiveCell(){
   pushUndo();
   sh.rows[r][c]=v;
   applyColorRules(sh);
+  afterSystemCellEdit(sh, r, c);
+  scheduleAutosave();
   renderGrid();
   setActiveCell(sh,r,c);
+}
+/** Po ręcznym wpisie w KAWA/UFG/… przelicz Stan/Komplet (tekst też zalicza). */
+function afterSystemCellEdit(sh, ri, ci){
+  if(!sh||ri==null||ci==null||ri<0||ci<0) return;
+  const isSys=REG_SYSTEMS.some(n=>findSystemCol(sh,n)===ci);
+  if(!isSys){
+    if(isRegistrySheet(sh)) refreshRegistryDerived(sh);
+    return;
+  }
+  if(isRegistrySheet(sh)){
+    refreshRegistryDerived(sh);
+    return;
+  }
+  // Lista robocza: lokalny Stan/Komplet z kolumn systemów na tej liście
+  const stanCi=findSystemCol(sh,'Stan');
+  const kompCi=findSystemCol(sh,'Komplet');
+  const dates=REG_SYSTEMS.map(n=>{
+    const sci=findSystemCol(sh,n);
+    return sci>=0?(sh.rows[ri][sci]||''):'';
+  });
+  const {stan,komplet}=computePersonStatus(dates);
+  if(stanCi>=0) sh.rows[ri][stanCi]=stan;
+  if(kompCi>=0) sh.rows[ri][kompCi]=komplet;
+  const color=REG_STATUS_COLOR[stan];
+  if(color) sh.rowColors[ri]=color; else delete sh.rowColors[ri];
+
+  // Tryb Z bazą: wpis (np. nr auta w UFG) od razu do Zobowiązanych
+  if(App.workMode==='linked'){
+    try{
+      const reg=ensureRegistrySheet(false);
+      if(!reg) return;
+      ensureRegistrySystemCols(reg);
+      let keyCi=findKeyColumn(sh);
+      if(keyCi<0) return;
+      const key=norm(sh.rows[ri][keyCi]).replace(/[\s-]/g,'');
+      if(!key) return;
+      const dest=findRegistryRowByKey(reg, key) ?? findRegistryRowScanAll(reg, key);
+      if(dest==null||dest<0) return;
+      const sysName=REG_SYSTEMS.find(n=>findSystemCol(sh,n)===ci);
+      if(!sysName) return;
+      const rci=findSystemCol(reg, sysName);
+      if(rci<0) return;
+      padSheetRow(reg, dest);
+      reg.rows[dest][rci]=sh.rows[ri][ci]||'';
+      refreshRegistryDerived(reg);
+    }catch(_){}
+  }
 }
 function isGridTypingTarget(el){
   if(!el) return false;
@@ -1867,6 +1922,7 @@ function buildRowTr(sh, ri, displayIdx, cols, idxs){
 
   cols.forEach(ci=>{
     const td=document.createElement('td');
+    if(isMetaTextCol(sh.columns[ci])) td.classList.add('meta-text');
     const val=sh.rows[ri][ci]??'';
     const editing=App.editing && App.editing.r===ri && App.editing.c===ci;
     if(App.activeCell&&App.activeCell.r===ri&&App.activeCell.c===ci) td.classList.add('cell-active');
@@ -2245,6 +2301,7 @@ function updateStatus(sh,idxs){
 
 function renderGrid(){
   const sh=active(); if(!sh) return;
+  capMetaTextWidths(sh);
   const grid=$('dataGrid'), empty=$('emptyState'), head=$('gridHead'), body=$('gridBody'), foot=$('gridFoot'), cg=$('colgroup');
   const wrap=$('gridWrap');
   const cols=visCols(sh); const idxs=sorted(sh, filtered(sh));
@@ -2300,7 +2357,10 @@ function renderGrid(){
   head.innerHTML=''; const hr=document.createElement('tr');
   const corner=document.createElement('th'); corner.className='corner'; corner.innerHTML='<div class="th-inner" style="justify-content:center"><input type="checkbox" id="selectAllCb"></div>'; hr.append(corner);
   cols.forEach(ci=>{
-    const th=document.createElement('th'); th.style.width=th.style.minWidth=(sh.widths[ci]||150)+'px';
+    const th=document.createElement('th');
+    if(isMetaTextCol(sh.columns[ci])) th.classList.add('meta-text');
+    th.style.width=th.style.minWidth=(sh.widths[ci]||150)+'px';
+    if(isMetaTextCol(sh.columns[ci])) th.style.maxWidth=META_TEXT_COL_W+'px';
     const inner=document.createElement('div'); inner.className='th-inner';
     const meta=document.createElement('span'); meta.className='meta'; meta.textContent=letter(sh.order.indexOf(ci));
     const title=document.createElement('span'); title.className='title'; title.textContent=sh.columns[ci]; title.title='PPM = zmień nazwę · dwuklik = zmień nazwę';
@@ -2310,7 +2370,14 @@ function renderGrid(){
     sort.title='Kliknij, aby sortować'; sort.style.cursor='pointer';
     inner.append(meta,title,sort,fbtn); th.append(inner);
     const rh=document.createElement('div'); rh.className='resize'; th.append(rh);
-    rh.onmousedown=e=>{e.preventDefault(); e.stopPropagation(); const sx=e.clientX, sw=sh.widths[ci]||150; const mv=ev=>{sh.widths[ci]=Math.max(70,sw+ev.clientX-sx); th.style.width=th.style.minWidth=sh.widths[ci]+'px'; const col=cg.querySelector('col[data-ci="'+ci+'"]'); if(col) col.style.width=sh.widths[ci]+'px';}; const up=()=>{window.removeEventListener('mousemove',mv); window.removeEventListener('mouseup',up);}; window.addEventListener('mousemove',mv); window.addEventListener('mouseup',up);};
+    rh.onmousedown=e=>{
+      e.preventDefault(); e.stopPropagation();
+      if(isMetaTextCol(sh.columns[ci])){ sh.widths[ci]=META_TEXT_COL_W; toast('Źródła/Notatka: stała szerokość '+META_TEXT_COL_W+'px'); return; }
+      const sx=e.clientX, sw=sh.widths[ci]||150;
+      const mv=ev=>{sh.widths[ci]=Math.max(70,sw+ev.clientX-sx); th.style.width=th.style.minWidth=sh.widths[ci]+'px'; const col=cg.querySelector('col[data-ci="'+ci+'"]'); if(col) col.style.width=sh.widths[ci]+'px';};
+      const up=()=>{window.removeEventListener('mousemove',mv); window.removeEventListener('mouseup',up);};
+      window.addEventListener('mousemove',mv); window.addEventListener('mouseup',up);
+    };
     sort.onclick=e=>{e.stopPropagation(); sh.activeCol=ci; pushUndo(); if(sh.sort.i===ci) sh.sort.d*=-1; else{sh.sort.i=ci; sh.sort.d=1;} renderGrid();};
     inner.onclick=e=>{if(e.target===fbtn||e.target===rh||e.target===sort||e.target.closest('.sort'))return; sh.activeCol=ci; updateStatus(sh,idxs);};
     title.ondblclick=e=>{e.preventDefault(); e.stopPropagation(); renameColumn(ci);};
@@ -3161,7 +3228,7 @@ function ensureRegistrySheet(switchTo){
       rows:[],
       order:cols.map((_,i)=>i),
       visible:cols.map(()=>true),
-      widths:cols.map((n)=>n==='PESEL'||n==='NIP'?130:n==='Źródła'||n==='Notatka'?160:100)
+      widths:cols.map((n)=>n==='PESEL'||n==='NIP'?130:isMetaTextCol(n)?META_TEXT_COL_W:100)
     });
     App.sheets.push(reg);
   }else{
@@ -3194,11 +3261,11 @@ function computePersonStatus(dates){
     if(isNieFiguruje(t)) return {kind:'na'};
     const d=parseISODate(t);
     if(d) return {kind:'date', d};
-    // Ręczny wpis (nr auta itd.) — liczy się do kompletu jak kliknięcie przycisku
-    return {kind:'text'};
+    // Ręczny wpis (nr auta itd.) — jak dzisiejsza data do kompletu/cyklu
+    return {kind:'text', d:todayD};
   });
   const filled=slots.filter(s=>s.kind==='na'||s.kind==='date'||s.kind==='text');
-  const dateSlots=slots.filter(s=>s.kind==='date').map(s=>s.d);
+  const dateSlots=slots.filter(s=>s.kind==='date'||s.kind==='text').map(s=>s.d);
   if(!filled.length) return {stan:REG_STATUS.todo, komplet:''};
   if(filled.length<slots.length) return {stan:REG_STATUS.partial, komplet:''};
   // wszystkie systemy załatwione (data / Pomiń / tekst)
@@ -3209,7 +3276,7 @@ function computePersonStatus(dates){
   if(age>REG_CYCLE_DAYS) return {stan:REG_STATUS.overdue, komplet};
   const allDone=slots.every(s=>s.kind==='na'||s.kind==='date'||s.kind==='text');
   if(dateSlots.every(d=>d.toISOString().slice(0,10)===today) && allDone){
-    if(slots.some(s=>s.kind==='date')) return {stan:REG_STATUS.today, komplet};
+    if(slots.some(s=>s.kind==='date'||s.kind==='text')) return {stan:REG_STATUS.today, komplet};
   }
   if(dateSlots.every(d=>d.toISOString().slice(0,10)===today)) return {stan:REG_STATUS.today, komplet};
   return {stan:REG_STATUS.ok, komplet};
@@ -3434,7 +3501,7 @@ function listSourceTag(sh, systems){
 }
 function tagPersonSource(reg, destRi, tag){
   if(!reg||destRi==null||destRi<0) return;
-  const zci=ensureCol(reg,'Źródła',160);
+  const zci=ensureCol(reg,'Źródła', META_TEXT_COL_W);
   if(zci<0) return;
   reg.rows[destRi][zci]=appendSourceTag(reg.rows[destRi][zci], tag);
 }
@@ -3449,7 +3516,7 @@ function mergeActiveIntoRegistry(){
   const reg=ensureRegistrySheet(false);
   ensureCol(reg,'PESEL',130);
   REG_SYSTEMS.forEach(n=>ensureCol(reg,n,100));
-  REG_META.forEach(n=>ensureCol(reg,n,160));
+  REG_META.forEach(n=>ensureCol(reg,n, isMetaTextCol(n)?META_TEXT_COL_W:110));
 
   const regMap=registryColMap(reg);
   const pci=regMap['PESEL'];
@@ -3665,7 +3732,7 @@ function markSystemsNieFiguruje(){
   pushUndo();
   let reg=isRegistrySheet(sh)?sh:ensureRegistrySheet(false);
   REG_SYSTEMS.forEach(n=>ensureCol(reg,n,100));
-  REG_META.forEach(n=>ensureCol(reg,n,160));
+  REG_META.forEach(n=>ensureCol(reg,n, isMetaTextCol(n)?META_TEXT_COL_W:110));
   ensureCol(reg,'NIP',130); ensureCol(reg,'PESEL',130);
   const rmap=registryColMap(reg);
   const tag=listSourceTag(sh, systems.concat(['NA']));
@@ -3976,7 +4043,7 @@ function addMissingToRegistry(){
   ensureCol(reg,'NIP',130);
   ensureCol(reg,'PESEL',130);
   REG_SYSTEMS.forEach(n=>ensureCol(reg,n,100));
-  REG_META.forEach(n=>ensureCol(reg,n,160));
+  REG_META.forEach(n=>ensureCol(reg,n, isMetaTextCol(n)?META_TEXT_COL_W:110));
 
   const idxs=sh.selected.size?[...sh.selected].sort((a,b)=>a-b):sh.rows.map((_,i)=>i);
   let added=0, known=0, skipped=0;
@@ -4850,6 +4917,16 @@ function pasteMatrixAt(matrix, startR, startC){
   });
   applyColorRules(sh);
   fitColumnWidths(sh,{wrap:true});
+  capMetaTextWidths(sh);
+  // Po wklejeniu w KAWA/UFG/… przelicz Stan/Komplet
+  if(isRegistrySheet(sh)) refreshRegistryDerived(sh);
+  else{
+    const endR=Math.min(sh.rows.length-1, startR+matrix.length-1);
+    const endC=Math.min(sh.columns.length-1, startC+Math.max(...matrix.map(r=>r.length))-1);
+    for(let r=startR;r<=endR;r++){
+      for(let c=startC;c<=endC;c++) afterSystemCellEdit(sh, r, c);
+    }
+  }
   render();
   if(matrix.length){
     const er=startR+matrix.length-1;
