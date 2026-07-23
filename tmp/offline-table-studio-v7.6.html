@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; media-src 'none'; font-src 'none';">
-<title>Offline Table Studio V7.6.9</title>
+<title>Offline Table Studio V7.7.0</title>
 <style>
 :root,[data-theme="navy"]{--bg:#dfe7f2;--chrome:#0f1c2e;--chrome2:#16253b;--panel:#fff;--panel2:#f4f7fb;--line:#c9d5e5;--text:#142033;--muted:#607084;--accent:#2563eb;--accent2:#1d4ed8;--soft:#e8f0ff;--head:#1a3354;--headText:#f5f8fc;--zebra:#eef3f9;--sel:#d9e8ff;--ok:#0f766e;--danger:#be123c;--shadow:0 12px 40px rgba(15,28,46,.12);--font:"Segoe UI",system-ui,-apple-system,sans-serif;--mono:Consolas,"Cascadia Mono",monospace}
 [data-theme="green"]{--bg:#dcebe3;--chrome:#0b2a24;--chrome2:#12352e;--accent:#0f766e;--accent2:#0d9488;--soft:#d8f3ee;--head:#134e4a;--sel:#c5efe7;--zebra:#eaf6f1}
@@ -68,7 +68,7 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
 .grid thead th.corner{z-index:6;background:color-mix(in srgb,var(--head) 90%,#000)}
 .grid td.corner{background:var(--panel2);color:var(--muted);font-size:.72rem;z-index:3}
 .th-inner{display:flex;align-items:flex-start;gap:5px;padding:8px 9px;user-select:none;position:relative;min-height:34px}
-.th-inner .title{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:normal;word-break:break-word;line-height:1.2;flex:1;min-width:0}
+.th-inner .title{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:normal;overflow-wrap:normal;word-break:normal;line-height:1.2;flex:1;min-width:0}
 .th-inner .meta{opacity:.65;font-size:.68rem;font-family:var(--mono);padding-top:2px}.th-inner .sort{opacity:.5;font-size:.68rem;padding-top:2px}
 .filter-btn{border:0;background:transparent;color:inherit;cursor:pointer;opacity:.8;padding:0;margin-top:1px}.filter-btn.on{color:#fde68a;opacity:1}
 /* Szerszy uchwyt zmiany szerokości */
@@ -76,23 +76,18 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
 .resize{position:absolute;top:0;right:-5px;width:16px;height:100%;cursor:col-resize;z-index:9;background:transparent}
 .resize:hover,.resize.dragging{background:color-mix(in srgb,var(--accent) 45%,transparent)}
 .cell{display:block;padding:7px 9px;width:100%;cursor:cell;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:text}
-.grid.wrap .cell{white-space:normal;overflow:visible;word-break:break-word}
-/* Zawijanie per kolumna — komórki i nagłówek */
-.grid td.col-wrap .cell,.grid.wrap td.col-wrap .cell{
-  white-space:normal!important;overflow:visible!important;text-overflow:clip!important;
-  word-break:break-word;max-height:none
+/* Zawijanie per kolumna — łamanie tylko między słowami (nie dzieli wyrazów) */
+.grid td.col-wrap .cell{
+  white-space:normal!important;overflow:hidden!important;text-overflow:clip!important;
+  overflow-wrap:break-word;word-break:normal;max-height:none
 }
 .grid th.col-wrap .th-inner .title{
-  white-space:normal!important;overflow:visible!important;text-overflow:clip!important;
-  word-break:break-word;max-height:none
+  white-space:normal!important;overflow:hidden!important;text-overflow:clip!important;
+  overflow-wrap:normal;word-break:normal;max-height:none
 }
 .grid td.col-nowrap .cell{
   white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;
   max-height:34px;word-break:normal
-}
-/* Przy globalnym .wrap bez jawnego col-nowrap też zawijaj; col-nowrap wygrywa */
-.grid.wrap td:not(.col-nowrap) .cell{
-  white-space:normal;overflow:visible;word-break:break-word;max-height:none
 }
 .grid.center .cell,.grid.center .th-inner{text-align:center;justify-content:center}
 .grid tbody tr:nth-child(even) td{background:var(--zebra)}.grid tbody tr:hover td{background:var(--soft)}
@@ -479,7 +474,7 @@ const AUTOSAVE_KEY='ots_autosave_v1';
 const COPY_MODE_KEY='ots_copy_mode_v1';
 const WORK_MODE_KEY='ots_work_mode_v1';
 const VIEW_PREFS_KEY='ots_view_prefs_v1';
-const ROW_H=34, VIRT_THRESHOLD=250, VIRT_BUFFER=12;
+const ROW_H=34, ROW_H_WRAP=64, VIRT_THRESHOLD=250, VIRT_BUFFER=12;
 const PASTE_HIST_MAX=12;
 const ROW_PALETTE=[
   {code:'', label:'Bez koloru', bg:'#fff'},
@@ -2527,22 +2522,26 @@ function renderGrid(){
   const savedScroll=wrap?wrap.scrollTop:0;
   body.innerHTML='';
 
-  // Wirtualizacja: stała wysokość wiersza. Przy zawijaniu tekstu — wyłącz.
-  const useVirt=idxs.length>=VIRT_THRESHOLD && !App.editing && !sheetHasColWrap(sh);
-  grid.classList.toggle('virt-mode', !!useVirt);
+  // Wirtualizacja ZAWSZE przy dużych tabelach — także gdy zawijamy (inaczej wiesza).
+  // Przy zawijaniu wiersze są wyższe: użyj estymowanej wysokości wiersza.
+  const bigTable=idxs.length>=VIRT_THRESHOLD && !App.editing;
+  const wrapping=sheetHasColWrap(sh);
+  const rowEstH=wrapping?ROW_H_WRAP:ROW_H;
+  const useVirt=bigTable;
+  grid.classList.toggle('virt-mode', !!useVirt && !wrapping);
   let start=0, end=idxs.length;
   if(useVirt && wrap){
     const scrollTop=savedScroll||0;
     const viewH=wrap.clientHeight||400;
-    const first=Math.max(0, Math.floor(scrollTop/ROW_H)-VIRT_BUFFER);
-    const visible=Math.ceil(viewH/ROW_H)+VIRT_BUFFER*2;
+    const first=Math.max(0, Math.floor(scrollTop/rowEstH)-VIRT_BUFFER);
+    const visible=Math.ceil(viewH/rowEstH)+VIRT_BUFFER*2;
     start=first;
     end=Math.min(idxs.length, first+visible);
     App._virtStart=start; App._virtEnd=end;
     if(start>0){
       const top=document.createElement('tr'); top.className='virt-spacer';
       const td=document.createElement('td'); td.colSpan=cols.length+1;
-      td.style.cssText='height:'+(start*ROW_H)+'px;padding:0;border:0;line-height:0';
+      td.style.cssText='height:'+(start*rowEstH)+'px;padding:0;border:0;line-height:0';
       top.append(td); body.append(top);
     }
   }else{
@@ -2554,7 +2553,7 @@ function renderGrid(){
   if(useVirt && wrap && end<idxs.length){
     const bot=document.createElement('tr'); bot.className='virt-spacer';
     const td=document.createElement('td'); td.colSpan=cols.length+1;
-    td.style.cssText='height:'+((idxs.length-end)*ROW_H)+'px;padding:0;border:0;line-height:0';
+    td.style.cssText='height:'+((idxs.length-end)*rowEstH)+'px;padding:0;border:0;line-height:0';
     bot.append(td); body.append(bot);
   }
   // przywróć scroll — przebudowa tbody potrafi go zresetować / skleić do góry
@@ -2566,13 +2565,14 @@ function renderGrid(){
     wrap.addEventListener('scroll', ()=>{
       if(App._skipScroll || App._virtScrollLock) return;
       const sh2=active(); if(!sh2) return;
-      if(App.editing || sheetHasColWrap(sh) || App.wrap) return;
+      if(App.editing) return;
       const n=sorted(sh2, filtered(sh2)).length;
       if(n<VIRT_THRESHOLD) return;
+      const rh2=sheetHasColWrap(sh2)?ROW_H_WRAP:ROW_H;
       const st=wrap.scrollTop||0;
-      const first=Math.max(0, Math.floor(st/ROW_H)-VIRT_BUFFER);
+      const first=Math.max(0, Math.floor(st/rh2)-VIRT_BUFFER);
       const viewH=wrap.clientHeight||400;
-      const visible=Math.ceil(viewH/ROW_H)+VIRT_BUFFER*2;
+      const visible=Math.ceil(viewH/rh2)+VIRT_BUFFER*2;
       const end2=Math.min(n, first+visible);
       // przebuduj tylko gdy zmieniło się okno wierszy
       if(App._virtStart===first && App._virtEnd===end2) return;
@@ -5223,7 +5223,7 @@ if($('btnShrinkCols')) $('btnShrinkCols').onclick=()=>{
   pushUndo();
   const n=shrinkWideColumns(sh, 180);
   renderGrid(); scheduleAutosave();
-  toast('Zawężono: Źródła/Notatka=100px, inne max 180px ('+n+' kol.)');
+  toast('Zawężono '+n+' kol. (Źródła/Notatka max 140, inne max 180). Zawijanie bez zmian.');
 };
 if($('btnShrinkMeta')) $('btnShrinkMeta').onclick=()=>$('btnShrinkCols')&&$('btnShrinkCols').click();
 $('btnRenumber').onclick=()=>renumberByView();
