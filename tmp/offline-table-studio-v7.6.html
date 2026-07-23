@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; media-src 'none'; font-src 'none';">
-<title>Offline Table Studio V7.7.0</title>
+<title>Offline Table Studio V7.7.1</title>
 <style>
 :root,[data-theme="navy"]{--bg:#dfe7f2;--chrome:#0f1c2e;--chrome2:#16253b;--panel:#fff;--panel2:#f4f7fb;--line:#c9d5e5;--text:#142033;--muted:#607084;--accent:#2563eb;--accent2:#1d4ed8;--soft:#e8f0ff;--head:#1a3354;--headText:#f5f8fc;--zebra:#eef3f9;--sel:#d9e8ff;--ok:#0f766e;--danger:#be123c;--shadow:0 12px 40px rgba(15,28,46,.12);--font:"Segoe UI",system-ui,-apple-system,sans-serif;--mono:Consolas,"Cascadia Mono",monospace}
 [data-theme="green"]{--bg:#dcebe3;--chrome:#0b2a24;--chrome2:#12352e;--accent:#0f766e;--accent2:#0d9488;--soft:#d8f3ee;--head:#134e4a;--sel:#c5efe7;--zebra:#eaf6f1}
@@ -89,6 +89,19 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
   white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;
   max-height:34px;word-break:normal
 }
+/* Notatka/Źródła: zawinięte, ale przycięte do 2 linii; rozwijane po kliknięciu */
+.grid td.col-wrap.clampable .cell{
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+  overflow:hidden!important;text-overflow:clip;max-height:calc(2 * 1.35em + 14px)
+}
+.grid td.col-wrap.clampable.cell-expanded .cell{
+  display:block;-webkit-line-clamp:unset;max-height:none;overflow:visible!important
+}
+.grid td.clampable{position:relative}
+.cell-exp-btn{position:absolute;right:2px;bottom:2px;z-index:6;border:0;border-radius:4px;
+  background:color-mix(in srgb,var(--accent) 22%,var(--panel));color:var(--text);
+  font-size:.62rem;line-height:1;padding:2px 4px;cursor:pointer;opacity:.85}
+.cell-exp-btn:hover{opacity:1;background:color-mix(in srgb,var(--accent) 40%,var(--panel))}
 .grid.center .cell,.grid.center .th-inner{text-align:center;justify-content:center}
 .grid tbody tr:nth-child(even) td{background:var(--zebra)}.grid tbody tr:hover td{background:var(--soft)}
 .grid tbody tr.selected td{background:var(--sel)!important}.grid td.cell-active{outline:2px solid var(--accent);outline-offset:-2px}
@@ -518,7 +531,7 @@ function foldPl(s){
 }
 function isMetaTextCol(name){
   const f=foldPl(name);
-  return f==='zrodla'||f==='zrodlo'||f==='notatka'||/^zrodl/.test(f);
+  return f==='zrodla'||f==='zrodlo'||f==='notatka'||/^zrodl/.test(f)||/^notatk/.test(f);
 }
 /** Tylko gdy brak szerokości — nie blokuj ręcznej zmiany ani autodopasowania. */
 function capMetaTextWidths(sh){
@@ -905,7 +918,11 @@ const App={workbook:'Skoroszyt bez nazwy', sheets:[], activeId:null, wrap:false,
   dragCol:null, dragSheet:null, filterCol:null, activeCell:null, schemas:[], undoStack:[], activeSchema:null,
   pasteHistory:[], findCursor:{r:0,c:0}, copyMode:'copy', statuses:JSON.parse(JSON.stringify(DEFAULT_STATUSES)),
   selRange:null, anchorCell:null, editing:null, selecting:false, virtTop:0, _virtBound:false, _skipScroll:false,
-  ribbonTab:'dane', exportScope:'auto', workMode:'adhoc'};
+  ribbonTab:'dane', exportScope:'auto', workMode:'adhoc', expandedCells:new Set()};
+
+function cellExpKey(ri,ci){return ri+':'+ci;}
+function isCellExpanded(ri,ci){return App.expandedCells.has(cellExpKey(ri,ci));}
+function toggleCellExpanded(ri,ci){const k=cellExpKey(ri,ci); if(App.expandedCells.has(k)) App.expandedCells.delete(k); else App.expandedCells.add(k);}
 
 function active(){return App.sheets.find(s=>s.id===App.activeId);}
 function ensureBase(){if(!App.sheets.length){const s=newSheet('Lista'); App.sheets.push(s); App.activeId=s.id;}}
@@ -2055,6 +2072,22 @@ function buildRowTr(sh, ri, displayIdx, cols, idxs){
       td.append(inp);
     }else{
       const cell=document.createElement('div'); cell.className='cell'; cell.textContent=val; cell.title=val;
+      // Notatka/Źródła: zawijane, ale przycięte do 2 linii; przycisk „⤢” rozwija/zawija
+      const metaWrap=isColWrap(sh,ci) && isMetaTextCol(sh.columns[ci]);
+      if(metaWrap && String(val).length>0){
+        td.classList.add('clampable');
+        const expanded=isCellExpanded(ri,ci);
+        if(expanded) td.classList.add('cell-expanded');
+        if(String(val).length>24){
+          const eb=document.createElement('button');
+          eb.type='button'; eb.className='cell-exp-btn';
+          eb.textContent=expanded?'⤡ zwiń':'⤢ więcej';
+          eb.title=expanded?'Zwiń komórkę':'Rozwiń całą notatkę';
+          eb.onmousedown=e=>{e.preventDefault(); e.stopPropagation();};
+          eb.onclick=e=>{ e.preventDefault(); e.stopPropagation(); toggleCellExpanded(ri,ci); renderGrid(); };
+          td.append(eb);
+        }
+      }
       if(sh.marks[ri]==='dup'&&sh.activeCol===ci) cell.classList.add('mark-dup');
       if(sh.marks[ri]==='empty'&&sh.activeCol===ci&&norm(val)==='') cell.classList.add('mark-empty');
       cell.onmousedown=e=>{
@@ -2158,7 +2191,7 @@ function renderSheetBar(){
     } else {
       b.textContent=isRegistrySheet(sh)?('★ '+sh.name):sh.name;
       b.onclick=()=>{
-        App.activeId=sh.id; App.activeCell=null; $('cellRef').textContent='—'; $('cellValue').textContent='';
+        App.activeId=sh.id; App.activeCell=null; App.expandedCells.clear(); $('cellRef').textContent='—'; $('cellValue').textContent='';
         if(isRegistrySheet(sh)) setRibbonTab('rejestr',{silent:true});
         else if(App.ribbonTab==='rejestr') setRibbonTab('dane',{silent:true});
         render();
