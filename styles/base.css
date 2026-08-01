@@ -999,6 +999,7 @@ body.notifications-open {
 }
 
 .notifications-panel-toolbar {
+    flex-shrink: 0;
     padding: 0 16px 10px;
     border-bottom: 1px solid var(--border);
 }
@@ -1031,6 +1032,7 @@ body.notifications-open {
 
 .notification-row {
     display: flex;
+    flex-shrink: 0;
     align-items: stretch;
     gap: 4px;
     border: 1px solid var(--border);
