@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pl"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kopiuj Studio V7.7.2</title>
+<title>Kopiuj Studio V7.7.3</title>
 <style>
 body{margin:0;font-family:-apple-system,system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
 .wrap{padding:16px;max-width:900px;margin:0 auto}
@@ -10,17 +10,17 @@ button.ok{background:#0f766e}
 textarea{width:100%;height:55vh;box-sizing:border-box;border-radius:12px;border:1px solid #334155;background:#020617;color:#e2e8f0;padding:12px;font:12px ui-monospace,Menlo,monospace}
 a{color:#93c5fd}
 </style></head><body><div class="wrap">
-<h1>Offline Table Studio V7.7.2</h1>
-<p><b>V7.7.2:</b> Naprawiono białą/nieczytelną czcionkę w „Trybie zwykłej tabeli” (bez kolorów) — teraz zawsze czarny tekst na białym tle, także w trybie ciemnym (to wychodziło np. po „Porównaj karty”). Reszta jak w V7.7.1.</p>
+<h1>Offline Table Studio V7.7.3</h1>
+<p><b>V7.7.3:</b> Naprawiono białą (niewidoczną) czcionkę w oknie „Porównaj karty” — listy rozwijane są znowu czytelne. „Synchronizuj z bazą” nie przenosi Cię już na kartę Zobowiązani — zostajesz na aktywnej liście.</p>
 <button type="button" id="b">Kopiuj cały kod</button>
-<a id="dl" download="offline-table-studio-v7.7.2.html" href="#">Pobierz .html</a>
+<a id="dl" download="offline-table-studio-v7.7.3.html" href="#">Pobierz .html</a>
 <textarea id="t" readonly>&lt;!DOCTYPE html&gt;
 &lt;html lang=&quot;pl&quot;&gt;
 &lt;head&gt;
 &lt;meta charset=&quot;UTF-8&quot;&gt;
 &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;
 &lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; media-src 'none'; font-src 'none';&quot;&gt;
-&lt;title&gt;Offline Table Studio V7.7.2&lt;/title&gt;
+&lt;title&gt;Offline Table Studio V7.7.3&lt;/title&gt;
 &lt;style&gt;
 :root,[data-theme=&quot;navy&quot;]{--bg:#dfe7f2;--chrome:#0f1c2e;--chrome2:#16253b;--panel:#fff;--panel2:#f4f7fb;--line:#c9d5e5;--text:#142033;--muted:#607084;--accent:#2563eb;--accent2:#1d4ed8;--soft:#e8f0ff;--head:#1a3354;--headText:#f5f8fc;--zebra:#eef3f9;--sel:#d9e8ff;--ok:#0f766e;--danger:#be123c;--shadow:0 12px 40px rgba(15,28,46,.12);--font:&quot;Segoe UI&quot;,system-ui,-apple-system,sans-serif;--mono:Consolas,&quot;Cascadia Mono&quot;,monospace}
 [data-theme=&quot;green&quot;]{--bg:#dcebe3;--chrome:#0b2a24;--chrome2:#12352e;--accent:#0f766e;--accent2:#0d9488;--soft:#d8f3ee;--head:#134e4a;--sel:#c5efe7;--zebra:#eaf6f1}
@@ -277,9 +277,11 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
 .sheet.sheet-park{font-style:italic}
 
 
-.ribbon select.btn,.toolbar select,.dlg select,#regFilterSelect{color:#edf3fb}
+.ribbon select.btn,.toolbar select,#regFilterSelect{color:#edf3fb}
+/* Selecty w dialogach są na jasnym panelu — tekst wg motywu, nie biały */
+.dlg select{color:var(--text)}
 .ribbon select.btn option,.toolbar select option,.dlg select option,#regFilterSelect option{color:#142033;background:#fff}
-[data-mode=&quot;dark&quot;] .ribbon select.btn option,[data-mode=&quot;dark&quot;] #regFilterSelect option{color:#e7eef8;background:#121a28}
+[data-mode=&quot;dark&quot;] .ribbon select.btn option,[data-mode=&quot;dark&quot;] #regFilterSelect option,[data-mode=&quot;dark&quot;] .dlg select option{color:#e7eef8;background:#121a28}
 
 &lt;/style&gt;
 &lt;/head&gt;
@@ -4203,16 +4205,15 @@ function syncListToRegistry(){
     if(color) sh.rowColors[ri]=color;
   });
 
-  // Zawsze pokaż bazę po syncu, żeby było widać KAWA/INFZ
-  App.activeId=reg.id;
+  // Zostań na aktywnej liście (nie przeskakuj na Zobowiązanych)
   render();
   scheduleAutosave();
 
   const sysHint=systemsTouched.size?' · '+[...systemsTouched].join('+'):'';
   if(updated||added){
-    toast('OK: przeniesiono do Zobowiązanych — wierszy '+ (updated+added) +', pól '+fieldsWritten+sysHint+' (przewiń do KAWA/SINF/…)');
+    toast('OK: przeniesiono do Zobowiązanych — wierszy '+ (updated+added) +', pól '+fieldsWritten+sysHint+'. Zostajesz na liście.');
   }else if(alreadyOk){
-    toast('Daty z listy już są w Zobowiązanych ('+alreadyOk+'). Jesteś na karcie bazy — przewiń w prawo do KAWA/SINF/INFZ.');
+    toast('Daty z listy już są w Zobowiązanych ('+alreadyOk+'). Zostajesz na liście.');
   }else if(notInBase.length){
     toast('Nie przeniesiono — brak dopasowania PESEL/NIP. Ustaw kolumnę klucza na liście i na Zobowiązanych.');
   }else{
