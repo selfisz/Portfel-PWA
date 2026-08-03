@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; media-src 'none'; font-src 'none';">
-<title>Offline Table Studio V7.7.3</title>
+<title>Offline Table Studio V7.7.4</title>
 <style>
 :root,[data-theme="navy"]{--bg:#dfe7f2;--chrome:#0f1c2e;--chrome2:#16253b;--panel:#fff;--panel2:#f4f7fb;--line:#c9d5e5;--text:#142033;--muted:#607084;--accent:#2563eb;--accent2:#1d4ed8;--soft:#e8f0ff;--head:#1a3354;--headText:#f5f8fc;--zebra:#eef3f9;--sel:#d9e8ff;--ok:#0f766e;--danger:#be123c;--shadow:0 12px 40px rgba(15,28,46,.12);--font:"Segoe UI",system-ui,-apple-system,sans-serif;--mono:Consolas,"Cascadia Mono",monospace}
 [data-theme="green"]{--bg:#dcebe3;--chrome:#0b2a24;--chrome2:#12352e;--accent:#0f766e;--accent2:#0d9488;--soft:#d8f3ee;--head:#134e4a;--sel:#c5efe7;--zebra:#eaf6f1}
@@ -1357,7 +1357,10 @@ function extractAumPdf(text){
       .replace(/(?=[PN]\s*:)/gi,'\n')
       .replace(/(?=Nowe\s+rachunki\s+bankowe\s+AUM)/gi,'\n')
       .replace(/(?=klasyfikacje\s+otwartych\s+spraw)/gi,'\n')
-      .replace(/(?=\d{8}\s+[A-Za-zĄĆĘŁŃÓŚŹŻ])/g,'\n');
+      // po identyfikatorze PESEL(11)/NIP(10) idącym zaraz po P:/N: — oddziel nazwę
+      .replace(/^([PN]\s*:\s*\d{10,11})\s+(?=\S)/gim,'$1\n')
+      // linia rachunku = DOKŁADNIE 8 cyfr (nie fragment dłuższej liczby) + spacja + litera
+      .replace(/(?<![\d.,-])(?=\d{8}(?!\d)\s+[A-Za-zĄĆĘŁŃÓŚŹŻ])/g,'\n');
   }
   const lines=src.split('\n').map(l=>l.replace(/\u00a0/g,' ').trim()).filter(Boolean);
   if(lines.length<2) return null;
@@ -1382,7 +1385,7 @@ function extractAumPdf(text){
   if(cur) blocks.push(cur);
   if(!blocks.length) return null;
 
-  const header=['PESEL','Imię i nazwisko','Adres','Klasyfikacja','Rachunki AUM','Liczba rachunków','Typ'];
+  const header=['PESEL','NIP','Imię i nazwisko','Adres','Klasyfikacja','Rachunki AUM','Liczba rachunków','Typ'];
   const out=[header];
   blocks.forEach(b=>{
     const blob=[b.headerRest].concat(b.lines).join('\n');
@@ -1391,6 +1394,13 @@ function extractAumPdf(text){
     const pm=allText.match(/\b(\d{11})\b/);
     if(pm) pesel=pm[1];
     else if(/^\d{11}$/.test(String(b.headerRest).replace(/\s/g,''))) pesel=String(b.headerRest).replace(/\s/g,'');
+
+    // NIP (10 cyfr) — dla firm/bloków N:; nie mylić z kodem banku (8 cyfr) ani PESEL (11)
+    let nip='';
+    if(!pesel){
+      const nm=allText.match(/(?<!\d)(\d{10})(?!\d)/);
+      if(nm) nip=nm[1];
+    }
 
     let klas='';
     const km=allText.match(/klasyfikacje\s+otwartych\s+spraw\s*:\s*([^\n]+)/i);
@@ -1410,13 +1420,21 @@ function extractAumPdf(text){
       if(isAumNoiseLine(line)) continue;
       if(isAumBankLine(line)) continue;
       if(/klasyfikacje\s+otwartych\s+spraw/i.test(line)) continue;
-      const s=norm(line);
+      let s=norm(line);
       if(pesel && s.replace(/\s/g,'')===pesel) continue;
+      if(nip && s.replace(/\s/g,'')===nip) continue;
+      // usuń identyfikator z początku linii z nazwą (flat: "5213000123 FIRMA…")
+      if(pesel) s=s.replace(new RegExp('^\\s*'+pesel+'\\s+'),'');
+      if(nip) s=s.replace(new RegExp('^\\s*'+nip+'\\s+'),'');
+      s=norm(s);
+      if(!s) continue;
       pre.push(s);
     }
     if(b.headerRest){
-      const hr=norm(b.headerRest);
-      if(hr && hr.replace(/\s/g,'')!==pesel && !isAumBankLine(hr) && !/^pesel$/i.test(hr) && !/^niop$/i.test(hr)){
+      let hr=norm(b.headerRest);
+      if(pesel) hr=norm(hr.replace(new RegExp('^\\s*'+pesel+'\\s+'),''));
+      if(nip) hr=norm(hr.replace(new RegExp('^\\s*'+nip+'\\s+'),''));
+      if(hr && hr.replace(/\s/g,'')!==pesel && hr.replace(/\s/g,'')!==nip && !isAumBankLine(hr) && !/^pesel$/i.test(hr) && !/^niop$/i.test(hr)){
         if(!pre.includes(hr)) pre.unshift(hr);
       }
     }
@@ -1427,10 +1445,11 @@ function extractAumPdf(text){
       addr=pre.slice(1).join(', ');
     }
     // placeholder z OCR — zostaw, user i tak wklei prawdziwy tekst
-    if(!banks.length && !pesel && !name) return;
-    const typ=b.kind==='N'?'NIOP':(b.kind==='P'?'PESEL':'?');
+    if(!banks.length && !pesel && !nip && !name) return;
+    const typ=b.kind==='N'?'NIOP':(b.kind==='P'?'PESEL':(nip&&!pesel?'NIOP':'PESEL'));
     out.push([
       pesel,
+      nip,
       name,
       addr,
       klas,
@@ -1440,23 +1459,24 @@ function extractAumPdf(text){
     ]);
   });
   if(out.length<2) return null;
-  extractAumPdf._meta={rows:out.length-1, banks:out.slice(1).reduce((a,r)=>a+(+r[5]||0),0)};
+  const iCnt=header.indexOf('Liczba rachunków');
+  extractAumPdf._meta={rows:out.length-1, banks:out.slice(1).reduce((a,r)=>a+(+r[iCnt]||0),0)};
   return out;
 }
 function expandAumToAccountRows(matrix){
   if(!matrix||matrix.length<2) return matrix;
   const h=matrix[0];
-  const iPesel=h.indexOf('PESEL'), iName=h.indexOf('Imię i nazwisko'), iAcc=h.indexOf('Rachunki AUM');
+  const iPesel=h.indexOf('PESEL'), iNip=h.indexOf('NIP'), iName=h.indexOf('Imię i nazwisko'), iAcc=h.indexOf('Rachunki AUM');
   const iAdr=h.indexOf('Adres'), iKl=h.indexOf('Klasyfikacja'), iTyp=h.indexOf('Typ');
   if(iAcc<0) return matrix;
-  const out=[['PESEL','Imię i nazwisko','Adres','Klasyfikacja','Kod banku','Bank','Typ']];
+  const out=[['PESEL','NIP','Imię i nazwisko','Adres','Klasyfikacja','Kod banku','Bank','Typ']];
   matrix.slice(1).forEach(r=>{
-    const pesel=r[iPesel]||'', name=r[iName]||'', adr=iAdr>=0?r[iAdr]:'', kl=iKl>=0?r[iKl]:'', typ=iTyp>=0?r[iTyp]:'';
+    const pesel=r[iPesel]||'', nip=iNip>=0?(r[iNip]||''):'', name=r[iName]||'', adr=iAdr>=0?r[iAdr]:'', kl=iKl>=0?r[iKl]:'', typ=iTyp>=0?r[iTyp]:'';
     const parts=String(r[iAcc]||'').split(/\s·\s/).map(s=>s.trim()).filter(Boolean);
-    if(!parts.length){ out.push([pesel,name,adr,kl,'','',typ]); return; }
+    if(!parts.length){ out.push([pesel,nip,name,adr,kl,'','',typ]); return; }
     parts.forEach(p=>{
       const m=p.match(/^(\d{8})\s+(.+)$/);
-      out.push([pesel,name,adr,kl, m?m[1]:'', m?m[2]:p, typ]);
+      out.push([pesel,nip,name,adr,kl, m?m[1]:'', m?m[2]:p, typ]);
     });
   });
   return out;
