@@ -9,7 +9,8 @@ beforeAll(() => {
         tx.date, tx.type, tx.mainCategory, tx.subCategory,
         Number(tx.amount).toFixed(2), tx.note || ''
     ].join('|');
-    loadScriptsInOrder(['js/search-utils.js', 'js/transaction-search.js']);
+    loadScriptsInOrder(['js/constants.js', 'js/search-utils.js', 'js/transaction-search.js']);
+    globalThis.categoryTree = DEFAULT_CATEGORY_TREE;
 });
 
 beforeEach(() => {
@@ -75,5 +76,31 @@ describe('findActiveTransactionIndex', () => {
     it('znajduje indeks po fingerprintie kopii obiektu', () => {
         const copy = { ...globalThis.appState.transactions[0] };
         expect(findActiveTransactionIndex(copy)).toBe(0);
+    });
+});
+
+describe('isTransactionMissingSubCategory', () => {
+    it('nie flaguje kategorii bez podkategorii (Transport)', () => {
+        expect(isTransactionMissingSubCategory({
+            type: 'expense',
+            mainCategory: 'Transport',
+            subCategory: '[Bez podkategorii]'
+        })).toBe(false);
+    });
+
+    it('flaguje [Bez podkategorii] gdy kategoria ma podkategorie', () => {
+        expect(isTransactionMissingSubCategory({
+            type: 'expense',
+            mainCategory: 'Zakupy',
+            subCategory: '[Bez podkategorii]'
+        })).toBe(true);
+    });
+
+    it('flaguje kategorię Różne', () => {
+        expect(isTransactionMissingSubCategory({
+            type: 'expense',
+            mainCategory: 'Różne',
+            subCategory: '[Bez podkategorii]'
+        })).toBe(true);
     });
 });

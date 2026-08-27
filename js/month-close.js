@@ -244,9 +244,9 @@ function collectMonthCloseBudgetIssues(monthKey) {
 function collectUncategorizedMonthTx(monthKey) {
     return (appState.transactions || []).filter((t) => {
         if (!t.date.startsWith(monthKey)) return false;
-        if (t.subCategory === '[Bez podkategorii]') return true;
-        if (t.mainCategory === 'Różne') return true;
-        return false;
+        return typeof isTransactionMissingSubCategory === 'function'
+            ? isTransactionMissingSubCategory(t)
+            : (t.subCategory === '[Bez podkategorii]' || t.mainCategory === 'Różne');
     });
 }
 

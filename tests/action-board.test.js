@@ -18,6 +18,17 @@ beforeAll(() => {
 
     loadScript('js/constants.js');
     loadScript('js/format.js');
+    globalThis.categoryTree = DEFAULT_CATEGORY_TREE;
+    globalThis.transactionFingerprint = (tx) => [
+        tx.date || '',
+        tx.type || '',
+        tx.mainCategory || '',
+        tx.subCategory || '',
+        Number(tx.amount || 0).toFixed(2),
+        tx.note || '',
+        tx.recurringId || ''
+    ].join('|');
+    loadScript('js/transaction-search.js');
     loadScript('js/transaction-duplicates.js');
     loadScript('js/recurring-confirm.js');
     loadScript('js/notifications.js');
@@ -79,6 +90,49 @@ describe('collectActionBoardTasks', () => {
         const id = collectActionBoardTasks()[0].id;
         snoozeActionBoardTask(id);
         expect(collectActionBoardTasks().length).toBe(0);
+    });
+
+    it('nie flaguje Transportu z [Bez podkategorii] jako brak kategorii', () => {
+        appState.transactions = [
+            { type: 'expense', date: '2026-07-02', amount: 45, mainCategory: 'Transport', subCategory: '[Bez podkategorii]' }
+        ];
+        expect(collectActionBoardTasks().some((t) => t.type === 'uncategorized')).toBe(false);
+    });
+
+    it('flaguje Zakupy bez podkategorii gdy kategoria ma podkategorie', () => {
+        appState.transactions = [
+            { type: 'expense', date: '2026-07-02', amount: 80, mainCategory: 'Zakupy', subCategory: '[Bez podkategorii]' }
+        ];
+        const task = collectActionBoardTasks().find((t) => t.type === 'uncategorized');
+        expect(task).toBeTruthy();
+        expect(task.id).toMatch(/^uncategorized\|/);
+        expect(task.id).not.toMatch(/^uncategorized\|idx:/);
+    });
+
+    it('odrzucone zadanie pozostaje ukryte po zmianie kolejności transakcji', () => {
+        const zakupyTx = {
+            type: 'expense',
+            date: '2026-07-02',
+            amount: 80,
+            mainCategory: 'Zakupy',
+            subCategory: '[Bez podkategorii]',
+            note: 'test'
+        };
+        appState.transactions = [
+            zakupyTx,
+            { type: 'expense', date: '2026-07-01', amount: 5, mainCategory: 'Różne', subCategory: '[Bez podkategorii]' }
+        ];
+        const zakupyTask = collectActionBoardTasks().find((t) => t.body.includes('Zakupy'));
+        expect(zakupyTask).toBeTruthy();
+        dismissActionBoardTask(zakupyTask.id);
+        expect(collectActionBoardTasks().some((t) => t.body.includes('Zakupy'))).toBe(false);
+
+        appState.transactions = [
+            { type: 'expense', date: '2026-07-03', amount: 1, mainCategory: 'Dom', subCategory: 'Czynsz' },
+            zakupyTx,
+            { type: 'expense', date: '2026-07-01', amount: 5, mainCategory: 'Różne', subCategory: '[Bez podkategorii]' }
+        ];
+        expect(collectActionBoardTasks().some((t) => t.body.includes('Zakupy'))).toBe(false);
     });
 });
 

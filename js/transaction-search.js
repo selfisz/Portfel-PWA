@@ -48,11 +48,27 @@ function filterTransactionItems(items, params = {}) {
     return filtered;
 }
 
+function getSubcategoriesForTransaction(tx) {
+    if (!tx?.mainCategory) return null;
+    const type = tx.type === 'income' ? 'income' : 'expense';
+    if (typeof getCategorySubcategories === 'function') {
+        return getCategorySubcategories(type, tx.mainCategory);
+    }
+    if (typeof categoryTree !== 'undefined' && categoryTree[type]) {
+        return categoryTree[type][tx.mainCategory] || [];
+    }
+    return null;
+}
+
 function isTransactionMissingSubCategory(tx) {
     if (!tx) return false;
-    if (tx.subCategory === '[Bez podkategorii]') return true;
     if (tx.mainCategory === 'Różne') return true;
-    return false;
+    const subs = getSubcategoriesForTransaction(tx);
+    if (subs === null) {
+        return tx.subCategory === '[Bez podkategorii]' || !tx.subCategory;
+    }
+    if (subs.length === 0) return false;
+    return tx.subCategory === '[Bez podkategorii]' || !tx.subCategory;
 }
 
 function searchTransactionItems(params = {}, options = {}) {

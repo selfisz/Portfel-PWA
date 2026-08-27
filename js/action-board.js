@@ -70,21 +70,32 @@ function buildDuplicatePairKey(indexA, indexB) {
     return [indexA, indexB].sort((a, b) => a - b).join('|');
 }
 
+function getUncategorizedBoardTaskId(tx) {
+    const fp = typeof transactionFingerprint === 'function' ? transactionFingerprint(tx) : '';
+    if (fp) return `uncategorized|${fp}`;
+    const index = typeof findActiveTransactionIndex === 'function'
+        ? findActiveTransactionIndex(tx)
+        : (appState.transactions || []).indexOf(tx);
+    return `uncategorized|idx:${index}`;
+}
+
 function collectUncategorizedBoardTasks() {
     const monthKey = typeof getCurrentMonthKey === 'function'
         ? getCurrentMonthKey()
         : localIsoDate(new Date()).slice(0, 7);
     return (appState.transactions || [])
-        .map((tx, index) => ({ tx, index }))
-        .filter(({ tx }) => tx.date?.startsWith(monthKey) && isUncategorizedTransaction(tx))
-        .map(({ tx, index }) => {
+        .filter((tx) => tx.date?.startsWith(monthKey) && isUncategorizedTransaction(tx))
+        .map((tx) => {
+            const index = typeof findActiveTransactionIndex === 'function'
+                ? findActiveTransactionIndex(tx)
+                : (appState.transactions || []).indexOf(tx);
             const cat = typeof formatTransactionCategoryLabel === 'function'
                 ? formatTransactionCategoryLabel(tx)
                 : (tx.mainCategory || '—');
             const sign = tx.type === 'expense' ? '−' : '+';
             const note = tx.note ? ` · ${tx.note}` : '';
             return {
-                id: `uncategorized|${index}`,
+                id: getUncategorizedBoardTaskId(tx),
                 type: 'uncategorized',
                 priority: getUncategorizedPriority(tx.amount),
                 title: 'Brak kategorii',
