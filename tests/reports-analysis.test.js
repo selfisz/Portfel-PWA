@@ -231,6 +231,38 @@ describe('buildCompareCategoryMovers', () => {
     expect(movers[1].name).toBe('Transport');
     expect(movers[1].diff).toBe(-10);
   });
+
+  it('obsługuje wpływy jako osobny typ', () => {
+    const txA = [{ type: 'income', amount: 4000, mainCategory: 'Praca' }];
+    const txB = [
+      { type: 'income', amount: 4500, mainCategory: 'Praca' },
+      { type: 'income', amount: 200, mainCategory: 'Inne' }
+    ];
+    const movers = buildCompareCategoryMovers(txA, txB, 5, 'income');
+    expect(movers[0].name).toBe('Praca');
+    expect(movers[0].diff).toBe(500);
+    expect(movers[1].name).toBe('Inne');
+    expect(movers[1].diff).toBe(200);
+  });
+});
+
+describe('getReportsRangePresetBounds', () => {
+  const ref = new Date('2026-09-15T12:00:00');
+
+  it('zwraca H1 bieżącego roku kontekstu', () => {
+    const bounds = getReportsRangePresetBounds('h1', ref);
+    expect(bounds).toEqual({ start: '2026-01-01', end: '2026-06-30' });
+  });
+
+  it('zwraca H2 bieżącego roku kontekstu', () => {
+    const bounds = getReportsRangePresetBounds('h2', ref);
+    expect(bounds).toEqual({ start: '2026-07-01', end: '2026-12-31' });
+  });
+
+  it('zwraca ostatnie 6 miesięcy włącznie z bieżącym', () => {
+    const bounds = getReportsRangePresetBounds('last6', ref);
+    expect(bounds).toEqual({ start: '2026-04-01', end: '2026-09-15' });
+  });
 });
 
 describe('formatComparePeriodLabel', () => {

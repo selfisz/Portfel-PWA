@@ -85,10 +85,43 @@ function isNotificationDismissedThisMonth(item, monthKey = getCurrentMonthKey())
     return !!(item.dismissed && item.dismissedYm === monthKey);
 }
 
+function getNotificationPayloadMonthKey(item) {
+    const payload = item?.payload || {};
+    if (payload.monthKey) return payload.monthKey;
+    if (payload.dueDate) return payload.dueDate.slice(0, 7);
+    const id = String(item?.id || '');
+    const match = id.match(/\|(\d{4}-\d{2})(?:\||$)/);
+    return match ? match[1] : null;
+}
+
+/** Opcja A: alerty z minionych miesięcy nie wracają po zmianie miesiąca. */
+function isNotificationPastPeriod(item, todayStr = localIsoDate(new Date())) {
+    if (!item) return false;
+    const currentYm = todayStr.slice(0, 7);
+    const payload = item.payload || {};
+
+    const payloadMonth = getNotificationPayloadMonthKey(item);
+    if (payloadMonth && payloadMonth < currentYm) return true;
+
+    if (payload.dueDate && payload.dueDate < todayStr) {
+        if (item.type === 'loan_due_0d' || item.type === 'loan_due_1d' || item.type === 'card_repay_50d') {
+            return true;
+        }
+    }
+
+    if (item.type === 'month_close') {
+        const idMonth = String(item.id || '').match(/month-close-reminder\|(\d{4}-\d{2})/);
+        if (idMonth && idMonth[1] < currentYm) return true;
+    }
+
+    return false;
+}
+
 function isNotificationVisible(item, todayStr = localIsoDate(new Date())) {
     if (!item || item.dismissedPermanently) return false;
+    if (item.dismissed) return false;
     if (isNotificationSnoozed(item, todayStr)) return false;
-    if (item.dismissed && item.dismissedYm === todayStr.slice(0, 7)) return false;
+    if (isNotificationPastPeriod(item, todayStr)) return false;
     if (typeof isNotificationResolved === 'function' && isNotificationResolved(item)) return false;
     return true;
 }
@@ -102,24 +135,16 @@ function upsertNotification(proposal) {
     const inbox = getNotificationInbox();
     const idx = inbox.findIndex((n) => n.id === proposal.id);
     const now = new Date().toISOString();
-    const currentYm = getCurrentMonthKey();
 
     if (idx >= 0) {
         const existing = inbox[idx];
-        let dismissed = existing.dismissed;
-        let dismissedYm = existing.dismissedYm;
-        let dismissedPermanently = existing.dismissedPermanently;
-        if (dismissed && dismissedYm && dismissedYm < currentYm) {
-            dismissed = false;
-            dismissedYm = null;
-        }
         inbox[idx] = {
             ...existing,
             ...proposal,
             read: existing.read,
-            dismissed,
-            dismissedYm,
-            dismissedPermanently,
+            dismissed: existing.dismissed,
+            dismissedYm: existing.dismissedYm,
+            dismissedPermanently: existing.dismissedPermanently,
             snoozedUntil: existing.snoozedUntil,
             updatedAt: now
         };

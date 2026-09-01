@@ -733,6 +733,33 @@
                     <button type="button" class="btn-outline" onclick="closeSellAssetForm()">Anuluj</button>
                 </div>
             </div>
+            <div id="asset-withdraw-section" class="asset-sell-section hidden">
+                <p class="section-label">Wypłać z aktywa</p>
+                <p id="asset-withdraw-hint" class="reports-hint"></p>
+                <div class="loan-form-row">
+                    <div class="form-group">
+                        <label class="section-label" for="asset-withdraw-asset-amount">Kwota z aktywa (całość)</label>
+                        <input type="number" id="asset-withdraw-asset-amount" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+                    </div>
+                    <div class="form-group asset-withdraw-actions-col">
+                        <span class="section-label" aria-hidden="true">&nbsp;</span>
+                        <button type="button" class="btn-outline asset-withdraw-full-btn" onclick="fillAssetWithdrawFullAmounts()">Całość</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="section-label" for="asset-withdraw-cash-amount">Kwota na saldo gotówki</label>
+                    <input type="number" id="asset-withdraw-cash-amount" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+                    <p id="asset-withdraw-cash-hint" class="reports-hint"></p>
+                </div>
+                <div class="form-group">
+                    <label class="section-label" for="asset-withdraw-note">Notatka (opcjonalnie)</label>
+                    <input type="text" id="asset-withdraw-note" maxlength="120" placeholder="np. wypłata PPK, potrącenia ZUS">
+                </div>
+                <div class="loan-details-edit-actions">
+                    <button type="button" class="btn-submit" onclick="confirmAssetWithdrawal()">Zatwierdź wypłatę</button>
+                    <button type="button" class="btn-outline" onclick="closeAssetWithdrawForm()">Anuluj</button>
+                </div>
+            </div>
             <div id="asset-details-edit" class="loan-details-edit obligation-edit-form hidden">
                 <div class="form-group">
                     <label class="section-label" for="asset-type-input">Typ</label>
@@ -1502,6 +1529,12 @@
                         </nav>
                         <div id="reports-period-fields" class="analysis-period-fields">
                             <div id="reports-period-range-wrap" class="analysis-period-field hidden">
+                                <span class="analysis-period-sub-label">Szybkie zakresy</span>
+                                <nav class="loans-hero-summary-chips analysis-range-preset-chips" aria-label="Presety zakresu">
+                                    <button id="btn-reports-range-preset-h1" type="button" class="toggle-btn loans-chip" onclick="applyReportsRangePreset('h1')">H1</button>
+                                    <button id="btn-reports-range-preset-h2" type="button" class="toggle-btn loans-chip" onclick="applyReportsRangePreset('h2')">H2</button>
+                                    <button id="btn-reports-range-preset-last6" type="button" class="toggle-btn loans-chip" onclick="applyReportsRangePreset('last6')">Ostatnie 6 mies.</button>
+                                </nav>
                                 <span class="analysis-period-sub-label">Zakres dat</span>
                                 <div class="reports-hero-date-row analysis-period-date-row">
                                     <input type="date" id="reports-range-start" class="analysis-period-date-input" aria-label="Początek zakresu">
@@ -2356,6 +2389,7 @@
     <script src="js/dashboard.js"></script>
     <script src="js/reports-core.js"></script>
     <script src="js/ppk.js"></script>
+    <script src="js/asset-withdrawal.js"></script>
     <script src="js/assets.js"></script>
     <script src="js/assets-migrations.js"></script>
     <script src="js/market-prices.js"></script>

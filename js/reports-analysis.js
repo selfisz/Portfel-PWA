@@ -281,6 +281,41 @@ function selectReportsSpecialMode(mode) {
     if (mode === 'compare') updateComparePresetUI();
 }
 
+function getReportsRangePresetBounds(preset, referenceDate = new Date()) {
+    const year = typeof getAnalysisContextYear === 'function'
+        ? getAnalysisContextYear()
+        : referenceDate.getFullYear();
+
+    if (preset === 'h1') {
+        return { start: `${year}-01-01`, end: `${year}-06-30` };
+    }
+    if (preset === 'h2') {
+        return { start: `${year}-07-01`, end: `${year}-12-31` };
+    }
+    if (preset === 'last6') {
+        const end = localIsoDate(referenceDate);
+        const start = localIsoDate(new Date(referenceDate.getFullYear(), referenceDate.getMonth() - 5, 1));
+        return { start, end };
+    }
+    return null;
+}
+
+function applyReportsRangePreset(preset) {
+    const bounds = getReportsRangePresetBounds(preset);
+    if (!bounds) return;
+
+    const set = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    };
+    set('reports-range-start', bounds.start);
+    set('reports-range-end', bounds.end);
+    expandReportsPeriodSpecial();
+    setReportsPeriodMode('range');
+    renderReports();
+    collapseReportsPeriodSpecial();
+}
+
 function selectComparePreset(preset) {
     if (!COMPARE_PRESETS.includes(preset)) return;
     reportsComparePreset = preset;
@@ -550,7 +585,10 @@ function setAnalysisSection(section) {
 
 function resizeCompareSectionCharts(section) {
     requestAnimationFrame(() => {
-        if (section === 'expenses') reportsCompareChartInstance?.resize();
+        if (section === 'expenses') {
+            reportsCompareChartInstance?.resize();
+            reportsCompareIncomeChartInstance?.resize();
+        }
         if (section === 'assets') reportsCompareWealthChartInstance?.resize();
     });
 }
@@ -790,17 +828,25 @@ function getPeriodInclusiveDays(start, end) {
     return Math.max(1, Math.round((e - s) / 86400000) + 1);
 }
 
-function getCategoryExpenseMap(tx) {
+function getCategoryAmountMap(tx, type = 'expense') {
     const map = {};
-    tx.filter((t) => t.type === 'expense').forEach((t) => {
+    tx.filter((t) => t.type === type).forEach((t) => {
         map[t.mainCategory] = (map[t.mainCategory] || 0) + t.amount;
     });
     return map;
 }
 
-function buildCompareCategoryMovers(txA, txB, limit = 5) {
-    const mapA = getCategoryExpenseMap(txA);
-    const mapB = getCategoryExpenseMap(txB);
+function getCategoryExpenseMap(tx) {
+    return getCategoryAmountMap(tx, 'expense');
+}
+
+function getCategoryIncomeMap(tx) {
+    return getCategoryAmountMap(tx, 'income');
+}
+
+function buildCompareCategoryMovers(txA, txB, limit = 5, type = 'expense') {
+    const mapA = getCategoryAmountMap(txA, type);
+    const mapB = getCategoryAmountMap(txB, type);
     const names = new Set([...Object.keys(mapA), ...Object.keys(mapB)]);
     return [...names]
         .map((name) => {
@@ -862,9 +908,16 @@ function buildComparePeriodGrid(labelA, labelB, firstHtml, secondHtml, extraClas
     return buildComparePeriodStack(labelA, labelB, firstHtml, secondHtml, extraClass);
 }
 
-function buildCompareCategoryMoversHtml(movers) {
+function buildCompareCategoryMoversHtml(movers, options = {}) {
+    const {
+        title = 'Największe zmiany kategorii',
+        emptyLabel = 'Brak danych do porównania kategorii.'
+    } = options;
     if (!movers.length) {
-        return '<p class="reports-hint">Brak wydatków do porównania kategorii.</p>';
+        return `<div class="compare-movers-section">
+            <h3 class="compare-subtitle">${escapeHtml(title)}</h3>
+            <p class="reports-hint">${escapeHtml(emptyLabel)}</p>
+        </div>`;
     }
     const rows = movers.map((row) => {
         const dir = row.diff > 0 ? 'up' : row.diff < 0 ? 'down' : 'flat';
@@ -877,7 +930,7 @@ function buildCompareCategoryMoversHtml(movers) {
         </div>`;
     }).join('');
     return `<div class="compare-movers-section">
-        <h3 class="compare-subtitle">Największe zmiany kategorii</h3>
+        <h3 class="compare-subtitle">${escapeHtml(title)}</h3>
         ${rows}
     </div>`;
 }
@@ -886,6 +939,10 @@ function destroyReportsCompareCharts() {
     if (reportsCompareChartInstance) {
         reportsCompareChartInstance.destroy();
         reportsCompareChartInstance = null;
+    }
+    if (reportsCompareIncomeChartInstance) {
+        reportsCompareIncomeChartInstance.destroy();
+        reportsCompareIncomeChartInstance = null;
     }
     if (reportsCompareWealthChartInstance) {
         reportsCompareWealthChartInstance.destroy();
@@ -1035,6 +1092,57 @@ function renderReportsCompareChart(ctx) {
     });
 }
 
+function renderReportsCompareIncomeChart(ctx) {
+    const canvas = document.getElementById('reportsCompareIncomeChart');
+    if (!canvas || typeof Chart === 'undefined' || typeof getReportsChartTheme !== 'function') return;
+
+    const mapA = getCategoryIncomeMap(ctx.periodA.tx);
+    const mapB = getCategoryIncomeMap(ctx.periodB.tx);
+    const categories = [...new Set([...Object.keys(mapA), ...Object.keys(mapB)])]
+        .map((name) => ({ name, max: Math.max(mapA[name] || 0, mapB[name] || 0) }))
+        .sort((left, right) => right.max - left.max)
+        .slice(0, 8)
+        .map((entry) => entry.name);
+
+    if (reportsCompareIncomeChartInstance) {
+        reportsCompareIncomeChartInstance.destroy();
+        reportsCompareIncomeChartInstance = null;
+    }
+
+    if (!categories.length) return;
+
+    const theme = getReportsChartTheme();
+    const options = getReportsChartOptions(theme);
+    options.aspectRatio = 1.55;
+    options.plugins.legend.position = 'bottom';
+
+    const { labelA, labelB } = getComparePeriodLabels(ctx);
+
+    reportsCompareIncomeChartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: categories,
+            datasets: [
+                {
+                    label: labelA,
+                    data: categories.map((name) => mapA[name] || 0),
+                    backgroundColor: theme.prevYearColor,
+                    borderRadius: 4,
+                    maxBarThickness: 28
+                },
+                {
+                    label: labelB,
+                    data: categories.map((name) => mapB[name] || 0),
+                    backgroundColor: theme.incomeColor,
+                    borderRadius: 4,
+                    maxBarThickness: 28
+                }
+            ]
+        },
+        options
+    });
+}
+
 function setCompareSlotHtml(section, html) {
     const slot = document.getElementById(`analysis-compare-${section}`);
     if (slot) slot.innerHTML = html;
@@ -1110,14 +1218,29 @@ function buildCompareOverviewHtml(ctx, summaryA, summaryB) {
         </div>`;
 }
 
-function buildCompareExpensesHtml(ctx, movers) {
+function buildCompareExpensesHtml(ctx, expenseMovers, incomeMovers) {
     return `<div class="card dashboard-panel">
-            ${buildCompareCategoryMoversHtml(movers)}
+            ${buildCompareCategoryMoversHtml(expenseMovers, {
+                title: 'Największe zmiany wydatków',
+                emptyLabel: 'Brak wydatków do porównania kategorii.'
+            })}
         </div>
         <div class="card chart-card dashboard-panel">
             <h2 class="dashboard-section-title">Wydatki wg kategorii</h2>
             <div class="compare-chart-wrap">
                 <canvas id="reportsCompareChart" aria-label="Wykres porównania wydatków wg kategorii"></canvas>
+            </div>
+        </div>
+        <div class="card dashboard-panel">
+            ${buildCompareCategoryMoversHtml(incomeMovers, {
+                title: 'Największe zmiany wpływów',
+                emptyLabel: 'Brak wpływów do porównania kategorii.'
+            })}
+        </div>
+        <div class="card chart-card dashboard-panel">
+            <h2 class="dashboard-section-title">Wpływy wg kategorii</h2>
+            <div class="compare-chart-wrap">
+                <canvas id="reportsCompareIncomeChart" aria-label="Wykres porównania wpływów wg kategorii"></canvas>
             </div>
         </div>
         <div class="card dashboard-panel">
@@ -1251,16 +1374,18 @@ function renderReportsCompare(ctx) {
 
     const summaryA = summarizePeriod(ctx.periodA.tx);
     const summaryB = summarizePeriod(ctx.periodB.tx);
-    const movers = buildCompareCategoryMovers(ctx.periodA.tx, ctx.periodB.tx);
+    const expenseMovers = buildCompareCategoryMovers(ctx.periodA.tx, ctx.periodB.tx, 5, 'expense');
+    const incomeMovers = buildCompareCategoryMovers(ctx.periodA.tx, ctx.periodB.tx, 5, 'income');
 
     setCompareSlotHtml('overview', buildCompareOverviewHtml(ctx, summaryA, summaryB));
-    setCompareSlotHtml('expenses', buildCompareExpensesHtml(ctx, movers));
+    setCompareSlotHtml('expenses', buildCompareExpensesHtml(ctx, expenseMovers, incomeMovers));
     setCompareSlotHtml('assets', buildCompareAssetsHtml(ctx));
     setCompareSlotHtml('debts', buildCompareDebtsTabHtml(ctx));
     setCompareSlotHtml('advanced', buildCompareAdvancedHtml(ctx));
 
     renderReportsCompareWealthChart(ctx);
     renderReportsCompareChart(ctx);
+    renderReportsCompareIncomeChart(ctx);
     resizeCompareSectionCharts(analysisSection);
 }
 
@@ -2260,6 +2385,7 @@ function getReportsChartInstancesForThemeRefresh() {
         reportsAllocationTrendChartInstance,
         reportsDiversificationChartInstance,
         reportsCompareChartInstance,
+        reportsCompareIncomeChartInstance,
         reportsCompareWealthChartInstance
     ].filter(Boolean);
 }
@@ -2291,7 +2417,9 @@ const ANALYSIS_SECTION_TITLES = {
 
 function getAnalysisSectionCharts(section, isCompare) {
     if (isCompare) {
-        if (section === 'expenses') return [reportsCompareChartInstance].filter(Boolean);
+        if (section === 'expenses') {
+            return [reportsCompareChartInstance, reportsCompareIncomeChartInstance].filter(Boolean);
+        }
         if (section === 'assets') return [reportsCompareWealthChartInstance].filter(Boolean);
         return [];
     }

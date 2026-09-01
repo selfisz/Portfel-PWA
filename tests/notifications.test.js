@@ -92,6 +92,39 @@ describe('collectCardRepaymentEvents', () => {
     });
 });
 
+describe('isNotificationPastPeriod', () => {
+    it('ukrywa alert budżetowy z minionego miesiąca', () => {
+        const item = {
+            id: 'budget-warn|2026-07|Jedzenie',
+            type: 'budget_warn',
+            payload: { monthKey: '2026-07' }
+        };
+        expect(isNotificationPastPeriod(item, '2026-09-01')).toBe(true);
+    });
+});
+
+describe('dismiss persistence', () => {
+    it('zostawia dismiss po odświeżeniu powiadomienia w nowym miesiącu', () => {
+        upsertNotification({
+            id: 'persist-dismiss',
+            type: 'budget_warn',
+            title: 'T',
+            body: 'B',
+            payload: { monthKey: '2026-07' }
+        });
+        dismissNotification('persist-dismiss');
+        expect(isNotificationVisible(getNotificationById('persist-dismiss'), '2026-09-01')).toBe(false);
+        upsertNotification({
+            id: 'persist-dismiss',
+            type: 'budget_warn',
+            title: 'T2',
+            body: 'B2',
+            payload: { monthKey: '2026-09' }
+        });
+        expect(isNotificationVisible(getNotificationById('persist-dismiss'), '2026-09-01')).toBe(false);
+    });
+});
+
 describe('dismiss i snooze', () => {
     it('snooze ukrywa do jutra', () => {
         upsertNotification({
@@ -107,7 +140,7 @@ describe('dismiss i snooze', () => {
         expect(isNotificationVisible(item)).toBe(false);
     });
 
-    it('dismiss ukrywa w bieżącym miesiącu', () => {
+    it('dismiss ukrywa na stałe', () => {
         upsertNotification({
             id: 'test-2',
             type: 'loan_due_1d',
@@ -119,6 +152,14 @@ describe('dismiss i snooze', () => {
         const item = getNotificationById('test-2');
         expect(item.dismissed).toBe(true);
         expect(isNotificationVisible(item)).toBe(false);
+        upsertNotification({
+            id: 'test-2',
+            type: 'loan_due_1d',
+            title: 'Test updated',
+            body: 'Body',
+            payload: { loanId: 'l1' }
+        });
+        expect(isNotificationVisible(getNotificationById('test-2'))).toBe(false);
     });
 });
 

@@ -18,6 +18,7 @@ let reportsAllocationTrendChartInstance = null;
 let reportsDiversificationChartInstance = null;
 let reportsStructureChartInstance = null;
 let reportsCompareChartInstance = null;
+let reportsCompareIncomeChartInstance = null;
 let reportsCompareWealthChartInstance = null;
 
 function destroyChart(chart) {

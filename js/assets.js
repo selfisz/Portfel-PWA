@@ -1118,7 +1118,7 @@ function renderAssetDetails() {
         typeof isPpkAsset === 'function' && isPpkAsset(asset)
             ? `${buildPpkBreakdownSectionHtml(asset)}${buildPpkEarlyWithdrawalSectionHtml(asset)}`
             : ''
-    }`;
+    }${typeof buildAssetWithdrawalHistoryHtml === 'function' ? buildAssetWithdrawalHistoryHtml(asset) : ''}`;
 
     if (actionsEl) {
         const archiveLabel = asset.archived ? 'Przywróć' : 'Archiwizuj';
@@ -1126,16 +1126,21 @@ function renderAssetDetails() {
         const sellBtn = (!isDraftAssetActive() && !asset.archived && asset.type === 'investment')
             ? `<button type="button" class="btn-outline loan-details-btn asset-sell-btn" onclick="openSellAssetForm()">Sprzedaj</button>`
             : '';
+        const withdrawBtn = (!isDraftAssetActive() && !asset.archived && getAssetWithdrawablePln(asset) > 0)
+            ? `<button type="button" class="btn-outline loan-details-btn asset-withdraw-btn" onclick="openAssetWithdrawForm()">Wypłać</button>`
+            : '';
         actionsEl.innerHTML = isDraftAssetActive()
             ? ''
             : `<div class="asset-details-actions">
                 ${sellBtn}
+                ${withdrawBtn}
                 <button type="button" class="btn-outline loan-details-btn" onclick="${archiveFn}">${archiveLabel}</button>
                 <button type="button" class="btn-outline loan-details-btn asset-delete-btn" onclick="deleteAsset()">Usuń</button>
             </div>`;
     }
 
     closeSellAssetForm();
+    if (typeof closeAssetWithdrawForm === 'function') closeAssetWithdrawForm();
 
     if (asset.type === 'cash') {
         renderAssetCashTransactions();

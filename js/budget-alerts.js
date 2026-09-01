@@ -34,6 +34,7 @@ function isNotificationResolved(item) {
     const payload = item.payload || {};
     if (item.type === 'budget_warn' || item.type === 'budget_over') {
         const monthKey = payload.monthKey || getCurrentMonthKey();
+        if (monthKey !== getCurrentMonthKey()) return true;
         const limit = getBudgetLimitForPayload(payload);
         if (!limit || limit <= 0) return true;
         const spent = getBudgetSpentForPayload(payload);
@@ -56,6 +57,8 @@ function isNotificationResolved(item) {
         return dailyAvg * daysInMonth <= limit;
     }
     if (item.type === 'recurring_missing') {
+        const payloadMonth = payload.monthKey;
+        if (payloadMonth && payloadMonth < getCurrentMonthKey()) return true;
         const monthKey = getCurrentMonthKey();
         if (payload.recurringId) {
             return (appState.transactions || []).some(
