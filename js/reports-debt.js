@@ -607,7 +607,13 @@ function getLoanRemainingMonths(loan) {
     }
     const capital = loan.currentCapitalLeft || 0;
     const installment = loan.nextInstallmentAmount || 0;
-    if (capital > 0 && installment > 0) return Math.max(1, Math.ceil(capital / installment));
+    if (capital > 0 && installment > 0) {
+        const est = typeof estimatePayoffMonths === 'function'
+            ? estimatePayoffMonths(capital, loan.interestRate, installment)
+            : null;
+        if (est?.months) return Math.max(1, est.months);
+        return Math.max(1, Math.ceil(capital / installment));
+    }
     return 0;
 }
 
@@ -761,11 +767,27 @@ function calculateOverpaymentScenarios(loan, { extraMonthly = 0, lumpSum = 0 } =
     };
 }
 
+// Odsetki na najbliższy rok liczone z malejącego kapitału — pełne
+// capital × stopa zawyża koszt, bo ignoruje spłacane raty.
 function estimateAnnualInterest(loan) {
     const capital = loan.currentCapitalLeft || 0;
     const rate = loan.interestRate || 0;
     if (!capital || !rate) return 0;
-    return capital * (rate / 100);
+
+    const payment = loan.nextInstallmentAmount || 0;
+    const monthlyRate = rate / 100 / 12;
+    if (!payment) return capital * (rate / 100);
+
+    let balance = capital;
+    let interest = 0;
+    for (let month = 0; month < 12 && balance > 0.01; month += 1) {
+        const monthInterest = balance * monthlyRate;
+        const principal = payment - monthInterest;
+        if (principal <= 0) return capital * (rate / 100);
+        interest += monthInterest;
+        balance = Math.max(0, balance - principal);
+    }
+    return interest;
 }
 
 function simulateOverpaymentMonths(loan, extraMonthly, mode = 'shorten') {
@@ -924,11 +946,10 @@ function getNextLoanPaymentSummary() {
     let next = null;
     getActiveLoans().forEach((loan) => {
         if (!loan.nextInstallmentDue || !loan.nextInstallmentAmount) return;
-        if (!next || loan.nextInstallmentDue < next.date) {
-            next = {
-                date: loan.nextInstallmentDue,
-                amount: loan.nextInstallmentAmount
-            };
+        const due = typeof getLoanNextDueDate === 'function' ? getLoanNextDueDate(loan) : loan.nextInstallmentDue;
+        if (!due) return;
+        if (!next || due < next.date) {
+            next = { date: due, amount: loan.nextInstallmentAmount };
         }
     });
     return next;
@@ -1213,7 +1234,9 @@ function collectDebtInstallmentRows(bounds = null) {
         const paid = sumLoanInstallmentPaymentsForLoanInRange(loan, startDate, endDate);
         const remaining = Math.max(0, Math.round((scheduledTotal - paid) * 100) / 100);
         if (remaining <= 0) return;
-        const due = loanDueDates.get(loanId) || loan.nextInstallmentDue || '';
+        const due = loanDueDates.get(loanId)
+            || (typeof getLoanNextDueDate === 'function' ? getLoanNextDueDate(loan) : loan.nextInstallmentDue)
+            || '';
         rows.push({
             sortKey: due || '9999-99-99',
             name: getLoanDisplayName(loan),

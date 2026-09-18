@@ -52,6 +52,10 @@ beforeAll(() => {
     runInContext(`
         function _getAppState()  { return appState; }
         function _setAppState(s) { appState = s; }
+        // odpowiednik z js/reports-analysis.js — ten plik potrzebuje DOM-u
+        function getTransactionsInRange(start, end) {
+            return (appState.transactions || []).filter((t) => t.date >= start && t.date <= end);
+        }
     `);
 });
 
@@ -195,6 +199,41 @@ describe('estimateAnnualInterest', () => {
         const loan = normalizeLoan({ id: 'l1', subCategory: 'A', totalAmount: 100000, currentCapitalLeft: 50000, interestRate: 7.5 });
         expect(estimateAnnualInterest(loan)).toBeCloseTo(3750, 1);
     });
+
+    it('przy znanej racie liczy odsetki z malejącego kapitału', () => {
+        const loan = normalizeLoan({ id: 'l1', subCategory: 'A', totalAmount: 100000, currentCapitalLeft: 100000, interestRate: 8, nextInstallmentAmount: 3000 });
+        const interest = estimateAnnualInterest(loan);
+        expect(interest).toBeLessThan(8000);
+        expect(interest).toBeGreaterThan(6000);
+    });
+
+    it('gdy rata nie pokrywa odsetek wraca do kapitał × stopa', () => {
+        const loan = normalizeLoan({ id: 'l1', subCategory: 'A', totalAmount: 100000, currentCapitalLeft: 100000, interestRate: 12, nextInstallmentAmount: 500 });
+        expect(estimateAnnualInterest(loan)).toBeCloseTo(12000, 1);
+    });
+});
+
+// ===========================================================================
+// estimatePayoffMonths
+// ===========================================================================
+describe('estimatePayoffMonths', () => {
+    it('bez oprocentowania dzieli kapitał przez ratę', () => {
+        expect(estimatePayoffMonths(12000, 0, 1000)).toEqual({ months: 12, coversInterest: true });
+    });
+
+    it('z oprocentowaniem wydłuża czas spłaty', () => {
+        const est = estimatePayoffMonths(100000, 8, 1500);
+        expect(est.coversInterest).toBe(true);
+        expect(est.months).toBeGreaterThan(Math.ceil(100000 / 1500));
+    });
+
+    it('sygnalizuje ratę, która nie pokrywa odsetek', () => {
+        expect(estimatePayoffMonths(100000, 12, 800)).toEqual({ months: null, coversInterest: false });
+    });
+
+    it('spłacony kapitał to 0 miesięcy', () => {
+        expect(estimatePayoffMonths(0, 8, 1000).months).toBe(0);
+    });
 });
 
 // ===========================================================================
@@ -283,6 +322,22 @@ describe('estimateLoanPayoff', () => {
         const loan = normalizeLoan({ id: 'l1', subCategory: 'A', totalAmount: 100000, currentCapitalLeft: 50000, nextInstallmentAmount: 0 });
         expect(estimateLoanPayoff(loan).label).toBe('—');
     });
+
+    it('uwzględnia odsetki, więc prognoza jest dłuższa niż kapitał/rata', () => {
+        const loan = normalizeLoan({ id: 'l1', subCategory: 'A', totalAmount: 200000, currentCapitalLeft: 100000, interestRate: 8, nextInstallmentAmount: 1500 });
+        const result = estimateLoanPayoff(loan);
+        const naiveMonths = Math.ceil(100000 / 1500);
+        const months = parseInt(result.label.match(/~(\d+)/)[1], 10);
+        expect(months).toBeGreaterThan(naiveMonths);
+        expect(result.detail).toContain('8%');
+    });
+
+    it('mówi wprost, gdy rata nie pokrywa odsetek', () => {
+        const loan = normalizeLoan({ id: 'l1', subCategory: 'A', totalAmount: 200000, currentCapitalLeft: 100000, interestRate: 12, nextInstallmentAmount: 800 });
+        const result = estimateLoanPayoff(loan);
+        expect(result.label).toBe('—');
+        expect(result.detail).toBe('rata nie pokrywa odsetek');
+    });
 });
 
 // ===========================================================================
@@ -298,6 +353,59 @@ describe('estimateCardPayoff', () => {
         const card = normalizeCreditCard({ id: 'c1', name: 'Test', limit: 5000, currentBalance: 2000 });
         _setAppState({ ..._getAppState(), creditCardMovements: [] });
         expect(estimateCardPayoff(card).label).toBe('—');
+    });
+
+    const monthsBackIso = (back, day = 15) => {
+        const d = new Date();
+        d.setDate(1);
+        d.setMonth(d.getMonth() - back);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    };
+
+    it('bez nowych wydatków liczy tempo ze samych spłat', () => {
+        const card = normalizeCreditCard({ id: 'c1', name: 'Test', limit: 5000, currentBalance: 2000 });
+        _setAppState({ ..._getAppState(),
+            creditCards: [card],
+            creditCardMovements: [0, 1, 2].map((back, i) => ({
+                id: `m${i}`, cardId: 'c1', type: 'repayment', amount: 1000, date: monthsBackIso(back)
+            }))
+        });
+        const result = estimateCardPayoff(card);
+        expect(result.label).toBe('~2 mies.');
+    });
+
+    it('odejmuje nowe wydatki na karcie od tempa spłat', () => {
+        const card = normalizeCreditCard({ id: 'c1', name: 'Test', limit: 5000, currentBalance: 2000 });
+        _setAppState({ ..._getAppState(),
+            creditCards: [card],
+            creditCardMovements: [0, 1, 2].map((back, i) => ({
+                id: `m${i}`, cardId: 'c1', type: 'repayment', amount: 1000, date: monthsBackIso(back)
+            })),
+            transactions: [0, 1, 2].map((back, i) => ({
+                id: `t${i}`, type: 'expense', amount: 300, creditCardId: 'c1',
+                mainCategory: 'Jedzenie', subCategory: 'Sklepy', date: monthsBackIso(back, 16)
+            }))
+        });
+        const result = estimateCardPayoff(card);
+        expect(result.label).toBe('~3 mies.');
+        expect(result.detail).toContain('minus wydatki');
+    });
+
+    it('mówi wprost, gdy nowe wydatki zjadają spłaty', () => {
+        const card = normalizeCreditCard({ id: 'c1', name: 'Test', limit: 5000, currentBalance: 2000 });
+        _setAppState({ ..._getAppState(),
+            creditCards: [card],
+            creditCardMovements: [0, 1, 2].map((back, i) => ({
+                id: `m${i}`, cardId: 'c1', type: 'repayment', amount: 1000, date: monthsBackIso(back)
+            })),
+            transactions: [0, 1, 2].map((back, i) => ({
+                id: `t${i}`, type: 'expense', amount: 1100, creditCardId: 'c1',
+                mainCategory: 'Jedzenie', subCategory: 'Sklepy', date: monthsBackIso(back, 16)
+            }))
+        });
+        const result = estimateCardPayoff(card);
+        expect(result.label).toBe('—');
+        expect(result.detail).toContain('zjadają spłaty');
     });
 });
 

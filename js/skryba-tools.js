@@ -143,6 +143,9 @@ function skrybaToolListDebts() {
     const loans = typeof getActiveLoans === 'function' ? getActiveLoans() : [];
     const cards = typeof getActiveCreditCards === 'function' ? getActiveCreditCards() : [];
     const fmt = typeof formatPlnAmount === 'function' ? formatPlnAmount : (n) => `${n} zł`;
+    const nextDueDate = (loan) => (typeof getLoanNextDueDate === 'function'
+        ? getLoanNextDueDate(loan)
+        : loan.nextInstallmentDue) || null;
 
     return {
         loans: loans.map((loan) => ({
@@ -150,10 +153,10 @@ function skrybaToolListDebts() {
             name: typeof getLoanDisplayName === 'function' ? getLoanDisplayName(loan) : loan.name,
             capitalLeftPln: loan.currentCapitalLeft || 0,
             interestRatePct: loan.interestRate || 0,
-            nextInstallmentDue: loan.nextInstallmentDue || null,
+            nextInstallmentDue: nextDueDate(loan),
             nextInstallmentAmountPln: loan.nextInstallmentAmount || 0,
             nextInstallmentLabel: loan.nextInstallmentAmount
-                ? `${fmt(loan.nextInstallmentAmount)}${loan.nextInstallmentDue ? ` (${loan.nextInstallmentDue})` : ''}`
+                ? `${fmt(loan.nextInstallmentAmount)}${nextDueDate(loan) ? ` (${nextDueDate(loan)})` : ''}`
                 : null
         })),
         creditCards: cards.map((card) => ({

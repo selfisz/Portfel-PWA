@@ -297,8 +297,9 @@ function renderLoanPaymentsFilter(activeLoans) {
 function renderLoanCardHtml(loan) {
     const paidPct = getLoanPaidPercent(loan);
     const paidAmount = getLoanPaidAmount(loan);
+    const nextDue = getLoanNextDueDate(loan);
     const nextLine = loan.nextInstallmentAmount > 0
-        ? `<p class="loan-next-installment">Następna rata: ${formatPlnAmount(loan.nextInstallmentAmount)}${loan.nextInstallmentDue ? ` · do ${formatTxDate(loan.nextInstallmentDue)}` : ''}</p>`
+        ? `<p class="loan-next-installment">Następna rata: ${formatPlnAmount(loan.nextInstallmentAmount)}${nextDue ? ` · do ${formatTxDate(nextDue)}` : ''}</p>`
         : '';
     const rateLine = loan.interestRate > 0
         ? `${loan.interestRate.toLocaleString('pl-PL', { maximumFractionDigits: 2 })}%`
@@ -393,7 +394,10 @@ function registerLoanPayment(loanId, amount, date, note, options = {}) {
         details
     };
     if (advanceDueDate && loan.nextInstallmentDue) {
-        updates.nextInstallmentDue = advanceLoanDueDate(loan.nextInstallmentDue);
+        const anchorDay = getLoanDueAnchorDay(loan);
+        const currentDue = getLoanNextDueDate(loan);
+        updates.nextInstallmentDue = advanceLoanDueDate(currentDue, anchorDay);
+        if (anchorDay) updates.installmentDueDay = anchorDay;
     }
 
     updateLoanInState(updates);
@@ -546,7 +550,8 @@ function saveLoanDetails() {
         currentCapitalLeft,
         interestRate,
         nextInstallmentAmount,
-        nextInstallmentDue
+        nextInstallmentDue,
+        installmentDueDay: clampDueDayNumber(nextInstallmentDue.split('-')[2]) || loan.installmentDueDay || 0
     });
     const wasNew = isDraftLoanActive();
     activeLoanId = updated.id;
@@ -768,7 +773,7 @@ function renderSimpleLoanDetailsHtml(loan) {
         loanDetailRow('Podkategoria', loan.subCategory),
         loanDetailRow('Pozostało rat', d.remainingInstallments ? String(d.remainingInstallments) : ''),
         loanDetailRow('Następna rata', loan.nextInstallmentAmount ? formatPlnAmount(loan.nextInstallmentAmount) : ''),
-        loanDetailRow('Termin raty', loan.nextInstallmentDue ? formatTxDate(loan.nextInstallmentDue) : '')
+        loanDetailRow('Termin raty', getLoanNextDueDate(loan) ? formatTxDate(getLoanNextDueDate(loan)) : '')
     ].join('');
 
     let html = loanDetailSection('Parametry kredytu', rows);
@@ -805,7 +810,7 @@ function renderLoanDetailsHtml(loan) {
         loanDetailRow('Koniec kredytu', d.endDate ? formatTxDate(d.endDate) : ''),
         loanDetailRow('Pozostało rat', d.remainingInstallments ? String(d.remainingInstallments) : ''),
         loanDetailRow('Następna rata', loan.nextInstallmentAmount ? formatPlnAmount(loan.nextInstallmentAmount) : ''),
-        loanDetailRow('Termin raty', loan.nextInstallmentDue ? formatTxDate(loan.nextInstallmentDue) : '')
+        loanDetailRow('Termin raty', getLoanNextDueDate(loan) ? formatTxDate(getLoanNextDueDate(loan)) : '')
     ].join('');
 
     const rateRows = [

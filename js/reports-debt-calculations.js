@@ -230,6 +230,8 @@ function buildDebtBalanceTrendData(ctx) {
 }
 
 function addMonthsToToday(months) {
+    const today = localIsoDate(new Date());
+    if (typeof addMonthsToIsoDate === 'function') return addMonthsToIsoDate(today, months);
     const d = new Date();
     d.setMonth(d.getMonth() + months);
     return localIsoDate(d);
@@ -280,6 +282,52 @@ function getRecentCardRepaymentAverage(cardId, months = 3) {
     return Math.round(medianOf(monthTotals) * 100) / 100;
 }
 
+// Kapitał podzielony przez ratę zaniża czas spłaty, bo część raty zjadają
+// odsetki — liczymy amortyzacją, a gdy rata ich nie pokrywa, mówimy to wprost.
+function estimatePayoffMonths(balance, annualRate, payment) {
+    const capital = Math.max(0, Number(balance) || 0);
+    const installment = Math.max(0, Number(payment) || 0);
+    if (!capital) return { months: 0, coversInterest: true };
+    if (!installment) return { months: null, coversInterest: true };
+
+    const monthlyRate = Math.max(0, Number(annualRate) || 0) / 100 / 12;
+    if (!monthlyRate) return { months: Math.ceil(capital / installment), coversInterest: true };
+
+    const monthlyInterest = capital * monthlyRate;
+    if (installment <= monthlyInterest) return { months: null, coversInterest: false };
+
+    const months = Math.log(installment / (installment - monthlyInterest)) / Math.log(1 + monthlyRate);
+    return { months: Math.max(1, Math.ceil(months)), coversInterest: true };
+}
+
+function getRecentCardChargeAverage(cardId, months = 3) {
+    const end = localIsoDate(new Date());
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - months);
+    const start = localIsoDate(startDate);
+
+    const byMonth = {};
+    getCreditCardMovementsInRange(start, end)
+        .filter((m) => m.cardId === cardId && m.type === 'transfer_out')
+        .forEach((m) => {
+            const key = m.date.slice(0, 7);
+            byMonth[key] = (byMonth[key] || 0) + m.amount;
+        });
+    const cardExpenses = typeof getTransactionsInRange === 'function'
+        ? getTransactionsInRange(start, end)
+        : [];
+    cardExpenses
+        .filter((t) => t.type === 'expense' && t.creditCardId === cardId)
+        .forEach((t) => {
+            const key = t.date.slice(0, 7);
+            byMonth[key] = (byMonth[key] || 0) + t.amount;
+        });
+
+    const totals = Object.values(byMonth);
+    if (!totals.length) return 0;
+    return Math.round(medianOf(totals) * 100) / 100;
+}
+
 function estimateLoanPayoff(loan) {
     const capital = loan.currentCapitalLeft || 0;
     if (!capital) return { label: 'Spłacony', detail: '' };
@@ -298,10 +346,16 @@ function estimateLoanPayoff(loan) {
         };
     }
     if (loan.nextInstallmentAmount > 0) {
-        const months = Math.ceil(capital / loan.nextInstallmentAmount);
+        const est = estimatePayoffMonths(capital, loan.interestRate, loan.nextInstallmentAmount);
+        if (!est.coversInterest) {
+            return { label: '—', detail: 'rata nie pokrywa odsetek' };
+        }
+        const rateNote = loan.interestRate > 0
+            ? ` i ${loan.interestRate.toLocaleString('pl-PL', { maximumFractionDigits: 2 })}%`
+            : '';
         return {
-            label: `~${months} mies.`,
-            detail: `przy racie ${formatPlnAmount(loan.nextInstallmentAmount)}`
+            label: `~${est.months} mies.`,
+            detail: `przy racie ${formatPlnAmount(loan.nextInstallmentAmount)}${rateNote}`
         };
     }
     return { label: '—', detail: 'brak danych o racie' };
@@ -315,11 +369,24 @@ function estimateCardPayoff(card) {
     if (avg < 1) {
         return { label: '—', detail: 'brak ostatnich spłat do wyliczenia' };
     }
-    const months = Math.ceil(balance / avg);
-    return {
-        label: `~${months} mies.`,
-        detail: `przy śr. ${formatPlnAmount(avg)}/mies. (3 mies.)`
-    };
+
+    // Spłaty same nie wystarczą: jeśli karta w tym czasie znów się zadłuża,
+    // saldo realnie maleje tylko o różnicę między spłatami a nowymi wydatkami.
+    const charges = getRecentCardChargeAverage(card.id);
+    const net = avg - charges;
+    if (charges >= 1 && net < 1) {
+        return {
+            label: '—',
+            detail: `nowe wydatki (${formatPlnAmount(charges)}/mies.) zjadają spłaty`
+        };
+    }
+
+    const pace = charges >= 1 ? net : avg;
+    const months = Math.ceil(balance / pace);
+    const detail = charges >= 1
+        ? `przy spłatach ${formatPlnAmount(avg)} minus wydatki ${formatPlnAmount(charges)}/mies. (3 mies.)`
+        : `przy śr. ${formatPlnAmount(avg)}/mies. (3 mies.)`;
+    return { label: `~${months} mies.`, detail };
 }
 
 function classifyLoanPaymentAmount(loan, amount) {
