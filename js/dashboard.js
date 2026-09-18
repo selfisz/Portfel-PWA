@@ -1071,7 +1071,7 @@ function renderDashboard() {
         const metaText = searchQuery ? `${formatTxDate(t.date)} · ${t.mainCategory}` : t.mainCategory;
         const fp = typeof transactionFingerprint === 'function' ? transactionFingerprint(t) : '';
         const isSelected = dashboardSelectionActive && fp && dashboardSelectedFingerprints.has(fp);
-        const whatIfOff = !forecastMode && isTransactionWhatIfExcluded(t);
+        const whatIfOff = !forecastMode && isTransactionExcludedFromDashboardTotals(t);
         const whatIfBadge = whatIfOff ? '<span class="tx-badge tx-badge--whatif">pominięte</span>' : '';
         const row = document.createElement('div');
         row.className = fromArchive ? 'tx-row tx-row--archive' : 'tx-row';
