@@ -162,12 +162,13 @@ async function refreshInvestmentPrices(options = {}) {
 
     const uniqueTickers = [...new Set(investments.map((asset) => asset.ticker.toUpperCase()))];
     const mappableTickers = uniqueTickers.filter((ticker) => resolveYahooSymbol(ticker));
-    let eurPln = typeof EUR_PLN_RATE === 'number' && EUR_PLN_RATE > 0 ? EUR_PLN_RATE : 4.32;
+    let eurPln = typeof getEurPlnRate === 'function' ? getEurPlnRate() : 4.32;
+    let rateChanged = false;
 
     try {
         const nbpRate = await fetchNbpEurPln();
         if (nbpRate) {
-            EUR_PLN_RATE = nbpRate;
+            rateChanged = typeof setEurPlnRate === 'function' ? setEurPlnRate(nbpRate) : false;
             eurPln = nbpRate;
         }
     } catch (err) {
@@ -196,13 +197,17 @@ async function refreshInvestmentPrices(options = {}) {
     if (updated > 0) {
         if (typeof saveState === 'function') saveState();
         if (typeof captureAllAssetValueHistory === 'function') captureAllAssetValueHistory('market');
+    } else if (rateChanged && typeof saveState === 'function') {
+        saveState();
+    }
+
+    if (updated > 0 || rateChanged || quoted > 0) {
         if (typeof renderAssets === 'function') renderAssets();
+        if (typeof renderDashboard === 'function') renderDashboard();
         if (typeof renderReports === 'function'
             && document.getElementById('view-reports')?.classList.contains('active')) {
             renderReports();
         }
-    } else if (quoted > 0 && typeof renderAssets === 'function') {
-        renderAssets();
     }
 
     return {

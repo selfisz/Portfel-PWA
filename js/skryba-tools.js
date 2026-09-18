@@ -121,7 +121,9 @@ function skrybaSummarizeTransactions(items) {
 
 function skrybaToolSnapshotWealth() {
     const assets = typeof getPortfolioValuePln === 'function' ? getPortfolioValuePln() : 0;
-    const loanDebt = typeof getLoanCapitalLeft === 'function' ? getLoanCapitalLeft() : 0;
+    const loanDebt = typeof getLoanSummaryCapitalPln === 'function'
+        ? getLoanSummaryCapitalPln()
+        : (typeof getLoanCapitalLeft === 'function' ? getLoanCapitalLeft() : 0);
     const cardDebt = typeof getCreditCardDebtTotal === 'function' ? getCreditCardDebtTotal() : 0;
     const totalDebt = typeof getLoanSummaryTotal === 'function' ? getLoanSummaryTotal() : loanDebt + cardDebt;
     const operationalCash = typeof getOperationalCashPln === 'function' ? getOperationalCashPln() : 0;

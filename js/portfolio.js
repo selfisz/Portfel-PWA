@@ -1,4 +1,22 @@
-let EUR_PLN_RATE = 4.32;
+const EUR_PLN_RATE_FALLBACK = 4.32;
+let EUR_PLN_RATE = EUR_PLN_RATE_FALLBACK;
+
+function getEurPlnRate() {
+    const stored = Number(typeof appState === 'object' && appState ? appState.reportPrefs?.eurPlnRate : NaN);
+    if (Number.isFinite(stored) && stored > 0) return stored;
+    return Number.isFinite(EUR_PLN_RATE) && EUR_PLN_RATE > 0 ? EUR_PLN_RATE : EUR_PLN_RATE_FALLBACK;
+}
+
+function setEurPlnRate(rate) {
+    const value = Number(rate);
+    if (!Number.isFinite(value) || value <= 0) return false;
+    EUR_PLN_RATE = value;
+    if (typeof appState === 'object' && appState) {
+        if (!appState.reportPrefs || typeof appState.reportPrefs !== 'object') appState.reportPrefs = {};
+        appState.reportPrefs.eurPlnRate = value;
+    }
+    return true;
+}
 
 function getDefaultLoan() {
     return {
@@ -130,7 +148,7 @@ function getLoanDisplayName(loan) {
 }
 
 function convertToPln(amount, currency = 'PLN') {
-    return currency === 'EUR' ? amount * EUR_PLN_RATE : amount;
+    return currency === 'EUR' ? amount * getEurPlnRate() : amount;
 }
 
 function getAssetValuePln(asset) {
@@ -171,11 +189,14 @@ function getCreditCardDebtTotal() {
     return getActiveCreditCards().reduce((sum, card) => sum + (card.currentBalance || 0), 0);
 }
 
-function getLoanSummaryTotal() {
-    const loanTotal = getActiveLoans()
+function getLoanSummaryCapitalPln() {
+    return getActiveLoans()
         .filter((loan) => loan.includeInSummary !== false)
         .reduce((sum, loan) => sum + (loan.currentCapitalLeft || 0), 0);
-    return loanTotal + getCreditCardDebtTotal();
+}
+
+function getLoanSummaryTotal() {
+    return getLoanSummaryCapitalPln() + getCreditCardDebtTotal();
 }
 
 function getLoanSummaryCount() {
@@ -287,7 +308,7 @@ function getLoanPaidPercent(loan) {
 }
 
 function calcNetWorthPln() {
-    return getPortfolioValuePln() - getLoanCapitalLeft();
+    return getPortfolioValuePln() - getLoanSummaryTotal();
 }
 
 function getLoanDebtSubcategories() {

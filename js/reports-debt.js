@@ -983,7 +983,7 @@ function renderReportsDebtsHero(ctx) {
     if (!totalEl) return;
 
     const totalDebt = getLoanSummaryTotal();
-    const loanDebt = getLoanCapitalLeft();
+    const loanDebt = typeof getLoanSummaryCapitalPln === 'function' ? getLoanSummaryCapitalPln() : getLoanCapitalLeft();
     const cardDebt = getCreditCardDebtTotal();
     const { total } = getDebtPaymentsInPeriod(ctx);
     const income = ctx.periodTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);

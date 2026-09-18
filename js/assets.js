@@ -344,7 +344,9 @@ function renderAssetsSummaryChips(activeAssets) {
         if (!items || !items.length) return;
 
         const groupExcluded = excludedGroups.has(group.id);
-        const groupTotal = items.reduce((s, a) => s + getAssetValueInPln(a), 0);
+        const groupTotal = items
+            .filter((asset) => asset.includeInSummary !== false)
+            .reduce((s, a) => s + getAssetValueInPln(a), 0);
         const gId = escapeHtml(group.id);
 
         let itemChips = '';
@@ -611,7 +613,14 @@ function deletePortfolioGroup(groupId) {
 function renderAssetsPortfolioPanel(group, items) {
     if (!items.length) return '';
 
-    const panelTotal = items.reduce((sum, asset) => sum + getAssetValueInPln(asset), 0);
+    const groupExcluded = getExcludedPortfolioGroups().includes(group.id);
+    const countedItems = groupExcluded ? [] : items.filter((asset) => asset.includeInSummary !== false);
+    const panelTotal = countedItems.reduce((sum, asset) => sum + getAssetValueInPln(asset), 0);
+    const fullTotal = items.reduce((sum, asset) => sum + getAssetValueInPln(asset), 0);
+    const outsideSummary = fullTotal - panelTotal;
+    const noteHtml = outsideSummary > 0.005
+        ? `<span class="assets-portfolio-panel-note">${groupExcluded ? 'poza sumą' : `poza sumą ${formatPlnAmount(outsideSummary)}`}</span>`
+        : '';
     const panelGain = items
         .filter((asset) => asset.type === 'investment')
         .reduce((sum, asset) => sum + getAssetGainPln(asset), 0);
@@ -630,6 +639,7 @@ function renderAssetsPortfolioPanel(group, items) {
             <h2 class="assets-portfolio-panel-title">${escapeHtml(group.title)}</h2>
             <div class="assets-portfolio-panel-totals">
                 <span class="assets-portfolio-panel-total">${formatPlnAmountHtml(panelTotal)}</span>
+                ${noteHtml}
                 ${gainHtml}
             </div>
         </div>
@@ -1370,10 +1380,8 @@ function sellAssetPartial() {
     }
 
     const proceedsNative = qtySold * pricePerUnit;
-    const proceedsPln = asset.currency === 'EUR' ? proceedsNative * EUR_PLN_RATE : proceedsNative;
-    const costBasisPln = asset.currency === 'EUR'
-        ? qtySold * asset.purchasePrice * EUR_PLN_RATE
-        : qtySold * asset.purchasePrice;
+    const proceedsPln = convertToPln(proceedsNative, asset.currency);
+    const costBasisPln = convertToPln(qtySold * asset.purchasePrice, asset.currency);
     const realizedGain = proceedsPln - costBasisPln;
 
     const newQty = Math.max(0, asset.quantity - qtySold);
