@@ -455,14 +455,44 @@ describe('advanceLoanDueDate', () => {
     expect(advanceLoanDueDate('2024-12-10')).toBe('2025-01-10');
   });
 
-  it('obsługuje koniec miesiąca (31 sty → overflow do marca w roku przestępnym)', () => {
-    const result = advanceLoanDueDate('2024-01-31');
-    // JS: setMonth(1) na 31 sty 2024 → luty ma 29 dni → overflow do 2 marca
-    expect(result).toBe('2024-03-02');
+  it('przycina koniec miesiąca zamiast wypychać ratę do następnego (31 sty → 29 lut)', () => {
+    expect(advanceLoanDueDate('2024-01-31')).toBe('2024-02-29');
+    expect(advanceLoanDueDate('2025-01-31')).toBe('2025-02-28');
+  });
+
+  it('z dniem kotwiczącym wraca na 31. po krótkim miesiącu', () => {
+    expect(advanceLoanDueDate('2024-02-29', 31)).toBe('2024-03-31');
+    expect(advanceLoanDueDate('2024-04-30', 31)).toBe('2024-05-31');
   });
 
   it('zwraca oryginał dla niepoprawnej daty', () => {
     expect(advanceLoanDueDate('not-a-date')).toBe('not-a-date');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getLoanNextDueDate
+// ---------------------------------------------------------------------------
+describe('getLoanNextDueDate', () => {
+  it('zostawia termin, który jeszcze nie minął', () => {
+    const loan = { nextInstallmentDue: '2024-05-10', installmentDueDay: 10 };
+    expect(getLoanNextDueDate(loan, '2024-05-01')).toBe('2024-05-10');
+  });
+
+  it('przewija zaległy termin na najbliższy przyszły', () => {
+    const loan = { nextInstallmentDue: '2024-01-10', installmentDueDay: 10 };
+    expect(getLoanNextDueDate(loan, '2024-04-15')).toBe('2024-05-10');
+  });
+
+  it('trzyma dzień 31 przy przewijaniu przez krótkie miesiące', () => {
+    const loan = { nextInstallmentDue: '2024-01-31', installmentDueDay: 31 };
+    expect(getLoanNextDueDate(loan, '2024-02-15')).toBe('2024-02-29');
+    expect(getLoanNextDueDate(loan, '2024-04-01')).toBe('2024-04-30');
+    expect(getLoanNextDueDate(loan, '2024-05-01')).toBe('2024-05-31');
+  });
+
+  it('bez zapisanego terminu zwraca pusty string', () => {
+    expect(getLoanNextDueDate({ nextInstallmentDue: '' }, '2024-05-01')).toBe('');
   });
 });
 

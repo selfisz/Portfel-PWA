@@ -55,6 +55,7 @@ function renderReportsCalendarView() {
 }
 
 function addMonthsToDate(isoDate, months) {
+    if (typeof addMonthsToIsoDate === 'function') return addMonthsToIsoDate(isoDate, months);
     const d = new Date(`${isoDate}T12:00:00`);
     d.setMonth(d.getMonth() + months);
     return d.toISOString().split('T')[0];
@@ -62,8 +63,10 @@ function addMonthsToDate(isoDate, months) {
 
 function getLoanInstallmentDay(loan) {
     if (!loan?.nextInstallmentDue) return null;
-    const day = parseInt(loan.nextInstallmentDue.split('-')[2], 10);
-    return Number.isNaN(day) ? null : day;
+    const day = typeof getLoanDueAnchorDay === 'function'
+        ? getLoanDueAnchorDay(loan)
+        : parseInt(loan.nextInstallmentDue.split('-')[2], 10);
+    return day > 0 ? day : null;
 }
 
 function getLoanPayoffEndDate(loan) {
@@ -75,8 +78,11 @@ function getLoanPayoffEndDate(loan) {
         return addMonthsToDate(today, loan.details.remainingInstallments);
     }
     if (loan.nextInstallmentAmount > 0) {
-        const months = Math.ceil(capital / loan.nextInstallmentAmount);
-        return addMonthsToDate(today, months);
+        const est = typeof estimatePayoffMonths === 'function'
+            ? estimatePayoffMonths(capital, loan.interestRate, loan.nextInstallmentAmount)
+            : { months: Math.ceil(capital / loan.nextInstallmentAmount), coversInterest: true };
+        if (!est.months) return null;
+        return addMonthsToDate(today, est.months);
     }
     return null;
 }

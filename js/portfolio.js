@@ -28,6 +28,7 @@ function getDefaultLoan() {
         interestRate: 0,
         nextInstallmentAmount: 0,
         nextInstallmentDue: '',
+        installmentDueDay: 0,
         archived: false,
         archivedAt: '',
         includeInSummary: true
@@ -44,6 +45,9 @@ function normalizeLoan(raw) {
     loan.interestRate = Math.max(0, parseFloat(loan.interestRate) || 0);
     loan.nextInstallmentAmount = Math.max(0, parseFloat(loan.nextInstallmentAmount) || 0);
     loan.nextInstallmentDue = loan.nextInstallmentDue || '';
+    loan.installmentDueDay = clampDueDayNumber(loan.installmentDueDay)
+        || clampDueDayNumber(loan.nextInstallmentDue.split('-')[2])
+        || 0;
     loan.archived = !!loan.archived;
     loan.archivedAt = loan.archivedAt || '';
     if (loan.includeInSummary === undefined || loan.includeInSummary === null) {
@@ -211,12 +215,55 @@ function getDebtSummaryTotalCount() {
     return loans + cards;
 }
 
-function advanceLoanDueDate(isoDate) {
+function clampDueDayNumber(value) {
+    const day = parseInt(value, 10);
+    return day >= 1 && day <= 31 ? day : 0;
+}
+
+function getLoanDueAnchorDay(loan) {
+    return clampDueDayNumber(loan?.installmentDueDay)
+        || clampDueDayNumber(String(loan?.nextInstallmentDue || '').split('-')[2])
+        || 0;
+}
+
+function daysInMonth(year, monthIndex) {
+    return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+// Terminy rat trzymają dzień miesiąca (np. 31.), a w krótszych miesiącach
+// przesuwają się na ostatni dzień — bez tego setMonth() wypycha ratę
+// z 31 stycznia na 3 marca i termin dryfuje przy każdej spłacie.
+function addMonthsToIsoDate(isoDate, months, anchorDay = 0) {
     if (!isoDate) return '';
-    const d = new Date(`${isoDate}T12:00:00`);
-    if (Number.isNaN(d.getTime())) return isoDate;
-    d.setMonth(d.getMonth() + 1);
-    return localIsoDate(d);
+    const base = new Date(`${isoDate}T12:00:00`);
+    if (Number.isNaN(base.getTime())) return isoDate;
+    const targetMonth = base.getMonth() + (Number(months) || 0);
+    const year = base.getFullYear() + Math.floor(targetMonth / 12);
+    const monthIndex = ((targetMonth % 12) + 12) % 12;
+    const wantedDay = clampDueDayNumber(anchorDay) || base.getDate();
+    const day = Math.min(wantedDay, daysInMonth(year, monthIndex));
+    return localIsoDate(new Date(year, monthIndex, day));
+}
+
+function advanceLoanDueDate(isoDate, anchorDay = 0) {
+    return addMonthsToIsoDate(isoDate, 1, anchorDay);
+}
+
+// Termin zapisany w kredycie potrafi zostać w przeszłości, jeśli spłaty nie
+// były rejestrowane — do prezentacji i prognoz bierzemy najbliższy przyszły.
+function getLoanNextDueDate(loan, fromDate = null) {
+    const stored = loan?.nextInstallmentDue || '';
+    if (!stored) return '';
+    const today = fromDate || localIsoDate(new Date());
+    if (stored >= today) return stored;
+    const anchorDay = getLoanDueAnchorDay(loan);
+    let due = stored;
+    for (let i = 0; i < 600 && due < today; i += 1) {
+        const next = addMonthsToIsoDate(due, 1, anchorDay);
+        if (!next || next <= due) return due;
+        due = next;
+    }
+    return due;
 }
 
 function localIsoDate(d) {
