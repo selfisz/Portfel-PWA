@@ -920,7 +920,7 @@ describe('filtr widoku wykresu (A/B)', () => {
     });
 });
 
-describe('podgląd „co jeśli” na Pulpicie', () => {
+describe('tryb „Policz bez…” na Pulpicie', () => {
     const rata = { date: '2024-06-05', type: 'expense', mainCategory: 'Długi', subCategory: 'Hipoteka', amount: 1000 };
     const zakupy = { date: '2024-06-06', type: 'expense', mainCategory: 'Jedzenie', subCategory: 'Sklep', amount: 250 };
     const wyplata = { date: '2024-06-01', type: 'income', mainCategory: 'Praca', subCategory: 'Etat', amount: 5000 };
@@ -966,9 +966,41 @@ describe('podgląd „co jeśli” na Pulpicie', () => {
 
     it('opisuje, ile pominięto i o ile spadły kwoty', () => {
         expect(buildDashboardWhatIfText({ count: 1, expense: 1000, income: 0 }))
-            .toBe('Podgląd bez 1 pozycji — wydatki niższe o 1000.00 zł');
+            .toBe('Policzone bez 1 pozycji — wydatki niższe o 1000.00 zł');
         expect(buildDashboardWhatIfText({ count: 2, expense: 1000, income: 500 }))
-            .toBe('Podgląd bez 2 pozycji — wydatki niższe o 1000.00 zł, wpływy niższe o 500.00 zł');
+            .toBe('Policzone bez 2 pozycji — wydatki niższe o 1000.00 zł, wpływy niższe o 500.00 zł');
+    });
+
+    it('przycisk zaprasza do wyboru, a po włączeniu kończy tryb', () => {
+        const btn = document.getElementById('btn-dashboard-whatif');
+        runInContext('dashboardWhatIfActive = false;');
+        updateDashboardWhatIfUi({ count: 0, expense: 0, income: 0 }, false);
+        expect(btn.textContent).toBe('Policz bez…');
+
+        runInContext('dashboardWhatIfActive = true;');
+        updateDashboardWhatIfUi({ count: 0, expense: 0, income: 0 }, false);
+        expect(btn.textContent).toBe('Gotowe');
+        runInContext('dashboardWhatIfActive = false;');
+    });
+
+    it('pasek pokazuje wynik dopiero, gdy coś jest pominięte', () => {
+        const bar = document.getElementById('dashboard-whatif-bar');
+        const text = document.getElementById('dashboard-whatif-text');
+
+        updateDashboardWhatIfUi({ count: 0, expense: 0, income: 0 }, false);
+        expect(bar.classList.contains('hidden')).toBe(true);
+
+        updateDashboardWhatIfUi({ count: 1, expense: 1000, income: 0 }, false);
+        expect(bar.classList.contains('hidden')).toBe(false);
+        expect(text.textContent).toBe('Policzone bez 1 pozycji — wydatki niższe o 1000.00 zł');
+    });
+
+    it('w prognozie tryb jest niedostępny', () => {
+        const btn = document.getElementById('btn-dashboard-whatif');
+        const bar = document.getElementById('dashboard-whatif-bar');
+        updateDashboardWhatIfUi({ count: 1, expense: 1000, income: 0 }, true);
+        expect(btn.classList.contains('hidden')).toBe(true);
+        expect(bar.classList.contains('hidden')).toBe(true);
     });
 });
 

@@ -33,7 +33,7 @@ function updateDashboardSelectionUi(forecastMode, searchQuery) {
     if (selectionBar) selectionBar.classList.toggle('hidden', hideSelection || !dashboardSelectionActive);
     if (hintEl && !hideSelection) {
         if (dashboardSelectionActive) hintEl.textContent = 'Zaznacz transakcje do raportu PDF';
-        else if (dashboardWhatIfActive) hintEl.textContent = 'Dotknij transakcję, aby wyłączyć ją z podglądu';
+        else if (dashboardWhatIfActive) hintEl.textContent = 'Dotknij transakcję, aby wyłączyć ją z obliczeń';
         else hintEl.textContent = 'Dotknij, aby edytować';
     }
     if (addBtn) {
@@ -149,7 +149,7 @@ function buildDashboardWhatIfText(summary) {
     if (summary.expense > 0) parts.push(`wydatki niższe o ${formatPlnAmount(summary.expense)}`);
     if (summary.income > 0) parts.push(`wpływy niższe o ${formatPlnAmount(summary.income)}`);
     const suffix = parts.length ? ` — ${parts.join(', ')}` : '';
-    return `Podgląd bez ${summary.count} pozycji${suffix}`;
+    return `Policzone bez ${summary.count} pozycji${suffix}`;
 }
 
 function toggleDashboardWhatIfMode() {
@@ -177,7 +177,7 @@ function updateDashboardWhatIfUi(summary, forecastMode) {
     const btn = document.getElementById('btn-dashboard-whatif');
     if (btn) {
         btn.classList.toggle('hidden', forecastMode);
-        btn.textContent = dashboardWhatIfActive ? 'Gotowe' : 'Co jeśli?';
+        btn.textContent = dashboardWhatIfActive ? 'Gotowe' : 'Policz bez…';
         btn.setAttribute('aria-pressed', dashboardWhatIfActive ? 'true' : 'false');
     }
 
@@ -853,7 +853,7 @@ function renderDashboard() {
     document.getElementById('db-period-label').innerText = formatDashboardPeriodLabel();
     document.getElementById('db-total-incomes').innerText = `${totalIncomes.toFixed(2)} zł`;
     document.getElementById('db-total-expenses').innerText = `${totalExpenses.toFixed(2)} zł`;
-    const heroLabelSuffix = forecastMode ? ' (prognoza)' : (whatIfActive ? ' (podgląd)' : '');
+    const heroLabelSuffix = forecastMode ? ' (prognoza)' : (whatIfActive ? ' (bez wybranych)' : '');
     document.getElementById('db-incomes-label').textContent = `Wpływy${heroLabelSuffix}`;
     document.getElementById('db-expenses-label').textContent = `Wydatki${heroLabelSuffix}`;
     document.getElementById('db-forecast-hint')?.classList.toggle('hidden', !forecastMode);
