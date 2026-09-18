@@ -141,3 +141,40 @@ describe('confirmTransactionBudgetIfNeeded', () => {
         expect(confirmTransactionBudgetIfNeeded(tx, null)).toBe(true);
     });
 });
+
+describe('budżet w Analizie dla wybranego miesiąca', () => {
+    it('bierze miesiąc z wybranego okresu, nie z kalendarza', () => {
+        const ctx = { mode: 'month', rangeStart: '2026-03-01', rangeEnd: '2026-03-31' };
+        expect(getReportsBudgetMonthKey(ctx)).toBe('2026-03');
+    });
+
+    it('dla okresu innego niż miesiąc nie wskazuje miesiąca', () => {
+        expect(getReportsBudgetMonthKey({ mode: 'year', period: '2026' })).toBeNull();
+        expect(getReportsBudgetMonthKey({ mode: 'range', rangeStart: '2026-01-01', rangeEnd: '2026-03-31' })).toBeNull();
+        expect(getReportsBudgetMonthKey(null)).toBeNull();
+    });
+
+    it('liczy zużycie limitu dla wskazanego miesiąca', () => {
+        appState.categoryBudgets = { Jedzenie: 1000 };
+        appState.transactions = [
+            { type: 'expense', mainCategory: 'Jedzenie', amount: 1200, date: '2026-03-10' },
+            { type: 'expense', mainCategory: 'Jedzenie', amount: 200, date: '2026-04-10' }
+        ];
+        const march = getAllCategoryBudgetStatuses('2026-03');
+        const april = getAllCategoryBudgetStatuses('2026-04');
+        expect(march[0].spent).toBe(1200);
+        expect(march[0].state).toBe('over');
+        expect(april[0].spent).toBe(200);
+        expect(april[0].state).toBe('ok');
+    });
+
+    it('podpisuje podsumowanie nazwą miesiąca, gdy to nie bieżący', () => {
+        appState.categoryBudgets = { Jedzenie: 1000 };
+        appState.transactions = [
+            { type: 'expense', mainCategory: 'Jedzenie', amount: 1200, date: '2026-03-10' }
+        ];
+        const statuses = getAllCategoryBudgetStatuses('2026-03');
+        expect(buildBudgetSummaryLine(statuses, '2026-03')).toContain('marzec 2026');
+        expect(buildBudgetSummaryLine(statuses, getCurrentMonthKey())).toBe('Budżet: 1 przekroczona');
+    });
+});

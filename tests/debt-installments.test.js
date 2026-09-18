@@ -190,3 +190,22 @@ describe('collectDebtInstallmentRows', () => {
         expect(cardRow?.amount).toBe(250);
     });
 });
+
+describe('raty w Analizie dla wybranego miesiąca', () => {
+    it('bierze granice z wybranego miesiąca', () => {
+        const ctx = { mode: 'month', rangeStart: '2026-03-01', rangeEnd: '2026-03-31' };
+        expect(getDebtInstallmentBounds(ctx)).toEqual({ startDate: '2026-03-01', endDate: '2026-03-31' });
+    });
+
+    it('dla innego okresu wraca do bieżącego miesiąca', () => {
+        const current = getMonthDateBounds();
+        expect(getDebtInstallmentBounds({ mode: 'year', period: '2026' })).toEqual(current);
+        expect(getDebtInstallmentBounds(null)).toEqual(current);
+    });
+
+    it('opisuje miesiąc w miejscowniku', () => {
+        expect(formatDebtInstallmentMonthLabel('2026-07-01')).toBe('lipcu 2026');
+        expect(formatDebtInstallmentMonthLabel('2026-11-01')).toBe('listopadzie 2026');
+        expect(formatDebtInstallmentMonthLabel('')).toBe('wybranym miesiącu');
+    });
+});

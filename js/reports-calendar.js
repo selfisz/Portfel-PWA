@@ -31,6 +31,26 @@ function ensureReportsDebtCalendarMonth() {
     reportsDebtCalendarMonth = now.getMonth();
 }
 
+// Kalendarz rat ustawia się na miesiąc wybrany w Analizie, dopóki nie
+// przewiniesz go strzałkami — wcześniej trzymał się miesiąca z pierwszego
+// otwarcia i nie reagował na zmianę okresu.
+function syncReportsDebtCalendarToSelectedMonth() {
+    const mode = typeof reportsPeriodMode !== 'undefined' ? reportsPeriodMode : null;
+    const monthKey = mode === 'month' && typeof getReportsMonthValue === 'function'
+        ? getReportsMonthValue()
+        : null;
+    if (!monthKey) {
+        reportsDebtCalendarSyncedMonth = null;
+        return;
+    }
+    if (monthKey === reportsDebtCalendarSyncedMonth) return;
+    const [year, month] = monthKey.split('-').map(Number);
+    if (!year || !month) return;
+    reportsDebtCalendarSyncedMonth = monthKey;
+    reportsDebtCalendarYear = year;
+    reportsDebtCalendarMonth = month - 1;
+}
+
 function shiftReportsDebtCalendarMonth(delta) {
     ensureReportsDebtCalendarMonth();
     reportsDebtCalendarMonth += delta;
@@ -232,6 +252,7 @@ function renderDebtCalendarGrid() {
     const labelEl = document.getElementById('reports-debt-calendar-label');
     if (!grid) return;
 
+    syncReportsDebtCalendarToSelectedMonth();
     ensureReportsDebtCalendarMonth();
     if (reportsDebtCalendarYear === null) return;
 

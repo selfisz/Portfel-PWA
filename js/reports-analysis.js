@@ -448,6 +448,12 @@ function updateReportsPeriodUI(ctx) {
     updateReportsPeriodResetVisibility();
 }
 
+function getAnalysisTransactionSource() {
+    return typeof getReportsTransactionSource === 'function'
+        ? getReportsTransactionSource()
+        : (appState.transactions || []);
+}
+
 function getReportsMonthValue() {
     const el = document.getElementById('reports-period-month');
     if (el?.value) return el.value;
@@ -1871,7 +1877,7 @@ function detectRecurringExpenses(rankLevel = 'main') {
     const fourMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
 
     const byKey = {};
-    appState.transactions
+    getAnalysisTransactionSource()
         .filter((t) => t.type === 'expense' && t.date >= cutoff)
         .forEach((t) => {
             const key = getExpenseGroupKey(t, rankLevel);
@@ -1932,7 +1938,7 @@ function detectRecurringExpenses(rankLevel = 'main') {
 
 function getManualRecurringEntries(rankLevel = 'main') {
     const byId = {};
-    appState.transactions.forEach((t) => {
+    getAnalysisTransactionSource().forEach((t) => {
         if (!t.recurringId || t.type !== 'expense') return;
         const prev = byId[t.recurringId];
         if (!prev || t.date >= prev.lastDate) {
@@ -2049,7 +2055,7 @@ function getCategoryMonthlyTotals(mainCategory, subCategory, rankLevel, monthsBa
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
         const end = localIsoDate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
-        const sum = appState.transactions
+        const sum = getAnalysisTransactionSource()
             .filter((t) => {
                 if (t.type !== 'expense' || t.mainCategory !== mainCategory || t.date < start || t.date > end) return false;
                 if (rankLevel === 'sub' && subCategory) {
@@ -2066,7 +2072,7 @@ function getCategoryMonthlyTotals(mainCategory, subCategory, rankLevel, monthsBa
 
 function buildTrendEntries(rankLevel) {
     const keys = {};
-    appState.transactions
+    getAnalysisTransactionSource()
         .filter((t) => t.type === 'expense')
         .forEach((t) => {
             if (rankLevel === 'sub') {

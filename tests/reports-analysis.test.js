@@ -4,7 +4,7 @@
  * Testujemy czyste funkcje obliczeniowe.
  * Pomijamy DOM-heavy: renderReportsCompare, renderReportsFlow, renderReportsForecast, etc.
  */
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { loadScript, runInContext } from './helpers/load.js';
 
 beforeAll(() => {
@@ -763,5 +763,52 @@ describe('getSixMonthsAgoDate', () => {
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
     const expected = `${sixMonthsAgo.getFullYear()}-${String(sixMonthsAgo.getMonth() + 1).padStart(2, '0')}-${String(sixMonthsAgo.getDate()).padStart(2, '0')}`;
     expect(result).toBe(expected);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wspólne źródło transakcji w Analizie (aktywne + archiwum lokalne)
+// ---------------------------------------------------------------------------
+describe('źródło transakcji w Analizie', () => {
+  const archived = [
+    { type: 'expense', mainCategory: 'Ubezpieczenia', subCategory: 'OC', amount: 900, date: '2025-02-10', recurringId: 'oc-1' },
+    { type: 'expense', mainCategory: 'Ubezpieczenia', subCategory: 'OC', amount: 900, date: '2025-03-10' }
+  ];
+
+  beforeEach(() => {
+    _setAppState({ ..._getAppState(), transactions: [
+      { type: 'expense', mainCategory: 'Jedzenie', subCategory: 'Sklepy', amount: 100, date: '2026-09-01' }
+    ]});
+    globalThis.getReportsTransactionSource = () => [
+      ...(_getAppState()?.transactions || []),
+      ...archived
+    ];
+  });
+
+  afterEach(() => {
+    delete globalThis.getReportsTransactionSource;
+  });
+
+  it('bez wspólnego źródła korzysta z aktywnych transakcji', () => {
+    delete globalThis.getReportsTransactionSource;
+    expect(getAnalysisTransactionSource().map((t) => t.mainCategory)).toEqual(['Jedzenie']);
+  });
+
+  it('buildTrendEntries widzi kategorie z archiwum', () => {
+    const labels = buildTrendEntries('main').map((e) => e.label);
+    expect(labels).toContain('Ubezpieczenia');
+    expect(labels).toContain('Jedzenie');
+  });
+
+  it('getManualRecurringEntries widzi cykliczne z archiwum', () => {
+    const entries = getManualRecurringEntries('main');
+    expect(entries.some((e) => e.mainCategory === 'Ubezpieczenia')).toBe(true);
+  });
+
+  it('getCategoryMonthlyTotals liczy miesiące z archiwum', () => {
+    const now = new Date();
+    const monthsBack = (now.getFullYear() - 2025) * 12 + (now.getMonth() - 2) + 1;
+    const totals = getCategoryMonthlyTotals('Ubezpieczenia', null, 'main', monthsBack);
+    expect(totals[0]).toBe(900);
   });
 });

@@ -184,6 +184,30 @@ describe('getPeriodDayCount', () => {
 });
 
 // ---------------------------------------------------------------------------
+// getPeriodElapsedDayCount
+// ---------------------------------------------------------------------------
+describe('getPeriodElapsedDayCount', () => {
+  it('dla zamkniętego okresu zwraca tyle samo co getPeriodDayCount', () => {
+    const ctx = { rangeStart: '2024-01-01', rangeEnd: '2024-01-31', periodTx: [] };
+    expect(getPeriodElapsedDayCount(ctx)).toBe(31);
+  });
+
+  it('dla bieżącego miesiąca liczy tylko dni, które minęły', () => {
+    const now = new Date();
+    const start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const end = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+    const ctx = { rangeStart: start, rangeEnd: end, periodTx: [] };
+    expect(getPeriodElapsedDayCount(ctx)).toBe(now.getDate());
+    expect(getPeriodElapsedDayCount(ctx)).toBeLessThanOrEqual(getPeriodDayCount(ctx));
+  });
+
+  it('dla okresu w przyszłości nie schodzi poniżej 1 dnia', () => {
+    const ctx = { rangeStart: '2099-01-01', rangeEnd: '2099-01-31', periodTx: [] };
+    expect(getPeriodElapsedDayCount(ctx)).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // getAnalysisSummaryAssets
 // ---------------------------------------------------------------------------
 describe('getAnalysisSummaryAssets', () => {

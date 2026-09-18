@@ -375,6 +375,18 @@ function closeCalendarDay() {
     document.body.style.overflow = '';
 }
 
+function getReportsSelectedRangeBounds(period) {
+    const read = (id) => document.getElementById(id)?.value || '';
+    if (period === 'compare') {
+        const start = read('reports-compare-a-start');
+        const end = read('reports-compare-a-end');
+        return start && end ? { start, end } : null;
+    }
+    const start = read('reports-range-start');
+    const end = read('reports-range-end');
+    return start && end ? { start, end } : null;
+}
+
 function calcReportsDailyAverage(period, periodTx) {
     const expenses = periodTx.filter((t) => t.type === 'expense');
     const now = new Date();
@@ -390,11 +402,20 @@ function calcReportsDailyAverage(period, periodTx) {
     }
 
     if (period === 'range' || period === 'compare') {
+        if (!expenses.length) return { avg: 0, hint: 'brak wydatków' };
+        // Liczymy po długości wybranego zakresu, a nie po odstępie między
+        // pierwszym i ostatnim wydatkiem — inaczej kilka transakcji w jednym
+        // tygodniu dawało średnią jak dla tygodnia, nie dla całego okresu.
+        const bounds = getReportsSelectedRangeBounds(period);
         const dates = expenses.map((t) => t.date).sort();
-        if (!dates.length) return { avg: 0, hint: 'brak wydatków' };
-        const start = dates[0];
-        const end = dates[dates.length - 1];
-        const days = Math.max(1, Math.ceil((new Date(`${end}T12:00:00`) - new Date(`${start}T12:00:00`)) / 86400000) + 1);
+        const start = bounds?.start || dates[0];
+        const rawEnd = bounds?.end || dates[dates.length - 1];
+        const todayStr = localIsoDate(now);
+        const end = rawEnd > todayStr ? todayStr : rawEnd;
+        const days = Math.max(
+            1,
+            Math.round((new Date(`${end}T12:00:00`) - new Date(`${start}T12:00:00`)) / 86400000) + 1
+        );
         const total = expenses.reduce((sum, t) => sum + t.amount, 0);
         return { avg: total / days, hint: `zakres (${days} dni)` };
     }
@@ -573,7 +594,7 @@ function renderReportsYoYChart(period, periodTx, reportsCtx) {
     const labels = [];
     const currentData = [];
     const prevData = [];
-    const allTx = appState.transactions;
+    const allTx = getReportsTransactionSource();
 
     if (period === 'range' || period === 'compare') {
         const start = reportsCtx?.rangeStart || reportsCtx?.periodA?.start;

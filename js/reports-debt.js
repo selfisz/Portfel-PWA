@@ -412,7 +412,10 @@ function renderReportsLoanSummary(ctx, targetId = 'reports-loan-summary') {
 }
 
 function buildYearReviewData(year) {
-    const yearTx = (appState.transactions || []).filter((t) => t.date.startsWith(String(year)));
+    const source = typeof getReportsTransactionSource === 'function'
+        ? getReportsTransactionSource()
+        : (appState.transactions || []);
+    const yearTx = source.filter((t) => t.date.startsWith(String(year)));
     if (!yearTx.length) return null;
 
     const s = summarizePeriod(yearTx);
@@ -1201,6 +1204,19 @@ function toggleDebtInstallmentInSummary(kind, id) {
     renderReportsDebtInstallmentList();
 }
 
+let reportsDebtInstallmentBounds = null;
+
+const MONTH_NAMES_LOCATIVE = [
+    'styczniu', 'lutym', 'marcu', 'kwietniu', 'maju', 'czerwcu',
+    'lipcu', 'sierpniu', 'wrześniu', 'październiku', 'listopadzie', 'grudniu'
+];
+
+function formatDebtInstallmentMonthLabel(startDate) {
+    const [year, month] = String(startDate || '').split('-').map(Number);
+    if (!year || !month || month < 1 || month > 12) return 'wybranym miesiącu';
+    return `${MONTH_NAMES_LOCATIVE[month - 1]} ${year}`;
+}
+
 function collectDebtInstallmentRows(bounds = null) {
     const { startDate, endDate } = bounds?.startDate && bounds?.endDate
         ? bounds
@@ -1340,11 +1356,23 @@ function renderReportsDebtInstallmentFilter(rows) {
     }).join('');
 }
 
-function renderReportsDebtInstallmentList() {
+// Lista rat pokazuje miesiąc wybrany w Analizie — dotąd zawsze liczyła
+// bieżący, więc przy podglądzie innego miesiąca dane się nie zgadzały.
+function getDebtInstallmentBounds(ctx) {
+    if (ctx?.mode === 'month' && ctx.rangeStart && ctx.rangeEnd) {
+        return { startDate: ctx.rangeStart, endDate: ctx.rangeEnd };
+    }
+    if (typeof getMonthDateBounds === 'function') return getMonthDateBounds();
+    return null;
+}
+
+function renderReportsDebtInstallmentList(ctx = null) {
     const el = document.getElementById('reports-debt-installment-list');
     if (!el) return;
 
-    const rows = collectDebtInstallmentRows();
+    const monthBounds = getDebtInstallmentBounds(ctx) || reportsDebtInstallmentBounds;
+    reportsDebtInstallmentBounds = monthBounds;
+    const rows = collectDebtInstallmentRows(monthBounds);
     const includedRows = rows.filter(isDebtInstallmentIncludedInSummary);
     const excludedCount = rows.length - includedRows.length;
 
@@ -1352,10 +1380,15 @@ function renderReportsDebtInstallmentList() {
     const monthlyTotal = includedRows.reduce((s, r) => s + r.amount, 0);
     const loanTotal = includedRows.filter((r) => !r.estimated).reduce((s, r) => s + r.amount, 0);
     const cardTotal = includedRows.filter((r) => r.estimated).reduce((s, r) => s + r.amount, 0);
-    const monthBounds = typeof getMonthDateBounds === 'function' ? getMonthDateBounds() : null;
     const monthSummary = monthBounds
         ? getDebtInstallmentRemainingSummary(monthBounds.startDate, monthBounds.endDate)
         : null;
+    const isCurrentMonth = !monthBounds
+        || (typeof getMonthDateBounds === 'function'
+            && getMonthDateBounds().startDate === monthBounds.startDate);
+    const summaryLabel = isCurrentMonth
+        ? 'Pozostało do spłaty w tym miesiącu'
+        : `Do spłaty w ${formatDebtInstallmentMonthLabel(monthBounds.startDate)}`;
 
     if (summaryEl) {
         const details = [];
@@ -1369,7 +1402,7 @@ function renderReportsDebtInstallmentList() {
         }
         if (excludedCount > 0) details.push(`${includedRows.length}/${rows.length} w sumie`);
         summaryEl.innerHTML = `<div class="debt-installment-total">
-            <span class="label">Pozostało do spłaty w tym miesiącu</span>
+            <span class="label">${escapeHtml(summaryLabel)}</span>
             <strong class="expense">${formatPlnAmount(monthSummary?.remaining ?? monthlyTotal)}</strong>
         </div>${details.length ? `<p class="debt-installment-total-meta">${details.join(' · ')}</p>` : ''}`;
     }
@@ -1551,7 +1584,7 @@ function renderReportsDebtLtv() {
 function renderReportsDebtsSection(ctx) {
     renderReportsDebtsHero(ctx);
     renderReportsDebtPortfolio(ctx);
-    renderReportsDebtInstallmentList();
+    renderReportsDebtInstallmentList(ctx);
     populateDebtsOverpayLoanSelect();
     renderReportsDebtOverpayCalc();
     renderReportsDebtsFreedomPanel(ctx);
