@@ -920,6 +920,58 @@ describe('filtr widoku wykresu (A/B)', () => {
     });
 });
 
+describe('podgląd „co jeśli” na Pulpicie', () => {
+    const rata = { date: '2024-06-05', type: 'expense', mainCategory: 'Długi', subCategory: 'Hipoteka', amount: 1000 };
+    const zakupy = { date: '2024-06-06', type: 'expense', mainCategory: 'Jedzenie', subCategory: 'Sklep', amount: 250 };
+    const wyplata = { date: '2024-06-01', type: 'income', mainCategory: 'Praca', subCategory: 'Etat', amount: 5000 };
+
+    beforeEach(() => {
+        runInContext(`
+            activeChartCategory = null;
+            activeChartSubCategory = null;
+            chartViewType = 'expense';
+            chartHiddenMainCategories = {};
+            chartHiddenSubCategories = {};
+            dashboardWhatIfExcluded.clear();
+        `);
+    });
+
+    it('wyłącza pojedynczą transakcję z sum', () => {
+        runInContext(`dashboardWhatIfExcluded.add(transactionFingerprint(${JSON.stringify(rata)}));`);
+        expect(isTransactionExcludedFromDashboardTotals(rata)).toBe(true);
+        expect(isTransactionExcludedFromDashboardTotals(zakupy)).toBe(false);
+    });
+
+    it('wyłącza całą kategorię odznaczoną na wykresie', () => {
+        runInContext(`chartHiddenMainCategories = { 'Długi': true };`);
+        expect(isTransactionExcludedFromDashboardTotals(rata)).toBe(true);
+        expect(isTransactionExcludedFromDashboardTotals(zakupy)).toBe(false);
+    });
+
+    it('filtr wykresu wydatków nie rusza wpływów', () => {
+        runInContext(`chartHiddenMainCategories = { 'Praca': true };`);
+        expect(isTransactionExcludedFromDashboardTotals(wyplata)).toBe(false);
+    });
+
+    it('podsumowanie liczy pominięte kwoty osobno dla wydatków i wpływów', () => {
+        runInContext(`
+            chartHiddenMainCategories = { 'Jedzenie': true };
+            dashboardWhatIfExcluded.add(transactionFingerprint(${JSON.stringify(rata)}));
+        `);
+        const summary = getDashboardWhatIfSummary([rata, zakupy, wyplata]);
+        expect(summary.count).toBe(2);
+        expect(summary.expense).toBeCloseTo(1250);
+        expect(summary.income).toBeCloseTo(0);
+    });
+
+    it('opisuje, ile pominięto i o ile spadły kwoty', () => {
+        expect(buildDashboardWhatIfText({ count: 1, expense: 1000, income: 0 }))
+            .toBe('Podgląd bez 1 pozycji — wydatki niższe o 1000.00 zł');
+        expect(buildDashboardWhatIfText({ count: 2, expense: 1000, income: 500 }))
+            .toBe('Podgląd bez 2 pozycji — wydatki niższe o 1000.00 zł, wpływy niższe o 500.00 zł');
+    });
+});
+
 describe('isDashboardChartTransactionLevel', () => {
     it('jest true gdy wybrano podkategorię poza prognozą', () => {
         runInContext(`activeChartSubCategory = 'Hipoteka';`);
