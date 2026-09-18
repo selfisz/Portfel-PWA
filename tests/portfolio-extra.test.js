@@ -194,6 +194,79 @@ describe('calcNetWorthPln', () => {
     it('zwraca 0 gdy brak aktywów i długów', () => {
         expect(calcNetWorthPln()).toBe(0);
     });
+
+    it('odejmuje także zadłużenie na kartach', () => {
+        _setAppState({ ..._getAppState(),
+            assets: [{ id: 'c', type: 'cash', amount: 50000, currency: 'PLN', archived: false, includeInSummary: true }],
+            loans: [],
+            creditCards: [{ id: 'card', name: 'Karta', limit: 20000, currentBalance: 8000, archived: false }]
+        });
+        expect(calcNetWorthPln()).toBeCloseTo(42000);
+    });
+
+    it('pomija kredyt wyłączony z sumy', () => {
+        _setAppState({ ..._getAppState(),
+            assets: [{ id: 'c', type: 'cash', amount: 50000, currency: 'PLN', archived: false, includeInSummary: true }],
+            loans: [{ id: 'l', subCategory: 'A', totalAmount: 100000, currentCapitalLeft: 30000, archived: false, includeInSummary: false }]
+        });
+        expect(calcNetWorthPln()).toBeCloseTo(50000);
+    });
+});
+
+// ===========================================================================
+// portfolio.js — getLoanSummaryCapitalPln
+// ===========================================================================
+describe('getLoanSummaryCapitalPln', () => {
+    it('sumuje kapitał tylko kredytów wliczanych do sumy', () => {
+        _setAppState({ ..._getAppState(), loans: [
+            { id: 'l1', subCategory: 'A', totalAmount: 100000, currentCapitalLeft: 30000, archived: false },
+            { id: 'l2', subCategory: 'B', totalAmount: 100000, currentCapitalLeft: 20000, archived: false, includeInSummary: false },
+            { id: 'l3', subCategory: 'C', totalAmount: 100000, currentCapitalLeft: 0, archived: true }
+        ]});
+        expect(getLoanSummaryCapitalPln()).toBeCloseTo(30000);
+    });
+
+    it('razem z kartami daje getLoanSummaryTotal', () => {
+        _setAppState({ ..._getAppState(),
+            loans: [{ id: 'l1', subCategory: 'A', totalAmount: 100000, currentCapitalLeft: 30000, archived: false }],
+            creditCards: [{ id: 'c1', name: 'Karta', limit: 5000, currentBalance: 2000, archived: false }]
+        });
+        expect(getLoanSummaryTotal()).toBeCloseTo(getLoanSummaryCapitalPln() + getCreditCardDebtTotal());
+    });
+});
+
+// ===========================================================================
+// portfolio.js — kurs EUR/PLN
+// ===========================================================================
+describe('kurs EUR/PLN', () => {
+    beforeEach(() => {
+        runInContext('EUR_PLN_RATE = EUR_PLN_RATE_FALLBACK;');
+    });
+
+    it('bez zapisanego kursu używa wartości domyślnej', () => {
+        expect(getEurPlnRate()).toBeCloseTo(4.32);
+    });
+
+    it('zapisuje kurs w stanie aplikacji i z niego korzysta', () => {
+        expect(setEurPlnRate(4.51)).toBe(true);
+        expect(_getAppState().reportPrefs.eurPlnRate).toBeCloseTo(4.51);
+        expect(getEurPlnRate()).toBeCloseTo(4.51);
+        expect(convertToPln(100, 'EUR')).toBeCloseTo(451);
+    });
+
+    it('kurs przetrwa przeładowanie skryptów (czyta ze stanu)', () => {
+        setEurPlnRate(4.75);
+        runInContext('EUR_PLN_RATE = EUR_PLN_RATE_FALLBACK;');
+        expect(getEurPlnRate()).toBeCloseTo(4.75);
+    });
+
+    it('odrzuca bezsensowne wartości', () => {
+        setEurPlnRate(4.6);
+        expect(setEurPlnRate(0)).toBe(false);
+        expect(setEurPlnRate(-2)).toBe(false);
+        expect(setEurPlnRate('abc')).toBe(false);
+        expect(getEurPlnRate()).toBeCloseTo(4.6);
+    });
 });
 
 // ===========================================================================

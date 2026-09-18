@@ -126,9 +126,7 @@ function renderLoans() {
             totalMetaEl.classList.add('hidden');
         } else {
             const parts = [];
-            const loanCapital = getActiveLoans()
-                .filter((loan) => loan.includeInSummary !== false)
-                .reduce((sum, loan) => sum + (loan.currentCapitalLeft || 0), 0);
+            const loanCapital = getLoanSummaryCapitalPln();
             const summaryCardDebt = typeof getCreditCardDebtTotal === 'function' ? getCreditCardDebtTotal() : cardDebt;
             if (activeLoans.length && loanCapital > 0) {
                 parts.push(`Kredyty ${formatPlnAmount(loanCapital)}`);
@@ -151,7 +149,7 @@ function renderLoans() {
 
     if (loansActiveTotalEl) {
         if (activeLoans.length) {
-            setPlnAmountElement(loansActiveTotalEl, getLoanCapitalLeft());
+            setPlnAmountElement(loansActiveTotalEl, getLoanSummaryCapitalPln());
             loansActiveTotalEl.classList.remove('hidden');
         } else {
             loansActiveTotalEl.classList.add('hidden');

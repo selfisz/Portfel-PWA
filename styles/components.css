@@ -10715,6 +10715,13 @@ button.reports-debt-split-item strong {
     white-space: nowrap;
 }
 
+.assets-portfolio-panel-note {
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
 .assets-portfolio-panel-pl {
     font-size: var(--text-2xs);
     font-weight: 600;

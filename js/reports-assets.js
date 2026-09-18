@@ -282,7 +282,7 @@ function renderReportsNetWorth() {
     const ctx = getReportsPeriodContext();
     const assets = getPortfolioValuePln();
     const horizons = getAssetsHorizonTotals();
-    const loanDebt = getLoanCapitalLeft();
+    const loanDebt = typeof getLoanSummaryCapitalPln === 'function' ? getLoanSummaryCapitalPln() : getLoanCapitalLeft();
     const cardDebt = getCreditCardDebtTotal();
     const totalDebt = loanDebt + cardDebt;
     const net = assets - totalDebt;
@@ -1013,7 +1013,7 @@ function buildAssetsCtx() {
     const assets = getAnalysisSummaryAssets();
     const totalAssets = getPortfolioValuePln();
     const horizons = getAssetsHorizonTotals();
-    const loanDebt = getLoanCapitalLeft();
+    const loanDebt = typeof getLoanSummaryCapitalPln === 'function' ? getLoanSummaryCapitalPln() : getLoanCapitalLeft();
     const cardDebt = getCreditCardDebtTotal();
     const liquidCash = getLiquidCashPln();
     return { assets, totalAssets, horizons, loanDebt, cardDebt, liquidCash };

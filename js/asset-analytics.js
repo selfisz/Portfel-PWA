@@ -64,7 +64,7 @@ function buildCurrentSnapshotPayload(monthKey, source = 'manual') {
     const horizons = typeof getAssetsHorizonTotals === 'function'
         ? getAssetsHorizonTotals()
         : { short: getPortfolioValuePln(), long: 0 };
-    const loanDebt = getLoanCapitalLeft();
+    const loanDebt = typeof getLoanSummaryCapitalPln === 'function' ? getLoanSummaryCapitalPln() : getLoanCapitalLeft();
     const cardDebt = getCreditCardDebtTotal();
     const totalDebt = loanDebt + cardDebt;
     const totalAssets = getPortfolioValuePln();
@@ -360,7 +360,8 @@ function adjustAssetValuePln(asset, deltaPln, options = {}) {
             if (!ok) return null;
         }
         if (qty > 0) {
-            const nextPrice = nextValue / qty / (a.currency === 'EUR' ? (EUR_PLN_RATE || 1) : 1);
+            const eurRate = typeof getEurPlnRate === 'function' ? getEurPlnRate() : EUR_PLN_RATE;
+            const nextPrice = nextValue / qty / (a.currency === 'EUR' ? (eurRate || 1) : 1);
             return updateAssetInState({ ...a, currentPrice: Math.max(0, nextPrice) });
         }
         return updateAssetInState({ ...a, quantity: 1, purchasePrice: Math.max(0, nextValue), currentPrice: Math.max(0, nextValue), currency: 'PLN' });
