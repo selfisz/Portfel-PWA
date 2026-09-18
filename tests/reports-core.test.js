@@ -380,6 +380,48 @@ describe('calcReportsDailyAverage', () => {
     expect(avg).toBe(0);
   });
 
+  it('dla "range" liczy po długości wybranego zakresu, nie po odstępie wydatków', () => {
+    const originalDocument = globalThis.document;
+    const values = { 'reports-range-start': '2024-01-01', 'reports-range-end': '2024-01-31' };
+    globalThis.document = {
+      ...originalDocument,
+      getElementById: (id) => (id in values
+        ? { value: values[id] }
+        : originalDocument.getElementById(id))
+    };
+    try {
+      const periodTx = [
+        { date: '2024-01-05', amount: 100, type: 'expense' },
+        { date: '2024-01-07', amount: 200, type: 'expense' }
+      ];
+      const { avg, hint } = calcReportsDailyAverage('range', periodTx);
+      expect(avg).toBeCloseTo(300 / 31, 5);
+      expect(hint).toBe('zakres (31 dni)');
+    } finally {
+      globalThis.document = originalDocument;
+    }
+  });
+
+  it('dla "range" sięgającego w przyszłość liczy tylko dni do dziś', () => {
+    const originalDocument = globalThis.document;
+    const today = new Date();
+    const start = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+    const values = { 'reports-range-start': start, 'reports-range-end': '2099-12-31' };
+    globalThis.document = {
+      ...originalDocument,
+      getElementById: (id) => (id in values
+        ? { value: values[id] }
+        : originalDocument.getElementById(id))
+    };
+    try {
+      const periodTx = [{ date: start, amount: 100, type: 'expense' }];
+      const { hint } = calcReportsDailyAverage('range', periodTx);
+      expect(hint).toBe(`zakres (${today.getDate()} dni)`);
+    } finally {
+      globalThis.document = originalDocument;
+    }
+  });
+
   it('nie liczy income — tylko expense', () => {
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;

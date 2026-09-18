@@ -7,6 +7,20 @@ function getPeriodDayCount(ctx) {
     return Math.max(1, Math.round((e - s) / 86400000) + 1);
 }
 
+// Do średnich dziennych liczymy dni, które już minęły. Pełna długość okresu
+// przy bieżącym miesiącu dzieli wydatki z kilku dni przez cały miesiąc
+// i zaniża średnią, a przez to zawyża rezerwę.
+function getPeriodElapsedDayCount(ctx) {
+    const { start, end } = getPeriodBoundsFromCtx(ctx);
+    const todayStr = localIsoDate(new Date());
+    const effectiveEnd = end > todayStr ? todayStr : end;
+    if (effectiveEnd < start) return 1;
+    const s = new Date(`${start}T12:00:00`);
+    const e = new Date(`${effectiveEnd}T12:00:00`);
+    if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return getPeriodDayCount(ctx);
+    return Math.max(1, Math.round((e - s) / 86400000) + 1);
+}
+
 function getAnalysisSummaryAssets() {
     if (typeof getSummaryAssets === 'function') return getSummaryAssets();
     if (typeof getActiveAssets === 'function') return getActiveAssets();
@@ -290,7 +304,7 @@ function renderReportsNetWorth() {
     const liquidCash = getLiquidCashPln();
     const cardCoverage = cardDebt > 0 ? Math.round((liquidCash / cardDebt) * 100) : null;
     const { expense } = summarizePeriod(ctx.periodTx);
-    const periodDays = getPeriodDayCount(ctx);
+    const periodDays = getPeriodElapsedDayCount(ctx);
     const avgMonthlyExpense = (expense / periodDays) * 30.44;
     const runwayMonths = avgMonthlyExpense > 0 ? liquidCash / avgMonthlyExpense : null;
     const monthChange = typeof getSnapshotMonthChange === 'function' ? getSnapshotMonthChange() : null;
@@ -309,7 +323,7 @@ function renderReportsNetWorth() {
             <div><span class="label">Rezerwa (mies.)</span><strong>${runwayMonths !== null ? runwayMonths.toFixed(1) : '—'}</strong></div>
             <div class="networth-total"><span class="label">${NET_WORTH_LABEL}</span><strong style="color:${net >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatPlnAmount(net)}</strong></div>
         </div>
-        <p class="reports-hint reports-networth-hint">Rezerwa = gotówka operacyjna ÷ średnie miesięczne wydatki w wybranym okresie.</p>`;
+        <p class="reports-hint reports-networth-hint">Rezerwa = gotówka operacyjna ÷ średnie miesięczne wydatki z ${periodDays} dni, które minęły w wybranym okresie.</p>`;
 
     if (changeEl) {
         if (monthChange) {

@@ -46,6 +46,7 @@ let reportsCalendarYear = null;
 let reportsCalendarMonth = null;
 let reportsDebtCalendarYear = null;
 let reportsDebtCalendarMonth = null;
+let reportsDebtCalendarSyncedMonth = null;
 let reportsLastPeriod = null;
 let cloudSyncUnlocked = false;
 let preferRemoteFinanceState = false;

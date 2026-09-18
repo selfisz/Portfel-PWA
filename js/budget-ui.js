@@ -305,6 +305,7 @@ function isBudgetConfirmOnOverEnabled() {
 
 let reportsBudgetExpandedCategory = null;
 let reportsBudgetOverviewShowAll = false;
+let reportsBudgetMonthKey = null;
 
 function bindReportsBudgetList(container) {
     if (!container || container.dataset.budgetBound === '1' || typeof container.addEventListener !== 'function') return;
@@ -321,7 +322,7 @@ function handleReportsBudgetCategoryClick(event) {
 }
 
 function refreshVisibleReportsBudgetLists() {
-    const monthKey = getCurrentMonthKey();
+    const monthKey = reportsBudgetMonthKey || getCurrentMonthKey();
     const statuses = getAllCategoryBudgetStatuses(monthKey);
     if (reportsBudgetExpandedCategory && !statuses.some((s) => s.key === reportsBudgetExpandedCategory)) {
         reportsBudgetExpandedCategory = null;
@@ -423,7 +424,7 @@ function renderBudgetStatusListHtml(statuses, {
     return `<div class="budget-status-list">${rows}</div>`;
 }
 
-function buildBudgetSummaryLine(statuses) {
+function buildBudgetSummaryLine(statuses, monthKey = null) {
     const over = statuses.filter((s) => s.state === 'over').length;
     const warn = statuses.filter((s) => s.state === 'warn').length;
     if (!statuses.length) return '';
@@ -431,29 +432,48 @@ function buildBudgetSummaryLine(statuses) {
     if (over) parts.push(`${over} przekroczon${over === 1 ? 'a' : 'e'}`);
     if (warn) parts.push(`${warn} blisko limitu`);
     if (!parts.length) parts.push('wszystko w limicie');
-    return `Budżet: ${parts.join(' · ')}`;
+    const label = monthKey && monthKey !== getCurrentMonthKey()
+        ? ` (${formatBudgetMonthLabel(monthKey)})`
+        : '';
+    return `Budżet${label}: ${parts.join(' · ')}`;
+}
+
+function formatBudgetMonthLabel(monthKey) {
+    const [year, month] = String(monthKey || '').split('-').map(Number);
+    if (!year || !month) return '';
+    return new Date(year, month - 1, 1).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+}
+
+// Paski budżetu pokazują miesiąc wybrany w Analizie — wcześniej liczyły
+// zawsze bieżący, więc przy podglądzie starszego miesiąca karta znikała.
+function getReportsBudgetMonthKey(ctx) {
+    if (ctx?.mode === 'month' && ctx.rangeStart) return String(ctx.rangeStart).slice(0, 7);
+    return null;
 }
 
 function updateReportsBudgetOverviewVisibility(ctx) {
     const card = document.getElementById('reports-budget-overview-card');
     if (!card) return;
-    const show = ctx?.mode !== 'compare'
-        && typeof isReportsCurrentMonthPeriod === 'function'
-        && isReportsCurrentMonthPeriod(ctx)
-        && hasConfiguredCategoryBudgets();
+    const monthKey = getReportsBudgetMonthKey(ctx);
+    const show = ctx?.mode !== 'compare' && !!monthKey && hasConfiguredCategoryBudgets();
     card.classList.toggle('hidden', !show);
-    if (show) renderReportsBudgetOverview(ctx);
+    if (!show) {
+        reportsBudgetMonthKey = null;
+        return;
+    }
+    renderReportsBudgetOverview(ctx);
 }
 
-function renderReportsBudgetOverview() {
+function renderReportsBudgetOverview(ctx = null) {
     const root = document.getElementById('reports-budget-overview-list');
     const card = document.getElementById('reports-budget-overview-card');
     if (!root) return;
     bindReportsBudgetList(card || root);
-    const monthKey = getCurrentMonthKey();
+    const monthKey = getReportsBudgetMonthKey(ctx) || reportsBudgetMonthKey || getCurrentMonthKey();
+    reportsBudgetMonthKey = monthKey;
     const statuses = getAllCategoryBudgetStatuses(monthKey);
     const summaryEl = document.getElementById('reports-budget-overview-summary');
-    if (summaryEl) summaryEl.textContent = buildBudgetSummaryLine(statuses);
+    if (summaryEl) summaryEl.textContent = buildBudgetSummaryLine(statuses, monthKey);
     const showAll = reportsBudgetOverviewShowAll;
     const limit = showAll ? null : 8;
     root.innerHTML = renderBudgetStatusListHtml(statuses, {

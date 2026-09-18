@@ -115,7 +115,9 @@ beforeAll(() => {
         function _setReportsCalendarYear(v)  { reportsCalendarYear = v; }
         function _setReportsCalendarMonth(v) { reportsCalendarMonth = v; }
         function _getDebtCalendarMonth() { return reportsDebtCalendarMonth; }
+        function _getDebtCalendarYear() { return reportsDebtCalendarYear; }
         function _setDebtCalendar(y, m) { reportsDebtCalendarYear = y; reportsDebtCalendarMonth = m; }
+        function _setDebtCalendarSynced(v) { reportsDebtCalendarSyncedMonth = v; }
     `);
 });
 
@@ -604,5 +606,44 @@ describe('shiftReportsDebtCalendarMonth', () => {
         shiftReportsDebtCalendarMonth(-1);
         expect(_getDebtCalendarMonth()).toBe(4);
         expect(_getReportsCalendarMonth()).toBe(5);
+    });
+});
+
+describe('syncReportsDebtCalendarToSelectedMonth', () => {
+    beforeEach(() => {
+        _setDebtCalendar(2024, 5);
+        _setDebtCalendarSynced(null);
+        globalThis.reportsPeriodMode = 'month';
+        globalThis.getReportsMonthValue = () => '2026-03';
+    });
+
+    it('ustawia kalendarz rat na miesiąc wybrany w Analizie', () => {
+        syncReportsDebtCalendarToSelectedMonth();
+        expect(_getDebtCalendarYear()).toBe(2026);
+        expect(_getDebtCalendarMonth()).toBe(2);
+    });
+
+    it('nie nadpisuje ręcznego przewinięcia, dopóki okres się nie zmieni', () => {
+        syncReportsDebtCalendarToSelectedMonth();
+        shiftReportsDebtCalendarMonth(1);
+        expect(_getDebtCalendarMonth()).toBe(3);
+        syncReportsDebtCalendarToSelectedMonth();
+        expect(_getDebtCalendarMonth()).toBe(3);
+    });
+
+    it('po zmianie wybranego miesiąca wraca do niego', () => {
+        syncReportsDebtCalendarToSelectedMonth();
+        shiftReportsDebtCalendarMonth(2);
+        globalThis.getReportsMonthValue = () => '2026-07';
+        syncReportsDebtCalendarToSelectedMonth();
+        expect(_getDebtCalendarYear()).toBe(2026);
+        expect(_getDebtCalendarMonth()).toBe(6);
+    });
+
+    it('dla okresu innego niż miesiąc nie rusza kalendarza rat', () => {
+        globalThis.reportsPeriodMode = 'year';
+        syncReportsDebtCalendarToSelectedMonth();
+        expect(_getDebtCalendarYear()).toBe(2024);
+        expect(_getDebtCalendarMonth()).toBe(5);
     });
 });
