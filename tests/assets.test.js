@@ -446,6 +446,31 @@ describe('getSummaryAssets', () => {
     ]});
     expect(getSummaryAssets()).toHaveLength(0);
   });
+
+  it('wyklucza aktywa z odznaczonej grupy portfela', () => {
+    _setAppState({
+      ..._getAppState(),
+      assets: [
+        { id: 'asset-inv-ikze-vwce', type: 'investment', brokerAccount: 'ikze', ticker: 'VWCE', quantity: 1, purchasePrice: 100, currentPrice: 105 },
+        { id: 'asset-cash-main', type: 'cash', amount: 500 }
+      ],
+      reportPrefs: { excludedPortfolioGroups: ['ikze'] }
+    });
+    expect(getSummaryAssets().map((a) => a.id)).toEqual(['asset-cash-main']);
+  });
+
+  it('zwraca to samo co getEffectiveSummaryAssets', () => {
+    _setAppState({
+      ..._getAppState(),
+      assets: [
+        { id: 'asset-inv-xtb-art', type: 'investment', brokerAccount: 'xtb', ticker: 'ART', quantity: 1, purchasePrice: 10, currentPrice: 12 },
+        { id: 'asset-inv-ikze-vwce', type: 'investment', brokerAccount: 'ikze', ticker: 'VWCE', quantity: 1, purchasePrice: 100, currentPrice: 105 },
+        { id: 'asset-cash-main', type: 'cash', amount: 500, includeInSummary: false }
+      ],
+      reportPrefs: { excludedPortfolioGroups: ['ikze'] }
+    });
+    expect(getSummaryAssets().map((a) => a.id)).toEqual(getEffectiveSummaryAssets().map((a) => a.id));
+  });
 });
 
 // ===========================================================================
