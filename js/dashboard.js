@@ -5,6 +5,9 @@ const dashboardSelectedFingerprints = new Set();
 let dashboardCurrentListTx = [];
 const CHART_DRILL_TX_MAX_SLICES = 16;
 
+let dashboardWhatIfActive = false;
+const dashboardWhatIfExcluded = new Set();
+
 function resetDashboardTxListPagination() {
     dashboardTxVisibleCount = LIST_PAGE_SIZE;
     dashboardTxListSignature = '';
@@ -29,9 +32,9 @@ function updateDashboardSelectionUi(forecastMode, searchQuery) {
     }
     if (selectionBar) selectionBar.classList.toggle('hidden', hideSelection || !dashboardSelectionActive);
     if (hintEl && !hideSelection) {
-        hintEl.textContent = dashboardSelectionActive
-            ? 'Zaznacz transakcje do raportu PDF'
-            : 'Dotknij, aby edytować';
+        if (dashboardSelectionActive) hintEl.textContent = 'Zaznacz transakcje do raportu PDF';
+        else if (dashboardWhatIfActive) hintEl.textContent = 'Dotknij transakcję, aby wyłączyć ją z podglądu';
+        else hintEl.textContent = 'Dotknij, aby edytować';
     }
     if (addBtn) {
         const count = dashboardSelectedFingerprints.size;
@@ -50,8 +53,12 @@ function toggleDashboardSelectionMode() {
     const searchQuery = document.getElementById('db-search')?.value.trim() || '';
     if (forecastMode && !searchQuery) return;
 
-    if (dashboardSelectionActive) exitDashboardSelectionMode();
-    else dashboardSelectionActive = true;
+    if (dashboardSelectionActive) {
+        exitDashboardSelectionMode();
+    } else {
+        dashboardSelectionActive = true;
+        dashboardWhatIfActive = false;
+    }
 
     updateDashboardSelectionUi(forecastMode, searchQuery);
     renderDashboard();
@@ -103,6 +110,82 @@ function addSelectedDashboardToBasket() {
         openNotificationsPanel();
         setNotificationsPanelTab('basket');
     }
+}
+
+function getTransactionWhatIfKey(t) {
+    return typeof transactionFingerprint === 'function' ? transactionFingerprint(t) : '';
+}
+
+function isTransactionWhatIfExcluded(t) {
+    const fp = getTransactionWhatIfKey(t);
+    return !!fp && dashboardWhatIfExcluded.has(fp);
+}
+
+function isTransactionHiddenByChartFilter(t) {
+    if (t.type !== chartViewType) return false;
+    if (!isChartMainCategoryVisible(t.mainCategory)) return true;
+    return !isChartSubCategoryVisible(t.mainCategory, getTransactionSubCategoryLabel(t));
+}
+
+function isTransactionExcludedFromDashboardTotals(t) {
+    return isTransactionWhatIfExcluded(t) || isTransactionHiddenByChartFilter(t);
+}
+
+function getDashboardWhatIfSummary(transactions) {
+    let count = 0;
+    let expense = 0;
+    let income = 0;
+    transactions.forEach((t) => {
+        if (!isTransactionExcludedFromDashboardTotals(t)) return;
+        count += 1;
+        if (t.type === 'expense') expense += t.amount;
+        else if (t.type === 'income') income += t.amount;
+    });
+    return { count, expense, income };
+}
+
+function buildDashboardWhatIfText(summary) {
+    const parts = [];
+    if (summary.expense > 0) parts.push(`wydatki niższe o ${formatPlnAmount(summary.expense)}`);
+    if (summary.income > 0) parts.push(`wpływy niższe o ${formatPlnAmount(summary.income)}`);
+    const suffix = parts.length ? ` — ${parts.join(', ')}` : '';
+    return `Podgląd bez ${summary.count} pozycji${suffix}`;
+}
+
+function toggleDashboardWhatIfMode() {
+    if (isDashboardForecastPeriod()) return;
+    dashboardWhatIfActive = !dashboardWhatIfActive;
+    if (dashboardWhatIfActive) exitDashboardSelectionMode();
+    renderDashboard();
+}
+
+function toggleDashboardWhatIfTransaction(fingerprint) {
+    if (!fingerprint) return;
+    if (dashboardWhatIfExcluded.has(fingerprint)) dashboardWhatIfExcluded.delete(fingerprint);
+    else dashboardWhatIfExcluded.add(fingerprint);
+    renderDashboard();
+}
+
+function clearDashboardWhatIf() {
+    dashboardWhatIfExcluded.clear();
+    chartHiddenMainCategories = {};
+    chartHiddenSubCategories = {};
+    renderDashboard();
+}
+
+function updateDashboardWhatIfUi(summary, forecastMode) {
+    const btn = document.getElementById('btn-dashboard-whatif');
+    if (btn) {
+        btn.classList.toggle('hidden', forecastMode);
+        btn.textContent = dashboardWhatIfActive ? 'Gotowe' : 'Co jeśli?';
+        btn.setAttribute('aria-pressed', dashboardWhatIfActive ? 'true' : 'false');
+    }
+
+    const bar = document.getElementById('dashboard-whatif-bar');
+    const textEl = document.getElementById('dashboard-whatif-text');
+    const visible = !forecastMode && summary.count > 0;
+    if (bar) bar.classList.toggle('hidden', !visible);
+    if (textEl && visible) textEl.textContent = buildDashboardWhatIfText(summary);
 }
 
 function getDashboardTxListSignature(listTx, searchQuery) {
@@ -746,6 +829,15 @@ function renderDashboard() {
     const searchQuery = document.getElementById('db-search').value.toLowerCase().trim();
     const dateFilteredTx = appState.transactions.filter(t => t.date >= startDate && t.date <= endDate);
 
+    const whatIfSummary = forecastMode
+        ? { count: 0, expense: 0, income: 0 }
+        : getDashboardWhatIfSummary(dateFilteredTx);
+    const whatIfActive = whatIfSummary.count > 0;
+    const totalsTx = whatIfActive
+        ? dateFilteredTx.filter((t) => !isTransactionExcludedFromDashboardTotals(t))
+        : dateFilteredTx;
+    updateDashboardWhatIfUi(whatIfSummary, forecastMode);
+
     let totalIncomes;
     let totalExpenses;
     if (forecastMode) {
@@ -753,16 +845,17 @@ function renderDashboard() {
         totalIncomes = forecast.income;
         totalExpenses = forecast.expense;
     } else {
-        totalIncomes = dateFilteredTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-        totalExpenses = dateFilteredTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+        totalIncomes = totalsTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+        totalExpenses = totalsTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
     }
     const netBalance = totalIncomes - totalExpenses;
 
     document.getElementById('db-period-label').innerText = formatDashboardPeriodLabel();
     document.getElementById('db-total-incomes').innerText = `${totalIncomes.toFixed(2)} zł`;
     document.getElementById('db-total-expenses').innerText = `${totalExpenses.toFixed(2)} zł`;
-    document.getElementById('db-incomes-label').textContent = forecastMode ? 'Wpływy (prognoza)' : 'Wpływy';
-    document.getElementById('db-expenses-label').textContent = forecastMode ? 'Wydatki (prognoza)' : 'Wydatki';
+    const heroLabelSuffix = forecastMode ? ' (prognoza)' : (whatIfActive ? ' (podgląd)' : '');
+    document.getElementById('db-incomes-label').textContent = `Wpływy${heroLabelSuffix}`;
+    document.getElementById('db-expenses-label').textContent = `Wydatki${heroLabelSuffix}`;
     document.getElementById('db-forecast-hint')?.classList.toggle('hidden', !forecastMode);
     const netEl = document.getElementById('db-net-balance');
     netEl.innerText = `${netBalance >= 0 ? '+' : ''}${netBalance.toFixed(2)} zł`;
@@ -808,7 +901,7 @@ function renderDashboard() {
     dashboardCurrentListTx = listTx;
     updateDashboardSelectionUi(forecastMode, searchQuery);
 
-    const chartTx = dateFilteredTx.filter(t => t.type === chartViewType);
+    const chartTx = dateFilteredTx.filter(t => t.type === chartViewType && !isTransactionWhatIfExcluded(t));
     const chartTypeLabel = chartViewType === 'income' ? 'wpływów' : 'wydatków';
     const chartTypeSuffix = forecastMode ? ' (prognoza)' : '';
     document.getElementById('btn-reset-chart').style.display = activeChartCategory ? 'block' : 'none';
@@ -978,12 +1071,17 @@ function renderDashboard() {
         const metaText = searchQuery ? `${formatTxDate(t.date)} · ${t.mainCategory}` : t.mainCategory;
         const fp = typeof transactionFingerprint === 'function' ? transactionFingerprint(t) : '';
         const isSelected = dashboardSelectionActive && fp && dashboardSelectedFingerprints.has(fp);
+        const whatIfOff = !forecastMode && isTransactionWhatIfExcluded(t);
+        const whatIfBadge = whatIfOff ? '<span class="tx-badge tx-badge--whatif">pominięte</span>' : '';
         const row = document.createElement('div');
         row.className = fromArchive ? 'tx-row tx-row--archive' : 'tx-row';
         if (dashboardSelectionActive) {
             row.classList.add('tx-row--selectable');
             if (isSelected) row.classList.add('tx-row--selected');
+        } else if (dashboardWhatIfActive) {
+            row.classList.add('tx-row--selectable');
         }
+        if (whatIfOff) row.classList.add('tx-row--whatif-off');
         const checkboxHtml = dashboardSelectionActive
             ? `<label class="tx-row-select" onclick="event.stopPropagation()"><input type="checkbox" class="tx-row-checkbox" data-tx-fp="${escapeHtml(fp)}" ${isSelected ? 'checked' : ''} aria-label="Zaznacz transakcję"></label>`
             : '';
@@ -991,14 +1089,14 @@ function renderDashboard() {
             ${checkboxHtml}
             ${renderCategoryIcon(t.mainCategory, 'list', t.subCategory !== '[Bez podkategorii]' ? t.subCategory : null, t.type)}
             <div class="tx-info">
-                <div class="tx-title">${title}${isRec}${isCard}${archiveBadge}${plannedBadge}</div>
+                <div class="tx-title">${title}${isRec}${isCard}${archiveBadge}${plannedBadge}${whatIfBadge}</div>
                 <div class="tx-meta">${metaText}</div>
                 ${t.note ? `<div class="tx-note">${t.note}</div>` : ''}
             </div>
             <div class="tx-amount-col">
                 <div class="tx-amount ${t.type}">${t.type === 'expense' ? '-' : '+'}${t.amount.toFixed(2)} zł</div>
             </div>
-            ${dashboardSelectionActive || fromArchive ? '' : '<span class="tx-chevron" aria-hidden="true">›</span>'}`;
+            ${dashboardSelectionActive || dashboardWhatIfActive || fromArchive ? '' : '<span class="tx-chevron" aria-hidden="true">›</span>'}`;
         if (dashboardSelectionActive && fp) {
             const checkbox = row.querySelector('.tx-row-checkbox');
             checkbox?.addEventListener('change', (e) => {
@@ -1008,6 +1106,8 @@ function renderDashboard() {
             row.addEventListener('click', () => {
                 toggleDashboardTxSelection(fp, !dashboardSelectedFingerprints.has(fp));
             });
+        } else if (dashboardWhatIfActive && fp) {
+            row.addEventListener('click', () => toggleDashboardWhatIfTransaction(fp));
         } else if (globalIndex >= 0) {
             row.addEventListener('click', () => openTransactionDetails(globalIndex));
         }

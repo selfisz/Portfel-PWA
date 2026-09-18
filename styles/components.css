@@ -1273,6 +1273,30 @@ html[data-theme="dark"] .hero-card {
     z-index: 1;
 }
 
+.dashboard-whatif-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 12px;
+    margin-top: 12px;
+    padding: 9px 12px;
+    border-radius: var(--radius-sm, 12px);
+    background: rgba(255, 255, 255, 0.12);
+    position: relative;
+    z-index: 1;
+}
+
+.dashboard-whatif-text {
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.dashboard-whatif-reset {
+    flex-shrink: 0;
+}
+
 .hero-budget-label {
     display: block;
     font-size: var(--text-2xs);
@@ -2694,6 +2718,13 @@ html:not([data-theme="dark"]) .grid-item.selected {
     font-weight: 600;
 }
 
+.dashboard-tx-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+}
+
 .dashboard-tx-selection-bar {
     display: flex;
     flex-wrap: wrap;
@@ -2830,6 +2861,20 @@ html:not([data-theme="dark"]) .grid-item.selected {
 .tx-badge--archive {
     background: rgba(148, 163, 184, 0.2);
     color: var(--text-muted);
+}
+
+.tx-badge--whatif {
+    background: rgba(148, 163, 184, 0.2);
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.tx-row--whatif-off {
+    opacity: 0.5;
+}
+
+.tx-row--whatif-off .tx-amount {
+    text-decoration: line-through;
 }
 
 .tx-row--archive {
