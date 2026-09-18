@@ -129,7 +129,13 @@ function getActiveAssets() {
 }
 
 function getSummaryAssets() {
-    return getActiveAssets().filter((asset) => asset.includeInSummary !== false);
+    const excluded = new Set(getExcludedPortfolioGroups());
+    return getActiveAssets().filter((asset) => {
+        if (asset.includeInSummary === false) return false;
+        const groupId = getAssetPortfolioGroupId(asset);
+        if (groupId && excluded.has(groupId)) return false;
+        return true;
+    });
 }
 
 function getExcludedPortfolioGroups() {
@@ -138,13 +144,7 @@ function getExcludedPortfolioGroups() {
 }
 
 function getEffectiveSummaryAssets() {
-    const excluded = new Set(getExcludedPortfolioGroups());
-    return getActiveAssets().filter((asset) => {
-        if (asset.includeInSummary === false) return false;
-        const groupId = getAssetPortfolioGroupId(asset);
-        if (groupId && excluded.has(groupId)) return false;
-        return true;
-    });
+    return getSummaryAssets();
 }
 
 function togglePortfolioGroupSummary(groupId) {

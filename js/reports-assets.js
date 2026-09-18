@@ -25,8 +25,9 @@ function getAssetsHorizonTotals() {
         const total = getPortfolioValuePln();
         return { short: total, long: 0 };
     }
-    const shortAssets = getAssetsByHorizon('short').filter((a) => a.includeInSummary !== false);
-    const longAssets = getAssetsByHorizon('long').filter((a) => a.includeInSummary !== false);
+    const summaryIds = new Set(getAnalysisSummaryAssets().map((a) => a.id));
+    const shortAssets = getAssetsByHorizon('short').filter((a) => summaryIds.has(a.id));
+    const longAssets = getAssetsByHorizon('long').filter((a) => summaryIds.has(a.id));
     return {
         short: getActiveAssetsTotalPln(shortAssets),
         long: getActiveAssetsTotalPln(longAssets)
