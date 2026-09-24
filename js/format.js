@@ -13,6 +13,23 @@ function formatPlnAmount(amount) {
     return `${n.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
 }
 
+/** Znak minus do kwot i procentów (spójny typograficzny „−”). */
+function formatSignedNumberPrefix(value) {
+    return Number(value) >= 0 ? '+' : '−';
+}
+
+/** Procent z przecinkiem dziesiętnym (pl-PL), ze znakiem. */
+function formatPercentPl(value, fractionDigits = 1) {
+    const n = Number(value);
+    if (value == null || !Number.isFinite(n)) return '—';
+    const sign = formatSignedNumberPrefix(n);
+    const abs = Math.abs(n).toLocaleString('pl-PL', {
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits
+    });
+    return `${sign}${abs}%`;
+}
+
 function formatPlnAmountHtml(amount) {
     const text = formatPlnAmount(amount);
     if (!text.endsWith(' zł')) return escapeHtml(text);

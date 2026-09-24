@@ -52,6 +52,13 @@ describe('formatPlnAmount', () => {
   });
 });
 
+describe('formatPercentPl', () => {
+  it('formatuje procent z przecinkiem i znakiem', () => {
+    expect(formatPercentPl(7.25)).toBe('+7,3%');
+    expect(formatPercentPl(-3.4)).toBe('−3,4%');
+  });
+});
+
 describe('formatPlnAmountHtml', () => {
   it('owija kwotę w markup z osobnym sufiksem zł', () => {
     const html = formatPlnAmountHtml(1234.56);
