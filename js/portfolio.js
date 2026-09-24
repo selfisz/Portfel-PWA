@@ -522,3 +522,17 @@ function resolveDebtTransactionLoan(t) {
     if (owners.length === 1) return owners[0];
     return null;
 }
+
+/** Id kredytu dla spłaty: najpierw moduł Długi (loanId / ruch gotówkowy), potem heurystyka legacy. */
+function getLoanIdForDebtTransaction(t) {
+    if (!t || t.type !== 'expense' || t.mainCategory !== 'Długi') return null;
+    if (t.loanId) return t.loanId;
+    const movement = typeof getCashMovementForTransaction === 'function'
+        ? getCashMovementForTransaction(t)
+        : null;
+    if (movement?.source === 'loan_payment' && movement.sourceRef) {
+        return movement.sourceRef;
+    }
+    const loan = resolveDebtTransactionLoan(t);
+    return loan?.id || null;
+}

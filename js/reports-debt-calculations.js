@@ -87,14 +87,16 @@ function sumLoanInstallmentPaymentsForLoanInRange(loan, start, end) {
 
 function sumLoanPaymentsForLoanInRange(loan, start, end) {
     if (!loan) return 0;
-    return getTransactionsInRange(start, end)
-        .filter((t) => {
-            const owner = typeof resolveDebtTransactionLoan === 'function'
+    const ownerId = typeof getLoanIdForDebtTransaction === 'function'
+        ? getLoanIdForDebtTransaction
+        : (t) => {
+            const resolved = typeof resolveDebtTransactionLoan === 'function'
                 ? resolveDebtTransactionLoan(t)
                 : null;
-            if (owner) return owner.id === loan.id;
-            return t.type === 'expense' && transactionBelongsToLoan(t, loan);
-        })
+            return resolved?.id || null;
+        };
+    return getTransactionsInRange(start, end)
+        .filter((t) => t.type === 'expense' && ownerId(t) === loan.id)
         .reduce((s, t) => s + t.amount, 0);
 }
 
@@ -406,15 +408,14 @@ function classifyLoanPaymentAmount(loan, amount) {
 function analyzeLoanPaymentsInPeriod(ctx) {
     let regular = 0;
     let over = 0;
-    const resolve = typeof resolveDebtTransactionLoan === 'function'
-        ? resolveDebtTransactionLoan
-        : (t) => {
-            const loans = getActiveLoans().filter((l) => transactionBelongsToLoan(t, l));
-            return loans.length === 1 ? loans[0] : null;
-        };
+    const resolveId = typeof getLoanIdForDebtTransaction === 'function'
+        ? getLoanIdForDebtTransaction
+        : (t) => resolveDebtTransactionLoan(t)?.id || null;
     ctx.periodTx.forEach((t) => {
         if (t.type !== 'expense' || t.mainCategory !== 'Długi') return;
-        const loan = resolve(t);
+        const loanId = resolveId(t);
+        if (!loanId) return;
+        const loan = getActiveLoans().find((l) => l.id === loanId);
         if (!loan) return;
         const noteOver = /nadpłat|nadplat/i.test(t.note || '');
         if (noteOver) {
@@ -431,19 +432,16 @@ function analyzeLoanPaymentsInPeriod(ctx) {
 function buildDebtSplitData(ctx) {
     const { start, end } = getPeriodBoundsFromCtx(ctx);
     const slices = [];
-    const resolve = typeof resolveDebtTransactionLoan === 'function'
-        ? resolveDebtTransactionLoan
-        : (t) => {
-            const loans = getActiveLoans().filter((l) => transactionBelongsToLoan(t, l));
-            return loans.length === 1 ? loans[0] : null;
-        };
+    const resolveId = typeof getLoanIdForDebtTransaction === 'function'
+        ? getLoanIdForDebtTransaction
+        : (t) => resolveDebtTransactionLoan(t)?.id || null;
     const amountByLoanId = new Map();
 
     ctx.periodTx.forEach((t) => {
         if (t.type !== 'expense' || t.mainCategory !== 'Długi') return;
-        const loan = resolve(t);
-        if (!loan) return;
-        amountByLoanId.set(loan.id, (amountByLoanId.get(loan.id) || 0) + t.amount);
+        const loanId = resolveId(t);
+        if (!loanId) return;
+        amountByLoanId.set(loanId, (amountByLoanId.get(loanId) || 0) + t.amount);
     });
 
     getActiveLoans().forEach((loan) => {
@@ -472,13 +470,12 @@ function buildDebtSplitDrillData(ctx, drillLabel = null) {
     if (match.kind === 'loan') {
         const loan = getActiveLoans().find((l) => l.id === match.id);
         if (!loan) return [];
-        const resolve = typeof resolveDebtTransactionLoan === 'function'
-            ? resolveDebtTransactionLoan
-            : (t) => (transactionBelongsToLoan(t, loan) ? loan : null);
+        const resolveId = typeof getLoanIdForDebtTransaction === 'function'
+            ? getLoanIdForDebtTransaction
+            : (t) => resolveDebtTransactionLoan(t)?.id || null;
         const txs = ctx.periodTx.filter((t) => {
             if (t.type !== 'expense' || t.mainCategory !== 'Długi') return false;
-            const owner = resolve(t);
-            return owner && owner.id === loan.id;
+            return resolveId(t) === loan.id;
         });
         const { sums } = getDashboardChartTransactionSums(txs);
         return Object.entries(sums).map(([label, amount]) => ({ label, amount }));

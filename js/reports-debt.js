@@ -394,7 +394,9 @@ function renderReportsLoanSummary(ctx, targetId = 'reports-loan-summary') {
         const loanId = escapeHtml(loan.id);
 
         const debtPayments = ctx.periodTx
-            .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
+            .filter((t) => typeof getLoanIdForDebtTransaction === 'function'
+                ? getLoanIdForDebtTransaction(t) === loan.id
+                : (t.type === 'expense' && transactionBelongsToLoan(t, loan)))
             .reduce((s, t) => s + t.amount, 0);
 
         return `<div class="analysis-loan-click loan-clickable" role="button" tabindex="0"
@@ -1060,7 +1062,9 @@ function buildReportsLoanPortfolioRowHtml(loan, ctx) {
     const annual = estimateAnnualInterest(loan);
     const paidPct = Math.round(getLoanPaidPercent(loan));
     const debtPayments = ctx.periodTx
-        .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
+        .filter((t) => typeof getLoanIdForDebtTransaction === 'function'
+            ? getLoanIdForDebtTransaction(t) === loan.id
+            : (t.type === 'expense' && transactionBelongsToLoan(t, loan)))
         .reduce((s, t) => s + t.amount, 0);
     const loanId = escapeHtml(loan.id);
     const isMortgage = typeof isMortgageLoan === 'function' && isMortgageLoan(loan);

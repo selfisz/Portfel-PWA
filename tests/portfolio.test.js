@@ -23,6 +23,8 @@ beforeAll(() => {
   globalThis.appState = { loans: [], transactions: [], assets: [], creditCards: [] };
   globalThis.categoryTree = { expense: { Długi: ['Kredyt hipoteczny', 'Meble'] } };
 
+  loadScript('js/constants.js');
+  loadScript('js/cash.js');
   loadScript('js/portfolio.js');
 });
 
@@ -414,6 +416,40 @@ describe('resolveDebtTransactionLoan', () => {
       note: 'Rata Kredyt 0% VeloBank'
     };
     expect(resolveDebtTransactionLoan(installment)?.id).toBe('loan-velo');
+  });
+});
+
+describe('getLoanIdForDebtTransaction', () => {
+  it('preferuje loanId z modułu spłaty kredytu', () => {
+    globalThis.appState.loans = [
+      { id: 'loan-hip', subCategory: 'Kredyt hipoteczny', totalAmount: 400000, currentCapitalLeft: 350000, archived: false }
+    ];
+    const tx = {
+      type: 'expense',
+      mainCategory: 'Długi',
+      subCategory: 'Spłata',
+      amount: 8000,
+      loanId: 'loan-hip'
+    };
+    expect(getLoanIdForDebtTransaction(tx)).toBe('loan-hip');
+  });
+
+  it('wiąże po ruchu gotówkowym loan_payment gdy brak loanId na transakcji', () => {
+    globalThis.appState.cashMovements = [{
+      id: 'cm1',
+      source: 'loan_payment',
+      sourceRef: 'loan-hip',
+      delta: -8000,
+      date: '2024-09-01'
+    }];
+    const tx = {
+      type: 'expense',
+      mainCategory: 'Długi',
+      subCategory: 'Spłata',
+      amount: 8000,
+      cashMovementId: 'cm1'
+    };
+    expect(getLoanIdForDebtTransaction(tx)).toBe('loan-hip');
   });
 });
 
