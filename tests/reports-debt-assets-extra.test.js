@@ -512,6 +512,27 @@ describe('buildDebtSplitData', () => {
         expect(hip?.amount).toBe(8000);
         expect(velo?.amount).toBeCloseTo(389.95, 2);
     });
+
+    it('ogólna podkategoria Spłata: kapitał na hipotece, rata na Velo', () => {
+        _setAppState({
+            ..._getAppState(),
+            loans: [
+                { id: 'velo', name: 'Kredyt 0% VeloBank', totalAmount: 20000, currentCapitalLeft: 15000, nextInstallmentAmount: 390 },
+                { id: 'hip', name: 'Kredyt hipoteczny', subCategory: 'Kredyt hipoteczny', totalAmount: 400000, currentCapitalLeft: 350000, nextInstallmentAmount: 4627 }
+            ]
+        });
+        const ctx = makeCtx([
+            { date: '2024-09-01', type: 'expense', mainCategory: 'Długi', subCategory: 'Spłata', amount: 8000, note: 'Spłata kapitału' },
+            { date: '2024-09-01', type: 'expense', mainCategory: 'Długi', subCategory: 'Spłata', amount: 3015.54, note: 'Spłata kapitału (2)' },
+            { date: '2024-09-24', type: 'expense', mainCategory: 'Długi', subCategory: 'Spłata', amount: 3620.55, note: 'Spłata kapitału' },
+            { date: '2024-09-01', type: 'expense', mainCategory: 'Długi', subCategory: 'Spłata', amount: 389.95, note: 'Rata Kredyt 0% VeloBank' }
+        ]);
+        const result = buildDebtSplitData(ctx);
+        const velo = result.find((s) => s.id === 'velo');
+        const hip = result.find((s) => s.id === 'hip');
+        expect(velo?.amount).toBeCloseTo(389.95, 2);
+        expect(hip?.amount).toBeCloseTo(8000 + 3015.54 + 3620.55, 2);
+    });
 });
 
 // ===========================================================================

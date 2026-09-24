@@ -382,10 +382,15 @@ function getLoanPaymentSubcategories(loan) {
 
     if (isMortgageLoan(loan)) {
         const subs = new Set(MORTGAGE_DEBT_SUBCATEGORIES);
+        subs.add('Spłata');
+        subs.add('Spłata kapitału');
         appState.transactions.forEach((t) => {
             if (t.type !== 'expense' || t.mainCategory !== 'Długi' || !t.subCategory) return;
             if (MORTGAGE_DEBT_SUBCATEGORIES.includes(t.subCategory)
                 || /hipotec|mieszkan|pekao/i.test(t.subCategory)) {
+                subs.add(t.subCategory);
+            }
+            if (t.loanPaymentKind === 'overpayment' || /spłat|splat|kapitał|kapital/i.test(t.note || '')) {
                 subs.add(t.subCategory);
             }
         });
@@ -401,9 +406,35 @@ function transactionMatchesLoan(t, loan) {
     return subs.includes(t.subCategory);
 }
 
+function isCatchAllLoanPaymentProfile(loan) {
+    return getLoanPaymentSubcategories(loan) === null;
+}
+
+function loanHasSpecificSubcategoryMatch(loan, t) {
+    const subs = getLoanPaymentSubcategories(loan);
+    return Boolean(subs && t.subCategory && subs.includes(t.subCategory));
+}
+
+function catchAllLoanMayClaimTransaction(loan, t) {
+    const inst = loan.nextInstallmentAmount || 0;
+    const amount = t.amount || 0;
+    if (t.loanPaymentKind === 'overpayment') return false;
+    if (/nadpłat|nadplat|spłat.*kapita|splat.*kapita|kapitał|kapital/i.test(t.note || '')) return false;
+    if (inst > 0 && amount > inst * 1.05) return false;
+    return true;
+}
+
 function transactionBelongsToLoan(t, loan) {
     if (!t || !loan || t.type !== 'expense' || t.mainCategory !== 'Długi') return false;
     if (t.loanId) return t.loanId === loan.id;
+    if (isCatchAllLoanPaymentProfile(loan)) {
+        if (!catchAllLoanMayClaimTransaction(loan, t)) return false;
+        const specificOwner = getActiveLoans().some((l) => {
+            if (l.id === loan.id) return false;
+            return loanHasSpecificSubcategoryMatch(l, t);
+        });
+        return !specificOwner;
+    }
     if (!transactionMatchesLoan(t, loan)) return false;
     const peers = getActiveLoans().filter((l) => {
         if (l.id === loan.id) return false;
@@ -411,6 +442,55 @@ function transactionBelongsToLoan(t, loan) {
         return subs && t.subCategory && subs.includes(t.subCategory);
     });
     return peers.length === 0;
+}
+
+function inferLoanForGenericSplata(t, loans) {
+    if ((t.subCategory || '').trim() !== 'Spłata') return null;
+    const note = (t.note || '').toLowerCase();
+    const amount = t.amount || 0;
+
+    if (/velo/i.test(note)) {
+        const velo = loans.find((l) => /velo/i.test(`${l.name || ''} ${getLoanDisplayName(l) || ''}`));
+        if (velo) return velo;
+    }
+    if (/alior/i.test(note)) {
+        const alior = loans.find((l) => /alior/i.test(`${l.name || ''} ${getLoanDisplayName(l) || ''}`));
+        if (alior) return alior;
+    }
+    if (/hipotec|mieszkan|pekao/i.test(note)) {
+        const hip = loans.find(isMortgageLoan);
+        if (hip) return hip;
+    }
+
+    if (/rata/i.test(note)) {
+        const installmentFit = loans.filter((l) => {
+            const inst = l.nextInstallmentAmount || 0;
+            return inst > 0 && amount > 0 && amount <= inst * 1.05;
+        });
+        if (installmentFit.length === 1) return installmentFit[0];
+    }
+    return null;
+}
+
+function inferOverpaymentLoanWithoutId(t, loans) {
+    if (t.loanId || t.loanPaymentKind === 'installment') return null;
+    const isCapitalLike = t.loanPaymentKind === 'overpayment'
+        || /nadpłat|nadplat|spłat.*kapita|splat.*kapita|kapitał|kapital/i.test(t.note || '');
+    if (!isCapitalLike) return null;
+
+    const defined = loans.filter((l) => !isCatchAllLoanPaymentProfile(l));
+    const bySub = defined.filter((l) => loanHasSpecificSubcategoryMatch(l, t));
+    if (bySub.length === 1) return bySub[0];
+
+    const amount = t.amount || 0;
+    const bigInstallment = defined.filter((l) => {
+        const inst = l.nextInstallmentAmount || 0;
+        return inst > 0 && amount > inst * 1.05;
+    });
+    const mortgageBig = bigInstallment.filter(isMortgageLoan);
+    if (mortgageBig.length === 1) return mortgageBig[0];
+    if (bigInstallment.length === 1) return bigInstallment[0];
+    return null;
 }
 
 /** Jednoznaczne przypisanie spłaty kredytu (Analiza, sumy) — co najwyżej jeden kredyt na transakcję. */
@@ -421,12 +501,24 @@ function resolveDebtTransactionLoan(t) {
         const byId = loans.find((l) => l.id === t.loanId);
         if (byId) return byId;
     }
+
+    const inferredCapital = inferOverpaymentLoanWithoutId(t, loans);
+    if (inferredCapital) return inferredCapital;
+
+    const inferredSplata = inferLoanForGenericSplata(t, loans);
+    if (inferredSplata) return inferredSplata;
+
     const owners = loans.filter((l) => transactionBelongsToLoan(t, l));
-    if (owners.length === 1) return owners[0];
-    if (owners.length > 1) {
+    const specific = owners.filter((l) => !isCatchAllLoanPaymentProfile(l));
+    if (specific.length === 1) return specific[0];
+    if (specific.length > 1) {
         const sub = (t.subCategory || '').trim();
-        const exact = owners.find((l) => (l.subCategory || '').trim() === sub);
-        return exact || null;
+        const exact = specific.find((l) => (l.subCategory || '').trim() === sub);
+        if (exact) return exact;
     }
+
+    const catchAll = owners.filter((l) => isCatchAllLoanPaymentProfile(l));
+    if (catchAll.length === 1) return catchAll[0];
+    if (owners.length === 1) return owners[0];
     return null;
 }

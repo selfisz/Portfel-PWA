@@ -355,6 +355,66 @@ describe('resolveDebtTransactionLoan', () => {
     };
     expect(resolveDebtTransactionLoan(installment)?.id).toBe('loan-velo');
   });
+
+  it('spłata kapitału z podkategorią Spłata (bez loanId) trafia na hipotekę, nie Velo catch-all', () => {
+    globalThis.appState.loans = [
+      {
+        id: 'loan-velo',
+        name: 'Kredyt 0% VeloBank',
+        totalAmount: 20000,
+        currentCapitalLeft: 15000,
+        nextInstallmentAmount: 390,
+        archived: false
+      },
+      {
+        id: 'loan-hip',
+        name: 'Kredyt hipoteczny',
+        subCategory: 'Kredyt hipoteczny',
+        totalAmount: 400000,
+        currentCapitalLeft: 350000,
+        nextInstallmentAmount: 4627,
+        archived: false
+      }
+    ];
+    globalThis.appState.transactions = [];
+    const capital = {
+      type: 'expense',
+      mainCategory: 'Długi',
+      subCategory: 'Spłata',
+      amount: 8000,
+      note: 'Spłata kapitału'
+    };
+    expect(resolveDebtTransactionLoan(capital)?.id).toBe('loan-hip');
+  });
+
+  it('rata Velo catch-all zostaje przy Velo gdy kwota jak rata', () => {
+    globalThis.appState.loans = [
+      {
+        id: 'loan-velo',
+        name: 'Kredyt 0% VeloBank',
+        totalAmount: 20000,
+        currentCapitalLeft: 15000,
+        nextInstallmentAmount: 390,
+        archived: false
+      },
+      {
+        id: 'loan-hip',
+        subCategory: 'Kredyt hipoteczny',
+        totalAmount: 400000,
+        currentCapitalLeft: 350000,
+        nextInstallmentAmount: 4627,
+        archived: false
+      }
+    ];
+    const installment = {
+      type: 'expense',
+      mainCategory: 'Długi',
+      subCategory: 'Spłata',
+      amount: 389.95,
+      note: 'Rata Kredyt 0% VeloBank'
+    };
+    expect(resolveDebtTransactionLoan(installment)?.id).toBe('loan-velo');
+  });
 });
 
 // ---------------------------------------------------------------------------
