@@ -47,6 +47,7 @@ beforeAll(() => {
   };
 
   loadScript('js/constants.js');
+  loadScript('js/format.js');
   loadScript('js/portfolio.js');
   loadScript('js/state.js');
   loadScript('js/assets.js');
@@ -69,6 +70,7 @@ beforeEach(() => {
     categoryBudgets: {},
     creditCardMovements: []
   });
+  runInContext('assetsTypeFilter = "all";');
 });
 
 // ===========================================================================
@@ -680,6 +682,53 @@ describe('portfolio grouping', () => {
     expect(html).toContain('Konto');
     expect((html.match(/class="card assets-portfolio-panel"/g) || []).length).toBe(4);
     expect(html.indexOf('Pozostałe aktywa')).toBeLessThan(html.indexOf('XTB'));
+  });
+});
+
+// ===========================================================================
+// spójność kart aktywów (sumy, P/L, wykluczenia)
+// ===========================================================================
+describe('spójność kart aktywów', () => {
+  it('P/L panelu liczy tylko pozycje wliczane w sumę', () => {
+    const items = [
+      normalizeAsset({ id: 'a1', type: 'investment', brokerAccount: 'xtb', quantity: 10, purchasePrice: 100, currentPrice: 120, includeInSummary: true }),
+      normalizeAsset({ id: 'a2', type: 'investment', brokerAccount: 'xtb', quantity: 5, purchasePrice: 100, currentPrice: 50, includeInSummary: false })
+    ];
+    const html = renderAssetsPortfolioPanel({ id: 'xtb', title: 'XTB' }, items);
+    const panelPl = html.match(/assets-portfolio-panel-pl[^>]*>([^<]+)/);
+    expect(panelPl?.[1]).toContain('+200,00 zł');
+    expect(panelPl?.[1]).not.toContain('−250,00 zł');
+  });
+
+  it('skraca nazwę wiersza o prefiks konta', () => {
+    const asset = normalizeAsset({ id: 'x', type: 'investment', name: 'mBank · PKO BP', brokerAccount: 'mbank' });
+    expect(getAssetPortfolioRowDisplayName(asset, 'mbank')).toBe('PKO BP');
+  });
+
+  it('pokazuje notkę poza sumą w sekcji pozostałych aktywów', () => {
+    const html = renderAssetsOtherSection([
+      normalizeAsset({ id: 'c1', type: 'cash', amount: 100, includeInSummary: true }),
+      normalizeAsset({ id: 'c2', type: 'cash', amount: 50, includeInSummary: false })
+    ]);
+    expect(html).toContain('poza sumą');
+    expect(html).toContain('50,00 zł');
+  });
+
+  it('kompaktowy panel bez powielonego wiersza dla jednego konta emerytalnego', () => {
+    const html = renderAssetsPortfolioPanel(
+      { id: 'emerytura', title: 'mBank Emerytura 2035' },
+      [normalizeAsset({ id: 'e1', type: 'retirement', name: 'mBank Emerytura 2035', amount: 1000, retirementKind: 'PPK', institution: 'mBank' })]
+    );
+    expect(html).not.toContain('assets-portfolio-row');
+    expect(html).toContain('assets-portfolio-panel-sub');
+  });
+
+  it('ukrywa zerowe pozycje typu inne, gdy są inne aktywa', () => {
+    const list = getAssetsForDisplayList([
+      normalizeAsset({ id: 'z', type: 'other', amount: 0, name: 'Zero' }),
+      normalizeAsset({ id: 'm', type: 'cash', amount: 100, name: 'Main' })
+    ]);
+    expect(list.map((a) => a.id)).toEqual(['m']);
   });
 });
 

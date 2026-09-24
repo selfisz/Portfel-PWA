@@ -93,6 +93,7 @@ beforeAll(() => {
     globalThis.showMoreLoanPayments = () => {};
 
     loadScript('js/constants.js');
+    loadScript('js/format.js');
     loadScript('js/tx-row-html.js');
     loadScript('js/loan-details.js');
     loadScript('js/portfolio.js');

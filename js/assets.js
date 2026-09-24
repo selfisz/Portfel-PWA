@@ -344,22 +344,21 @@ function renderAssetsSummaryChips(activeAssets) {
         if (!items || !items.length) return;
 
         const groupExcluded = excludedGroups.has(group.id);
-        const groupTotal = items
-            .filter((asset) => asset.includeInSummary !== false)
-            .reduce((s, a) => s + getAssetValueInPln(a), 0);
+        const groupTotal = groupExcluded
+            ? 0
+            : items
+                .filter((asset) => asset.includeInSummary !== false)
+                .reduce((s, a) => s + getAssetValueInPln(a), 0);
         const gId = escapeHtml(group.id);
 
-        let itemChips = '';
-        if (!groupExcluded) {
-            itemChips = items.map((asset) => {
-                const included = asset.includeInSummary !== false;
-                const aId = escapeHtml(asset.id);
-                return `<button type="button"
-                    class="toggle-btn loans-chip assets-summary-item-chip${included ? ' active' : ''}"
-                    onclick="toggleAssetSummaryInclude('${aId}')"
-                    aria-pressed="${included ? 'true' : 'false'}">${escapeHtml(getAssetDisplayName(asset))}</button>`;
-            }).join('');
-        }
+        const itemChips = items.map((asset) => {
+            const included = !groupExcluded && asset.includeInSummary !== false;
+            const aId = escapeHtml(asset.id);
+            return `<button type="button"
+                class="toggle-btn loans-chip assets-summary-item-chip${included ? ' active' : ''}${groupExcluded ? ' assets-summary-item-chip--group-off' : ''}"
+                onclick="toggleAssetSummaryInclude('${aId}')"
+                aria-pressed="${included ? 'true' : 'false'}">${escapeHtml(getAssetDisplayName(asset))}</button>`;
+        }).join('');
 
         rows.push(`<div class="assets-summary-group">
             <button type="button"
@@ -421,12 +420,17 @@ function startNewAssetFromHero(type) {
     startNewAsset(type);
 }
 
-function renderAssetsHorizonFilter() {
+function countAssetsByHorizon(assets, horizon) {
+    return assets.filter((asset) => getAssetHorizon(asset) === horizon).length;
+}
+
+function renderAssetsHorizonFilter(assetPool = null) {
     const nav = document.getElementById('assets-type-filter');
     if (!nav) return;
-    const shortCount = getAssetsByHorizon('short').length;
-    const longCount = getAssetsByHorizon('long').length;
-    if (!getActiveAssets().length) {
+    const pool = assetPool || getActiveAssets();
+    const shortCount = countAssetsByHorizon(pool, 'short');
+    const longCount = countAssetsByHorizon(pool, 'long');
+    if (!pool.length) {
         nav.innerHTML = '';
         nav.classList.add('hidden');
         return;
@@ -441,7 +445,7 @@ function renderAssetsHorizonFilter() {
         .filter((chip) => chip.id === 'all' || (chip.id === 'short' ? shortCount : longCount) > 0 || assetsTypeFilter === chip.id)
         .map((chip) => {
             const count = chip.id === 'all'
-                ? getActiveAssets().length
+                ? pool.length
                 : chip.id === 'short' ? shortCount : longCount;
             return `<button type="button" class="toggle-btn${assetsTypeFilter === chip.id ? ' active' : ''}" onclick="setAssetsTypeFilter('${chip.id}')"><span class="assets-horizon-chip-label">${chip.label}</span><span class="assets-horizon-count">${count}</span></button>`;
         })
@@ -533,27 +537,106 @@ function hasPortfolioGroupedAssets(activeAssets) {
     return activeAssets.some((asset) => getAssetPortfolioGroupId(asset));
 }
 
+function formatAssetDeleteCountLabel(count) {
+    if (count === 1) return '1 pozycję';
+    const mod10 = count % 10;
+    const mod100 = count % 100;
+    if (mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14)) return `${count} pozycje`;
+    return `${count} pozycji`;
+}
+
+function formatAssetGainParts(gainPln, gainPct) {
+    const gainClass = gainPln >= 0 ? 'income' : 'expense';
+    const amtSign = formatSignedNumberPrefix(gainPln);
+    const pct = formatPercentPl(gainPct);
+    const amt = `${amtSign}${formatPlnAmount(Math.abs(gainPln))}`;
+    return { gainClass, text: `${amt} (${pct})` };
+}
+
 function formatAssetGainLabel(asset) {
     if (asset.type !== 'investment') return '';
     const gainPln = getAssetGainPln(asset);
     const gainPct = getAssetGainPct(asset);
-    const gainClass = gainPln >= 0 ? 'income' : 'expense';
-    const sign = gainPln >= 0 ? '+' : '−';
-    return `<span class="assets-portfolio-row-pl ${gainClass}">${sign}${formatPlnAmount(Math.abs(gainPln))} (${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%)</span>`;
+    const { gainClass, text } = formatAssetGainParts(gainPln, gainPct);
+    return `<span class="assets-portfolio-row-pl ${gainClass}">${text}</span>`;
 }
 
-function renderAssetsPortfolioRow(asset) {
+const PORTFOLIO_ROW_NAME_PREFIX = {
+    xtb: /^XTB\s*[·•\-]\s*/i,
+    mbank: /^mBank\s*[·•\-]\s*/i,
+    ikze: /^IKZE\s*[·•\-]\s*/i,
+    emerytura: /^mBank\s*[·•\-]\s*/i
+};
+
+function getAssetPortfolioRowDisplayName(asset, groupId) {
+    const full = getAssetDisplayName(asset);
+    const strip = groupId ? PORTFOLIO_ROW_NAME_PREFIX[groupId] : null;
+    if (!strip) return full;
+    const trimmed = full.replace(strip, '').trim();
+    return trimmed || full;
+}
+
+function isNegligibleAssetForDisplay(asset) {
+    if (!asset || asset.archived) return true;
+    const value = getAssetValueInPln(asset);
+    if (value >= 0.01) return false;
+    if (asset.type === 'investment' && (asset.quantity || 0) > 0) return false;
+    return asset.type === 'cash' || asset.type === 'other';
+}
+
+function shouldCompactPortfolioPanel(group, items) {
+    if (items.length !== 1) return false;
+    const asset = items[0];
+    if (asset.type === 'investment') return false;
+    const title = (group.title || '').trim();
+    const displayName = getAssetDisplayName(asset).trim();
+    const rowName = getAssetPortfolioRowDisplayName(asset, group.id).trim();
+    return displayName === title || rowName === title;
+}
+
+function assetPortfolioPanelMetaLabel(asset) {
+    if (asset.type === 'cash') return 'Gotówka';
+    if (asset.type === 'retirement') {
+        const kind = RETIREMENT_KIND_LABELS[asset.retirementKind] || asset.retirementKind || 'PPK';
+        return asset.institution ? `${kind} · ${asset.institution}` : kind;
+    }
+    return ASSET_TYPE_LABELS[asset.type] || 'Aktywo';
+}
+
+function assetClickableKeydownAttr(openFn) {
+    return `onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); ${openFn}; }"`;
+}
+
+function isAssetOutsideSummary(asset) {
+    if (!asset) return false;
+    if (asset.includeInSummary === false) return true;
+    const groupId = getAssetPortfolioGroupId(asset);
+    return !!groupId && getExcludedPortfolioGroups().includes(groupId);
+}
+
+const ASSET_OUTSIDE_SUMMARY_LABEL = 'poza sumą';
+
+function renderAssetOutsideSummaryBadge(asset, { groupExcluded = false } = {}) {
+    if (groupExcluded || asset.includeInSummary !== false) return '';
+    return `<span class="assets-outside-badge">${ASSET_OUTSIDE_SUMMARY_LABEL}</span>`;
+}
+
+function renderAssetsPortfolioRow(asset, { groupExcluded = false, groupId = null } = {}) {
     const assetId = escapeHtml(asset.id);
     const openFn = `openAssetDetails('${assetId}')`;
-    const name = escapeHtml(getAssetDisplayName(asset));
+    const name = escapeHtml(getAssetPortfolioRowDisplayName(asset, groupId));
+    const keydown = assetClickableKeydownAttr(openFn);
+    const isOff = !groupExcluded && asset.includeInSummary === false;
+    const rowClass = `assets-portfolio-row asset-clickable${isOff ? ' assets-portfolio-row--off' : ''}`;
+    const badge = renderAssetOutsideSummaryBadge(asset, { groupExcluded });
 
     if (asset.type === 'investment') {
         const qtyLabel = `${asset.quantity} szt.`;
-        return `<div class="assets-portfolio-row asset-clickable" role="button" tabindex="0"
-            onclick="${openFn}" onkeydown="if (event.key === 'Enter') ${openFn}">
+        return `<div class="${rowClass}" role="button" tabindex="0"
+            onclick="${openFn}" ${keydown}>
             <div class="assets-portfolio-row-main">
                 <strong class="assets-portfolio-row-name">${name}</strong>
-                <span class="assets-portfolio-row-meta">${escapeHtml(qtyLabel)}</span>
+                <span class="assets-portfolio-row-meta">${escapeHtml(qtyLabel)}${badge}</span>
             </div>
             <div class="assets-portfolio-row-values">
                 <strong class="assets-portfolio-row-value">${formatPlnAmountHtml(getAssetValueInPln(asset))}</strong>
@@ -565,11 +648,11 @@ function renderAssetsPortfolioRow(asset) {
     const meta = asset.type === 'cash'
         ? 'Gotówka'
         : (RETIREMENT_KIND_LABELS[asset.retirementKind] || ASSET_TYPE_LABELS[asset.type] || 'Aktywo');
-    return `<div class="assets-portfolio-row asset-clickable" role="button" tabindex="0"
-        onclick="${openFn}" onkeydown="if (event.key === 'Enter') ${openFn}">
+    return `<div class="${rowClass}" role="button" tabindex="0"
+        onclick="${openFn}" ${keydown}>
         <div class="assets-portfolio-row-main">
             <strong class="assets-portfolio-row-name">${name}</strong>
-            <span class="assets-portfolio-row-meta">${escapeHtml(meta)}</span>
+            <span class="assets-portfolio-row-meta">${escapeHtml(meta)}${badge}</span>
         </div>
         <div class="assets-portfolio-row-values">
             <strong class="assets-portfolio-row-value">${formatPlnAmountHtml(getAssetValueInPln(asset))}</strong>
@@ -589,8 +672,8 @@ function deletePortfolioGroup(groupId) {
 
     if (!allIds.length) return;
 
-    const label = allIds.length === 1 ? '1 pozycję' : `${allIds.length} pozycje/pozycji`;
-    if (!confirm(`Usunąć całe konto „${group.title}" (${label})?`)) return;
+    const label = formatAssetDeleteCountLabel(allIds.length);
+    if (!confirm(`Usunąć całe konto „${group.title}” (${label})?`)) return;
 
     allIds.forEach((id) => markAssetDeleted(id));
     appState.assets = (appState.assets || []).filter((a) => !allIds.includes(a.id));
@@ -615,40 +698,59 @@ function renderAssetsPortfolioPanel(group, items) {
 
     const groupExcluded = getExcludedPortfolioGroups().includes(group.id);
     const countedItems = groupExcluded ? [] : items.filter((asset) => asset.includeInSummary !== false);
-    const panelTotal = countedItems.reduce((sum, asset) => sum + getAssetValueInPln(asset), 0);
+    const countedTotal = countedItems.reduce((sum, asset) => sum + getAssetValueInPln(asset), 0);
     const fullTotal = items.reduce((sum, asset) => sum + getAssetValueInPln(asset), 0);
-    const outsideSummary = fullTotal - panelTotal;
-    const noteHtml = outsideSummary > 0.005
-        ? `<span class="assets-portfolio-panel-note">${groupExcluded ? 'poza sumą' : `poza sumą ${formatPlnAmount(outsideSummary)}`}</span>`
+    const outsideSummary = fullTotal - countedTotal;
+    // Nagłówek pokazuje wartość konta wyłączonego w całości (przekreśloną), a nie 0 zł.
+    const panelTotal = groupExcluded ? fullTotal : countedTotal;
+    const gainItems = (groupExcluded ? items : countedItems).filter((asset) => asset.type === 'investment');
+    const noteHtml = groupExcluded
+        ? `<span class="assets-portfolio-panel-note">${ASSET_OUTSIDE_SUMMARY_LABEL}</span>`
+        : (outsideSummary > 0.005
+            ? `<span class="assets-portfolio-panel-note">${ASSET_OUTSIDE_SUMMARY_LABEL} ${formatPlnAmount(outsideSummary)}</span>`
+            : '');
+    const panelGain = gainItems.reduce((sum, asset) => sum + getAssetGainPln(asset), 0);
+    const panelCost = gainItems.reduce((sum, asset) => sum + getAssetCostInPln(asset), 0);
+    const panelGainPct = panelCost ? (panelGain / panelCost) * 100 : 0;
+    const { gainClass, text: gainText } = formatAssetGainParts(panelGain, panelGainPct);
+    const gainHtml = gainItems.length
+        ? `<span class="assets-portfolio-panel-pl ${gainClass}${groupExcluded ? ' assets-portfolio-panel-pl--off' : ''}">${gainText}</span>`
         : '';
-    const panelGain = items
-        .filter((asset) => asset.type === 'investment')
-        .reduce((sum, asset) => sum + getAssetGainPln(asset), 0);
-    const hasGain = items.some((asset) => asset.type === 'investment');
-    const gainClass = panelGain >= 0 ? 'income' : 'expense';
-    const gainSign = panelGain >= 0 ? '+' : '−';
-    const gainHtml = hasGain
-        ? `<span class="assets-portfolio-panel-pl ${gainClass}">${gainSign}${formatPlnAmount(Math.abs(panelGain))}</span>`
+    const totalClass = `assets-portfolio-panel-total${groupExcluded ? ' assets-portfolio-panel-total--off' : ''}`;
+
+    const compact = shouldCompactPortfolioPanel(group, items);
+    const compactMeta = compact ? assetPortfolioPanelMetaLabel(items[0]) : '';
+    const compactMetaHtml = compactMeta
+        ? `<p class="assets-portfolio-panel-sub">${escapeHtml(compactMeta)}</p>`
         : '';
+    const rowItemsRaw = items.filter((asset) => !isNegligibleAssetForDisplay(asset));
+    const rowItems = rowItemsRaw.length ? rowItemsRaw : items;
+    const rowsHtml = compact
+        ? ''
+        : `<div class="assets-portfolio-panel-rows">
+            ${rowItems.map((asset) => renderAssetsPortfolioRow(asset, { groupExcluded, groupId: group.id })).join('')}
+        </div>`;
 
     const groupId = escapeHtml(group.id);
     const deleteFn = `deletePortfolioGroup('${groupId}')`;
 
     return `<section class="card assets-portfolio-panel" aria-label="${escapeHtml(group.title)}">
         <div class="assets-portfolio-panel-head">
-            <h2 class="assets-portfolio-panel-title">${escapeHtml(group.title)}</h2>
+            <div class="assets-portfolio-panel-head-main">
+                <h2 class="assets-portfolio-panel-title">${escapeHtml(group.title)}</h2>
+                ${compactMetaHtml}
+            </div>
             <div class="assets-portfolio-panel-totals">
-                <span class="assets-portfolio-panel-total">${formatPlnAmountHtml(panelTotal)}</span>
+                <span class="${totalClass}">${formatPlnAmountHtml(panelTotal)}</span>
                 ${noteHtml}
                 ${gainHtml}
             </div>
         </div>
-        <div class="assets-portfolio-panel-rows">
-            ${items.map((asset) => renderAssetsPortfolioRow(asset)).join('')}
-        </div>
-        <div class="assets-portfolio-panel-footer">
+        ${rowsHtml}
+        <details class="assets-portfolio-panel-actions">
+            <summary class="assets-portfolio-panel-actions-trigger">Zarządzaj kontem</summary>
             <button type="button" class="assets-portfolio-panel-delete-btn" onclick="${deleteFn}">Usuń konto</button>
-        </div>
+        </details>
     </section>`;
 }
 
@@ -663,13 +765,25 @@ function renderAssetsPortfolioSections(activeAssets) {
 function renderAssetsOtherSection(assets) {
     if (!assets.length) return '';
     const sectionTotal = getActiveAssetsTotalPln(assets.filter((a) => a.includeInSummary !== false));
+    const outsideSummary = getActiveAssetsTotalPln(assets) - sectionTotal;
+    const noteHtml = outsideSummary > 0.005
+        ? `<span class="assets-other-note">${ASSET_OUTSIDE_SUMMARY_LABEL} ${formatPlnAmount(outsideSummary)}</span>`
+        : '';
     return `<section class="assets-other-section">
         <div class="assets-other-head">
             <h2 class="assets-other-title">Pozostałe aktywa</h2>
-            <span class="assets-other-total">${formatPlnAmountHtml(sectionTotal)}</span>
+            <div class="assets-other-totals">
+                <span class="assets-other-total">${formatPlnAmountHtml(sectionTotal)}</span>
+                ${noteHtml}
+            </div>
         </div>
-        <div class="assets-other-list">${assets.map((asset) => renderAssetCardHtml(asset)).join('')}</div>
+        <div class="assets-other-list">${getAssetsForDisplayList(assets).map((asset) => renderAssetCardHtml(asset)).join('')}</div>
     </section>`;
+}
+
+function getAssetsForDisplayList(assets) {
+    const filtered = assets.filter((asset) => !isNegligibleAssetForDisplay(asset));
+    return filtered.length ? filtered : assets;
 }
 
 function buildAssetsListHtml(allActive, hasAssets) {
@@ -682,7 +796,8 @@ function buildAssetsListHtml(allActive, hasAssets) {
 
     if (hasPortfolioGroupedAssets(allActive)) {
         const portfolioHtml = renderAssetsPortfolioSections(allActive);
-        const otherHtml = renderAssetsOtherSection(getNonPortfolioActiveAssets(allActive));
+        const otherAssets = filterAssetsByHorizon(getNonPortfolioActiveAssets(allActive));
+        const otherHtml = renderAssetsOtherSection(otherAssets);
         return `<div class="assets-portfolio-grid">${otherHtml}${portfolioHtml}</div>`;
     }
 
@@ -702,48 +817,68 @@ function buildAssetsListHtml(allActive, hasAssets) {
 function renderAssetsTypeFilter(activeAssets) {
     const nav = document.getElementById('assets-type-filter');
     if (!nav) return;
-    if (hasPortfolioGroupedAssets(activeAssets)) {
+    if (!activeAssets.length) {
         nav.innerHTML = '';
         nav.classList.add('hidden');
         return;
     }
-    renderAssetsHorizonFilter();
+    const filterPool = hasPortfolioGroupedAssets(activeAssets)
+        ? getNonPortfolioActiveAssets(activeAssets)
+        : activeAssets;
+    if (!filterPool.length) {
+        nav.innerHTML = '';
+        nav.classList.add('hidden');
+        return;
+    }
+    renderAssetsHorizonFilter(filterPool);
+}
+
+function getAssetCardStateClass(asset) {
+    return isAssetOutsideSummary(asset) ? ' asset-summary-card--off' : '';
+}
+
+function renderAssetCardBadge(asset) {
+    return isAssetOutsideSummary(asset)
+        ? `<span class="assets-outside-badge">${ASSET_OUTSIDE_SUMMARY_LABEL}</span>`
+        : '';
 }
 
 function renderInvestmentCardHtml(asset) {
     const gainPct = getAssetGainPct(asset);
     const gainPln = getAssetGainPln(asset);
-    const gainClass = gainPct >= 0 ? 'income' : 'expense';
+    const { gainClass, text: gainText } = formatAssetGainParts(gainPln, gainPct);
     const meta = `${asset.quantity} szt. · śr. ${asset.purchasePrice.toFixed(2)} ${asset.currency}`;
-    return `<div class="card asset-summary-card asset-clickable" role="button" tabindex="0"
-        onclick="openAssetDetails('${escapeHtml(asset.id)}')"
-        onkeydown="if (event.key === 'Enter') openAssetDetails('${escapeHtml(asset.id)}')">
+    const openCall = `openAssetDetails('${escapeHtml(asset.id)}')`;
+    return `<div class="card asset-summary-card asset-clickable${getAssetCardStateClass(asset)}" role="button" tabindex="0"
+        onclick="${openCall}"
+        ${assetClickableKeydownAttr(openCall)}>
         <div class="asset-card-head">
             <span class="asset-type-badge">${ASSET_TYPE_ICONS.investment}</span>
             <div>
                 <h2 class="asset-card-title">${escapeHtml(getAssetDisplayName(asset))}</h2>
-                <p class="asset-card-sub">${escapeHtml(asset.ticker || meta)}</p>
+                <p class="asset-card-sub">${escapeHtml(asset.ticker || meta)}${renderAssetCardBadge(asset)}</p>
             </div>
         </div>
         <div class="asset-card-hero">
             <span class="loan-stat-label">Wartość</span>
             <strong class="asset-card-value">${formatPlnAmountHtml(getAssetValueInPln(asset))}</strong>
         </div>
-        <p class="loan-hero-meta">${escapeHtml(meta)} · <span class="${gainClass}">${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}% (${gainPln >= 0 ? '+' : ''}${formatPlnAmount(gainPln)})</span></p>
+        <p class="loan-hero-meta">${escapeHtml(meta)} · <span class="${gainClass}">${gainText}</span></p>
     </div>`;
 }
 
 function renderDepositCardHtml(asset) {
     const endLine = asset.endDate ? ` · do ${formatTxDate(asset.endDate)}` : '';
     const rateLine = asset.interestRate > 0 ? `${asset.interestRate.toLocaleString('pl-PL', { maximumFractionDigits: 2 })}%` : '—';
-    return `<div class="card asset-summary-card asset-clickable" role="button" tabindex="0"
-        onclick="openAssetDetails('${escapeHtml(asset.id)}')"
-        onkeydown="if (event.key === 'Enter') openAssetDetails('${escapeHtml(asset.id)}')">
+    const openCall = `openAssetDetails('${escapeHtml(asset.id)}')`;
+    return `<div class="card asset-summary-card asset-clickable${getAssetCardStateClass(asset)}" role="button" tabindex="0"
+        onclick="${openCall}"
+        ${assetClickableKeydownAttr(openCall)}>
         <div class="asset-card-head">
             <span class="asset-type-badge">${ASSET_TYPE_ICONS.deposit}</span>
             <div>
                 <h2 class="asset-card-title">${escapeHtml(getAssetDisplayName(asset))}</h2>
-                <p class="asset-card-sub">Lokata</p>
+                <p class="asset-card-sub">Lokata${renderAssetCardBadge(asset)}</p>
             </div>
         </div>
         <div class="asset-card-hero">
@@ -757,14 +892,15 @@ function renderDepositCardHtml(asset) {
 function renderCashCardHtml(asset) {
     const isCele = /cele/i.test(asset.name || '');
     const sub = isCele ? 'Cele oszczędnościowe' : 'Gotówka / konto';
-    return `<div class="card asset-summary-card asset-clickable" role="button" tabindex="0"
-        onclick="openAssetDetails('${escapeHtml(asset.id)}')"
-        onkeydown="if (event.key === 'Enter') openAssetDetails('${escapeHtml(asset.id)}')">
+    const openCall = `openAssetDetails('${escapeHtml(asset.id)}')`;
+    return `<div class="card asset-summary-card asset-clickable${getAssetCardStateClass(asset)}" role="button" tabindex="0"
+        onclick="${openCall}"
+        ${assetClickableKeydownAttr(openCall)}>
         <div class="asset-card-head">
             <span class="asset-type-badge">${ASSET_TYPE_ICONS.cash}</span>
             <div>
                 <h2 class="asset-card-title">${escapeHtml(getAssetDisplayName(asset))}</h2>
-                <p class="asset-card-sub">${escapeHtml(sub)}</p>
+                <p class="asset-card-sub">${escapeHtml(sub)}${renderAssetCardBadge(asset)}</p>
             </div>
         </div>
         <div class="asset-card-hero">
@@ -775,14 +911,15 @@ function renderCashCardHtml(asset) {
 }
 
 function renderOtherCardHtml(asset) {
-    return `<div class="card asset-summary-card asset-clickable" role="button" tabindex="0"
-        onclick="openAssetDetails('${escapeHtml(asset.id)}')"
-        onkeydown="if (event.key === 'Enter') openAssetDetails('${escapeHtml(asset.id)}')">
+    const openCall = `openAssetDetails('${escapeHtml(asset.id)}')`;
+    return `<div class="card asset-summary-card asset-clickable${getAssetCardStateClass(asset)}" role="button" tabindex="0"
+        onclick="${openCall}"
+        ${assetClickableKeydownAttr(openCall)}>
         <div class="asset-card-head">
             <span class="asset-type-badge">${ASSET_TYPE_ICONS.other}</span>
             <div>
                 <h2 class="asset-card-title">${escapeHtml(getAssetDisplayName(asset))}</h2>
-                <p class="asset-card-sub">Inne</p>
+                <p class="asset-card-sub">Inne${renderAssetCardBadge(asset)}</p>
             </div>
         </div>
         <div class="asset-card-hero">
@@ -795,14 +932,15 @@ function renderOtherCardHtml(asset) {
 function renderRetirementCardHtml(asset) {
     const kind = RETIREMENT_KIND_LABELS[asset.retirementKind] || asset.retirementKind || 'PPK';
     const inst = asset.institution ? ` · ${asset.institution}` : '';
-    return `<div class="card asset-summary-card asset-clickable" role="button" tabindex="0"
-        onclick="openAssetDetails('${escapeHtml(asset.id)}')"
-        onkeydown="if (event.key === 'Enter') openAssetDetails('${escapeHtml(asset.id)}')">
+    const openCall = `openAssetDetails('${escapeHtml(asset.id)}')`;
+    return `<div class="card asset-summary-card asset-clickable${getAssetCardStateClass(asset)}" role="button" tabindex="0"
+        onclick="${openCall}"
+        ${assetClickableKeydownAttr(openCall)}>
         <div class="asset-card-head">
             <span class="asset-type-badge">${ASSET_TYPE_ICONS.retirement}</span>
             <div>
                 <h2 class="asset-card-title">${escapeHtml(getAssetDisplayName(asset))}</h2>
-                <p class="asset-card-sub">${escapeHtml(kind)}${escapeHtml(inst)}</p>
+                <p class="asset-card-sub">${escapeHtml(kind)}${escapeHtml(inst)}${renderAssetCardBadge(asset)}</p>
             </div>
         </div>
         <div class="asset-card-hero">
@@ -824,9 +962,10 @@ function renderAssetCardHtml(asset) {
 
 function renderArchivedAssetCardHtml(asset) {
     const archivedLabel = asset.archivedAt ? formatTxDate(asset.archivedAt) : '—';
+    const openCall = `openAssetDetails('${escapeHtml(asset.id)}')`;
     return `<div class="asset-archive-card asset-clickable" role="button" tabindex="0"
-        onclick="openAssetDetails('${escapeHtml(asset.id)}')"
-        onkeydown="if (event.key === 'Enter') openAssetDetails('${escapeHtml(asset.id)}')">
+        onclick="${openCall}"
+        ${assetClickableKeydownAttr(openCall)}>
         <div class="asset-archive-card-head">
             <strong>${escapeHtml(getAssetDisplayName(asset))}</strong>
             <span class="loan-archive-badge">Zarchiwizowane</span>
@@ -877,8 +1016,7 @@ function renderAssets() {
         if (metaEl) {
             const investments = summaryAssets.filter((a) => a.type === 'investment');
             if (hasAssets && investments.length && (gainPln !== 0 || gainPct !== 0)) {
-                const sign = gainPln >= 0 ? '+' : '−';
-                metaEl.textContent = `Inwestycje P/L: ${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}% (${sign}${formatPlnAmount(Math.abs(gainPln))})`;
+                metaEl.textContent = `Inwestycje P/L: ${formatAssetGainParts(gainPln, gainPct).text}`;
                 metaEl.classList.remove('hidden');
             } else {
                 metaEl.classList.add('hidden');
