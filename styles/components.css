@@ -1830,8 +1830,21 @@ input:focus, select:focus {
     display: none;
 }
 
-.add-category-shortcuts-toggle {
+#view-add .add-category-shortcuts-toggle {
+    margin-bottom: 0;
     width: 100%;
+}
+
+#view-add .add-category-shortcuts-toggle .toggle-btn {
+    font-size: var(--text-sm);
+    padding: 11px 8px;
+    min-height: 42px;
+}
+
+#view-add .add-category-shortcuts-toggle .toggle-btn.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 4px 14px var(--accent-soft);
 }
 
 .add-category-shortcuts-empty {
