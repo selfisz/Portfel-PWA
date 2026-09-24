@@ -487,6 +487,43 @@ function payLoanInstallment(loanId) {
     refreshCurrentView();
 }
 
+function markLoanAsPaidOff(loanId) {
+    const loan = getLoanById(loanId);
+    if (!loan || !isLoanActive(loan)) return;
+
+    const capitalLeft = loan.currentCapitalLeft || 0;
+    const question = capitalLeft > 0
+        ? `Oznaczyć ${getLoanDisplayName(loan)} jako spłacony? Pozostały kapitał ${formatPlnAmount(capitalLeft)} zostanie ustawiony na 0, a kredyt trafi do archiwum. Transakcja spłaty nie zostanie zapisana.`
+        : `Oznaczyć ${getLoanDisplayName(loan)} jako spłacony i przenieść do archiwum?`;
+    if (!confirm(question)) return;
+
+    updateLoanInState({
+        ...loan,
+        totalAmount: loan.totalAmount > 0 ? loan.totalAmount : capitalLeft,
+        currentCapitalLeft: 0,
+        nextInstallmentAmount: 0,
+        nextInstallmentDue: '',
+        archived: true,
+        archivedAt: localIsoDate(new Date())
+    });
+    saveState();
+    hapticFeedback();
+    if (typeof notifyAfterFinanceChange === 'function') notifyAfterFinanceChange();
+
+    loansArchiveExpanded = true;
+    showSettingsToast('Kredyt oznaczony jako spłacony — w archiwum');
+    closeLoanDetails();
+    renderLoans();
+    refreshCurrentView();
+}
+
+function renderLoanPaidOffActionHtml(loan) {
+    return `<div class="loan-details-actions">
+        <button type="button" class="btn-outline loan-details-btn" onclick="markLoanAsPaidOff('${escapeHtml(loan.id)}')">Oznacz jako spłacone</button>
+        <p class="loan-detail-note">Kwota do zapłaty spadnie do 0, a kredyt trafi do archiwum.</p>
+    </div>`;
+}
+
 function populateLoanForm(loan) {
     const nameInput = document.getElementById('loan-name-input');
     const subSelect = document.getElementById('loan-subcategory-select');
@@ -640,6 +677,8 @@ function refreshLoanDetailsPanel() {
         if (loan.archived && html) {
             const archivedOn = loan.archivedAt ? ` · ${formatTxDate(loan.archivedAt)}` : '';
             html = `<p class="loan-archive-notice">Spłacony i zarchiwizowany${archivedOn}. Ustaw kapitał &gt; 0 w edycji, aby przywrócić do aktywnych.</p>${html}`;
+        } else if (html && isLoanActive(loan)) {
+            html += renderLoanPaidOffActionHtml(loan);
         }
         content.innerHTML = html;
     }

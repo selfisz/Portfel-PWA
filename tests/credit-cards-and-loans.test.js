@@ -471,3 +471,62 @@ describe('registerLoanPayment', () => {
     }
   });
 });
+
+// ===========================================================================
+// loans.js — markLoanAsPaidOff
+// ===========================================================================
+describe('markLoanAsPaidOff', () => {
+  beforeEach(() => {
+    globalThis.setPlnAmountElement = () => {};
+    globalThis.formatPlnAmountHtml = (n) => `${Number(n).toFixed(2)} zł`;
+    _setAppState({ ..._getAppState(), loans: [
+      { id: 'loan-mbank', name: 'mBank', subCategory: 'Raty',
+        totalAmount: 20000, currentCapitalLeft: 4500, interestRate: 8,
+        nextInstallmentAmount: 800, nextInstallmentDue: '2024-02-10',
+        archived: false, includeInSummary: true }
+    ]});
+  });
+
+  it('zeruje kapitał i ratę oraz archiwizuje kredyt', () => {
+    markLoanAsPaidOff('loan-mbank');
+    const loan = _getAppState().loans.find((l) => l.id === 'loan-mbank');
+    expect(loan.currentCapitalLeft).toBe(0);
+    expect(loan.nextInstallmentAmount).toBe(0);
+    expect(loan.nextInstallmentDue).toBe('');
+    expect(loan.archived).toBe(true);
+    expect(loan.archivedAt).toBeTruthy();
+  });
+
+  it('nie dodaje transakcji spłaty dla kredytu', () => {
+    markLoanAsPaidOff('loan-mbank');
+    const txs = _getAppState().transactions.filter((t) => t.loanId === 'loan-mbank');
+    expect(txs).toHaveLength(0);
+  });
+
+  it('nie zmienia kredytu gdy użytkownik anuluje potwierdzenie', () => {
+    globalThis.confirm = () => false;
+    markLoanAsPaidOff('loan-mbank');
+    const loan = _getAppState().loans.find((l) => l.id === 'loan-mbank');
+    expect(loan.currentCapitalLeft).toBe(4500);
+    expect(loan.archived).toBe(false);
+  });
+
+  it('ignoruje nieistniejący i już zarchiwizowany kredyt', () => {
+    expect(() => markLoanAsPaidOff('brak-id')).not.toThrow();
+    _setAppState({ ..._getAppState(), loans: [
+      { id: 'loan-old', name: 'Stary', subCategory: 'Raty', totalAmount: 1000,
+        currentCapitalLeft: 0, archived: true, archivedAt: '2023-01-01' }
+    ]});
+    markLoanAsPaidOff('loan-old');
+    expect(_getAppState().loans[0].archivedAt).toBe('2023-01-01');
+  });
+});
+
+describe('renderLoanPaidOffActionHtml', () => {
+  it('renderuje przycisk oznaczenia jako spłacone z id kredytu', () => {
+    const html = renderLoanPaidOffActionHtml({ id: 'loan-mbank' });
+    expect(html).toContain('Oznacz jako spłacone');
+    expect(html).toContain("markLoanAsPaidOff('loan-mbank')");
+  });
+});
+
