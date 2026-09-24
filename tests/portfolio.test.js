@@ -311,6 +311,52 @@ describe('transactionBelongsToLoan', () => {
   });
 });
 
+describe('resolveDebtTransactionLoan', () => {
+  it('nie przypisuje spłaty hipotecznej do Velo bez podkategorii kredytu', () => {
+    globalThis.appState.loans = [
+      { id: 'loan-velo', name: 'Kredyt 0% VeloBank', totalAmount: 20000, currentCapitalLeft: 15000, archived: false },
+      {
+        id: 'loan-hip',
+        name: 'Kredyt hipoteczny',
+        subCategory: 'Kredyt hipoteczny',
+        totalAmount: 400000,
+        currentCapitalLeft: 350000,
+        archived: false
+      }
+    ];
+    const capital = {
+      type: 'expense',
+      mainCategory: 'Długi',
+      subCategory: 'Kredyt hipoteczny',
+      amount: 8000,
+      note: 'Spłata kapitału'
+    };
+    expect(resolveDebtTransactionLoan(capital)?.id).toBe('loan-hip');
+    expect(transactionMatchesLoan(capital, globalThis.appState.loans[0])).toBe(true);
+  });
+
+  it('przypisuje ratę Velo gdy tylko ona pasuje', () => {
+    globalThis.appState.loans = [
+      { id: 'loan-velo', name: 'Velo', subCategory: 'Kredyt 0% VeloBank', totalAmount: 20000, currentCapitalLeft: 15000, archived: false },
+      {
+        id: 'loan-hip',
+        subCategory: 'Kredyt hipoteczny',
+        totalAmount: 400000,
+        currentCapitalLeft: 350000,
+        archived: false
+      }
+    ];
+    const installment = {
+      type: 'expense',
+      mainCategory: 'Długi',
+      subCategory: 'Kredyt 0% VeloBank',
+      amount: 389.95,
+      note: 'Rata'
+    };
+    expect(resolveDebtTransactionLoan(installment)?.id).toBe('loan-velo');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // isLoanConfigured / isLoanActive / isLoanArchived
 // ---------------------------------------------------------------------------

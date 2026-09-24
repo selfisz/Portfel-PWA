@@ -493,6 +493,25 @@ describe('buildDebtSplitData', () => {
         const result = buildDebtSplitData(ctx);
         expect(result[0].amount >= result[result.length - 1].amount).toBe(true);
     });
+
+    it('nie dolicza spłaty hipotecznej do Velo bez podkategorii kredytu', () => {
+        _setAppState({
+            ..._getAppState(),
+            loans: [
+                { id: 'velo', name: 'Kredyt 0% VeloBank', totalAmount: 20000, currentCapitalLeft: 15000 },
+                { id: 'hip', name: 'Kredyt hipoteczny', subCategory: 'Kredyt hipoteczny', totalAmount: 400000, currentCapitalLeft: 350000 }
+            ]
+        });
+        const ctx = makeCtx([
+            { date: '2024-09-01', type: 'expense', mainCategory: 'Długi', subCategory: 'Kredyt hipoteczny', amount: 8000, note: 'Spłata kapitału' },
+            { date: '2024-09-01', type: 'expense', mainCategory: 'Długi', subCategory: 'Kredyt 0% VeloBank', amount: 389.95, note: 'Rata' }
+        ]);
+        const result = buildDebtSplitData(ctx);
+        const velo = result.find((s) => s.id === 'velo');
+        const hip = result.find((s) => s.id === 'hip');
+        expect(hip?.amount).toBe(8000);
+        expect(velo?.amount).toBeCloseTo(389.95, 2);
+    });
 });
 
 // ===========================================================================

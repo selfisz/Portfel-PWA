@@ -88,7 +88,13 @@ function sumLoanInstallmentPaymentsForLoanInRange(loan, start, end) {
 function sumLoanPaymentsForLoanInRange(loan, start, end) {
     if (!loan) return 0;
     return getTransactionsInRange(start, end)
-        .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
+        .filter((t) => {
+            const owner = typeof resolveDebtTransactionLoan === 'function'
+                ? resolveDebtTransactionLoan(t)
+                : null;
+            if (owner) return owner.id === loan.id;
+            return t.type === 'expense' && transactionBelongsToLoan(t, loan);
+        })
         .reduce((s, t) => s + t.amount, 0);
 }
 
@@ -400,19 +406,24 @@ function classifyLoanPaymentAmount(loan, amount) {
 function analyzeLoanPaymentsInPeriod(ctx) {
     let regular = 0;
     let over = 0;
-    getActiveLoans().forEach((loan) => {
-        ctx.periodTx
-            .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
-            .forEach((t) => {
-                const noteOver = /nadpłat|nadplat/i.test(t.note || '');
-                if (noteOver) {
-                    over += t.amount;
-                    return;
-                }
-                const split = classifyLoanPaymentAmount(loan, t.amount);
-                regular += split.regular;
-                over += split.over;
-            });
+    const resolve = typeof resolveDebtTransactionLoan === 'function'
+        ? resolveDebtTransactionLoan
+        : (t) => {
+            const loans = getActiveLoans().filter((l) => transactionBelongsToLoan(t, l));
+            return loans.length === 1 ? loans[0] : null;
+        };
+    ctx.periodTx.forEach((t) => {
+        if (t.type !== 'expense' || t.mainCategory !== 'Długi') return;
+        const loan = resolve(t);
+        if (!loan) return;
+        const noteOver = /nadpłat|nadplat/i.test(t.note || '');
+        if (noteOver) {
+            over += t.amount;
+            return;
+        }
+        const split = classifyLoanPaymentAmount(loan, t.amount);
+        regular += split.regular;
+        over += split.over;
     });
     return { regular, over, total: regular + over };
 }
@@ -420,11 +431,23 @@ function analyzeLoanPaymentsInPeriod(ctx) {
 function buildDebtSplitData(ctx) {
     const { start, end } = getPeriodBoundsFromCtx(ctx);
     const slices = [];
+    const resolve = typeof resolveDebtTransactionLoan === 'function'
+        ? resolveDebtTransactionLoan
+        : (t) => {
+            const loans = getActiveLoans().filter((l) => transactionBelongsToLoan(t, l));
+            return loans.length === 1 ? loans[0] : null;
+        };
+    const amountByLoanId = new Map();
+
+    ctx.periodTx.forEach((t) => {
+        if (t.type !== 'expense' || t.mainCategory !== 'Długi') return;
+        const loan = resolve(t);
+        if (!loan) return;
+        amountByLoanId.set(loan.id, (amountByLoanId.get(loan.id) || 0) + t.amount);
+    });
 
     getActiveLoans().forEach((loan) => {
-        const amount = ctx.periodTx
-            .filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan))
-            .reduce((s, t) => s + t.amount, 0);
+        const amount = amountByLoanId.get(loan.id) || 0;
         if (amount > 0) slices.push({ label: getLoanDisplayName(loan), amount, kind: 'loan', id: loan.id });
     });
 
@@ -449,7 +472,14 @@ function buildDebtSplitDrillData(ctx, drillLabel = null) {
     if (match.kind === 'loan') {
         const loan = getActiveLoans().find((l) => l.id === match.id);
         if (!loan) return [];
-        const txs = ctx.periodTx.filter((t) => t.type === 'expense' && transactionMatchesLoan(t, loan));
+        const resolve = typeof resolveDebtTransactionLoan === 'function'
+            ? resolveDebtTransactionLoan
+            : (t) => (transactionBelongsToLoan(t, loan) ? loan : null);
+        const txs = ctx.periodTx.filter((t) => {
+            if (t.type !== 'expense' || t.mainCategory !== 'Długi') return false;
+            const owner = resolve(t);
+            return owner && owner.id === loan.id;
+        });
         const { sums } = getDashboardChartTransactionSums(txs);
         return Object.entries(sums).map(([label, amount]) => ({ label, amount }));
     }

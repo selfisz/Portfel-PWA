@@ -412,3 +412,21 @@ function transactionBelongsToLoan(t, loan) {
     });
     return peers.length === 0;
 }
+
+/** Jednoznaczne przypisanie spłaty kredytu (Analiza, sumy) — co najwyżej jeden kredyt na transakcję. */
+function resolveDebtTransactionLoan(t) {
+    if (!t || t.type !== 'expense' || t.mainCategory !== 'Długi') return null;
+    const loans = getActiveLoans();
+    if (t.loanId) {
+        const byId = loans.find((l) => l.id === t.loanId);
+        if (byId) return byId;
+    }
+    const owners = loans.filter((l) => transactionBelongsToLoan(t, l));
+    if (owners.length === 1) return owners[0];
+    if (owners.length > 1) {
+        const sub = (t.subCategory || '').trim();
+        const exact = owners.find((l) => (l.subCategory || '').trim() === sub);
+        return exact || null;
+    }
+    return null;
+}
