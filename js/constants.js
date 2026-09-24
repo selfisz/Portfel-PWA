@@ -82,6 +82,9 @@ const DEFAULT_CATEGORY_TREE = {
 };
 const RECENT_CATEGORIES_KEY = 'recent_categories';
 const MAX_RECENT_CATEGORIES = 5;
+const FAVORITE_CATEGORIES_KEY = 'favorite_categories';
+const MAX_FAVORITE_CATEGORIES = 8;
+const ADD_CATEGORY_SHORTCUT_MODE_KEY = 'add_category_shortcut_mode';
 const SAVINGS_GOAL_KEY = 'reports_savings_goal_pct';
 const NET_WORTH_LABEL = 'Wartość netto';
 const NOTIFICATION_INBOX_KEY = 'finanse_notification_inbox';

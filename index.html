@@ -1339,7 +1339,13 @@
                     <p id="add-form-error" class="add-form-error hidden" role="alert" aria-live="polite"></p>
                     <div id="add-form-standard">
                         <div class="add-recent-section" id="recent-categories-wrapper" style="display:none;">
-                            <span class="add-section-label">Ostatnio</span>
+                            <div id="add-category-shortcuts-segment-wrap" class="add-category-shortcuts-segment-wrap hidden">
+                                <div class="flex-toggle flex-toggle--2 add-category-shortcuts-toggle" role="tablist" aria-label="Skróty kategorii">
+                                    <button type="button" id="btn-add-shortcut-recent" class="toggle-btn active" role="tab" aria-selected="true" onclick="setAddCategoryShortcutMode('recent')">Ostatnio</button>
+                                    <button type="button" id="btn-add-shortcut-favorite" class="toggle-btn" role="tab" aria-selected="false" onclick="setAddCategoryShortcutMode('favorite')">Ulubione</button>
+                                </div>
+                            </div>
+                            <p id="add-category-shortcuts-empty" class="add-category-shortcuts-empty hidden" aria-live="polite"></p>
                             <div id="recent-categories-row" class="recent-categories add-recent-scroll"></div>
                         </div>
                         <div class="add-payment-row" id="add-payment-row">
@@ -1358,10 +1364,13 @@
                         </div>
                         <p class="reports-hint tx-income-cash-hint hidden" id="tx-income-cash-hint">Wpływ zwiększy saldo gotówki.</p>
                         <section class="add-category-section" id="add-category-section" aria-label="Kategoria">
-                            <button type="button" class="add-category-selected-btn" id="add-category-selected-btn" onclick="focusAddCategorySearch()">
-                                <span class="add-section-label">Kategoria</span>
-                                <span id="add-category-summary" class="add-category-summary-text">Wybierz kategorię</span>
-                            </button>
+                            <div class="add-category-selected-row">
+                                <button type="button" class="add-category-selected-btn" id="add-category-selected-btn" onclick="focusAddCategorySearch()">
+                                    <span class="add-section-label">Kategoria</span>
+                                    <span id="add-category-summary" class="add-category-summary-text">Wybierz kategorię</span>
+                                </button>
+                                <button type="button" id="add-category-favorite-btn" class="add-category-favorite-btn hidden" aria-label="Dodaj do ulubionych" onclick="event.stopPropagation(); toggleAddFormCategoryFavorite();">☆</button>
+                            </div>
                             <div class="add-category-search-wrap">
                                 <label class="visually-hidden" for="add-category-search">Szukaj kategorii</label>
                                 <input type="search" id="add-category-search" class="add-category-search" placeholder="Szukaj np. czynsz…" autocomplete="off" enterkeyhint="search" oninput="if (typeof renderAddCategorySearchResults === 'function') renderAddCategorySearchResults(this.value);" onfocus="clearAddFormError();">

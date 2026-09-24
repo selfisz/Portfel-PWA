@@ -38,6 +38,7 @@ beforeAll(() => {
   globalThis.selectMainCategoryForm = () => {};
   globalThis.renderMainCategoriesForm = () => {};
   globalThis.selectAddFormCategoryPair = () => {};
+  globalThis.showSettingsToast = () => {};
   globalThis.normalizeFormSubCategoryForMain = (type, mainCategory, subCategory) => {
     const subs = (categoryTree?.[type] || {})[mainCategory] || [];
     if (!subs.length) return '[Bez podkategorii]';
@@ -415,6 +416,54 @@ describe('addRecentCategory', () => {
     expect(getRecentCategories('income')).toHaveLength(1);
     expect(getRecentLoans()).toHaveLength(1);
     expect(getRecentCards()).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ulubione kategorie (wydatek / wpływ)
+// ---------------------------------------------------------------------------
+describe('ulubione kategorie', () => {
+  it('dodaje i wykrywa ulubioną parę', () => {
+    pushFavoriteFormEntry({ type: 'expense', mainCategory: 'Dom', subCategory: 'Czynsz' });
+    expect(getFavoriteCategories('expense')).toHaveLength(1);
+    expect(isFavoriteCategory('expense', 'Dom', 'Czynsz')).toBe(true);
+  });
+
+  it('nie duplikuje ulubionych', () => {
+    pushFavoriteFormEntry({ type: 'expense', mainCategory: 'Dom', subCategory: 'Czynsz' });
+    expect(pushFavoriteFormEntry({ type: 'expense', mainCategory: 'Dom', subCategory: 'Czynsz' })).toBe(false);
+    expect(getFavoriteCategories('expense')).toHaveLength(1);
+  });
+
+  it('oddziela wydatek i wpływ', () => {
+    pushFavoriteFormEntry({ type: 'expense', mainCategory: 'Dom', subCategory: 'Czynsz' });
+    pushFavoriteFormEntry({ type: 'income', mainCategory: 'Wynagrodzenie', subCategory: 'Podstawa' });
+    expect(getFavoriteCategories('expense')).toHaveLength(1);
+    expect(getFavoriteCategories('income')).toHaveLength(1);
+  });
+
+  it('ogranicza listę do MAX_FAVORITE_CATEGORIES', () => {
+    for (let i = 0; i < MAX_FAVORITE_CATEGORIES + 2; i += 1) {
+      pushFavoriteFormEntry({ type: 'expense', mainCategory: 'Dom', subCategory: `Sub${i}` });
+    }
+    expect(getFavoriteCategories('expense')).toHaveLength(MAX_FAVORITE_CATEGORIES);
+  });
+
+  it('toggle usuwa ulubioną pozycję', () => {
+    pushFavoriteFormEntry({ type: 'expense', mainCategory: 'Dom', subCategory: 'Czynsz' });
+    toggleFavoriteCategory('expense', 'Dom', 'Czynsz');
+    expect(isFavoriteCategory('expense', 'Dom', 'Czynsz')).toBe(false);
+  });
+
+  it('zapamiętuje segment skrótów osobno dla typu', () => {
+    setAddCategoryShortcutMode('favorite');
+    formState.currentType = 'income';
+    setAddCategoryShortcutMode('recent');
+    formState.currentType = 'expense';
+    expect(getAddCategoryShortcutMode('expense')).toBe('favorite');
+    formState.currentType = 'income';
+    expect(getAddCategoryShortcutMode('income')).toBe('recent');
+    formState.currentType = 'expense';
   });
 });
 
