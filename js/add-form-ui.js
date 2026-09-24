@@ -29,9 +29,40 @@ function getAddFormCategoryLabel() {
     return `${main} · ${sub}`;
 }
 
-function hasAddFormRecentCategories() {
+function hasAddFormCategoryShortcuts() {
     const wrapper = document.getElementById('recent-categories-wrapper');
     return !!(wrapper && wrapper.style.display !== 'none');
+}
+
+function hasAddFormRecentCategories() {
+    return hasAddFormCategoryShortcuts();
+}
+
+function isAddFormCategoryPairComplete(type = formState.currentType) {
+    const main = formState.selectedMainCategory;
+    if (!main) return false;
+    const subs = categoryTree[type]?.[main] || [];
+    if (subs.length > 0) {
+        return typeof isFormSubCategoryComplete === 'function'
+            ? isFormSubCategoryComplete(type, main, formState.selectedSubCategory)
+            : !!(formState.selectedSubCategory && formState.selectedSubCategory !== '[Bez podkategorii]');
+    }
+    return true;
+}
+
+function updateAddCategoryFavoriteBtn() {
+    const btn = document.getElementById('add-category-favorite-btn');
+    if (!btn) return;
+    const scope = formState.formMode || formState.currentType || 'expense';
+    const show = (scope === 'expense' || scope === 'income') && isAddFormCategoryPairComplete();
+    btn.classList.toggle('hidden', !show);
+    if (!show) return;
+    const fav = typeof isFavoriteCategory === 'function'
+        && isFavoriteCategory(formState.currentType, formState.selectedMainCategory, formState.selectedSubCategory);
+    btn.classList.toggle('add-category-favorite-btn--active', fav);
+    btn.textContent = fav ? '★' : '☆';
+    btn.setAttribute('aria-label', fav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych');
+    btn.setAttribute('aria-pressed', fav ? 'true' : 'false');
 }
 
 function updateCategoryGridsVisibility() {
@@ -87,15 +118,16 @@ function updateAddCategorySummary() {
         || (typeof isFormSubCategoryComplete === 'function'
             ? isFormSubCategoryComplete(formState.currentType, formState.selectedMainCategory, formState.selectedSubCategory)
             : !!formState.selectedSubCategory);
-    if (label && subReady && editingTxIndex === null && hasAddFormRecentCategories()) {
+    if (label && subReady && editingTxIndex === null && hasAddFormCategoryShortcuts()) {
         closeAddCategoryBrowse();
     }
+    updateAddCategoryFavoriteBtn();
 }
 
 function updateAddCategoryBrowseUi(options = {}) {
     const browseBtn = document.getElementById('add-category-browse-btn');
     const picker = document.getElementById('add-category-picker');
-    const hasRecents = hasAddFormRecentCategories();
+    const hasRecents = hasAddFormCategoryShortcuts();
 
     browseBtn?.classList.toggle('hidden', !hasRecents);
 
@@ -237,6 +269,7 @@ function selectAddFormCategoryPair(main, sub) {
     formState.selectedSubCategory = sub;
     clearAddCategorySearch();
     renderMainCategoriesForm();
+    if (typeof updateAddCategoryFavoriteBtn === 'function') updateAddCategoryFavoriteBtn();
 }
 
 function renderAddCategorySearchResults(query = '') {
@@ -271,6 +304,9 @@ function renderAddCategorySearchResults(query = '') {
     }
 
     matches.forEach((entry) => {
+        const row = document.createElement('div');
+        row.className = 'add-category-search-hit-row';
+
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'add-category-search-hit';
@@ -279,13 +315,36 @@ function renderAddCategorySearchResults(query = '') {
         if (isSelected) btn.classList.add('selected');
         btn.innerHTML = `${renderCategoryIcon(entry.main, 'chip', entry.sub === '[Bez podkategorii]' ? null : entry.sub, formState.currentType)}<span class="add-category-search-hit-label">${entry.label}</span>`;
         btn.onclick = () => selectAddFormCategoryPair(entry.main, entry.sub);
-        resultsEl.appendChild(btn);
+        row.appendChild(btn);
+
+        const star = document.createElement('button');
+        star.type = 'button';
+        star.className = 'add-category-favorite-toggle';
+        const isFav = typeof isFavoriteCategory === 'function'
+            && isFavoriteCategory(formState.currentType, entry.main, entry.sub);
+        if (isFav) star.classList.add('add-category-favorite-toggle--active');
+        star.textContent = isFav ? '★' : '☆';
+        star.setAttribute('aria-label', isFav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych');
+        star.onclick = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof toggleFavoriteCategory === 'function') {
+                toggleFavoriteCategory(formState.currentType, entry.main, entry.sub);
+            }
+            renderAddCategorySearchResults(query);
+            if (typeof renderAddCategoryShortcutPanel === 'function') renderAddCategoryShortcutPanel();
+            if (typeof updateAddCategoryFavoriteBtn === 'function') updateAddCategoryFavoriteBtn();
+        };
+        row.appendChild(star);
+
+        resultsEl.appendChild(row);
     });
 }
 
 function initAddFormUi() {
     updateAddDateChipLabel();
     updateAddCategorySummary();
+    updateAddCategoryFavoriteBtn();
     syncAddPaymentMethodUi();
     updateAddFormFooterSummary();
     updateAddCategoryBrowseUi({ autoFocus: true });

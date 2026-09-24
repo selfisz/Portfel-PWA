@@ -417,6 +417,7 @@ function applyCategoryEditorDeletions(type, deletedMains, deletedSubs) {
     });
 
     purgeRecentCategoriesForDeleted(deletedMains, deletedSubs, type);
+    purgeFavoriteCategoriesForDeleted(deletedMains, deletedSubs, type);
 }
 
 function migrateSubCategoryBudgetsOnCategoryRename(mainMap, subRenames) {
@@ -555,6 +556,7 @@ function saveCategoryEditor() {
     });
 
     migrateRecentCategories(mainMap, subRenames, type);
+    migrateFavoriteCategories(mainMap, subRenames, type);
     saveCategoryEditorIcons(type, groups);
     saveState();
     hapticFeedback();

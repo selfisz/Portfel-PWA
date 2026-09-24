@@ -404,6 +404,144 @@ function addRecentCard(cardId, cardOperation = 'repayment') {
     pushRecentFormEntry({ scope: 'card', cardId, cardOperation });
 }
 
+function readFavoriteFormEntries() {
+    try {
+        return JSON.parse(localStorage.getItem(FAVORITE_CATEGORIES_KEY) || '[]');
+    } catch {
+        return [];
+    }
+}
+
+function favoriteCategoryEntryKey(entry) {
+    const type = entry.type || entry.scope || 'expense';
+    return `${type}|${entry.mainCategory}|${entry.subCategory}`;
+}
+
+function getFavoriteCategories(type) {
+    return readFavoriteFormEntries()
+        .filter((entry) => (entry.type || entry.scope) === type && entry.mainCategory)
+        .slice(0, MAX_FAVORITE_CATEGORIES);
+}
+
+function isFavoriteCategory(type, mainCategory, subCategory) {
+    const resolved = resolveRecentCategoryPair({ type, mainCategory, subCategory }, type);
+    if (!resolved) return false;
+    const key = favoriteCategoryEntryKey(resolved);
+    return readFavoriteFormEntries().some((entry) => favoriteCategoryEntryKey(entry) === key);
+}
+
+function pushFavoriteFormEntry(entry) {
+    const resolved = resolveRecentCategoryPair(entry, entry.type || entry.scope);
+    if (!resolved) return false;
+    const normalized = { ...resolved, scope: resolved.type };
+    let all = readFavoriteFormEntries();
+    const key = favoriteCategoryEntryKey(normalized);
+    if (all.some((item) => favoriteCategoryEntryKey(item) === key)) return false;
+    all.unshift(normalized);
+    localStorage.setItem(FAVORITE_CATEGORIES_KEY, JSON.stringify(all.slice(0, MAX_FAVORITE_CATEGORIES)));
+    return true;
+}
+
+function removeFavoriteCategory(type, mainCategory, subCategory) {
+    const resolved = resolveRecentCategoryPair({ type, mainCategory, subCategory }, type);
+    if (!resolved) return false;
+    const key = favoriteCategoryEntryKey(resolved);
+    const all = readFavoriteFormEntries();
+    const filtered = all.filter((item) => favoriteCategoryEntryKey(item) !== key);
+    if (filtered.length === all.length) return false;
+    localStorage.setItem(FAVORITE_CATEGORIES_KEY, JSON.stringify(filtered));
+    return true;
+}
+
+function toggleFavoriteCategory(type, mainCategory, subCategory) {
+    if (isFavoriteCategory(type, mainCategory, subCategory)) {
+        removeFavoriteCategory(type, mainCategory, subCategory);
+        if (typeof showSettingsToast === 'function') showSettingsToast('Usunięto z ulubionych');
+        return false;
+    }
+    if (pushFavoriteFormEntry({ type, mainCategory, subCategory })) {
+        if (typeof showSettingsToast === 'function') showSettingsToast('Dodano do ulubionych');
+        return true;
+    }
+    return false;
+}
+
+function readAddCategoryShortcutModes() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(ADD_CATEGORY_SHORTCUT_MODE_KEY) || '{}');
+        return raw && typeof raw === 'object' ? raw : {};
+    } catch {
+        return {};
+    }
+}
+
+function getAddCategoryShortcutMode(type = formState.currentType) {
+    const modes = readAddCategoryShortcutModes();
+    return modes[type] === 'favorite' ? 'favorite' : 'recent';
+}
+
+function setAddCategoryShortcutMode(mode) {
+    const type = formState.currentType;
+    if (mode !== 'favorite' && mode !== 'recent') return;
+    const modes = readAddCategoryShortcutModes();
+    modes[type] = mode;
+    localStorage.setItem(ADD_CATEGORY_SHORTCUT_MODE_KEY, JSON.stringify(modes));
+    renderAddCategoryShortcutPanel();
+    if (typeof updateAddCategoryBrowseUi === 'function') updateAddCategoryBrowseUi();
+}
+
+function migrateFavoriteCategories(mainMap, subRenames, type) {
+    try {
+        const favorites = readFavoriteFormEntries();
+        let changed = false;
+        const migrated = favorites.map((entry) => {
+            if ((entry.type || entry.scope) !== type) return entry;
+            let { mainCategory, subCategory } = entry;
+            if (mainMap[mainCategory]) {
+                mainCategory = mainMap[mainCategory];
+                changed = true;
+            }
+            const origMain = entry.mainCategory;
+            subRenames.forEach((r) => {
+                if (origMain === r.oldMain && subCategory === r.oldSub) {
+                    subCategory = r.newSub;
+                    changed = true;
+                }
+            });
+            return { ...entry, mainCategory, subCategory };
+        });
+        if (changed) localStorage.setItem(FAVORITE_CATEGORIES_KEY, JSON.stringify(migrated));
+    } catch { /* ignore */ }
+}
+
+function purgeFavoriteCategoriesForDeleted(deletedMains, deletedSubs, type) {
+    try {
+        const deletedMainSet = new Set(deletedMains);
+        const deletedSubKeys = new Set(deletedSubs.map((d) => `${d.oldMain}\0${d.oldSub}`));
+        const favorites = readFavoriteFormEntries();
+        const filtered = favorites.filter((entry) => {
+            if ((entry.type || entry.scope) !== type) return true;
+            if (deletedMainSet.has(entry.mainCategory)) return false;
+            if (deletedSubKeys.has(`${entry.mainCategory}\0${entry.subCategory}`)) return false;
+            return true;
+        });
+        if (filtered.length !== favorites.length) {
+            localStorage.setItem(FAVORITE_CATEGORIES_KEY, JSON.stringify(filtered));
+        }
+    } catch { /* ignore */ }
+}
+
+function toggleAddFormCategoryFavorite() {
+    if (typeof isAddFormCategoryPairComplete === 'function' && !isAddFormCategoryPairComplete()) return;
+    const type = formState.currentType;
+    toggleFavoriteCategory(type, formState.selectedMainCategory, formState.selectedSubCategory);
+    if (typeof updateAddCategoryFavoriteBtn === 'function') updateAddCategoryFavoriteBtn();
+    renderAddCategoryShortcutPanel();
+    if (typeof renderAddCategorySearchResults === 'function') {
+        renderAddCategorySearchResults(document.getElementById('add-category-search')?.value || '');
+    }
+}
+
 function hasRecentSubCategory(subCategory) {
     return !!(subCategory && subCategory !== '[Bez podkategorii]');
 }
@@ -454,46 +592,85 @@ function createSubCategoryItem(sub) {
     return item;
 }
 
-function renderRecentCategoryChips() {
+function appendCategoryShortcutChip(row, entry) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'recent-chip';
+    const fullLabel = formatRecentCategoryChipFullLabel(entry.mainCategory, entry.subCategory);
+    const shortLabel = formatRecentCategoryChipLabel(entry.mainCategory, entry.subCategory);
+    chip.title = fullLabel;
+    chip.setAttribute('aria-label', fullLabel);
+    chip.innerHTML = `${renderCategoryIcon(entry.mainCategory, 'chip', hasRecentSubCategory(entry.subCategory) ? entry.subCategory : null, entry.type)}<span class="recent-chip-label">${shortLabel}</span>`;
+    if (formState.selectedMainCategory === entry.mainCategory && formState.selectedSubCategory === entry.subCategory) {
+        chip.classList.add('selected');
+    }
+    chip.onclick = () => {
+        const resolved = resolveRecentCategoryPair(entry);
+        if (!resolved) return;
+        if (typeof selectAddFormCategoryPair === 'function') {
+            selectAddFormCategoryPair(resolved.mainCategory, resolved.subCategory);
+        } else {
+            formState.selectedMainCategory = resolved.mainCategory;
+            formState.selectedSubCategory = resolved.subCategory;
+            renderMainCategoriesForm();
+        }
+        focusAmountField();
+    };
+    row.appendChild(chip);
+}
+
+function renderAddCategoryShortcutPanel() {
     const wrapper = document.getElementById('recent-categories-wrapper');
     const row = document.getElementById('recent-categories-row');
+    const segmentWrap = document.getElementById('add-category-shortcuts-segment-wrap');
+    const emptyEl = document.getElementById('add-category-shortcuts-empty');
+    const btnRecent = document.getElementById('btn-add-shortcut-recent');
+    const btnFavorite = document.getElementById('btn-add-shortcut-favorite');
     if (!wrapper || !row) return;
 
-    const recents = getRecentCategories(formState.currentType);
-    if (recents.length === 0) {
+    const type = formState.currentType;
+    const recents = getRecentCategories(type);
+    const favorites = getFavoriteCategories(type);
+    const hasAny = recents.length > 0 || favorites.length > 0;
+
+    if (!hasAny) {
         wrapper.style.display = 'none';
         row.innerHTML = '';
+        segmentWrap?.classList.add('hidden');
+        emptyEl?.classList.add('hidden');
         return;
     }
 
+    let mode = getAddCategoryShortcutMode(type);
+    if (mode === 'favorite' && !favorites.length && recents.length) mode = 'recent';
+    if (mode === 'recent' && !recents.length && favorites.length) mode = 'favorite';
+
     wrapper.style.display = 'block';
+    segmentWrap?.classList.remove('hidden');
+    btnRecent?.classList.toggle('active', mode === 'recent');
+    btnFavorite?.classList.toggle('active', mode === 'favorite');
+    btnRecent?.setAttribute('aria-selected', mode === 'recent' ? 'true' : 'false');
+    btnFavorite?.setAttribute('aria-selected', mode === 'favorite' ? 'true' : 'false');
+
+    const activeList = mode === 'favorite' ? favorites : recents;
     row.innerHTML = '';
-    recents.forEach((recent) => {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'recent-chip';
-        const fullLabel = formatRecentCategoryChipFullLabel(recent.mainCategory, recent.subCategory);
-        const shortLabel = formatRecentCategoryChipLabel(recent.mainCategory, recent.subCategory);
-        chip.title = fullLabel;
-        chip.setAttribute('aria-label', fullLabel);
-        chip.innerHTML = `${renderCategoryIcon(recent.mainCategory, 'chip', hasRecentSubCategory(recent.subCategory) ? recent.subCategory : null, recent.type)}<span class="recent-chip-label">${shortLabel}</span>`;
-        if (formState.selectedMainCategory === recent.mainCategory && formState.selectedSubCategory === recent.subCategory) {
-            chip.classList.add('selected');
+    activeList.forEach((entry) => appendCategoryShortcutChip(row, entry));
+
+    if (emptyEl) {
+        if (activeList.length === 0) {
+            emptyEl.classList.remove('hidden');
+            emptyEl.textContent = mode === 'favorite'
+                ? 'Brak ulubionych. Oznacz gwiazdką przy kategorii.'
+                : 'Tu pojawią się ostatnio używane kategorie.';
+        } else {
+            emptyEl.classList.add('hidden');
+            emptyEl.textContent = '';
         }
-        chip.onclick = () => {
-            const resolved = resolveRecentCategoryPair(recent);
-            if (!resolved) return;
-            if (typeof selectAddFormCategoryPair === 'function') {
-                selectAddFormCategoryPair(resolved.mainCategory, resolved.subCategory);
-            } else {
-                formState.selectedMainCategory = resolved.mainCategory;
-                formState.selectedSubCategory = resolved.subCategory;
-                renderMainCategoriesForm();
-            }
-            focusAmountField();
-        };
-        row.appendChild(chip);
-    });
+    }
+}
+
+function renderRecentCategoryChips() {
+    renderAddCategoryShortcutPanel();
 }
 
 function renderRecentLoanChips() {
@@ -588,6 +765,7 @@ function renderRecentCategories() {
         renderRecentCardChips();
         return;
     }
-    renderRecentCategoryChips();
+    renderAddCategoryShortcutPanel();
     if (typeof updateAddCategoryBrowseUi === 'function') updateAddCategoryBrowseUi();
+    if (typeof updateAddCategoryFavoriteBtn === 'function') updateAddCategoryFavoriteBtn();
 }
