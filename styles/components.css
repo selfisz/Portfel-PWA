@@ -10185,6 +10185,17 @@ button.reports-debt-split-item strong {
     line-height: 1.45;
 }
 
+.loan-details-actions {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+.loan-details-actions .loan-detail-note {
+    margin: 8px 0 0;
+    text-align: center;
+}
+
 .credit-cards-section {
     margin-bottom: 14px;
 }
